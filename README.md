@@ -61,7 +61,7 @@ What `planlint` does that the authoring surfaces do not, by construction:
 - Reads the target repo's real machinery (Makefile, `pyproject.toml`, invariant
   source) and holds specs to *that*, using the target's own vocabulary.
 - Reads thresholds from the detected locator instead of letting them be
-  hard-coded in spec prose (G003).
+  hard-coded in spec prose; a literal that drifts from the floor fires (G003).
 - Fails closed when a spec cites a gate the repo does not have (G004).
 
 What `planlint` deliberately does **not** do (see Non-goals): author specs, own a
@@ -116,8 +116,8 @@ quality without making the document wrong.
 |---|---|---|---|
 | G001 | ERROR | any | The spec declares something verifiable at all |
 | G002 | ERROR | any | At least one criterion names a **non-success** outcome |
-| G003 | ERROR | any | No hard-coded thresholds; read them from the detected locator |
-| G004 | ERROR | any | Every cited `make <target>` exists in the target's Makefile |
+| G003 | ERROR | any | Threshold literals must not drift from the detected floor |
+| G004 | ERROR | any | Every cited `make <target>` (verified-by line or matrix) exists in the Makefile |
 | G005 | WARN | any | Every cited `INV-n` is declared in the invariant source |
 | H001 | ERROR | harness | Every AC has `_Verified by:_` naming a runnable stage |
 | H002 | WARN | harness | Every AC traces to an `R-`/`C-` requirement |

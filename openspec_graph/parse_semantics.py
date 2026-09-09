@@ -57,6 +57,13 @@ THRESHOLD_ALLOWLIST = (
 # because the phrasings that matter in practice are open-ended -- "opens no
 # egress channel" and "mutates neither the remote nor the local tag list" both
 # describe failure paths and neither is a fixed idiom.
+
+# An upstream-dialect `#### Scenario:` header. Scenario step lines may cite a
+# make target in a code span; that code span is an execution citation, but bare
+# prose ("we make a decision") is not. Only the backticked form is extracted.
+_SCENARIO_HEADER = re.compile(r"^####\s+Scenario:", re.MULTILINE)
+_NEXT_HEADING = re.compile(r"\n#{2,4}\s")
+_BACKTICKED_MAKE = re.compile(r"`make\s+([a-z][a-z0-9_-]*)`")
 NEGATIVE_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
     re.compile(p, re.IGNORECASE)
     for p in (
@@ -101,18 +108,50 @@ def line_of(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
-def hard_coded(text: str) -> tuple[str, ...]:
-    offenders: list[str] = []
+def execution_make_refs(text: str) -> tuple[str, ...]:
+    """Make targets cited only in execution contexts.
+
+    G004 must not fire on prose like "make a decision" in a Problem Statement.
+    A make target is a real citation only where it names a runnable stage: on a
+    ``_Verified by:_`` line, inside the Validation Matrix (whose Make Target
+    column is the execution contract), or as a backticked code span in an
+    upstream-dialect Scenario step. Bare Scenario prose is not a citation.
+    """
+    refs: set[str] = set()
+    for m in VERIFIED_BY.finditer(text):
+        refs.update(MAKE_REF.findall(m.group(1)))
+    matrix = section_body(text, "Validation Matrix")
+    if matrix:
+        refs.update(MAKE_REF.findall(matrix))
+    for header in _SCENARIO_HEADER.finditer(text):
+        start = header.end()
+        nxt = _NEXT_HEADING.search(text, start)
+        body = text[start : nxt.start() if nxt else len(text)]
+        refs.update(_BACKTICKED_MAKE.findall(body))
+    return tuple(sorted(refs))
+
+
+def hard_coded(text: str) -> tuple[tuple[int, str], ...]:
+    """Threshold literals found in criterion / table rows, as ``(value, line)``.
+
+    Only lines that are criteria (``-``) or table rows (``|``) are scanned, so prose
+    thresholds are ignored. Each offender is paired with its numeric value so G003
+    can compare against the detected coverage floor and fire only on drift.
+    """
+    offenders: list[tuple[int, str]] = []
     for raw_line in text.splitlines():
         line = raw_line.strip()
         if not line.startswith("-") and not line.startswith("|"):
             continue
-        if not HARD_THRESHOLD.search(line):
+        match = HARD_THRESHOLD.search(line)
+        if not match:
             continue
         low = line.lower()
         if any(token in low for token in THRESHOLD_ALLOWLIST):
             continue
-        offenders.append(line[:120])
+        digits = re.search(r"\d{2,3}", match.group(0))
+        value = int(digits.group(0)) if digits else 0
+        offenders.append((value, line))
     return tuple(offenders)
 
 

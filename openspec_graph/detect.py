@@ -11,6 +11,8 @@ import json
 import re
 from pathlib import Path
 
+from . import machinery
+
 MANIFESTS: dict[str, tuple[str, ...]] = {
     "python": ("pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"),
     "node": ("package.json",),
@@ -29,9 +31,7 @@ INVARIANT_SOURCES: tuple[str, ...] = (
     "AGENTS.md",
 )
 
-_MAKE_TARGET = re.compile(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", re.MULTILINE)
 _INV_ID = re.compile(r"\bINV-\d+\b")
-_FAIL_UNDER = re.compile(r"^\s*fail_under\s*=\s*(\d+)", re.MULTILINE)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -91,9 +91,7 @@ def _make_targets(root: Path) -> tuple[str, ...]:
     if not makefile.exists():
         return ()
     text = makefile.read_text(encoding="utf-8", errors="replace")
-    skip = {".PHONY", ".DEFAULT_GOAL", ".SUFFIXES"}
-    targets = [t for t in _MAKE_TARGET.findall(text) if t not in skip]
-    return tuple(sorted(set(targets)))
+    return machinery.parse_makefile(text)
 
 
 def _threshold(root: Path) -> ThresholdSource | None:
@@ -117,10 +115,12 @@ def _threshold(root: Path) -> ThresholdSource | None:
 
     pyproject = root / "pyproject.toml"
     if pyproject.exists():
-        match = _FAIL_UNDER.search(pyproject.read_text(encoding="utf-8", errors="replace"))
-        if match:
+        value = machinery.parse_pyproject_fail_under(
+            pyproject.read_text(encoding="utf-8", errors="replace")
+        )
+        if value is not None:
             return ThresholdSource(
-                "pyproject.toml:[tool.coverage.report].fail_under", int(match.group(1))
+                "pyproject.toml:[tool.coverage.report].fail_under", value
             )
     return None
 

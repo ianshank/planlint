@@ -203,7 +203,7 @@ def test_g002_fires_when_every_criterion_is_a_happy_path(repo: Path) -> None:
 def test_g003_fires_on_hard_coded_threshold(repo: Path) -> None:
     body = GOOD_HARNESS.replace(
         "An attested write records an evidence id.",
-        "Line coverage is at least 90% for the new module.",
+        "Line coverage is at least 95% for the new module.",
     )
     assert "G003" in rule_ids(findings_for(repo, body))
 

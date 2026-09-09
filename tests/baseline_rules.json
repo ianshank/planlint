@@ -15,7 +15,7 @@
     "id": "G003",
     "severity": "ERROR",
     "dialects": "*",
-    "summary": "no hard-coded thresholds"
+    "summary": "thresholds do not drift from the detected floor"
   },
   {
     "id": "G004",

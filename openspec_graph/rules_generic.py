@@ -36,9 +36,25 @@ def _needs_negative(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
 
 
 def _hard_coded_threshold(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
-    locator = profile.threshold.locator if profile.threshold else "the governance policy"
-    for offender in spec.hard_coded_thresholds:
-        yield f"hard-coded threshold; read it from {locator} instead -- {offender!r}"
+    floor = profile.threshold.value if profile.threshold else None
+    locator = (
+        profile.threshold.locator if profile.threshold else "the governance policy"
+    )
+    for value, line in spec.hard_coded_thresholds:
+        if floor is not None and value == floor:
+            # The literal matches the detected floor -- agreement, not drift.
+            continue
+        if floor is not None:
+            yield (
+                f"threshold `{value}` drifts from the floor `{floor}` declared at "
+                f"{locator}; cite the locator, not a literal -- {line[:120]!r}"
+            )
+        else:
+            yield (
+                f"threshold literal `{value}` is not bound to a detected coverage "
+                f"floor; declare one at {locator} or remove the literal -- "
+                f"{line[:120]!r}"
+            )
 
 
 def _unknown_make_target(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
@@ -70,7 +86,7 @@ def _unknown_invariant(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]
 GENERIC_RULES: tuple[Rule, ...] = (
     Rule("G001", ERROR, ("*",), "spec declares verifiable criteria", _no_criteria),
     Rule("G002", ERROR, ("*",), "at least one non-success criterion", _needs_negative),
-    Rule("G003", ERROR, ("*",), "no hard-coded thresholds", _hard_coded_threshold),
+    Rule("G003", ERROR, ("*",), "thresholds do not drift from the detected floor", _hard_coded_threshold),
     Rule("G004", ERROR, ("*",), "cited make targets exist", _unknown_make_target),
     Rule("G005", WARN, ("*",), "cited invariants are declared", _unknown_invariant),
 )

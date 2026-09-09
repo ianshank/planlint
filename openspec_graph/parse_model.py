@@ -64,7 +64,7 @@ class ParsedSpec:
     criteria: tuple[Criterion, ...]
     make_refs: tuple[str, ...]
     invariant_refs: tuple[str, ...]
-    hard_coded_thresholds: tuple[str, ...]
+    hard_coded_thresholds: tuple[tuple[int, str], ...]
     delta_headers: tuple[str, ...]
     scenario_levels: tuple[int, ...] = ()
     suppressed: frozenset[str] = frozenset()

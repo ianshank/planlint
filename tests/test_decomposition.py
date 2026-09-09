@@ -22,6 +22,7 @@ FX = REPO_ROOT / "tests" / "fixtures"
 # Modules created by this change package. Each must stay stdlib-only (R-DG-3) and
 # obey the import boundary: no importing cli or graph (R-DG-5).
 _NEW_MODULES = [
+    "machinery",
     "scaffold_templates",
     "parse_semantics",
     "parse_model",
@@ -43,7 +44,7 @@ _BOUNDARY_EXEMPT = {"cli", "__init__"}
 _EXPECTED_HASHES = {
     "validate": "0a810b4f791fa5684dbf384df7ab626ddf96c3b62fcd9d8299dc8d774a3b82e0",
     "graph": "6a63cc66d2e319f9fde85a37f46f333429c6be9989be5d5eb6686183afedfa9c",
-    "rules": "e25ad6cd262a52447cd11ada2c96494b3a7af2ca83cb8e6af6911f20b719540f",
+    "rules": "3303d64ca6929d31f9ba8d7ce224b444826bdda80c5545b16095d9ac477bf27e",
 }
 
 
