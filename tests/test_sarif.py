@@ -357,8 +357,19 @@ def test_graph_format_choices_are_unchanged(tmp_path: Path) -> None:
 
 
 def test_the_composite_action_declares_the_expected_steps() -> None:
-    """AC-SA-14: text-level assertions, because nothing in this suite imports
-    a YAML parser and adding a dependency for one guard is not worth it."""
+    """AC-SA-14, re-pinned by `add-github-action-contract` (DEC-GA-002).
+
+    The shape this criterion originally described -- the action running
+    `validate --format sarif` into a file and uploading it itself -- is gone,
+    and deliberately. SARIF is now projected from the one findings envelope the
+    scan writes, so the two renderings cannot disagree, and the upload moved to
+    the consumer workflow where the permission it needs is visible to whoever
+    grants it.
+
+    What survives is the property the criterion was actually for: an adopter
+    who installs this action still gets SARIF. The action's full contract is
+    asserted in `tests/test_action_contract.py`, which also executes it.
+    """
     action = (REPO_ROOT / ".github" / "actions" / "planlint" / "action.yml").read_text(
         encoding="utf-8"
     )
@@ -366,8 +377,16 @@ def test_the_composite_action_declares_the_expected_steps() -> None:
     assert "using: composite" in action
     assert "planlint --target" in action
     assert "detect" in action
-    assert "--format sarif" in action
-    assert "upload-sarif" in action
+    assert "--format sarif" in action, "the action must still produce a SARIF log"
+    assert "sarif-path:" in action, (
+        "and must expose where it wrote it, since the upload is now the caller's step"
+    )
+
+    template = (REPO_ROOT / "templates" / "spec-gate.yml").read_text(encoding="utf-8")
+    assert "upload-sarif" in template, (
+        "the upload moved to the consumer workflow rather than disappearing"
+    )
+    assert "steps.planlint.outputs.sarif-path" in template
 
 
 def test_pre_commit_hooks_file_declares_a_validate_hook() -> None:

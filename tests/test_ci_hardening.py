@@ -526,3 +526,65 @@ def test_makefile_has_matcher_accuracy_report_target() -> None:
         line = next(ln for ln in makefile.splitlines() if ln.startswith(f"{gate}:"))
         assert "matcher-accuracy" not in line.split(), f"{gate} must not compose the report target"
 
+
+
+# --- add-github-action-contract: the composite action is actually executed ----
+
+
+def test_ci_workflow_has_an_action_contract_job() -> None:
+    """AC: the action runs somewhere.
+
+    Every other gate in this repository reads `action.yml` as text. The action
+    shipped once with an install line that resolved to no published
+    distribution, no `outputs:` block at all, and a SARIF-upload guard that
+    could never fire -- none of which a text check could see, because each one
+    was well-formed YAML saying the wrong thing. This job is the one that runs
+    it.
+    """
+    blocks = _ci_job_blocks(_ci_workflow_text())
+    job = blocks.get("action-contract", "")
+    assert job, "ci.yml defines no action-contract job"
+
+    assert "uses: ./.github/actions/planlint" in job, (
+        "the contract job must run the action in this checkout, not a published ref"
+    )
+    assert "continue-on-error: true" in job, (
+        "a deliberately red fixture must be allowed to report its outputs rather "
+        "than ending the job at the first failing leg"
+    )
+    # The scan must work in the posture a fork pull request gets: a read-only
+    # token and no secrets.
+    assert "contents: read" in job
+    assert "secrets." not in job, "the scan must need no secret"
+
+
+def test_every_action_fixture_has_a_contract_leg() -> None:
+    """Non-success: a sixth fixture cannot be added without a leg asserting it.
+
+    Discovered from disk rather than listed, the same design rule
+    `tests/test_adopter_urls.py` states for its own corpus -- a fixture outside
+    the matrix is a labelled expectation nothing checks.
+    """
+    fixtures = REPO_ROOT / "tests" / "fixtures" / "action"
+    on_disk = {
+        # `nested` is scanned at its own subdirectory, so the matrix names the
+        # fixture rather than the target path.
+        path.name
+        for path in fixtures.iterdir()
+        if path.is_dir()
+    }
+    assert on_disk, "no action fixtures found; this guard would be vacuous"
+
+    job = _ci_job_blocks(_ci_workflow_text()).get("action-contract", "")
+    declared = set(re.findall(r"^\s+- fixture: ([\w-]+)$", job, re.MULTILINE))
+    assert declared == on_disk, (
+        f"fixtures without a contract leg: {sorted(on_disk - declared)}; "
+        f"legs without a fixture: {sorted(declared - on_disk)}"
+    )
+
+
+def test_the_contract_job_is_not_wired_into_a_make_target() -> None:
+    """It needs a runner, so it stays CI-side: folding it into `make pre-pr`
+    would make the local gate unrunnable rather than more thorough."""
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert "action-contract" not in makefile

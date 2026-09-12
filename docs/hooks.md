@@ -54,6 +54,7 @@ a local net before the round-trip to CI.
 | `encoding-stress` | push + PR | `make e2e-live` under `PYTHONIOENCODING=ascii` (hard) |
 | `self-validate` | push + PR | `planlint validate --fail-on ERROR` (hard) |
 | `packaging` | push + PR | wheel build + `tools/check_wheel_metadata.py` (hard) |
+| `action-contract` | push + PR | the composite action run against every labelled fixture under `tests/fixtures/action/`, under a read-only token with no secrets (hard) |
 | `graph-diff` | PR only | `tools/diff_spec_graph.py` base→head (AC-CH-5/6) |
 | `security` | push + PR | gitleaks + no-hardcoded-thresholds (hard) |
 | `docs` | push + PR | `make docs-check` (hard) |

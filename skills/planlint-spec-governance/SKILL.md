@@ -51,6 +51,18 @@ that wants them annotated on a pull request instead of printed. `--json` is an
 alias of `--format json`; passing it alongside a different format is a usage
 error rather than a preference the tool resolves for you.
 
+`report` is the one verb that reads no repository at all. Point it at a
+findings envelope saved earlier by `validate --format json` -- possibly on
+another machine, since that envelope is portable -- and it renders the same
+run as SARIF, as GitHub workflow-command annotations, as a job-summary table,
+or as CI step outputs. It never evaluates a rule and never exits 1: the gate
+was decided by the run that produced the envelope, and this only says what
+that run found. Pass the dialect card from `detect --format json` as well and
+it also reports what the target had to be checked against -- a repository with
+no make targets and no coverage floor gives the cited-stage and threshold
+rules nothing to compare against, so a clean run there proves less than it
+looks like it proves.
+
 `delta --baseline CARD.json` answers a different question from `validate`:
 not "is this citation broken" but "which specs did a change to this
 repository's machinery leave behind" -- a make target removed, an invariant no
@@ -97,6 +109,7 @@ Read-only. Safe to run at any time, on any repository:
 | `rules` | The rule table this build carries |
 | `waivers` | Every waived rule across the tree |
 | `delta` | Specs whose citations went stale since a saved dialect card |
+| `report` | Render a saved findings envelope as SARIF or a GitHub CI surface |
 
 Writes files. Do not run these unless the user asks:
 
@@ -152,9 +165,18 @@ treated as "unknown" rather than as an error.
 
 ## Wiring it into CI
 
-`assets/spec-gate.yml` is a ready workflow: it runs `detect` so drift shows up
-in the log even on a pass, then `validate` as the blocking gate. Copy it into
-the target repository's own workflows directory.
+`assets/spec-gate.yml` is a ready workflow. Copy it into the target
+repository's own workflows directory. It calls this project's composite
+action, pinned to an exact release tag, which installs the CLI, runs the gate
+once, annotates the pull request, writes a job summary, and uploads the
+complete evidence bundle as a workflow artifact.
+
+The action distinguishes four results, and only the first is green: the specs
+passed; findings reached the threshold; nothing was checked, so the run gated
+nothing; or the scan could not run at all. Report whichever one it gives you.
+A repository that has just run `init` and written no change package yet lands
+on the third, which is a red build on purpose -- an empty gate is not a
+passing gate.
 
 ## References
 

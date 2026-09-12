@@ -113,3 +113,26 @@ the report. A malformed or unreadable baseline file exits 2 instead.
 - **2**: report that the command could not run, and why. For a missing spec
   tree, the honest summary is that the tool does not apply to this repository
   yet. Offer `planlint init --dry-run`; run `init` only when asked.
+
+## `report`, which never exits 1
+
+`report` renders a findings envelope that some earlier run produced. It has no
+opinion about that run, so it never returns 1 -- exit 1 means "findings were
+reported at or above the threshold" everywhere else in this CLI, and a
+renderer reporting that would be claiming a verdict it did not reach.
+
+- **0** -- the projection was written to stdout.
+- **2** -- the envelope could not be projected: the file is missing or
+  unreadable, is not JSON, is not an object, carries a schema version this
+  build does not read, or is missing a field the projection needs. One line on
+  stderr names the problem; stdout stays empty, because a half-written
+  document beside a diagnostic is worse than neither.
+
+A dialect card passed with `--card` is held to the same standard, and a
+malformed one is exit 2 rather than a silent degradation: reporting "no
+machinery detected" for a repository that has plenty would invert the warning
+the card exists to raise.
+
+The global `--target` does not apply to this verb. It reads the file it is
+given and nothing else, which is what lets it project an artifact downloaded
+from another machine.

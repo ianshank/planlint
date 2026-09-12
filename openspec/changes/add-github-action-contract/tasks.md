@@ -1,239 +1,104 @@
 # Milestones
 
-> Nothing in this package is implemented yet. Every acceptance criterion
-> starts unchecked, and every `_Verified by:` that names a test file rather
-> than a `pytest -k` selector is naming a test that does not exist yet —
-> deliberately, because `tests/test_spec_test_citations.py` fails the suite
-> on a selector that resolves to nothing. Writing those tests is the gating
-> work of Milestones 2 through 7, not a follow-up, and the citations are
-> upgraded to `pytest -k` selectors as each test lands. Flip a criterion to
-> `[x]` only when it is implemented *and* verified — never retroactively.
+> Every milestone below is implemented and verified. `AC-GA-23` is the one
+> criterion still open: it can only be closed by the hosted `action-contract`
+> job running green on the pull request, because a local simulation cannot
+> cover the `uses:` steps, the artifact upload, or the action path.
 
-## Milestone 0 — Grounding pass (done in the drafting of this package)
+## Milestone 0 — Grounding pass [DONE]
 
-- Facts established against the tree and the live index, not inferred, each
-  cited in `proposal.md`'s Evidence: the install line resolves to nothing
-  because `planlint` is not on PyPI and `v0.1.0` is the only tag; the action
-  has no `outputs:` block and writes `planlint.sarif` into the consumer's
-  checkout; a zero-spec run prints `PASS` and exits 0 (reproduced on an
-  empty `openspec/changes/`); the SARIF upload has no fork guard;
-  `sarif.to_sarif` takes the envelope's own `findings` list; the verb set is
-  closed at nine and held equal to `SKILL.md`'s tables.
+- Established against the tree and the live index, each cited in `proposal.md`:
+  the install line resolves to nothing because the distribution is unpublished;
+  the action had no `outputs:` block and wrote into the consumer's checkout; a
+  zero-spec run prints `PASS` and exits 0; the SARIF upload had no fork guard
+  and could not have had a working file guard under `$RUNNER_TEMP`;
+  `sarif.to_sarif` consumes the envelope's own findings list.
 - Two assumptions from the external design brief did not survive contact and
-  are corrected in the spec: helper subcommands that *write*
-  `$GITHUB_OUTPUT`/`$GITHUB_STEP_SUMMARY` through flags contradict the
-  stdout-only stance (`DEC-SA-012`), so `report` prints and the action
-  redirects; and a `--exit-code` flag on the summary helper is redundant,
-  because `blocking > 0` and exit 1 are one fact (`cli.py:449`, `cli.py:494`)
-  — `status` is derived from the envelope alone (`DEC-GA-004`).
-- Every non-obvious call recorded as `DEC-GA-001` through `DEC-GA-015`.
-- **Gate:** `make validate`
+  were corrected before any code: helper subcommands that *write*
+  `$GITHUB_OUTPUT` through flags contradict the stdout-only stance
+  (`DEC-SA-012`), so `report` prints and the action redirects; and an
+  `--exit-code` flag is redundant, because `blocking > 0` and exit 1 are one
+  fact (`DEC-GA-004`).
+- Adversarial review of the draft found two blocking defects in the drafted
+  YAML expressions — a fork guard that would skip every push and a
+  `hashFiles` guard that cannot address `$RUNNER_TEMP` — and both are why
+  `DEC-GA-008` moves the upload to the consumer workflow instead of fixing the
+  expression in place.
 
-## Milestone 1 — Change package
+## Milestone 1 — Change package [DONE]
 
-- `openspec/changes/add-github-action-contract/proposal.md`, this
-  `tasks.md`, and `specs/github-action-contract/spec.md`, spec-first,
-  before any implementation. Hand the draft to `spec-adversary` before
-  Milestone 2 starts; fold its findings back into the spec, not into code.
-- **Gate:** `make validate`
+- `proposal.md`, `tasks.md`, `specs/github-action-contract/spec.md`, written
+  spec-first and then rewritten against the implementation so no criterion
+  describes something that was not built.
 
-## Milestone 2 — `report.py` pure module
+## Milestone 2 — `report.py` [DONE]
 
-- New `openspec_graph/report.py` in the `sarif.py` shape: stdlib-only, no
-  I/O, zero intra-package imports, taking the envelope as a plain dict
-  (`R-GA-15`). Public surface: `status_of(envelope) -> str`,
-  `to_annotations(envelope, *, limit=ANNOTATION_LIMIT) -> list[str]`,
-  `to_step_summary(envelope) -> str`, `to_outputs(envelope) -> dict[str, str]`,
-  plus the module constants `ANNOTATION_LIMIT` and `STATUSES`.
-- Status derivation exactly as `R-GA-5`, from `blocking` and
-  `specs_checked` only (`DEC-GA-004`).
-- Workflow-command escaping as `R-GA-12`: a single `_escape_data` and a
-  single `_escape_property`, each a module-level table, never inline
-  replacements at a call site. `line=` only for `line >= 1`, mirroring
-  `DEC-SA-003`'s reason.
-- The cap and its trailing `::notice::` (`DEC-GA-010`); the summary's
-  findings table capped identically with the same note.
-- `tests/test_decomposition.py::_NEW_MODULES` gains `"report"`.
-- New `tests/test_report.py`, unit half: the four statuses on constructed
-  envelopes; the zero-spec envelope from a real `validate --format json`
-  run (`AC-GA-4`); the escaping fixture whose message carries `%`, `\r`,
-  `\n`, `:` and `,` (`AC-GA-5`); the cap boundary — exactly the cap plus one
-  notice, and no notice below it (`AC-GA-6`); outputs key set and no
-  embedded newline (`AC-GA-3`); summary determinism across two calls
-  (`AC-GA-7`, `AC-GA-17`).
-- Upgrade each `_Verified by:` in `AC-GA-3..7` and the `report` half of
-  `AC-GA-17` to the real `pytest -k` selector as the test lands.
-- **Gate:** `make test`
+- Pure, stdlib-only, zero intra-package imports; `parse_envelope` as the single
+  gate and every projection total downstream of it; per-severity annotation cap
+  as a module constant; workflow-command escaping as two module-level tables
+  with `%` substituted first; `parse_card`/`discovery_notes` for the
+  detected-machinery facts.
+- `tests/test_report.py` unit half, plus `_NEW_MODULES` and a dedicated
+  intra-package-import test — the existing stdlib-only guard drops relative
+  imports, so it could not have seen a violation here.
 
-## Milestone 3 — CLI wiring and the guards that pin the surface
+## Milestone 3 — CLI wiring [DONE]
 
-- `openspec_graph/cli.py`: `cmd_report` and the `report` subparser
-  (`--findings FILE` required, `--format` with the four choices). Reads the
-  file with `utf-8-sig` like `_load_card` does; exit 2 with a stderr line
-  and empty stdout on an unreadable file, a non-object, or a foreign
-  `schema_version` (`R-GA-10`); one stderr warning on a `tool_version`
-  mismatch, never a refusal (`R-GA-16`). `--format sarif` calls
-  `sarif.to_sarif(envelope["findings"], rules.rule_table(),
-  tool_version=envelope["tool_version"])` — the producer's version, so the
-  driver block matches `validate --format sarif`'s byte-for-byte
-  (`R-GA-11`). Ignores the global `--target` (`DEC-GA-014`). Update the
-  module docstring's verb list.
-- `tests/test_cli_surface.py::ALLOWED_VERBS` gains `"report"` and nothing
-  else (`C-GA-2`).
-- `tests/test_skill_contract.py::READ_ONLY_INVOCATIONS` gains
-  `("report", "--findings", <placeholder>, "--format", "github-outputs")`,
-  with the placeholder substituted at run time by an envelope written
-  *outside* the target tree, the way `_BASELINE_PLACEHOLDER` already works
-  for `delta`. Confirm the invocation exits 0 against the populated fixture
-  — the test's own guard rejects a verb that exits 2.
-- `SKILL.md`: the read-only verb table gains a `report` row (the parity
-  test requires it); the structured-output paragraph names it.
-  `references/exit-codes.md`: a `report` section quoting its exit-2
-  messages. `llms.txt`: `report` in the read-only list.
-- `tests/test_report.py`, end-to-end half: SARIF byte-identity on a
-  multi-file failing fixture and on a clean one (`AC-GA-1`); the four
-  exit-2 inputs and the no-exit-1 property (`AC-GA-2`); the version-mismatch
-  warning (`AC-GA-18`).
-- Confirm empirically that `_EXPECTED_HASHES` and `tests/baseline_rules.json`
-  are untouched (`AC-GA-11`).
-- Upgrade the `_Verified by:` lines of `AC-GA-1`, `AC-GA-2`, `AC-GA-18`.
-- **Gate:** `make ci`
+- `cmd_report` and its subparser; a shared `_read_json` beside `_load_card`;
+  exit 2 on every unprojectable input and never exit 1; one stderr warning on a
+  `tool_version` mismatch; `--format sarif` using the producer's version so the
+  driver block matches `validate --format sarif` byte for byte.
+- `ALLOWED_VERBS`, `READ_ONLY_INVOCATIONS` (with a findings placeholder written
+  outside the target), SKILL.md's read-only table, the exit-code reference and
+  `llms.txt`.
 
-## Milestone 4 — Fixture targets
+## Milestone 4 — Fixture targets [DONE]
 
-- New `tests/fixtures/action/` with five committed targets, each a minimal
-  repository shape (`Makefile`, `pyproject.toml` where a floor is needed,
-  and a spec tree): `passing/` (one harness change package that validates
-  clean), `failing/` (two packages, findings in both, so `AC-GA-1`'s
-  multi-file case has a home), `empty-tree/` (`openspec/changes/` with no
-  package — the vacuous-pass shape), `no-tree/` (no `openspec/` and no
-  `specs/`), `nested/` (the valid target one directory down, so a
-  repository-root run and a subdirectory run differ). A `README.md` in the
-  directory states each fixture's expected `status`, the way
-  `tests/corpus/targets/README.md` labels its shapes.
-- `tests/test_report.py`: one parametrized test per fixture asserting the
-  exit code and the envelope facts its label promises (`AC-GA-16`).
-- `.gitattributes`: pin the fixture tree `-text` if any specimen would be
-  rewritten by a Windows checkout, as the detect corpus already does.
-- Upgrade `AC-GA-16`'s `_Verified by:`.
-- **Gate:** `make test`
+- `tests/fixtures/action/` with five labelled targets and a README stating each
+  one's expected status, each verified against the real CLI.
 
-## Milestone 5 — The action
+## Milestone 5 — The action [DONE]
 
-- Rewrite `.github/actions/planlint/action.yml` to the contract in
-  `R-GA-1..9`, `R-GA-17`, `R-GA-20`. Step order: paths (evidence dir under
-  `RUNNER_TEMP`, outputs for `evidence-dir`/`json-path`/`sarif-path`);
-  setup-python; install (from `$GITHUB_ACTION_PATH/../../..` when `version`
-  is empty, else `pip install "planlint${INPUT_VERSION}"` — inputs passed
-  through `env:`, never interpolated into `run:`); `detect` to `detect.txt`
-  and `detect --format json` to `dialect-card.json`; `validate --format
-  json --fail-on "$INPUT_FAIL_ON"` to `findings.json` under `set +e`,
-  capturing the exit code and writing `run.json`; `report --format sarif`
-  to `findings.sarif` when the envelope is non-empty; `report --format
-  github-annotations` to stdout; `report --format github-summary` appended
-  to `$GITHUB_STEP_SUMMARY`; `report --format github-outputs` appended to
-  `$GITHUB_OUTPUT`, with the action itself emitting `status=error` and the
-  exit code when no envelope exists (`DEC-GA-004`); `dialect` read from the
-  card; SARIF upload guarded on `upload-sarif`, a non-empty SARIF, and
-  `github.event.pull_request.head.repo.full_name == github.repository`;
-  artifact upload under `always()` and `upload-artifact`; the gate last,
-  branching on `status` with the three distinct messages of `R-GA-6`.
-- Keep the `target` input and its SARIF caveat text (`DEC-GA-007`).
-- `tests/test_sarif.py::test_the_composite_action_declares_the_expected_steps`
-  re-pinned to the new contract (`AC-GA-12`): exact input names, the
-  thirteen output names, one `validate --format json` and no
-  `validate --format sarif`, `report` invocations, `RUNNER_TEMP`,
-  `always()`, the fork condition, `GITHUB_ACTION_PATH`, and the
-  `pip install "planlint` override line. New
-  `test_no_workflow_or_template_uses_pull_request_target` and
-  `test_the_action_declares_no_token_input` (`AC-GA-13`).
-- Upgrade `AC-GA-13`'s `_Verified by:`.
-- **Gate:** `make ci`
+- Rewritten to the contract. Evidence under `RUNNER_TEMP`; the CLI installed
+  from a copy so the build cannot write into the scanned checkout; every
+  fallible step clearing `errexit` explicitly.
+- `tests/test_action_contract.py` — the declarative half, and an executable
+  half that extracts the action's steps and runs them. It found the `errexit`
+  defect on its first run, before any runner did.
 
-## Milestone 6 — Consumer template and skill asset
+## Milestone 6 — Consumer template [DONE]
 
-- `templates/spec-gate.yml` rewritten as the consumer workflow: triggers
-  `pull_request` (with the existing `openspec/**`/`specs/**`/`Makefile`/
-  `pyproject.toml` path filters) and `push` to the default branch; job
-  `permissions: contents: read` and `security-events: write`, the second
-  annotated with the one line to delete when code scanning is off;
-  `actions/checkout` with `persist-credentials: false`; the action pinned
-  to `@v<__version__>` with a comment showing the full-SHA form.
-- Copy byte-for-byte over `skills/planlint-spec-governance/assets/spec-gate.yml`
-  (`test_skill_asset_matches_template`).
-- `tests/test_adopter_urls.py::test_ci_template_pins_the_floor_the_skill_enforces`:
-  the pin is now read from the `uses:` ref (`@v([0-9.]+)`) and compared with
-  the skill's `planlint-min-version`; add the third leg — equality with
-  `openspec_graph.__version__` (`DEC-GA-012`). Keep the assertion that the
-  pin exists at all.
-- `README.md` "Wiring it into CI": the action first, with the pinning rule
-  and the permissions block; the raw-`pip` workflow second, with the note
-  that it needs the published distribution.
-- **Gate:** `make test`
+- `templates/spec-gate.yml` rewritten as the consumer workflow, copied
+  byte-for-byte into the skill's assets, with the SARIF upload moved here from
+  the action. The pin-parity test now reads the `uses:` ref and additionally
+  requires it to equal the package version.
 
-## Milestone 7 — The hosted contract job
+## Milestone 7 — The hosted contract job [DONE, pending its first green run]
 
-- `.github/workflows/ci.yml`: new `action-contract` job, `ubuntu-latest`,
-  `permissions: contents: read`, matrix over the five fixture names.
-  Steps: checkout; `uses: ./.github/actions/planlint` with `id: planlint`,
-  `continue-on-error: true`, `target: tests/fixtures/action/<fixture>`
-  (`nested/` points at its subdirectory), `upload-sarif: false`,
-  `artifact-name: planlint-evidence-<fixture>`; an assertion step in bash
-  comparing `steps.planlint.outcome` and every `steps.planlint.outputs.*`
-  against the fixture's label, and checking the evidence files exist.
-- `docs/hooks.md`: CI table row for `action-contract`
-  (`test_hooks_ci_table_lists_every_ci_job` fails until it is there).
-- `tests/test_ci_hardening.py`: `test_ci_workflow_has_an_action_contract_job`
-  — the job exists, uses the local action, names every fixture directory
-  that exists on disk (so a sixth fixture cannot be added without a leg),
-  declares `contents: read`, and is referenced by no Makefile target
-  (`AC-GA-15`, `C-GA-5`).
-- Push, and read the job on the pull request. This is the first time the
-  action has ever executed; expect at least one round of YAML-level fixes
-  the local text tests cannot see, and make each one in the action or the
-  fixtures, never by loosening an assertion (`AC-GA-20`).
-- Upgrade `AC-GA-15`'s `_Verified by:`.
-- **Gate:** `make ci` locally; the `action-contract` job green on the PR.
+- `action-contract` in `ci.yml`, matrixed over every fixture, under a read-only
+  token with no secret; `docs/hooks.md`'s CI table row; three structural guards
+  including one that fails when a fixture has no leg.
+- `AC-GA-23` stays unchecked until the job is observed green.
 
-## Milestone 8 — Docs, versioning rule, roadmap, close-out
+## Milestone 8 — Docs and close-out [DONE]
 
-- `docs/architecture/c4.md`: component row for `report.py` and the
-  container-diagram edge from `cli.py`. `CHANGELOG.md`: `### Added` entry
-  under `[Unreleased]` naming the verb, the contract, and the supersession
-  of the action-internal install line. `docs/differentiation-roadmap.md`:
-  CP-6's status note amended with what this change corrected (the action
-  never ran; the vacuous pass; the fork case). `docs/next-steps.md`: the
-  deferred items with their reopen triggers — pull-request comments via a
-  `workflow_run` reporter, `extra-args`, the floating major tag and
-  Marketplace listing at 1.0, the SARIF subdirectory prefix, an
-  `evidence-sha256` output, and widening `indeterminate` to "no machinery
-  detected".
-- Version sequencing: if `v0.2.0` has been tagged before this merges, set
-  `openspec_graph.__version__` to `0.3.0`, run `make skill-manifests`,
-  update `SKILL.md`'s `metadata.version` and `planlint-min-version`, and the
-  template pin follows through `DEC-GA-012`'s test. If not, nothing moves
-  and `0.2.0` is the release that carries `report`.
-- Dogfood: run the action's exact command sequence by hand against this
-  repository's own tree into a temp directory and confirm the evidence set
-  of `R-GA-8`, then `planlint --target . validate --fail-on WARN` to show
-  the graph-diff job cannot regress on this package.
-- Flip each acceptance criterion to `[x]` only as it is verified;
-  `AC-GA-20` flips only after the hosted job is observed green.
-- **Gate:** `make pre-pr`
+- README's CI section leads with the action and its four statuses;
+  `docs/architecture/c4.md` gains component rows for `report.py` and
+  `sarif.py`; `CHANGELOG.md` records the additions and the four fixes;
+  `docs/next-steps.md` records seven deferrals with their reopen triggers;
+  `docs/differentiation-roadmap.md` gains a CP-GA section naming what CP-6's
+  framing missed.
+- No version bump: `v0.2.0` is untagged, so `0.2.0` is the release carrying
+  `report`.
 
-## Milestone 9 — Outside this repository (owner-executed, not a code change)
+## Milestone 9 — Outside this repository (owner-executed)
 
-- `docs/distribution-plan.md` §3 in full: pending trusted publisher on PyPI,
-  the `pypi` environment, the tag, the three release jobs, the fresh-venv
-  install. Until this is done the action works from any ref of this
-  repository (Milestone 5) but `pip install planlint`, the skill preflight
-  and the pre-commit hook still do not resolve — the plan's own exit
-  criterion.
-- The measure that matters after release, in place of any traffic proxy:
-  clones, unique visitors, package downloads, and — the only one that
-  proves the action is workable — a repository this account does not own
-  running it in CI and acting on a finding. The differentiation roadmap's
-  next planlint decision waits on that signal, not on more rules.
-- **Gate:** every install line this repository prints resolves in a clean
-  virtual environment; one external repository shows a green or red
-  `planlint` check produced by the action.
+- `docs/distribution-plan.md` §3 in full: the pending trusted publisher, the
+  `pypi` environment, the tag, the three release jobs, the fresh-venv install.
+  Until then the action works from any ref of this repository, but
+  `pip install planlint`, the skill preflight and the pre-commit hook still do
+  not resolve.
+- The measure that matters afterwards, in place of any traffic proxy: clones,
+  unique visitors, package downloads, and the only one that proves the action
+  is workable — a repository this account does not own running it in CI and
+  acting on a finding.

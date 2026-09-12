@@ -358,7 +358,35 @@ still cite the old number."
 - **Cutline:** if the target repo is not a git repo, exit 0 with an INFO that
   delta lint requires a git history — do not guess.
 
-### CP-6: `add-sarif-and-actions` (v4, distribution) — implemented
+### CP-GA: `add-github-action-contract` — implemented
+
+> The composite action CP-6 shipped was the right first move and did not work.
+> Three things this section's framing missed, each found by grounding it
+> against the tree rather than against the sketch:
+>
+> 1. **It had never run for anybody, and could not.** Its install line took
+>    `planlint` from PyPI, where nothing is published — the only tag is
+>    `v0.1.0`, under the pre-rename distribution name. "Time-to-first-red-X
+>    under five minutes" was measured against an action that failed at step
+>    one. The CLI is now installed from the action's own checkout, so the
+>    `uses:` ref pins the tool and the adapter together and the action works at
+>    any ref, published or not.
+> 2. **A run that checked nothing was reported as a pass.** `validate` over a
+>    spec tree holding no change package exits 0, and the action relayed that
+>    as green — a passing check over an unmeasured repository, which is worse
+>    than no check because the green is now evidence. The action reports four
+>    results, and `indeterminate` fails the build.
+> 3. **The projections belong in Python.** SARIF was produced by a second
+>    `validate` run and everything else by nothing at all. One run now writes
+>    one envelope and `planlint report` projects it into SARIF, annotations, a
+>    job summary and step outputs — so those surfaces cannot disagree with each
+>    other or with the exit code, and the escaping rules that shell-and-jq
+>    implementations get wrong are ordinary tested code.
+>
+> The action's own shell steps are extracted and executed against labelled
+> fixtures in `make test`, and run for real in the `action-contract` CI job.
+
+### CP-6: `add-sarif-and-actions` (v4, distribution) — implemented, then superseded in part
 
 > Status: implemented. See the approved spec at
 > `openspec/changes/add-sarif-and-actions/specs/sarif-output/spec.md`
