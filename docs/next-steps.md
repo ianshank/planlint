@@ -4,6 +4,34 @@ What is intentionally **not** in scope yet, and the order to consider it. Each
 item is deferred deliberately — adding it before the value is proven would be
 over-engineering.
 
+## After the first public tag (0.2.0)
+
+Do **not** start this list before `v0.2.0` is tagged and `pip install planlint`
+resolves. The in-tree remainder is not more rules; it is 1.0 credibility.
+Each item is its own OpenSpec change, spec-drafter → spec-adversary first.
+
+1. **Vacuous-pass policy.** A target with no Makefile and no coverage floor
+   currently passes G003/G004 vacuously. The Action already reports that
+   through `discovery-warnings`. Widening `indeterminate` to cover "no
+   machinery detected" is a rule-semantics question (reopen trigger already
+   recorded under the Action contract deferrals below). Docs for CLI
+   adopters now sit in the README; the remaining work is the policy decision.
+2. **Finding line numbers.** `Finding.line` is 0 because `Rule.check` returns
+   strings. Criteria and waivers already carry lines; `Requirement` does not.
+   Plumbing a region into SARIF is a check-contract change. Until then the
+   region is omitted, never clamped to line 1.
+3. **Named Action inputs** for `--change` and `--dialect`. No raw
+   `extra-args`. Leave `--require-witness` off the Action (the store is
+   gitignored; a fresh CI checkout always fails it closed).
+4. **One real `evals/` run** (item 16 below), then **CP-8** agent-threat
+   corpus + H007 with a CI-exposed catch-rate. Detect-corpus and matcher
+   floors are already shipped.
+5. SpecKit wrong-level heading WARN (item 4b) and U004 modal design (item 7c).
+6. **Marketplace + floating `v1` only at 1.0** (DEC-GA-011).
+
+Rule-pack plugins (item 3) and configurable discovery lists (item 4) stay
+later than this list. They sharpen a tool nobody has adopted yet.
+
 ## Near term
 
 1. ~~**Waiver audit report**~~ — shipped in CP-4 (`add-waiver-ledger-and-inv-lints`)

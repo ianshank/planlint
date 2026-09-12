@@ -56,12 +56,13 @@ jobs:
           # anything else that runs in this job.
           persist-credentials: false
 
-      # Pinned to an exact release tag. The tag pins the adapter and the CLI
-      # together, so nothing floats underneath a green build. For a stricter
-      # supply chain, pin the full commit sha instead:
-      #   uses: ianshank/planlint/.github/actions/planlint@<40-character sha>
+      # The Action installs the CLI from its own checkout, so any git ref of
+      # ianshank/planlint works. v0.2.0 is the first public tag and does not
+      # exist until the release workflow cuts it; until then pin this SHA
+      # (the last Action implementation). After the tag exists, switch to:
+      #   uses: ianshank/planlint/.github/actions/planlint@v0.2.0
       - id: planlint
-        uses: ianshank/planlint/.github/actions/planlint@v0.2.0
+        uses: ianshank/planlint/.github/actions/planlint@a853b72f05a0a1ecbfed52eca6791bf2bb9ffa11
         with:
           target: "."
           fail-on: ERROR

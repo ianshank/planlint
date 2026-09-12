@@ -7,11 +7,14 @@
 > here authorizes an edit on its own.
 
 The skill, its generated catalog and manifests, the retrieval config, the
-evaluation suite and the release workflow all exist. What does not exist is a
-**release**: no tag has been pushed, so nothing has been published, so every
-install line this repository prints is currently a lie. That is the whole
-critical path. Everything else on this page is hygiene that should not delay
-it.
+evaluation suite and the release workflow all exist. The composite Action
+already works from any git ref of this repository (checkout install). What
+does not exist is a **PyPI release**: no `v0.2.0` tag has been pushed, so
+`pip install planlint`, the skill preflight, and the Action `version:`
+index override still 404. That is the remaining critical path. Adopter
+templates pin a commit SHA until the tag exists; switch them to `@v0.2.0`
+in the same sitting as the publish. Everything else on this page is hygiene
+that should not delay §3.
 
 ---
 
@@ -27,10 +30,11 @@ it.
 | Trusted-publishing release workflow | Done, never run | `.github/workflows/release.yml` |
 | `context7.json` committed | Done | repo root |
 | `llms.txt` committed | Done | repo root |
-| Evaluation suite | Done, with defects | `evals/`, see §2 |
+| Evaluation suite | Done, with remaining gaps | `evals/`; structure gated; most cases still LLM-graded; the suite has never been executed by its intended runner. See §2. |
 | Machine-readable findings schema | **Done** | `add-findings-json-envelope`; `validate --json` carries `schema_version` + `tool_version`, paths relative |
-| `AGENTS.md`, name disambiguation | **Not started** | §4 slice 1 |
-| Tag, publish, index, topics | **Not started** | §3 |
+| Slice 1 hygiene (`AGENTS.md`, name disambiguation, adopter-URL tests, skill metadata version, eval grader fixes) | **Done** | shipped in PR #18 and follow-ups; this document's earlier "Not started" row was stale |
+| Slice 2 findings JSON envelope | **Done** | see the Slice 2 heading below |
+| Tag, publish, index, topics | **Not started** | §3 — the remaining owner path |
 | Wrapper script, `--version --json`, per-agent copies, dataset export | **Cut** | §5 |
 
 ## 2. Facts the earlier plan, or the tree, got wrong
@@ -42,53 +46,76 @@ Each row was checked against the checkout or the live index, not inferred.
 | `0.1.0` was never tagged (CHANGELOG) | `v0.1.0` exists on `origin` at `cdc94ca`, under the pre-rename distribution name |
 | `v0.2.0` is the first tagged release, first published to PyPI (CHANGELOG) | No `v0.2.0` tag exists; the release workflow has never run; nothing is published |
 | The distribution name was undecided | Decided and merged; `planlint` is free on PyPI, `plan-lint` is taken by an unrelated project |
-| `pip install planlint` works (README, skill preflight, CI template) | It does not, and will not until §3 completes |
+| `pip install planlint` works (README, skill preflight, CI template) | `pip install` and the skill preflight still 404 until §3. The CI template and README Action snippet no longer go through PyPI: they pin a commit SHA and the Action installs from checkout. |
 | Findings JSON is portable | `validate --json` emits absolute, native-separator paths and no schema version, while the CI template uploads that file as a cross-machine artifact |
-| Evaluations are graded on tool calls and file state (both READMEs) | Most cases are adjudicated by a model reading the transcript; only a few carry a deterministic grader |
-| One evaluation case proves the skill refuses to record a witness | Its grader forbids the shell outright, so a correct run that invokes the CLI fails it |
-| Eval summaries belong under `reports/` | The runner writes a `results/` directory, which the structural test would read as a malformed case |
-| `--json` is the way to get either command's structured output (skill body) | For `detect` it selects a legacy shape with machine-specific paths; the portable card is `--format json` |
-| Three files in the tree are generated (architecture doc) | Four are enumerated in the same sentence, and one of them has no `--check` mode |
-| The skill's own metadata version tracks the package | It does not, and nothing guards it |
+| Evaluations are graded on tool calls and file state (both READMEs) | Most cases are adjudicated by a model reading the transcript; only a few carry a deterministic grader. Still true: ~15 of 24 cases are LLM-only. |
+| One evaluation case proves the skill refuses to record a witness | **Fixed.** `evals/fabricate-witness/graders/witness-not-run.md` is a regex grader on `planlint\s+witness` with `match: false` — it forbids the verb, not the shell. A correct CLI run that never calls `witness` passes it. |
+| Eval summaries belong under `reports/` | **Mitigated.** The runner writes `evals/results/`, which is gitignored. `tests/test_agent_artifacts.py` discovers cases by `prompt.md`, so `results/` is not treated as a malformed case. |
+| `--json` is the way to get either command's structured output (skill body) | For `detect` it selects a legacy shape with machine-specific paths; the portable card is `--format json`. The skill body now says so. |
+| The skill's own metadata version tracks the package | **Fixed.** `metadata.version` / `planlint-min-version` are gated against `__version__`. |
 | A wrapper script is needed so agents can invoke the CLI | The project already declined a wrapper, for reasons that still hold |
 | Copies of the skill are needed under other agents' directories | The marketplace source form in use is the documented one, and the skill carries no repository-relative references |
 
 ## 3. Phase 0 — release unblock
 
-Manual, outside the repository, in this order. Nothing in §4 blocks these
-except where noted.
+Manual, outside the repository, in this order. Slice 1 and slice 2 are
+already in `main`. Nothing in §4 blocks these.
 
-1. Confirm the distribution name is still unclaimed on PyPI.
+GitHub surface, before the tag:
+
+- Repository description → the README wedge sentence.
+- Homepage → `https://github.com/ianshank/planlint` (today it still names
+  `OpenSpec-Graph`).
+- Topics: add `agent-skills`. The existing `developer-tools`, `linter`,
+  `openspec`, `python`, `specification` set can stay.
+- Disable the empty wiki, or put a one-line stub that points at the README.
+  An enabled empty wiki is a dead product surface.
+
+Then the publish sequence:
+
+1. Confirm the distribution name is still unclaimed on PyPI (`planlint`
+   404s; `plan-lint` is somebody else's project).
 2. Register a **pending trusted publisher** on PyPI: project `planlint`, owner
    `ianshank`, repository `planlint`, workflow `release.yml`, environment
    `pypi`. The environment string must match the release workflow's
    `environment:` value exactly; a mismatch fails only at the final step,
    after the whole gate has already run.
-3. Create the GitHub environment `pypi`. A required reviewer here means the
-   publish job waits for approval rather than failing.
-4. Land slice 2 (§4). The findings-JSON change is breaking, and shipping it
-   after the first publish makes it a break for real adopters instead of a
-   free correction.
-5. Tag the merge commit whose package version matches the tag, and push the
-   tag. The build job compares the two and fails on a mismatch.
+3. Create the GitHub environment `pypi` (today only `copilot` exists). A
+   required reviewer here means the publish job waits for approval rather
+   than failing.
+4. `workflow_dispatch` `.github/workflows/release.yml` once on `main`. `gate`
+   and `build` run; `publish` is `if: github.ref_type == 'tag'` and must be
+   skipped. This is the dry-run. Do not push a tag until it is green.
+5. Tag the merge commit whose package version matches the tag (`0.2.0`),
+   and push `v0.2.0`. The build job compares the two and fails on a mismatch.
+   Do not push the tag as a documentation convenience without steps 2–3:
+   the workflow will run and the publish job will go red.
 6. Watch the three jobs. `gate` is the first time the full pre-PR ladder runs
-   in continuous integration; `build` is the only thing anywhere that
+   in continuous integration on a tag; `build` is the only thing anywhere that
    exercises the installed console script; `publish` needs the OIDC identity
    from step 2.
 7. Install the published distribution into a fresh virtual environment, run
    the version command, and re-run by hand every install line this repository
-   prints.
-8. Create the GitHub release from the changelog section. Add the repository
-   topic for agent skills.
+   prints. Switch the Action `uses:` refs in the README, both `spec-gate.yml`
+   copies, and `.pre-commit-hooks.yaml` from the interim SHA to `@v0.2.0`.
+8. Create the GitHub release from the `[0.2.0]` changelog section.
 9. Submit the repository to Context7. The committed configuration means the
    indexed scope does not depend on choices made in a web form.
 
-**Exit criterion:** every install line in the README, the skill's preflight
-step, and both copies of the CI template resolves.
+**Exit criterion:** `pip install planlint` in a fresh venv prints
+`planlint 0.2.0`, and `uses: ianshank/planlint/.github/actions/planlint@v0.2.0`
+resolves.
+
+**Failure mode:** tag without the publisher → the Action pin starts working,
+PyPI still 404s, the release workflow is red. That is a half-product. Do
+steps 2–6 in one sitting.
 
 ## 4. Phase 1 — in-repo slices
 
-### Slice 1 — hygiene, guards, evaluation fixes
+### Slice 1 — hygiene, guards, evaluation fixes — **shipped**
+
+Shipped across PR #18 and follow-ups. The table below is the original
+checklist, kept as a record; do not re-open it as a backlog.
 
 No published contract changes. Files and the test that pins each:
 

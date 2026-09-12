@@ -182,6 +182,22 @@ quality without making the document wrong.
 | W001 | ERROR | any | Every cited stage has a fresh, exit-0 witness (only under `--require-witness`) |
 | W002 | ERROR | any | A witness's recorded coverage meets the detected floor (only under `--require-witness`) |
 
+W001 and W002 are **opt-in**. A plain `validate` does not evaluate them, and a
+passing run is not proof that any cited stage executed. `--require-witness`
+reads content-addressed files under `.planlint/witnesses/`. This repository
+gitignores `.planlint/`, and a typical CI checkout does the same, so enabling
+the flag on a fresh clone **always fails closed** (W001: never witnessed).
+Record witnesses in the job that actually ran the stage, and persist the
+store as an artifact if a later job needs it. The composite Action does not
+expose `--require-witness` for that reason.
+
+A target with **no Makefile and no coverage floor** is a related honesty
+gap: G003 and G004 have nothing to compare citations against, so a green
+`validate` proves less than it looks like it proves. The Action reports that
+through `discovery-warnings` and a warning annotation rather than relabelling
+the run `indeterminate`. Widening that status is a policy change, not a
+projection change.
+
 G002 is the load-bearing one: *at least one criterion must name a non-success
 outcome — what this change rejects, denies, or fails closed on.* A plan that
 only describes success has not said what going wrong looks like. See
@@ -370,22 +386,29 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: ianshank/planlint/.github/actions/planlint@v0.2.0
+      - uses: ianshank/planlint/.github/actions/planlint@a853b72f05a0a1ecbfed52eca6791bf2bb9ffa11
         with:
           target: "."
           fail-on: ERROR
 ```
 
-The action installs the CLI, runs the gate once, annotates the pull request,
-writes a job summary, and uploads the complete evidence bundle — the findings
-envelope, its SARIF projection, the dialect card and the run metadata — as a
-workflow artifact you can download on a red build.
+The action installs the CLI from **its own checkout** when `version` is left
+empty, so the `uses:` ref pins the adapter and the CLI together and there is
+no package index to wait for. The composite steps are bash and the documented
+runner is `ubuntu-latest`; Windows CI in this repository covers the pytest
+suite, not this action.
 
-Pin an exact release tag, as above, or a full commit sha for a stricter supply
-chain. The tag pins the adapter and the CLI together, so nothing floats
-underneath a green build. The action needs no token and no secret: it reads the
-repository and writes nothing into it, which is the posture a fork pull request
-gets anyway.
+`v0.2.0` is the first public tag and is **not on GitHub until the release
+workflow cuts it**. Pin the commit SHA above until then. After the tag
+exists, switch the ref to `@v0.2.0`. A full commit SHA remains valid either
+way.
+
+The action runs the gate once, annotates the pull request, writes a job
+summary, and uploads the complete evidence bundle — the findings envelope,
+its SARIF projection, the dialect card and the run metadata — as a workflow
+artifact you can download on a red build. It needs no token and no secret:
+it reads the repository and writes nothing into it, which is the posture a
+fork pull request gets anyway.
 
 **It reports four results, and only the first is green.**
 
