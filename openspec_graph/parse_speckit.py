@@ -16,8 +16,8 @@ from .parse_semantics import (
     SPECKIT_SUCCESS_CRITERIA_HEADING,
     USER_STORY_HEADING,
     line_of,
-    speckit_section_body,
-    speckit_subsection_body,
+    speckit_section_span,
+    speckit_subsection_span,
     strip_waiver_comments,
 )
 
@@ -32,10 +32,16 @@ def parse_speckit(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion, 
     # no "### Functional Requirements" heading at all) -- scope to the H3's
     # own span via speckit_subsection_body so only bullets actually declared
     # there count.
-    req_section = speckit_section_body(text, "Requirements")
-    req_body = speckit_subsection_body(req_section, "Functional Requirements")
+    req_origin, req_section = speckit_section_span(text, "Requirements")
+    sub_origin, req_body = speckit_subsection_span(req_section, "Functional Requirements")
+    fr_origin = req_origin + sub_origin
     reqs = tuple(
-        Requirement(ident=m.group(1), text=m.group(2), kind="functional")
+        Requirement(
+            ident=m.group(1),
+            text=m.group(2),
+            kind="functional",
+            line=line_of(text, fr_origin + m.start()),
+        )
         for m in FR_DECL.finditer(req_body)
     )
 
@@ -48,14 +54,14 @@ def parse_speckit(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion, 
     # function guards on `crit.note` being non-empty for exactly this
     # reason -- every SC bullet would otherwise report as "missing
     # WHEN/THEN", which was never a claim it made).
-    sc_body = speckit_section_body(text, SPECKIT_SUCCESS_CRITERIA_HEADING)
+    sc_origin, sc_body = speckit_section_span(text, SPECKIT_SUCCESS_CRITERIA_HEADING)
     for m in SC_DECL.finditer(sc_body):
         criteria.append(
             Criterion(
                 ident=m.group(1),
                 text=m.group(2),
                 requirement_refs=(),
-                line=line_of(text, text.find(m.group(0))),
+                line=line_of(text, sc_origin + m.start()),
             )
         )
 

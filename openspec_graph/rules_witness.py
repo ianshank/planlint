@@ -22,7 +22,7 @@ from collections.abc import Iterable
 
 from .detect import StackProfile
 from .parse import MAKE_REF, Criterion, ParsedSpec
-from .rule_types import ERROR, Rule
+from .rule_types import ERROR, CheckHit, CheckResult, Rule
 from .witness import matching_witnesses
 
 __all__ = ["WITNESS_RULES"]
@@ -34,7 +34,7 @@ def _stage_citations(spec: ParsedSpec) -> Iterable[tuple[Criterion, str]]:
             yield crit, stage
 
 
-def _missing_witness(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
+def _missing_witness(spec: ParsedSpec, profile: StackProfile) -> Iterable[CheckResult]:
     """W001: distinguishes *why* a citation is unproven rather than one
     generic "no witness" message for every cause (missing, stale-commit,
     and failing-run findings would otherwise be indistinguishable to a CI
@@ -45,12 +45,16 @@ def _missing_witness(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
             # even attempted), but that's not why this citation is unproven:
             # nothing has ever been witnessed. Saying "sha could not be
             # determined" would misdiagnose this as a git problem.
-            yield f"{crit.ident} cites `{stage}`, which has never been witnessed"
+            yield CheckHit(
+                f"{crit.ident} cites `{stage}`, which has never been witnessed",
+                line=crit.line,
+            )
             continue
         if profile.current_sha is None:
-            yield (
+            yield CheckHit(
                 f"{crit.ident} cites `{stage}`, but the current commit sha could not "
-                "be determined; no witness can be verified"
+                "be determined; no witness can be verified",
+                line=crit.line,
             )
             continue
         at_commit = matching_witnesses(profile.witnesses, stage, profile.current_sha)
@@ -58,17 +62,24 @@ def _missing_witness(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
             continue
         failing = next((w for w in at_commit if w.exit_code != 0), None)
         if failing is not None:
-            yield (
+            yield CheckHit(
                 f"{crit.ident} cites `{stage}`, whose witness at the current commit "
-                f"recorded a failing run (exit {failing.exit_code})"
+                f"recorded a failing run (exit {failing.exit_code})",
+                line=crit.line,
             )
         elif any(w.stage == stage for w in profile.witnesses):
-            yield f"{crit.ident} cites `{stage}`, which is witnessed, but not at the current commit"
+            yield CheckHit(
+                f"{crit.ident} cites `{stage}`, which is witnessed, but not at the current commit",
+                line=crit.line,
+            )
         else:
-            yield f"{crit.ident} cites `{stage}`, which has never been witnessed"
+            yield CheckHit(
+                f"{crit.ident} cites `{stage}`, which has never been witnessed",
+                line=crit.line,
+            )
 
 
-def _witness_below_floor(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
+def _witness_below_floor(spec: ParsedSpec, profile: StackProfile) -> Iterable[CheckResult]:
     """W002: only evaluates witnesses that already clear W001's own bar
     (fresh, exit-0, at the current commit) -- a missing witness is W001's
     finding to make, not a second, redundant one here."""
@@ -81,9 +92,10 @@ def _witness_below_floor(spec: ParsedSpec, profile: StackProfile) -> Iterable[st
             if w.exit_code != 0:
                 continue
             if w.coverage is not None and w.coverage < floor:
-                yield (
+                yield CheckHit(
                     f"{crit.ident} cites `{stage}`, whose witness recorded "
-                    f"{w.coverage}% coverage, below the detected floor of {floor}%"
+                    f"{w.coverage}% coverage, below the detected floor of {floor}%",
+                    line=crit.line,
                 )
 
 

@@ -67,6 +67,7 @@ class Requirement:
     kind: str  # "functional" | "constraint" | "shall"
     level: int = 0  # markdown heading depth, 0 for list-declared requirements
     body: str = ""  # upstream-dialect prose beneath the heading; "" for harness
+    line: int = 0  # 1-based declaration line; 0 when the parser has no locus
 
     @property
     def is_normative(self) -> bool:

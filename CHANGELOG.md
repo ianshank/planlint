@@ -15,6 +15,31 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 > tag (through PR #24): `report`, the four-way Action contract, SARIF, `delta`,
 > the labelled detect corpus, matcher precision, and the findings envelope.
 
+### Added — finding line hits and named Action scope (`add-finding-line-hits`)
+
+- **`CheckHit`**, an additive check-contract type. `Rule.check` may yield a
+  bare `str` (still `line=0`) or `CheckHit(message, line=)`. `evaluate()`
+  copies `line` onto `Finding` only when it is `>= 1` and never clamps a
+  missing locus to 1. `FINDINGS_SCHEMA_VERSION` stays `1`: the `line` key
+  already existed.
+- **Honest parser loci.** `Requirement.line` is 1-based in all three
+  dialects. Harness criteria stop using `text.find(block[:60])` and use the
+  Acceptance Criteria span origin plus the match offset, so a quoted copy of
+  an AC no longer steals its line.
+- **Migrated rules** that already held a locus now put it on the finding:
+  G007, H001–H004, U002–U004, S001–S004, W001/W002. Citation and document-
+  level checks stay at line 0 on purpose.
+- **Named Action inputs `change` and `dialect`.** Empty defaults omit the
+  CLI flag. No `extra-args`. No `--require-witness` on the Action.
+
+> `v0.1.0` was tagged in git (`cdc94ca`) under the previous distribution name
+> `openspec-graph`, and was never published to a package index. `v0.2.0` is the
+> first release under the `planlint` name and the first intended for PyPI;
+> publication happens when the tag is pushed and `.github/workflows/release.yml`
+> runs. This section includes every change that sat under Unreleased until the
+> tag (through PR #24): `report`, the four-way Action contract, SARIF, `delta`,
+> the labelled detect corpus, matcher precision, and the findings envelope.
+
 ### Changed — release-train honesty
 
 - **Changelog no longer splits 0.2.0.** The work that accumulated under

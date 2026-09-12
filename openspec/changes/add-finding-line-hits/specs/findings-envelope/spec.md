@@ -265,10 +265,14 @@ not treat as a schema bump. The package version stays `0.2.0`.
   (R-LH-9, R-LH-11, DEC-LH-011, DEC-LH-013)
   _Verified by:_ `pytest -k test_requirement_line_is_one_based_in_harness_upstream_and_speckit` · stage: `make test`
 
-- [ ] **AC-LH-7:** In a harness document where two AC blocks share a
-  leading prefix long enough that `text.find(block[:60])` would hit the
-  first, the second criterion's `.line` is the line of the second AC
-  bullet. (R-LH-10, R-LH-12, DEC-LH-007)
+- [ ] **AC-LH-7:** In a harness document where `text.find(block[:60])`
+  for the second AC actually diverges from that bullet's line — either
+  because the Problem Statement quotes that AC's `block[:60]`, or
+  because two ACs share an ident so the first sixty characters collide —
+  the second criterion's `.line` is the line of the second AC bullet,
+  not the earlier copy. Distinct ids with only a shared description do
+  not reproduce the old false locus (the ident sits inside `block[:60]`).
+  (R-LH-10, R-LH-12, DEC-LH-007)
   _Verified by:_ `pytest -k test_harness_criterion_line_is_the_ac_bullet_not_a_duplicate_prefix` · stage: `make test`
 
 - [ ] **AC-LH-8 (non-success):** `section_body(text, name)` still returns

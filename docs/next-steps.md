@@ -16,12 +16,14 @@ Each item is its own OpenSpec change, spec-drafter → spec-adversary first.
    machinery detected" is a rule-semantics question (reopen trigger already
    recorded under the Action contract deferrals below). Docs for CLI
    adopters now sit in the README; the remaining work is the policy decision.
-2. **Finding line numbers.** `Finding.line` is 0 because `Rule.check` returns
-   strings. Criteria and waivers already carry lines; `Requirement` does not.
-   Plumbing a region into SARIF is a check-contract change. Until then the
-   region is omitted, never clamped to line 1.
-3. **Named Action inputs** for `--change` and `--dialect`. No raw
-   `extra-args`. Leave `--require-witness` off the Action (the store is
+2. ~~**Finding line numbers.**~~ Shipped in `add-finding-line-hits`.
+   `Rule.check` may yield `CheckHit` with a 1-based locus; `evaluate()` copies
+   it onto `Finding.line` when `>= 1`. SARIF region and GitHub `line=` still
+   omit a missing locus rather than clamping 0 to 1. Citation rules
+   (G003–G005/G008) and whole-tree G006/G009 stay at line 0 on purpose.
+3. ~~**Named Action inputs** for `--change` and `--dialect`.~~ Shipped in
+   `add-finding-line-hits`. Empty defaults omit the flag. No raw
+   `extra-args`. `--require-witness` stays off the Action (the store is
    gitignored; a fresh CI checkout always fails it closed).
 4. **One real `evals/` run** (item 16 below), then **CP-8** agent-threat
    corpus + H007 with a CI-exposed catch-rate. Detect-corpus and matcher
@@ -104,13 +106,13 @@ later than this list. They sharpen a tool nobody has adopted yet.
    already computed, plus a composite Action and `.pre-commit-hooks.yaml`.
 
    One thing this item's framing got wrong, and it is the interesting part:
-   findings carry `path`/`line`/`rule`/`severity`, but **no rule sets a
-   line** — every finding reaching the CLI has `line == 0`. SARIF's
-   `startLine` minimum is 1, so clamping would have put a wrong annotation on
-   the first line of every file in every pull request, with no way for a
-   reviewer to tell it was wrong. The region is omitted instead. A projection
-   is only as good as the fields it is projecting, which is worth checking
-   before assuming one is mechanical.
+   findings carry `path`/`line`/`rule`/`severity`, but when SARIF first
+   shipped **no rule set a line** — every finding reaching the CLI had
+   `line == 0`. SARIF's `startLine` minimum is 1, so clamping would have put
+   a wrong annotation on the first line of every file in every pull request,
+   with no way for a reviewer to tell it was wrong. The region is omitted
+   instead. `add-finding-line-hits` later fills `Finding.line` when a check
+   holds a real locus (`CheckHit`); the omit-when-`< 1` rule is unchanged.
 
    Deferred from `add-github-action-contract`, each with a reopen trigger
    rather than a date:

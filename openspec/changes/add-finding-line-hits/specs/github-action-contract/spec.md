@@ -95,6 +95,11 @@ without an edit.
   the list going forward. Adding an output remains allowed within a
   major version (`R-GA-4`); adding an input is the stronger change, which
   is why it is specified here rather than waved through as compatible.
+  The new *input* `dialect` is a validate override; it is not the
+  existing *output* of the same name (`R-GA-4`), which remains the
+  detect-derived dialect `report` projects. GitHub keeps `inputs` and
+  `outputs` in different maps, so `with: dialect: speckit` does not
+  rewrite `steps.*.outputs.dialect`.
 - **DEC-GA-018:** empty means omit the flag, not pass a sentinel.
   `--dialect auto` is a real CLI choice (`cli.py:880`) that *overrides*
   detection. Passing it when the Action input is empty would change

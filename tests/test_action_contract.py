@@ -39,6 +39,7 @@ FIXTURES = REPO_ROOT / "tests" / "fixtures" / "action"
 # or removing one is not, which is why the set is pinned rather than sampled.
 EXPECTED_INPUTS = {
     "target", "version", "fail-on", "python-version", "upload-artifact", "artifact-name",
+    "change", "dialect",
 }
 EXPECTED_OUTPUTS = {
     "status", "exit-code", "errors", "warnings", "infos", "findings", "blocking",
@@ -130,6 +131,8 @@ def _top_level_keys(text: str, section: str) -> set[str]:
 
 
 def test_the_action_declares_exactly_the_v1_inputs() -> None:
+    """The closed list grew by two named flags (`change`, `dialect`).
+    Adding an input is the stronger change; outputs may still grow."""
     assert _top_level_keys(_action_text(), "inputs") == EXPECTED_INPUTS
 
 
@@ -145,7 +148,9 @@ def test_the_action_runs_validate_once_and_projects_the_rest() -> None:
     """The property that makes every surface agree: one rule-engine run, and
     every other rendering a projection of the file it wrote."""
     text = _action_text()
-    assert len(re.findall(r"planlint --target \"\$INPUT_TARGET\" validate", text)) == 1
+    scan = next(step for step in _steps(text) if step.get("id") == "scan")
+    body = str(scan["run"])
+    assert body.count('planlint "${args[@]}"') == 1
     assert "validate --format sarif" not in text, (
         "SARIF must be projected from the envelope by `report`, not produced by a "
         "second validate run that could disagree with the first"
@@ -270,6 +275,26 @@ def test_the_install_override_names_the_published_distribution() -> None:
     assert _requirements(line) == ["planlint"], line
 
 
+def test_action_inputs_include_change_and_dialect() -> None:
+    declared = _top_level_keys(_action_text(), "inputs")
+    assert declared == EXPECTED_INPUTS
+    assert {"change", "dialect"} <= declared
+    assert not any("token" in name for name in declared)
+    text = _action_text()
+    # Both new inputs default to empty so templates that omit them keep working.
+    assert re.search(r"^  change:$", text, re.MULTILINE)
+    assert re.search(r"^  dialect:$", text, re.MULTILINE)
+
+
+def test_action_does_not_pass_require_witness() -> None:
+    text = _action_text()
+    declared = _top_level_keys(text, "inputs")
+    assert "extra-args" not in declared
+    assert "args" not in declared
+    assert "--require-witness" not in text
+    assert not (REPO_ROOT / "action.yml").exists()
+
+
 # --- the executable half -----------------------------------------------------
 
 
@@ -340,7 +365,9 @@ def test_the_step_extractor_sees_the_whole_action() -> None:
     assert all(isinstance(steps[i].get("run"), str) for i, _ in enumerate(steps) if steps[i].get("run"))
     scan = next(step for step in steps if step.get("id") == "scan")
     assert "planlint --target" in str(scan["run"])
-    assert set(scan["env"]) >= {"INPUT_TARGET", "INPUT_FAIL_ON", "EVIDENCE"}
+    assert set(scan["env"]) >= {
+        "INPUT_TARGET", "INPUT_FAIL_ON", "INPUT_CHANGE", "INPUT_DIALECT", "EVIDENCE",
+    }
 
 
 def _resolve(expression: str, context: dict[str, object]) -> str:
@@ -368,7 +395,8 @@ class ActionRun:
             "inputs": {
                 "target": ".", "version": "", "fail-on": "ERROR",
                 "python-version": "3.12", "upload-artifact": "true",
-                "artifact-name": "planlint-evidence", **inputs,
+                "artifact-name": "planlint-evidence",
+                "change": "", "dialect": "", **inputs,
             },
             # The install step is a `uses:`-adjacent concern (it installs the
             # CLI that is already installed here), so its one output is seeded
@@ -393,6 +421,12 @@ class ActionRun:
             "GITHUB_OUTPUT": _posix(outputs_file),
             "GITHUB_STEP_SUMMARY": _posix(self.summary),
             "GITHUB_ACTION_PATH": _posix(ACTION.parent),
+            # Isolated HOME hides a `--user` install. The hosted job installs
+            # into the runner's Python; pointing at this checkout is the local
+            # equivalent so the scan exercises the adapter, not site.USER_SITE.
+            "PYTHONPATH": os.pathsep.join(
+                p for p in (str(REPO_ROOT), os.environ.get("PYTHONPATH", "")) if p
+            ),
         }
         # Git Bash needs SYSTEMROOT to resolve its own helpers; harmless
         # elsewhere and absent from the minimal env above without it.
@@ -576,3 +610,91 @@ def test_the_evidence_directory_is_outside_the_scanned_tree(tmp_path: Path) -> N
     evidence = Path(run.outputs("paths")["evidence-dir"]).resolve()
     assert evidence.is_relative_to(tmp_path.resolve())
     assert not evidence.is_relative_to(target.resolve())
+
+
+def _capture_validate_argv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **inputs: str
+) -> list[str]:
+    """Run the scan step against a shim ``planlint`` that records argv.
+
+    The shim exits 0 without importing the real CLI: these tests are about
+    which flags the adapter appended, not about evaluating rules.
+    """
+    shim_dir = tmp_path / "shim"
+    shim_dir.mkdir()
+    log_path = tmp_path / "planlint-argv.jsonl"
+    script = shim_dir / "planlint"
+    script.write_text(
+        "#!/usr/bin/env python3\n"
+        "import json, sys\n"
+        f"log = {str(log_path)!r}\n"
+        "if '--version' in sys.argv:\n"
+        "    print('planlint 0.0.0-shim')\n"
+        "    raise SystemExit(0)\n"
+        "with open(log, 'a', encoding='utf-8') as fh:\n"
+        "    json.dump(sys.argv[1:], fh)\n"
+        "    fh.write('\\n')\n"
+        "raise SystemExit(0)\n",
+        encoding="utf-8",
+    )
+    script.chmod(0o755)
+    runner_temp = tmp_path / "runner"
+    runner_temp.mkdir()
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    # Construct before PATH is patched: ActionRun seeds the install version
+    # from the real `planlint --version`.
+    run = ActionRun(workspace, runner_temp, **inputs)
+    monkeypatch.setenv("PATH", f"{shim_dir}{os.pathsep}{os.environ['PATH']}")
+    assert run.run_step("paths") == 0, run.logs.get("paths")
+    assert run.run_step("scan") == 0, run.logs.get("scan")
+    rows = [
+        json.loads(line)
+        for line in log_path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    validate_rows = [row for row in rows if "validate" in row]
+    assert len(validate_rows) == 1, rows
+    return validate_rows[0]
+
+
+def test_empty_change_and_dialect_inputs_omit_cli_flags() -> None:
+    scan = next(step for step in _steps(_action_text()) if step.get("id") == "scan")
+    body = str(scan["run"])
+    assert '[ -n "$INPUT_CHANGE" ]' in body
+    assert '[ -n "$INPUT_DIALECT" ]' in body
+    assert 'args+=( --change "$INPUT_CHANGE" )' in body
+    assert 'args+=( --dialect "$INPUT_DIALECT" )' in body
+    # The auto override is a real CLI choice; it must not appear as a
+    # fallback in the script, only as `$INPUT_DIALECT` when the input is set.
+    assert "--dialect auto" not in body
+
+
+@_needs_bash
+def test_empty_change_and_dialect_inputs_omit_cli_flags_on_the_argv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    argv = _capture_validate_argv(tmp_path, monkeypatch)
+    assert "--change" not in argv
+    assert "--dialect" not in argv
+
+
+@_needs_bash
+def test_nonempty_change_input_passes_change_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    argv = _capture_validate_argv(tmp_path, monkeypatch, change="add-thing")
+    assert argv.count("validate") == 1
+    assert "--change" in argv
+    assert argv[argv.index("--change") + 1] == "add-thing"
+    assert "--dialect" not in argv
+
+
+@_needs_bash
+def test_nonempty_dialect_input_passes_dialect_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    argv = _capture_validate_argv(tmp_path, monkeypatch, dialect="harness")
+    assert "--dialect" in argv
+    assert argv[argv.index("--dialect") + 1] == "harness"
+    assert "--change" not in argv

@@ -58,6 +58,23 @@ inputs:
       a matrix that calls this action more than once has to vary it.
     required: false
     default: "planlint-evidence"
+  change:
+    description: >-
+      Limit validate to one OpenSpec change package, passed through as
+      `--change` when non-empty. Empty — the default — omits the flag, so
+      the whole spec tree is checked. This is not a raw argument
+      pass-through: only this named CLI flag is reachable.
+    required: false
+    default: ""
+  dialect:
+    description: >-
+      Override spec-dialect detection for validate (`harness`, `upstream`,
+      `speckit`, or `auto`), passed through as `--dialect` when non-empty.
+      Empty — the default — omits the flag, so detect-derived dialect is
+      unchanged. This input is not the `dialect` output, which remains the
+      dialect the scan actually detected.
+    required: false
+    default: ""
 
 outputs:
   status:
@@ -199,6 +216,8 @@ runs:
       env:
         INPUT_TARGET: ${{ inputs.target }}
         INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_CHANGE: ${{ inputs.change }}
+        INPUT_DIALECT: ${{ inputs.dialect }}
         EVIDENCE: ${{ steps.paths.outputs.evidence-dir }}
         PLANLINT_VERSION: ${{ steps.install.outputs.version }}
       run: |
@@ -219,8 +238,16 @@ runs:
           > "${EVIDENCE}/dialect-card.json" 2>/dev/null || true
         [ -s "${EVIDENCE}/dialect-card.json" ] || rm -f "${EVIDENCE}/dialect-card.json"
 
-        planlint --target "$INPUT_TARGET" validate \
-          --fail-on "$INPUT_FAIL_ON" --format json \
+        # Optional flags are appended, never interpolated into a single
+        # string: an empty input must not become an empty --change value or
+        # an explicit auto dialect override. Empty omits the flag so
+        # detect-derived dialect and an unscoped run stay the shipped
+        # default (DEC-GA-018).
+        args=( --target "$INPUT_TARGET" validate --fail-on "$INPUT_FAIL_ON" --format json )
+        [ -n "$INPUT_CHANGE" ] && args+=( --change "$INPUT_CHANGE" )
+        [ -n "$INPUT_DIALECT" ] && args+=( --dialect "$INPUT_DIALECT" )
+
+        planlint "${args[@]}" \
           > "${EVIDENCE}/findings.json" 2> "${EVIDENCE}/validate.stderr.txt"
         code=$?
         echo "exit-code=${code}" >> "$GITHUB_OUTPUT"

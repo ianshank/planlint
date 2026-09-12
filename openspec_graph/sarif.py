@@ -92,8 +92,9 @@ def _location(finding: Mapping[str, object]) -> list[dict[str, object]]:
     # Only a real line gets a region. SARIF's startLine minimum is 1, so a 0
     # cannot be represented, and clamping it to 1 would put an annotation on
     # the first line of a real file pointing at content the finding is not
-    # about -- a wrong location a reviewer cannot tell is wrong. This is the
-    # common path, not an edge case: no rule currently sets a line at all.
+    # about -- a wrong location a reviewer cannot tell is wrong. Rules that
+    # hold a real locus now copy it onto Finding.line via CheckHit; checks
+    # without one still leave the field at 0 and the region is omitted.
     line = finding.get("line")
     if isinstance(line, int) and line >= 1:
         physical["region"] = {"startLine": line}
