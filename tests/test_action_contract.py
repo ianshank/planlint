@@ -24,6 +24,7 @@ Two halves, and the second is the point:
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -47,6 +48,56 @@ EXPECTED_OUTPUTS = {
 }
 
 _EXPRESSION = re.compile(r"\$\{\{\s*([^}]+?)\s*\}\}")
+
+
+def _github_bash() -> str | None:
+    """The interpreter GitHub uses for a ``shell: bash`` step on this platform.
+
+    On Linux and macOS that is plain ``bash``. On Windows it is the bash that
+    ships with Git for Windows -- deliberately *not* whatever ``bash`` resolves
+    to on PATH, which is System32's WSL launcher. A hosted Windows runner has
+    no WSL distribution installed, so that launcher answers every invocation
+    with a UTF-16 error and exit 1, and this simulation would be reporting the
+    absence of WSL rather than anything about the action.
+
+    Mirroring the runner's own choice keeps the simulation faithful on both
+    platforms instead of running on only one. Returns ``None`` when no such
+    interpreter exists, so the caller can skip with a reason rather than fail
+    with a confusing one.
+    """
+    if os.name != "nt":
+        return "bash"
+    roots = [
+        os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+        os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"),
+    ]
+    for root in roots:
+        candidate = Path(root) / "Git" / "bin" / "bash.exe"
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
+_BASH = _github_bash()
+
+# The executable half only. The declarative assertions above read the YAML and
+# run everywhere, including the Windows leg -- it is the contract that has to
+# hold on every platform, while the shell body is POSIX and runs where GitHub
+# runs it.
+_needs_bash = pytest.mark.skipif(
+    _BASH is None,
+    reason="no Git for Windows bash on this machine; GitHub uses it for `shell: bash` "
+    "on Windows runners, and PATH's `bash` there is the WSL launcher",
+)
+
+
+def _posix(path: Path | str) -> str:
+    """A path spelled the way the interpreter above expects to read it.
+
+    Git Bash accepts ``D:/a/_temp/x`` and mangles ``D:\\a\\_temp\\x``, whose
+    backslashes it reads as escapes. No-op on POSIX.
+    """
+    return Path(path).as_posix()
 
 
 def _action_text() -> str:
@@ -336,20 +387,31 @@ class ActionRun:
         outputs_file.write_text("", encoding="utf-8")
 
         env = {
-            "PATH": __import__("os").environ["PATH"],
-            "HOME": str(self.runner_temp),
-            "RUNNER_TEMP": str(self.runner_temp),
-            "GITHUB_OUTPUT": str(outputs_file),
-            "GITHUB_STEP_SUMMARY": str(self.summary),
-            "GITHUB_ACTION_PATH": str(ACTION.parent),
+            "PATH": os.environ["PATH"],
+            "HOME": _posix(self.runner_temp),
+            "RUNNER_TEMP": _posix(self.runner_temp),
+            "GITHUB_OUTPUT": _posix(outputs_file),
+            "GITHUB_STEP_SUMMARY": _posix(self.summary),
+            "GITHUB_ACTION_PATH": _posix(ACTION.parent),
         }
+        # Git Bash needs SYSTEMROOT to resolve its own helpers; harmless
+        # elsewhere and absent from the minimal env above without it.
+        for passthrough in ("SYSTEMROOT", "SystemRoot", "TEMP", "TMP", "COMSPEC"):
+            if passthrough in os.environ:
+                env.setdefault(passthrough, os.environ[passthrough])
         raw_env = step["env"]
         assert isinstance(raw_env, dict)
         for key, value in raw_env.items():
             env[key] = _resolve(value, self.context)
 
+        assert _BASH is not None, "run_step needs the interpreter the skip guard checks for"
+        # `-e` is not decoration: GitHub runs a composite `shell: bash` step as
+        # `bash --noprofile --norc -eo pipefail {0}`, so a body that merely
+        # omits `set -e` still starts under errexit. Simulating that is what
+        # caught the action's fallible steps dying on their first non-zero
+        # command before an exit code could be recorded.
         result = subprocess.run(
-            ["bash", "-e", "-c", str(step["run"])],
+            [_BASH, "--noprofile", "--norc", "-eo", "pipefail", "-c", str(step["run"])],
             cwd=self.workspace, env=env, capture_output=True, text=True, check=False,
         )
         self.logs[step_id] = result.stdout + result.stderr
@@ -398,6 +460,7 @@ ACTION_CONTRACT = (
     ACTION_CONTRACT,
     ids=[row[0].rsplit("/", 1)[-1] for row in ACTION_CONTRACT],
 )
+@_needs_bash
 def test_the_action_reports_each_fixtures_labelled_status(
     tmp_path: Path, target: str, status: str, gate_exit: int, phrase: str
 ) -> None:
@@ -416,6 +479,7 @@ def test_the_action_reports_each_fixtures_labelled_status(
     assert phrase in run.logs["gate"], run.logs["gate"]
 
 
+@_needs_bash
 def test_a_failing_run_populates_the_whole_evidence_bundle(tmp_path: Path) -> None:
     run = _drive(tmp_path, "tests/fixtures/action/failing")
     evidence = Path(run.outputs("paths")["evidence-dir"])
@@ -436,6 +500,7 @@ def test_a_failing_run_populates_the_whole_evidence_bundle(tmp_path: Path) -> No
     assert (evidence / "annotations.txt").read_text(encoding="utf-8").startswith("::error ")
 
 
+@_needs_bash
 def test_an_unscannable_target_produces_the_error_status_and_no_envelope(tmp_path: Path) -> None:
     """Non-success: the one status the envelope cannot describe. `validate`
     exits 2 writing nothing to stdout, so there is no envelope to read, and the
@@ -450,6 +515,7 @@ def test_an_unscannable_target_produces_the_error_status_and_no_envelope(tmp_pat
     assert json.loads((evidence / "run.json").read_text(encoding="utf-8"))["validate_exit_code"] == 2
 
 
+@_needs_bash
 def test_annotation_paths_resolve_from_the_repository_root(tmp_path: Path) -> None:
     """A finding's path is relative to the target; GitHub resolves an
     annotation's ``file=`` against the repository root. The action passes the
@@ -469,6 +535,7 @@ def test_annotation_paths_resolve_from_the_repository_root(tmp_path: Path) -> No
         assert (REPO_ROOT / path).is_file(), f"{path} does not resolve from the repository root"
 
 
+@_needs_bash
 def test_a_nested_target_is_scanned_at_its_own_root(tmp_path: Path) -> None:
     """The target one directory down is a real target: it detects its own
     machinery rather than the repository's."""
@@ -485,6 +552,7 @@ def test_a_nested_target_is_scanned_at_its_own_root(tmp_path: Path) -> None:
     assert run.outputs("project")["specs-checked"] == "1"
 
 
+@_needs_bash
 def test_the_step_summary_reaches_the_job_summary_file(tmp_path: Path) -> None:
     run = _drive(tmp_path, "tests/fixtures/action/failing")
     summary = run.summary.read_text(encoding="utf-8")
@@ -492,6 +560,7 @@ def test_the_step_summary_reaches_the_job_summary_file(tmp_path: Path) -> None:
     assert "`fail`" in summary
 
 
+@_needs_bash
 def test_the_evidence_directory_is_outside_the_scanned_tree(tmp_path: Path) -> None:
     """Non-success, observed rather than asserted from the YAML: the scanned
     fixture must be byte-identical before and after a run."""
@@ -504,4 +573,6 @@ def test_the_evidence_directory_is_outside_the_scanned_tree(tmp_path: Path) -> N
 
     after = {p: p.read_bytes() for p in sorted(target.rglob("*")) if p.is_file()}
     assert after == before, "the action modified the repository it was scanning"
-    assert tmp_path in Path(run.outputs("paths")["evidence-dir"]).parents
+    evidence = Path(run.outputs("paths")["evidence-dir"]).resolve()
+    assert evidence.is_relative_to(tmp_path.resolve())
+    assert not evidence.is_relative_to(target.resolve())
