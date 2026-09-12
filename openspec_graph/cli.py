@@ -15,6 +15,7 @@ Verbs:
   rules     print the rule table
   waivers   list every waived rule across the tree, with file, line, reason, change
   delta     list specs whose citations went stale since a saved dialect card
+  report    project a findings envelope into SARIF or GitHub surfaces
   witness   record proof a stage actually ran (CI-side; see validate --require-witness)
 
 Exit codes: 0 clean, 1 findings at or above the fail level, 2 usage error.
@@ -34,7 +35,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import delta, detect, dialect_card, ledger, mermaid, rules, sarif, scaffold, witness
+from . import delta, detect, dialect_card, ledger, mermaid, report, rules, sarif, scaffold, witness
 from . import graph as graph_module
 from .log import configure as configure_logging
 from .parse import ParsedSpec, SpecReadError, parse_spec
@@ -85,6 +86,21 @@ _DETECT_JSON_DEPRECATED = (
 # Rendered by every verb that needs a spec tree. The Agent Skill's exit-code
 # reference quotes it verbatim, so it lives once rather than in each verb.
 _NO_SPEC_TREE = "no openspec/ directory and no SpecKit specs/ tree; run ``planlint init`` first"
+
+# Quoted by skills/planlint-spec-governance/references/exit-codes.md and
+# tests/test_report.py. A dialect card shares schema_version 1 with the
+# findings envelope, so the key check is what refuses it (R-GA-10).
+FINDINGS_ENVELOPE_KEYS_MESSAGE = (
+    "cannot read --findings {path}: not a findings envelope "
+    "(need findings list, integer blocking, integer specs_checked)"
+)
+_REPORT_BAD_SCHEMA = (
+    "cannot read --findings {path}: unsupported schema_version {got!r} "
+    "(expected {expected})"
+)
+_REPORT_VERSION_MISMATCH = (
+    "WARNING: findings envelope tool_version {got!r} differs from this build {running}"
+)
 
 # `--change` scopes OpenSpec change packages. On a SpecKit-only target the
 # generic "no specs found" reads as "your feature is missing" when the real
@@ -304,6 +320,29 @@ def cmd_new(args: argparse.Namespace) -> int:
     return 0
 
 
+def _load_json_object(path_str: str, label: str) -> tuple[dict[str, object] | None, int]:
+    """Read a JSON object from ``path_str``, or render the exit-2 diagnostic.
+
+    Shared by ``detect --diff``, ``delta --baseline``, and ``report --findings``.
+    ``utf-8-sig`` so a Windows-saved file with a BOM still loads. Returns
+    ``(object, 0)`` on success and ``(None, 2)`` on failure -- never exit 1.
+    """
+    path = Path(path_str)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"cannot read {label} {path}: {exc}", file=sys.stderr)
+        return None, 2
+    if not isinstance(payload, dict):
+        print(
+            f"cannot read {label} {path}: expected a JSON object, "
+            f"got {type(payload).__name__}",
+            file=sys.stderr,
+        )
+        return None, 2
+    return payload, 0
+
+
 def _load_card(path_str: str, label: str) -> tuple[dict[str, object] | None, int]:
     """Read a saved dialect card, or render the exit-2 diagnostic for it.
 
@@ -315,22 +354,80 @@ def _load_card(path_str: str, label: str) -> tuple[dict[str, object] | None, int
     never exit 1, which is reserved for "the comparison ran and reported
     something".
     """
+    return _load_json_object(path_str, label)
+
+
+def _is_json_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _load_findings_envelope(path_str: str) -> tuple[dict[str, object] | None, int]:
+    """Read a findings envelope for ``report``, or exit 2 with empty stdout."""
+    payload, code = _load_json_object(path_str, "--findings")
+    if payload is None:
+        return None, code
     path = Path(path_str)
-    try:
-        # utf-8-sig: a baseline card saved by a Windows editor may carry a BOM,
-        # which json.loads rejects outright.
-        card = json.loads(path.read_text(encoding="utf-8-sig"))
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"cannot read {label} {path}: {exc}", file=sys.stderr)
-        return None, 2
-    if not isinstance(card, dict):
+    if payload.get("schema_version") != rules.FINDINGS_SCHEMA_VERSION:
         print(
-            f"cannot read {label} {path}: expected a JSON object, "
-            f"got {type(card).__name__}",
+            _REPORT_BAD_SCHEMA.format(
+                path=path,
+                got=payload.get("schema_version"),
+                expected=rules.FINDINGS_SCHEMA_VERSION,
+            ),
             file=sys.stderr,
         )
         return None, 2
-    return card, 0
+    findings = payload.get("findings")
+    if (
+        not isinstance(findings, list)
+        or not _is_json_int(payload.get("blocking"))
+        or not _is_json_int(payload.get("specs_checked"))
+    ):
+        print(FINDINGS_ENVELOPE_KEYS_MESSAGE.format(path=path), file=sys.stderr)
+        return None, 2
+    return payload, 0
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    """Project a findings envelope. Ignores ``--target`` (DEC-GA-014)."""
+    logger.debug("report format=%s findings=%s", args.format, args.findings)
+    envelope, code = _load_findings_envelope(args.findings)
+    if envelope is None:
+        return code
+
+    running = _package_version()
+    tool_version = envelope.get("tool_version")
+    if str(tool_version) != running:
+        print(
+            _REPORT_VERSION_MISMATCH.format(got=tool_version, running=running),
+            file=sys.stderr,
+        )
+
+    if args.format == "sarif":
+        serialized: list[dict[str, object]] = []
+        raw_findings = envelope["findings"]
+        if isinstance(raw_findings, list):
+            serialized = [item for item in raw_findings if isinstance(item, dict)]
+        print(
+            json.dumps(
+                sarif.to_sarif(
+                    serialized,
+                    rules.rule_table(),
+                    tool_version=str(tool_version or ""),
+                ),
+                indent=2,
+            )
+        )
+        return 0
+    if args.format == "github-annotations":
+        print("\n".join(report.to_annotations(envelope)))
+        return 0
+    if args.format == "github-summary":
+        sys.stdout.write(report.to_step_summary(envelope))
+        return 0
+    outputs = report.to_outputs(envelope)
+    print("\n".join(f"{key}={value}" for key, value in outputs.items()))
+    return 0
 
 
 def _sort_key(finding: rules.Finding, root: Path) -> tuple[str, str]:
@@ -837,6 +934,24 @@ def build_parser() -> argparse.ArgumentParser:
         "abbreviated -- e.g. `git rev-parse HEAD`, not `--short`)",
     )
     p_witness.set_defaults(func=cmd_witness)
+
+    p_report = sub.add_parser(
+        "report",
+        help="project a findings envelope into SARIF or GitHub surfaces",
+    )
+    p_report.add_argument(
+        "--findings",
+        required=True,
+        metavar="FILE",
+        help="a findings envelope saved earlier by `validate --format json`",
+    )
+    p_report.add_argument(
+        "--format",
+        required=True,
+        choices=["sarif", "github-annotations", "github-summary", "github-outputs"],
+        help="projection to print on stdout; never writes a file",
+    )
+    p_report.set_defaults(func=cmd_report)
 
     return parser
 

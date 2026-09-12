@@ -357,17 +357,86 @@ def test_graph_format_choices_are_unchanged(tmp_path: Path) -> None:
 
 
 def test_the_composite_action_declares_the_expected_steps() -> None:
-    """AC-SA-14: text-level assertions, because nothing in this suite imports
+    """AC-GA-12: text-level assertions, because nothing in this suite imports
     a YAML parser and adding a dependency for one guard is not worth it."""
     action = (REPO_ROOT / ".github" / "actions" / "planlint" / "action.yml").read_text(
         encoding="utf-8"
     )
 
     assert "using: composite" in action
-    assert "planlint --target" in action
-    assert "detect" in action
-    assert "--format sarif" in action
-    assert "upload-sarif" in action
+    for name in (
+        "target:",
+        "version:",
+        "fail-on:",
+        "python-version:",
+        "upload-sarif:",
+        "upload-artifact:",
+        "artifact-name:",
+    ):
+        assert name in action, f"missing input {name}"
+    for name in (
+        "status:",
+        "exit-code:",
+        "errors:",
+        "warnings:",
+        "findings:",
+        "blocking:",
+        "specs-checked:",
+        "rules-triggered:",
+        "dialect:",
+        "version:",
+        "evidence-dir:",
+        "json-path:",
+        "sarif-path:",
+    ):
+        assert name in action, f"missing output {name}"
+
+    assert "validate --format json" in action
+    assert "validate --format sarif" not in action
+    assert "report --format sarif" in action
+    assert "github-annotations" in action
+    assert "github-summary" in action
+    assert "github-outputs" in action
+    assert "RUNNER_TEMP" in action
+    assert "always()" in action
+    assert "github.event_name != 'pull_request'" in action
+    assert "head.repo.full_name" in action
+    assert "[ -s" in action
+    assert "hashFiles" not in action
+    assert "GITHUB_ACTION_PATH" in action
+    assert 'pip install "planlint' in action
+    assert "findings at or above" in action
+    assert "precondition or usage error" in action
+    assert "zero specs" in action
+
+
+def test_no_workflow_or_template_uses_pull_request_target() -> None:
+    """AC-GA-13: pull_request_target is forbidden in adopter-facing YAML."""
+    hits: list[str] = []
+    for root in (
+        REPO_ROOT / ".github",
+        REPO_ROOT / "templates",
+        REPO_ROOT / "skills",
+    ):
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            try:
+                text = path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            if "pull_request_target" in text:
+                hits.append(path.relative_to(REPO_ROOT).as_posix())
+    assert not hits, f"pull_request_target appears in {hits}"
+
+
+def test_the_action_declares_no_token_input() -> None:
+    """AC-GA-13: the action requires no secret and declares no token input."""
+    action = (REPO_ROOT / ".github" / "actions" / "planlint" / "action.yml").read_text(
+        encoding="utf-8"
+    )
+    inputs = action.split("inputs:", 1)[1].split("outputs:", 1)[0]
+    assert "token" not in inputs.lower()
 
 
 def test_pre_commit_hooks_file_declares_a_validate_hook() -> None:

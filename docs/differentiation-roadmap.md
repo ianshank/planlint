@@ -358,15 +358,23 @@ still cite the old number."
 - **Cutline:** if the target repo is not a git repo, exit 0 with an INFO that
   delta lint requires a git history — do not guess.
 
-### CP-6: `add-sarif-and-actions` (v4, distribution) — implemented
+### CP-6: `add-sarif-and-actions` (v4, distribution) — implemented, contract rewritten
 
-> Status: implemented. See the approved spec at
+> Status: implemented, then rewritten by `add-github-action-contract`. See
 > `openspec/changes/add-sarif-and-actions/specs/sarif-output/spec.md`
-> (`AC-SA-1..19`). The sketch below called SARIF a projection of fields the
-> findings "already carry" — true of `path`/`rule`/`severity`, but **no
-> rule sets a line**, so every finding has `line == 0`. SARIF's `startLine`
-> minimum is 1, so the region is omitted rather than clamped: clamping
-> would annotate the first line of every file in every pull request.
+> (`AC-SA-1..19`) and
+> `openspec/changes/add-github-action-contract/specs/github-action-contract/spec.md`.
+> The sketch below called SARIF a projection of fields the findings "already
+> carry" — true of `path`/`rule`/`severity`, but **no rule sets a line**, so
+> every finding has `line == 0`. SARIF's `startLine` minimum is 1, so the
+> region is omitted rather than clamped. The first action never ran: it
+> installed a distribution that was not on the index, wrote SARIF into the
+> consumer checkout, treated a zero-spec run as a pass, and failed fork pull
+> requests on a read-only `GITHUB_TOKEN` before the gate could explain
+> anything. The contract rewrite makes the wrapper as honest as the CLI:
+> install from checkout by default, one JSON envelope, `report` projections,
+> evidence under `$RUNNER_TEMP`, `indeterminate` for zero specs, and a skipped
+> (not failed) SARIF upload on fork PRs.
 
 SARIF output so findings appear inline in the GitHub PR the org already has,
 plus a one-file composite Action and a pre-commit hook. Time-to-first-red-X

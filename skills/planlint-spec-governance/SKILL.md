@@ -51,6 +51,12 @@ that wants them annotated on a pull request instead of printed. `--json` is an
 alias of `--format json`; passing it alongside a different format is a usage
 error rather than a preference the tool resolves for you.
 
+`report --findings FILE --format {sarif,github-annotations,github-summary,github-outputs}`
+projects a findings envelope saved earlier by `validate --format json`. It
+prints to stdout only and never writes a file. `report --format sarif` over
+that envelope is byte-identical to `validate --format sarif` on the same tree
+and build. A dialect card is not an envelope and is refused.
+
 `delta --baseline CARD.json` answers a different question from `validate`:
 not "is this citation broken" but "which specs did a change to this
 repository's machinery leave behind" -- a make target removed, an invariant no
@@ -97,6 +103,7 @@ Read-only. Safe to run at any time, on any repository:
 | `rules` | The rule table this build carries |
 | `waivers` | Every waived rule across the tree |
 | `delta` | Specs whose citations went stale since a saved dialect card |
+| `report` | Project a saved findings envelope into SARIF or GitHub surfaces |
 
 Writes files. Do not run these unless the user asks:
 
@@ -152,9 +159,11 @@ treated as "unknown" rather than as an error.
 
 ## Wiring it into CI
 
-`assets/spec-gate.yml` is a ready workflow: it runs `detect` so drift shows up
-in the log even on a pass, then `validate` as the blocking gate. Copy it into
-the target repository's own workflows directory.
+`assets/spec-gate.yml` is a ready workflow: it checks out with
+`persist-credentials: false` and runs the composite action
+`ianshank/planlint/.github/actions/planlint` pinned to an exact tag. Copy it
+into the target repository's own workflows directory. Do not use a floating
+major tag.
 
 ## References
 

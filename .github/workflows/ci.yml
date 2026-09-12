@@ -238,3 +238,80 @@ jobs:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
       - run: make docs-check
+
+  action-contract:
+    # Hosted proof that the composite action runs against committed fixtures
+    # (R-GA-21). continue-on-error is on this workflow step, never inside the
+    # composite. Not composed into any Makefile target (C-GA-5).
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture: [passing, failing, empty-tree, no-tree, nested]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run planlint action
+        id: planlint
+        continue-on-error: true
+        uses: ./.github/actions/planlint
+        with:
+          target: ${{ matrix.fixture == 'nested' && 'tests/fixtures/action/nested/target' || format('tests/fixtures/action/{0}', matrix.fixture) }}
+          upload-sarif: false
+          artifact-name: planlint-evidence-${{ matrix.fixture }}
+
+      - name: Assert contract
+        env:
+          FIXTURE: ${{ matrix.fixture }}
+          OUTCOME: ${{ steps.planlint.outcome }}
+          STATUS: ${{ steps.planlint.outputs.status }}
+          EXIT_CODE: ${{ steps.planlint.outputs.exit-code }}
+          EVIDENCE: ${{ steps.planlint.outputs.evidence-dir }}
+          JSON_PATH: ${{ steps.planlint.outputs.json-path }}
+          SARIF_PATH: ${{ steps.planlint.outputs.sarif-path }}
+        run: |
+          set -euo pipefail
+          test -n "$EVIDENCE"
+          test -d "$EVIDENCE"
+          test -f "$EVIDENCE/run.json"
+          test -f "$EVIDENCE/detect.txt"
+          test -f "$EVIDENCE/dialect-card.json"
+          case "$FIXTURE" in
+            passing)
+              test "$OUTCOME" = success
+              test "$STATUS" = pass
+              test "$EXIT_CODE" = 0
+              test -s "$JSON_PATH"
+              test -s "$SARIF_PATH"
+              ;;
+            failing)
+              test "$OUTCOME" = failure
+              test "$STATUS" = fail
+              test "$EXIT_CODE" = 1
+              test -s "$SARIF_PATH"
+              ;;
+            empty-tree)
+              test "$OUTCOME" = failure
+              test "$STATUS" = indeterminate
+              test "$EXIT_CODE" = 0
+              ;;
+            no-tree)
+              test "$OUTCOME" = failure
+              test "$STATUS" = error
+              test "$EXIT_CODE" = 2
+              test -z "$JSON_PATH"
+              test -z "$SARIF_PATH"
+              ;;
+            nested)
+              test "$OUTCOME" = success
+              test "$STATUS" = pass
+              test "$EXIT_CODE" = 0
+              ;;
+            *)
+              echo "unknown fixture $FIXTURE"
+              exit 1
+              ;;
+          esac
+

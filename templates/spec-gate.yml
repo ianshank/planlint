@@ -1,7 +1,9 @@
 # Drop into .github/workflows/spec-gate.yml in the target repository.
 #
-# ``planlint detect`` is read-only and always runs, so dialect/threshold drift shows
-# up in the log even when the gate passes. ``planlint validate`` is the gate itself.
+# Pins the composite action to an exact tag equal to this repository's
+# package version. The `uses:` ref is the CLI: the action installs planlint
+# from its own checkout unless `version` is set. Do not use a floating
+# major tag such as @v1.
 name: spec-gate
 
 on:
@@ -14,39 +16,22 @@ on:
       - "specs/**"
       - "Makefile"
       - "pyproject.toml"
+  push:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   specs:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # delete this line if code scanning is off
+      actions: read           # required only on a private repository
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          persist-credentials: false
 
-      - name: Install planlint
-        # Pinned to a compatible range, not bare: this workflow is copied
-        # into other repositories, where an unpinned install would pull a
-        # future major with a different exit-code contract straight into
-        # their CI. Requires planlint on PyPI (published by the v* tag).
-        run: pip install --quiet "planlint>=0.2.0,<1"
-
-      - name: Report detected conventions
-        run: planlint detect
-
-      - name: Validate every change package
-        run: planlint validate --fail-on ERROR
-
-      # Warnings are recorded as an artifact rather than failing the build, so
-      # the WARN backlog is visible without blocking unrelated work.
-      - name: Record warnings
-        if: always()
-        run: planlint validate --fail-on WARN --json > spec-findings.json || true
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: spec-findings
-          path: spec-findings.json
+      - uses: ianshank/planlint/.github/actions/planlint@v0.2.0
+        # Pin to a full SHA instead of the tag if you need a bit-for-bit lock:
+        # uses: ianshank/planlint/.github/actions/planlint@<full-sha>

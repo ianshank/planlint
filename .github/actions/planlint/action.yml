@@ -3,8 +3,10 @@
 # red X on a foreign repository is the number this exists to move: add the
 # step, push, see the findings on the diff.
 #
-# It uploads SARIF rather than printing findings, because a CI log is a place
-# nobody looks and the pull request is a place everybody already does.
+# Thin unprivileged scan adapter (DEC-GA-001): install the CLI, run
+# `validate --format json` once, project that envelope through `report`,
+# upload evidence, relay the gate. It does not parse text logs, evaluate a
+# rule, or interpolate inputs into `run:` scripts.
 name: planlint
 description: Lint implementation plans and specs against a repository's real machinery.
 
@@ -20,11 +22,11 @@ inputs:
     default: "."
   version:
     description: >-
-      planlint version specifier. Pinned by default: an action that floats to
-      the newest release can turn a green pull request red without anybody
-      changing a line of the repository it is gating.
+      Optional PEP 440 specifier appended to `planlint` for an index install.
+      Empty (the default) installs the CLI from this action's own checkout
+      so the `uses:` ref pins the CLI and the action together.
     required: false
-    default: ">=0.2.0,<1"
+    default: ""
   fail-on:
     description: Lowest severity that fails the job (INFO, WARN, or ERROR).
     required: false
@@ -41,72 +43,197 @@ inputs:
       cannot fail on permissions rather than on anything about the specs.
     required: false
     default: "true"
+  upload-artifact:
+    description: Upload the evidence directory as a workflow artifact.
+    required: false
+    default: "true"
+  artifact-name:
+    description: Name of the uploaded evidence artifact.
+    required: false
+    default: "planlint-evidence"
+
+outputs:
+  status:
+    description: pass, fail, error, or indeterminate
+    value: ${{ steps.project.outputs.status }}
+  exit-code:
+    description: validate's process exit code
+    value: ${{ steps.validate.outputs.exit-code }}
+  errors:
+    description: Count of ERROR findings, derived from the envelope
+    value: ${{ steps.project.outputs.errors }}
+  warnings:
+    description: Count of WARN findings, derived from the envelope
+    value: ${{ steps.project.outputs.warnings }}
+  findings:
+    description: Count of all findings, derived from the envelope
+    value: ${{ steps.project.outputs.findings }}
+  blocking:
+    description: Envelope blocking count
+    value: ${{ steps.project.outputs.blocking }}
+  specs-checked:
+    description: Envelope specs_checked count
+    value: ${{ steps.project.outputs.specs-checked }}
+  rules-triggered:
+    description: Sorted, de-duplicated rule ids that fired
+    value: ${{ steps.project.outputs.rules-triggered }}
+  dialect:
+    description: Dialect field from detect --format json
+    value: ${{ steps.dialect.outputs.dialect }}
+  version:
+    description: tool_version from the findings envelope
+    value: ${{ steps.project.outputs.version }}
+  evidence-dir:
+    description: Absolute path of the evidence directory under RUNNER_TEMP
+    value: ${{ steps.paths.outputs.evidence-dir }}
+  json-path:
+    description: Path of findings.json, or empty when no envelope exists
+    value: ${{ steps.project.outputs.json-path }}
+  sarif-path:
+    description: Path of findings.sarif, or empty when no envelope exists
+    value: ${{ steps.project.outputs.sarif-path }}
 
 runs:
   using: composite
   steps:
+    - name: Prepare evidence directory
+      id: paths
+      shell: bash
+      run: |
+        evidence="$RUNNER_TEMP/planlint-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+        mkdir -p "$evidence"
+        echo "evidence-dir=$evidence" >> "$GITHUB_OUTPUT"
+
     - uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
 
     - name: Install planlint
       shell: bash
-      run: python -m pip install --quiet "planlint${{ inputs.version }}"
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+      run: |
+        python -m pip install --upgrade pip
+        if [ -z "$INPUT_VERSION" ]; then
+          python -m pip install --quiet "$GITHUB_ACTION_PATH/../../.."
+        else
+          python -m pip install "planlint${INPUT_VERSION}"
+        fi
 
-    # Detection first, and unconditionally: every finding is phrased against
-    # the conventions detected here, so a reader who disagrees with a finding
-    # needs this output to see which assumption produced it.
     - name: Report detected conventions
       shell: bash
-      run: planlint --target "${{ inputs.target }}" detect
+      env:
+        INPUT_TARGET: ${{ inputs.target }}
+        EVIDENCE_DIR: ${{ steps.paths.outputs.evidence-dir }}
+      run: |
+        planlint --target "$INPUT_TARGET" detect > "$EVIDENCE_DIR/detect.txt"
+        planlint --target "$INPUT_TARGET" detect --format json > "$EVIDENCE_DIR/dialect-card.json"
 
-    # One invocation, and that matters. Running validate twice -- once for the
-    # SARIF, once for the exit code -- would spend double the work to ask the
-    # same question, and the two runs could in principle disagree. The exit
-    # code is captured here and re-applied after the upload, so findings reach
-    # the diff even when the gate fails.
-    - name: Validate and emit SARIF
+    - name: Validate
       id: validate
       shell: bash
+      env:
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        EVIDENCE_DIR: ${{ steps.paths.outputs.evidence-dir }}
+        ACTION_REF: ${{ github.action_path }}
       run: |
-        # `set +e` rather than `continue-on-error:`, which composite action
-        # steps do not support: GitHub runs these with `bash -e`, so a
-        # non-zero planlint would abort the step before the exit code could
-        # be recorded and the SARIF uploaded.
+        start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
         set +e
-        planlint --target "${{ inputs.target }}" validate \
-          --fail-on "${{ inputs.fail-on }}" --format sarif > planlint.sarif
+        planlint --target "$INPUT_TARGET" validate --format json --fail-on "$INPUT_FAIL_ON" \
+          > "$EVIDENCE_DIR/findings.json" 2> "$EVIDENCE_DIR/validate.err"
         gate=$?
         set -e
-        echo "gate=$gate" >> "$GITHUB_OUTPUT"
+        finish=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        echo "exit-code=$gate" >> "$GITHUB_OUTPUT"
+        START="$start" FINISH="$finish" GATE="$gate" python -c "import json,os,subprocess; from pathlib import Path; version=subprocess.check_output(['planlint','--version'], text=True).strip(); payload={'exit_code': int(os.environ['GATE']), 'tool_version': version, 'action_ref': os.environ.get('ACTION_REF',''), 'started_at': os.environ['START'], 'finished_at': os.environ['FINISH']}; Path(os.environ['EVIDENCE_DIR'], 'run.json').write_text(json.dumps(payload, indent=2) + '\n', encoding='utf-8')"
 
-    # Guarded on the file being non-empty: an exit-2 usage error (no spec tree,
-    # a bad target) writes nothing, and uploading an empty file fails inside
-    # the upload action -- which would abort the run before the gate step could
-    # report the real reason.
+    - name: Project the envelope
+      id: project
+      shell: bash
+      env:
+        EVIDENCE_DIR: ${{ steps.paths.outputs.evidence-dir }}
+      run: |
+        JSON_PATH="$EVIDENCE_DIR/findings.json"
+        SARIF_PATH="$EVIDENCE_DIR/findings.sarif"
+        if python -c "import json,sys; from pathlib import Path; payload=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8-sig')); sys.exit(0 if isinstance(payload, dict) and isinstance(payload.get('findings'), list) else 1)" "$JSON_PATH"; then
+          planlint report --format sarif --findings "$JSON_PATH" > "$SARIF_PATH"
+          planlint report --format github-annotations --findings "$JSON_PATH"
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            planlint report --format github-summary --findings "$JSON_PATH" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          planlint report --format github-outputs --findings "$JSON_PATH" >> "$GITHUB_OUTPUT"
+          echo "json-path=$JSON_PATH" >> "$GITHUB_OUTPUT"
+          echo "sarif-path=$SARIF_PATH" >> "$GITHUB_OUTPUT"
+          if [ -s "$SARIF_PATH" ]; then
+            echo "sarif-exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sarif-exists=false" >> "$GITHUB_OUTPUT"
+          fi
+        else
+          echo "status=error" >> "$GITHUB_OUTPUT"
+          echo "json-path=" >> "$GITHUB_OUTPUT"
+          echo "sarif-path=" >> "$GITHUB_OUTPUT"
+          echo "sarif-exists=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Record dialect
+      id: dialect
+      shell: bash
+      env:
+        EVIDENCE_DIR: ${{ steps.paths.outputs.evidence-dir }}
+      run: |
+        CARD="$EVIDENCE_DIR/dialect-card.json"
+        if [ -f "$CARD" ]; then
+          dialect=$(python -c "import json,sys; from pathlib import Path; card=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8-sig')); print(card.get('dialect','') if isinstance(card, dict) else '')" "$CARD")
+        else
+          dialect=""
+        fi
+        echo "dialect=$dialect" >> "$GITHUB_OUTPUT"
+
     - name: Upload SARIF
-      if: ${{ inputs.upload-sarif == 'true' && hashFiles('planlint.sarif') != '' }}
+      if: ${{ inputs.upload-sarif == 'true' && steps.project.outputs.sarif-exists == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
       uses: github/codeql-action/upload-sarif@v3
       with:
-        sarif_file: planlint.sarif
+        sarif_file: ${{ steps.project.outputs.sarif-path }}
         category: planlint
 
-    # Last, so findings are visible on the diff even when the gate fails.
-    # Exit 2 is reported distinctly: it means planlint could not run at all,
-    # and calling that "findings were reported" would send a reader looking
-    # for specs to fix that do not exist.
+    - name: Upload evidence
+      if: ${{ always() && inputs.upload-artifact == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.paths.outputs.evidence-dir }}
+        if-no-files-found: warn
+
     - name: Apply the gate
       shell: bash
+      env:
+        STATUS: ${{ steps.project.outputs.status }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        EXIT_CODE: ${{ steps.validate.outputs.exit-code }}
+        EVIDENCE_DIR: ${{ steps.paths.outputs.evidence-dir }}
       run: |
-        case "${{ steps.validate.outputs.gate }}" in
-          0) ;;
-          1)
-            echo "planlint reported findings at or above ${{ inputs.fail-on }}"
+        case "$STATUS" in
+          pass) ;;
+          fail)
+            echo "planlint reported findings at or above ${INPUT_FAIL_ON}"
+            exit 1
+            ;;
+          error)
+            echo "planlint could not run (exit ${EXIT_CODE}); this is a precondition or usage error, not a spec failure."
+            if [ -s "$EVIDENCE_DIR/validate.err" ]; then
+              echo "planlint stderr:"
+              cat "$EVIDENCE_DIR/validate.err"
+            fi
+            exit 1
+            ;;
+          indeterminate)
+            echo "planlint checked zero specs; add an OpenSpec change package under openspec/changes/ or a SpecKit specs/ tree."
             exit 1
             ;;
           *)
-            echo "planlint could not run (exit ${{ steps.validate.outputs.gate }});"
-            echo "this is a precondition or usage error, not a spec failure."
+            echo "planlint returned unknown status ${STATUS:-<empty>} (exit ${EXIT_CODE})"
             exit 1
             ;;
         esac

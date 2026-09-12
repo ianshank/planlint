@@ -51,8 +51,12 @@
   single `_escape_property`, each a module-level table, never inline
   replacements at a call site. `line=` only for `line >= 1`, mirroring
   `DEC-SA-003`'s reason.
-- The cap and its trailing `::notice::` (`DEC-GA-010`); the summary's
-  findings table capped identically with the same note.
+- The cap is `ANNOTATION_LIMIT = 10` and its trailing `::notice::`
+  (`DEC-GA-010`); the summary's findings table is capped identically with
+  the same note, which is the guaranteed withheld-count surface. Table
+  cells escape `|` (`R-GA-14`). `to_outputs` derives `errors` / `warnings`
+  / `findings` counts as `R-GA-13`; it does not read those keys off the
+  envelope.
 - `tests/test_decomposition.py::_NEW_MODULES` gains `"report"`.
 - New `tests/test_report.py`, unit half: the four statuses on constructed
   envelopes; the zero-spec envelope from a real `validate --format json`
@@ -69,15 +73,19 @@
 
 - `openspec_graph/cli.py`: `cmd_report` and the `report` subparser
   (`--findings FILE` required, `--format` with the four choices). Reads the
-  file with `utf-8-sig` like `_load_card` does; exit 2 with a stderr line
-  and empty stdout on an unreadable file, a non-object, or a foreign
-  `schema_version` (`R-GA-10`); one stderr warning on a `tool_version`
+  file with `utf-8-sig` like `_load_card` does (extract a shared
+  `_load_json_object` if that keeps the two readers identical); exit 2 with
+  a stderr line and empty stdout on an unreadable file, a non-object, a
+  foreign `schema_version`, or a JSON object missing envelope keys
+  (`findings` list, integer `blocking`, integer `specs_checked`) — including
+  a dialect card (`R-GA-10`); one stderr warning on a `tool_version`
   mismatch, never a refusal (`R-GA-16`). `--format sarif` calls
-  `sarif.to_sarif(envelope["findings"], rules.rule_table(),
-  tool_version=envelope["tool_version"])` — the producer's version, so the
-  driver block matches `validate --format sarif`'s byte-for-byte
-  (`R-GA-11`). Ignores the global `--target` (`DEC-GA-014`). Update the
-  module docstring's verb list.
+  `print(json.dumps(sarif.to_sarif(envelope["findings"], rules.rule_table(),
+  tool_version=envelope["tool_version"]), indent=2))` — the producer's
+  version and the same `indent=2` `print` as `cmd_validate`, so the driver
+  block matches `validate --format sarif` byte-for-byte (`R-GA-11`). Ignores
+  the global `--target` (`DEC-GA-014`). Update the module docstring's verb
+  list.
 - `tests/test_cli_surface.py::ALLOWED_VERBS` gains `"report"` and nothing
   else (`C-GA-2`).
 - `tests/test_skill_contract.py::READ_ONLY_INVOCATIONS` gains
@@ -91,9 +99,10 @@
   `references/exit-codes.md`: a `report` section quoting its exit-2
   messages. `llms.txt`: `report` in the read-only list.
 - `tests/test_report.py`, end-to-end half: SARIF byte-identity on a
-  multi-file failing fixture and on a clean one (`AC-GA-1`); the four
-  exit-2 inputs and the no-exit-1 property (`AC-GA-2`); the version-mismatch
-  warning (`AC-GA-18`).
+  multi-file failing fixture and on a clean one (`AC-GA-1`); the exit-2
+  inputs of AC-GA-2 (missing file, non-JSON, JSON array, foreign
+  `schema_version`, dialect card) and the no-exit-1 property; the
+  version-mismatch warning (`AC-GA-18`).
 - Confirm empirically that `_EXPECTED_HASHES` and `tests/baseline_rules.json`
   are untouched (`AC-GA-11`).
 - Upgrade the `_Verified by:` lines of `AC-GA-1`, `AC-GA-2`, `AC-GA-18`.
@@ -125,26 +134,33 @@
   `RUNNER_TEMP`, outputs for `evidence-dir`/`json-path`/`sarif-path`);
   setup-python; install (from `$GITHUB_ACTION_PATH/../../..` when `version`
   is empty, else `pip install "planlint${INPUT_VERSION}"` — inputs passed
-  through `env:`, never interpolated into `run:`); `detect` to `detect.txt`
-  and `detect --format json` to `dialect-card.json`; `validate --format
-  json --fail-on "$INPUT_FAIL_ON"` to `findings.json` under `set +e`,
-  capturing the exit code and writing `run.json`; `report --format sarif`
-  to `findings.sarif` when the envelope is non-empty; `report --format
+  through `env:`, never interpolated into `run:`); `detect --target
+  "$INPUT_TARGET"` to `detect.txt` and `detect --target "$INPUT_TARGET"
+  --format json` to `dialect-card.json`; `validate --target "$INPUT_TARGET"
+  --format json --fail-on "$INPUT_FAIL_ON"` to `findings.json` under
+  `set +e`, capturing the exit code and writing `run.json`; `report --format
+  sarif` to `findings.sarif` when `findings.json` exists as a JSON object
+  (including an empty `findings` list); `report --format
   github-annotations` to stdout; `report --format github-summary` appended
   to `$GITHUB_STEP_SUMMARY`; `report --format github-outputs` appended to
   `$GITHUB_OUTPUT`, with the action itself emitting `status=error` and the
   exit code when no envelope exists (`DEC-GA-004`); `dialect` read from the
-  card; SARIF upload guarded on `upload-sarif`, a non-empty SARIF, and
-  `github.event.pull_request.head.repo.full_name == github.repository`;
-  artifact upload under `always()` and `upload-artifact`; the gate last,
-  branching on `status` with the three distinct messages of `R-GA-6`.
+  card; SARIF upload skipped unless `upload-sarif` is `true`, a
+  path-based `[ -s "$SARIF_PATH" ]` (never `hashFiles`) says the file
+  exists, and (`github.event_name != 'pull_request'` or
+  `github.event.pull_request.head.repo.full_name == github.repository`)
+  (`R-GA-20`, `DEC-GA-016`); artifact upload under `always()` and
+  `upload-artifact`; the gate last, branching on `status` with the three
+  distinct messages of `R-GA-6`. Composite `outputs.*.value` MUST map every
+  declared output to a step that writes `$GITHUB_OUTPUT`.
 - Keep the `target` input and its SARIF caveat text (`DEC-GA-007`).
 - `tests/test_sarif.py::test_the_composite_action_declares_the_expected_steps`
   re-pinned to the new contract (`AC-GA-12`): exact input names, the
   thirteen output names, one `validate --format json` and no
   `validate --format sarif`, `report` invocations, `RUNNER_TEMP`,
-  `always()`, the fork condition, `GITHUB_ACTION_PATH`, and the
-  `pip install "planlint` override line. New
+  `always()`, the R-GA-20 fork-or-push condition, a path-based SARIF
+  existence check and no `hashFiles` of the SARIF, `GITHUB_ACTION_PATH`,
+  and the `pip install "planlint` override line. New
   `test_no_workflow_or_template_uses_pull_request_target` and
   `test_the_action_declares_no_token_input` (`AC-GA-13`).
 - Upgrade `AC-GA-13`'s `_Verified by:`.
@@ -156,7 +172,8 @@
   `pull_request` (with the existing `openspec/**`/`specs/**`/`Makefile`/
   `pyproject.toml` path filters) and `push` to the default branch; job
   `permissions: contents: read` and `security-events: write`, the second
-  annotated with the one line to delete when code scanning is off;
+  annotated with the one line to delete when code scanning is off, plus
+  `actions: read` annotated as required only on a private repository;
   `actions/checkout` with `persist-credentials: false`; the action pinned
   to `@v<__version__>` with a comment showing the full-SHA form.
 - Copy byte-for-byte over `skills/planlint-spec-governance/assets/spec-gate.yml`

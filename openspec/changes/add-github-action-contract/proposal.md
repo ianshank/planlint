@@ -191,3 +191,13 @@ artifact that gate is measured on, and today it cannot be reproduced at all.
 ## Affected Capabilities
 
 - `github-action-contract`
+
+## Adversarial review (folded before implementation)
+
+The `spec-adversary` pass found three HIGH defects in the draft, all folded
+into `spec.md` / `tasks.md` rather than into code: the Milestone 5 upload
+`if:` skipped every `push` event (R-GA-20 / DEC-GA-016 now name the
+fork-or-push formula and ban `hashFiles` under `$RUNNER_TEMP`); `report`
+would have accepted a dialect card as `--findings` (R-GA-10 now requires
+envelope keys); and `ANNOTATION_LIMIT` had no integer (DEC-GA-010 now sets
+it to 10, GitHub's per-step display cap).

@@ -40,6 +40,7 @@ _NEW_MODULES = [
     "ledger",
     "delta",
     "sarif",
+    "report",
     "mermaid",
     "witness",
     "rules_witness",

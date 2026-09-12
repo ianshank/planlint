@@ -46,6 +46,7 @@ planlint --target /path/to/clone detect --diff prev.json  # exit 1 + list what d
 planlint --target /path/to/clone init        # write a snapshot of detected conventions into openspec/
 planlint --target /path/to/clone new add-thing --capability thing-capability
 planlint --target /path/to/clone validate    # exit 1 on any ERROR — the gate
+planlint --target /path/to/clone report --findings findings.json --format sarif
 planlint --target /path/to/clone waivers --format json  # ledger of every waived rule, tree-wide
 planlint --target /path/to/clone graph --format mermaid  # a picture, not just JSON (see below)
 planlint --version                           # print the installed version and exit
@@ -356,7 +357,36 @@ still accepted); JSON stdout stays parseable. See [`docs/aqa.md`](docs/aqa.md).
 
 ## Wiring it into CI
 
-`planlint validate` is the gate. Add to `.github/workflows/`:
+The composite action is the first-class path. Pin it to an exact release tag
+(`@vX.Y.Z`) or a full SHA; do not use a floating major tag such as `@v1`.
+
+```yaml
+name: spec-gate
+on:
+  pull_request:
+    paths: ["openspec/**", "specs/**", "Makefile", "pyproject.toml"]
+  push:
+    branches: [main]
+jobs:
+  specs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # delete this line if code scanning is off
+      actions: read           # required only on a private repository
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: ianshank/planlint/.github/actions/planlint@v0.2.0
+        # Pin to a full SHA instead of the tag if you need a bit-for-bit lock:
+        # uses: ianshank/planlint/.github/actions/planlint@<full-sha>
+```
+
+A ready copy lives at [`templates/spec-gate.yml`](templates/spec-gate.yml).
+
+The raw-`pip` workflow is second. It needs the published distribution on PyPI,
+which this repository's action-from-checkout path does not:
 
 ```yaml
 name: spec-gate

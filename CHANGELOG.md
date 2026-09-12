@@ -5,6 +5,23 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — GitHub Action contract (`add-github-action-contract`)
+
+- **`report` verb.** Read-only projection of a `validate --format json`
+  findings envelope into SARIF, GitHub workflow-command annotations, a step
+  summary, or `key=value` outputs. Stdout only; exit 2 on an unreadable or
+  foreign file; never exit 1. `report --format sarif` is byte-identical to
+  `validate --format sarif` for the same tree and build.
+- **Composite action contract.** `.github/actions/planlint/action.yml` is a
+  thin unprivileged scan adapter: one `validate --format json`, evidence under
+  `$RUNNER_TEMP`, `report` projections, a fork-or-push SARIF upload guard, and
+  a gate that distinguishes `fail` / `error` / `indeterminate`. Default install
+  is from the action's own checkout, superseding the action-internal half of
+  `DEC-SA-009`; `version` remains an explicit index override.
+- **Hosted `action-contract` job** over committed fixtures under
+  `tests/fixtures/action/`, plus a consumer template pinned to
+  `@v<package version>`.
+
 ### Fixed — detection defects found by a labelled corpus (`fix-detect-corpus-defects`)
 
 - **False G004 from a UTF-8 byte-order mark.** U+FEFF is a format character,

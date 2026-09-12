@@ -43,6 +43,7 @@ RENDERER = REPO_ROOT / "tools" / "render_rule_catalog.py"
 # once tmp_path exists -- and because the file must not live inside the tree
 # whose byte-for-byte stability the test is measuring.
 _BASELINE_PLACEHOLDER = "<BASELINE>"
+_FINDINGS_PLACEHOLDER = "<FINDINGS>"
 
 # Exactly the verbs SKILL.md's own read-only table lists, in its order. If a
 # verb moves between that table and the "writes files" one, this list must
@@ -66,6 +67,8 @@ READ_ONLY_INVOCATIONS: tuple[tuple[str, ...], ...] = (
     # would show up as a created file and mask what the verb itself did.
     ("delta", "--baseline", _BASELINE_PLACEHOLDER),
     ("delta", "--baseline", _BASELINE_PLACEHOLDER, "--format", "json"),
+    # Envelope written outside the digested tree, never the dialect card.
+    ("report", "--findings", _FINDINGS_PLACEHOLDER, "--format", "github-outputs"),
     # The only read-only invocation that reaches the witness store at all.
     # Without it the store's directory is never touched during this test, so
     # the empty-directory case above would be untested in practice.
@@ -144,20 +147,33 @@ def test_read_only_verbs_leave_tree_byte_identical(populated_repo: Path) -> None
     before = _tree_digest(populated_repo)
     assert before, "fixture repo is empty; the comparison would be vacuous"
 
-    # One real card, written outside the tree under test.
+    # One real card and one findings envelope, both written outside the tree
+    # under test. The envelope is `validate --format json` output -- a dialect
+    # card shares schema_version 1 and is not a findings file (R-GA-10).
     baseline = populated_repo.parent / "read-only-baseline.json"
     card = run_cli(populated_repo, "detect", "--format", "json")
     assert card.returncode == 0, card.stderr
     baseline.write_text(card.stdout, encoding="utf-8")
+    findings = populated_repo.parent / "read-only-findings.json"
+    envelope = run_cli(populated_repo, "validate", "--format", "json")
+    assert envelope.returncode in _ALLOWED_READ_ONLY_EXITS, envelope.stderr
+    findings.write_text(envelope.stdout, encoding="utf-8")
 
     for argv in READ_ONLY_INVOCATIONS:
-        argv = tuple(str(baseline) if a == _BASELINE_PLACEHOLDER else a for a in argv)
-        result = run_cli(populated_repo, *argv)
+        mapped = []
+        for arg in argv:
+            if arg == _BASELINE_PLACEHOLDER:
+                mapped.append(str(baseline))
+            elif arg == _FINDINGS_PLACEHOLDER:
+                mapped.append(str(findings))
+            else:
+                mapped.append(arg)
+        result = run_cli(populated_repo, *mapped)
         # Without this the test passes vacuously if a verb regresses into an
         # immediate refusal: it would touch nothing precisely because it did
         # nothing, and the read-only claim would look proven.
         assert result.returncode in _ALLOWED_READ_ONLY_EXITS, (
-            f"{' '.join(argv)} exited {result.returncode}, so it never ran; "
+            f"{' '.join(mapped)} exited {result.returncode}, so it never ran; "
             f"an unchanged tree proves nothing here. stderr: {result.stderr!r}"
         )
 

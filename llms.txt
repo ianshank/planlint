@@ -10,7 +10,7 @@ planlint evaluates plans; it does not author them. Read-only by default.
 
 ## Contract
 
-- Read-only verbs: `detect`, `validate`, `graph`, `rules`, `waivers`.
+- Read-only verbs: `detect`, `validate`, `graph`, `rules`, `waivers`, `report`.
 - Verbs that write: `init`, `new`, `witness`. `init` and `new` take `--dry-run`
   and never overwrite without `--force`.
 - Exit 0 means no findings at or above the threshold. Exit 1 means findings.

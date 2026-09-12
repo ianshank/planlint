@@ -26,8 +26,16 @@ def test_read_text_or_none_returns_none_and_logs_on_oserror(
         raise PermissionError(13, "Permission denied")
 
     monkeypatch.setattr(Path, "read_text", refuse)
-    with caplog.at_level(logging.DEBUG, logger="planlint.detect"):
-        assert repo_io.read_text_or_none(target, "Makefile") is None
+    # ``log.configure()`` (any in-process ``cli.main()``) sets
+    # ``planlint.propagate = False``, so records never reach the root handler
+    # pytest's caplog installs. Attach to the emitting logger directly.
+    detect_log = logging.getLogger("planlint.detect")
+    detect_log.addHandler(caplog.handler)
+    try:
+        with caplog.at_level(logging.DEBUG, logger="planlint.detect"):
+            assert repo_io.read_text_or_none(target, "Makefile") is None
+    finally:
+        detect_log.removeHandler(caplog.handler)
     assert any("could not read" in record.getMessage() for record in caplog.records)
 
 

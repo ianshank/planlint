@@ -25,6 +25,7 @@ from tests.support import normalize_root, run_cli, write_spec
 # apply, chat) are explicitly excluded (the non-success criterion of AC-RP-3).
 ALLOWED_VERBS = {
     "detect", "init", "new", "validate", "graph", "rules", "waivers", "delta", "witness",
+    "report",
 }
 REJECTED_VERBS = {"propose", "apply", "chat", "generate", "draft"}
 

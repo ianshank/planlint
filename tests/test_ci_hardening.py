@@ -526,3 +526,23 @@ def test_makefile_has_matcher_accuracy_report_target() -> None:
         line = next(ln for ln in makefile.splitlines() if ln.startswith(f"{gate}:"))
         assert "matcher-accuracy" not in line.split(), f"{gate} must not compose the report target"
 
+
+def test_ci_workflow_has_an_action_contract_job() -> None:
+    """AC-GA-15: the hosted contract job uses the local action over on-disk fixtures."""
+    blocks = _ci_job_blocks(_ci_workflow_text())
+    assert "action-contract" in blocks, "ci.yml has no action-contract job"
+    body = blocks["action-contract"]
+    assert "contents: read" in body
+    assert "./.github/actions/planlint" in body
+    assert "continue-on-error: true" in body
+    assert "upload-sarif: false" in body
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert "action-contract" not in makefile, (
+        "action-contract is CI-side only and must not be composed into a Makefile target"
+    )
+    fx = REPO_ROOT / "tests" / "fixtures" / "action"
+    names = sorted(path.name for path in fx.iterdir() if path.is_dir())
+    assert names, "no fixture directories under tests/fixtures/action/"
+    for name in names:
+        assert name in body, f"action-contract job does not name on-disk fixture {name!r}"
+

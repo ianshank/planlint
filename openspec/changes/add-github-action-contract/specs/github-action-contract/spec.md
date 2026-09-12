@@ -79,13 +79,15 @@ held equal to `SKILL.md`'s read-only table.
 - R-GA-7: Every file the action writes MUST live under a directory beneath
   `$RUNNER_TEMP`, never under `GITHUB_WORKSPACE`. The action MUST leave the
   target tree unchanged.
-- R-GA-8: The evidence directory MUST contain `findings.json` (the envelope,
-  byte-for-byte as `validate` printed it), `findings.sarif`,
-  `dialect-card.json` (from `detect --format json`), `detect.txt` (the text
-  report), and `run.json` (the validate exit code, the tool version, the
-  action ref, and timestamps). `findings.json`, `findings.sarif` and
-  `dialect-card.json` MUST be byte-identical across two runs on an unchanged
-  tree and build; every non-deterministic field MUST live only in `run.json`.
+- R-GA-8: The evidence directory MUST always contain `run.json` (the
+  validate exit code, the tool version, the action ref, and timestamps)
+  and, when detect ran, `detect.txt` and `dialect-card.json`.
+  `findings.json` and `findings.sarif` MUST be present when an envelope
+  was produced; on the `error` path (no envelope) they MAY be absent, and
+  the `json-path` / `sarif-path` outputs MUST then be the empty string.
+  `findings.json`, `findings.sarif` and `dialect-card.json` MUST be
+  byte-identical across two runs on an unchanged tree and build whenever
+  they exist; every non-deterministic field MUST live only in `run.json`.
 - R-GA-9: The artifact upload MUST run whenever the validate step ran,
   including on `fail` and on `error` — conditioned on `upload-artifact` and
   `always()`, on nothing else.
@@ -96,31 +98,46 @@ held equal to `SKILL.md`'s read-only table.
   `report --findings FILE --format {sarif,github-annotations,github-summary,github-outputs}`.
   It MUST print its projection to stdout only, MUST NOT create, modify or
   remove any file, MUST exit 0 on success, MUST exit 2 with a stderr message
-  and empty stdout when `FILE` is unreadable, is not a JSON object, or carries
-  a `schema_version` other than `rules.FINDINGS_SCHEMA_VERSION`, and MUST
-  NOT exit 1 under any input.
+  and empty stdout when `FILE` is unreadable, is not a JSON object, carries
+  a `schema_version` other than `rules.FINDINGS_SCHEMA_VERSION`, or is a
+  JSON object that is not a findings envelope — `findings` is not a list,
+  or `blocking` or `specs_checked` is not an integer. A dialect card
+  (`detect --format json`) shares `schema_version` 1 and MUST be refused
+  this way, not projected. It MUST NOT exit 1 under any input.
 - R-GA-11: `report --format sarif` over the envelope `validate --format json`
   printed MUST produce stdout byte-identical to `validate --format sarif` for
-  the same tree and the same build.
+  the same tree and the same build. The renderer MUST be `print(json.dumps(...,
+  indent=2))`, matching `cmd_validate`'s SARIF branch, including the trailing
+  newline `print` adds.
 - R-GA-12: `report --format github-annotations` MUST emit one workflow
   command per finding, in envelope order: `::error` for `ERROR`, `::warning`
   for `WARN`, `::notice` for `INFO`; `file=<path>` when `path` is non-null;
   `line=<n>` only when `line` is at least 1 (never for 0, never clamped);
   `title=<rule>`; and message text escaped by the workflow-command rules
   (`%` to `%25`, carriage return to `%0D`, newline to `%0A`, and in property
-  values additionally `:` to `%3A` and `,` to `%2C`). It MUST stop at a
-  module-level cap and, when the cap is reached, emit exactly one trailing
-  `::notice::` naming how many findings were withheld and that the full
-  envelope is in the evidence artifact.
+  values additionally `:` to `%3A` and `,` to `%2C`). It MUST stop at
+  `ANNOTATION_LIMIT`, a module-level constant equal to 10 (GitHub's
+  documented per-step annotation display cap), and, when the cap is
+  reached, emit exactly one trailing `::notice::` naming how many findings
+  were withheld and that the full envelope is in the evidence artifact.
+  That trailing notice is best-effort on the annotation stream; R-GA-14's
+  step summary is the surface that MUST always name the withheld count.
 - R-GA-13: `report --format github-outputs` MUST emit one `key=value` line per
   envelope-derivable output — `status`, `errors`, `warnings`, `findings`,
   `blocking`, `specs-checked`, `rules-triggered`, `version` — with no newline
-  inside any value. `rules-triggered` MUST be the sorted, de-duplicated,
-  comma-joined rule ids of the findings.
+  inside any value. `errors`, `warnings` and `findings` MUST be decimal
+  counts derived from the envelope: `errors` is the number of findings
+  whose `severity` is `ERROR`, `warnings` the number whose `severity` is
+  `WARN`, `findings` is `len(findings)`. `blocking` and `specs-checked` map
+  from the envelope keys `blocking` and `specs_checked`. `version` is the
+  envelope's `tool_version`. `rules-triggered` MUST be the sorted,
+  de-duplicated, comma-joined rule ids of the findings. The envelope itself
+  MUST NOT grow these count keys (C-GA-1).
 - R-GA-14: `report --format github-summary` MUST emit Markdown carrying the
   status, the counts, and a findings table (rule, severity, path, message)
   subject to the same cap and trailing note as R-GA-12, derived only from the
-  envelope.
+  envelope. Table cells MUST escape `|` as `\|` and replace newlines inside
+  a cell with a space, so a finding message cannot break the table.
 - R-GA-15: `openspec_graph/report.py` MUST be pure and stdlib-only, MUST
   perform no I/O, MUST import no other module of this package, and MUST be
   registered in `tests/test_decomposition.py::_NEW_MODULES`.
@@ -148,14 +165,19 @@ held equal to `SKILL.md`'s read-only table.
 - R-GA-19: The string `pull_request_target` MUST NOT appear in any file
   under `.github/`, `templates/` or `skills/`. The template MUST declare job
   `permissions` explicitly — `contents: read`, plus `security-events: write`
-  only for the SARIF upload — and MUST check out with
+  only for the SARIF upload, plus `actions: read` annotated as required
+  only on a private repository — and MUST check out with
   `persist-credentials: false`. The action MUST require no secret and MUST
   declare no token input.
 - R-GA-20: The SARIF upload step MUST be skipped, not failed, when
   `upload-sarif` is not `true`, when no SARIF file exists, or when the event
   is a pull request whose head repository is not the workflow's repository
-  (a fork, whose token is read-only). A policy result MUST NOT be turned into
-  an `error` by the upload.
+  (a fork, whose token is read-only). A `push` event MUST still upload when
+  the other two conditions hold. Existence MUST be tested against the
+  evidence-dir path (a step output from `[ -s "$SARIF_PATH" ]` or
+  equivalent), NEVER via `hashFiles`, which only searches
+  `GITHUB_WORKSPACE`. A policy result MUST NOT be turned into an `error` by
+  the upload.
 
 ### Contract tests
 
@@ -293,13 +315,16 @@ held equal to `SKILL.md`'s read-only table.
   poison byte-stability, so they get their own file; `findings.json`,
   `findings.sarif` and `dialect-card.json` stay exactly what the CLI printed
   and stay comparable across runs.
-- **DEC-GA-010:** the annotation cap is a module-level constant in
-  `report.py`, not an action input. Annotations flood a pull request past a
-  few dozen and GitHub itself stops rendering them; the cap is a property of
-  the surface, not a policy an adopter tunes. It also keeps a bare number
-  out of the action YAML, which is this repository's posture for every
-  other threshold (`tools/check_no_hardcoded_thresholds.py`). The trailing
-  notice exists so a capped run can never be mistaken for a complete one.
+- **DEC-GA-010:** the annotation cap is `ANNOTATION_LIMIT = 10` in
+  `report.py`, not an action input. GitHub's Checks UI has long truncated
+  workflow-command annotations at ten per step; a higher cap would emit
+  commands the UI never shows and could hide the trailing withheld-count
+  notice. The cap is a property of that surface, not a policy an adopter
+  tunes, and it keeps a bare number out of the action YAML. The trailing
+  `::notice::` is still emitted so a capped annotation stream cannot be
+  mistaken for a complete one; R-GA-14's step summary is the surface that
+  is guaranteed to name the withheld count even if GitHub truncates the
+  annotation stream.
 - **DEC-GA-011:** no floating major tag and no Marketplace listing until
   1.0. `add-sarif-and-actions` declined both, and DEC-GA-006 removes the
   last reason to want a floating tag early: an exact tag now pins the CLI
@@ -339,39 +364,50 @@ held equal to `SKILL.md`'s read-only table.
   a template that used it would look identical to one that did not. A
   text-level guard over the three directories adopters copy from costs one
   test and closes the door.
+- **DEC-GA-016:** SARIF existence is a step output from a test of the
+  evidence-dir path, never `hashFiles`. `hashFiles` only searches
+  `GITHUB_WORKSPACE`; after R-GA-7 moves the file under `$RUNNER_TEMP` a
+  copied `hashFiles('findings.sarif')` is always empty and the upload is
+  always skipped. The hosted `action-contract` job sets `upload-sarif:
+  false`, so CI cannot catch that always-skip. The text-level re-pin
+  (AC-GA-12) therefore requires the path-based check and forbids
+  `hashFiles` against the SARIF file.
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] **AC-GA-1:** For a fixture with findings in more than one spec file
+- [x] **AC-GA-1:** For a fixture with findings in more than one spec file
   and for a clean fixture, `report --format sarif` over the envelope
   `validate --format json` printed produces stdout byte-identical to
   `validate --format sarif` on the same tree — asserted on a non-empty
   results array first, so the equality cannot hold vacuously. (R-GA-11)
-  _Verified by:_ `tests/test_report.py` (to be written in Milestone 3) · stage: `make test`
+  _Verified by:_ `pytest -k test_report_sarif_is_byte_identical_to_validate_sarif` · stage: `make test`
 
-- [ ] **AC-GA-2 (non-success):** `report` exits 2, prints one line to
+- [x] **AC-GA-2 (non-success):** `report` exits 2, prints one line to
   stderr, and prints nothing to stdout for each of: a missing file, a file
-  that is not JSON, a JSON array, and an envelope whose `schema_version` is
-  not the current one. No input makes it exit 1. (R-GA-10)
-  _Verified by:_ `tests/test_report.py` (to be written in Milestone 3) · stage: `make test`
+  that is not JSON, a JSON array, an envelope whose `schema_version` is
+  not the current one, and a `detect --format json` dialect card (same
+  `schema_version`, missing envelope keys). No input makes it exit 1.
+  (R-GA-10)
+  _Verified by:_ `pytest -k test_report_exit_two_inputs_and_never_exit_one` · stage: `make test`
 
-- [ ] **AC-GA-3:** `report --format github-outputs` over a failing fixture's
-  envelope yields `status=fail` with `errors`, `warnings`, `findings` and
-  `blocking` equal to the envelope's own counts and `rules-triggered` sorted
-  and de-duplicated; over a clean fixture it yields `status=pass`; every
+- [x] **AC-GA-3:** `report --format github-outputs` over a failing fixture's
+  envelope yields `status=fail` with `errors`, `warnings` and `findings`
+  equal to the derived counts of R-GA-13, `blocking` and `specs-checked`
+  equal to the envelope keys, and `rules-triggered` sorted and
+  de-duplicated; over a clean fixture it yields `status=pass`; every
   line is `key=value`, the key set is exactly the documented one, and no
   value contains a newline. (R-GA-5, R-GA-13)
-  _Verified by:_ `tests/test_report.py` (to be written in Milestone 2) · stage: `make test`
+  _Verified by:_ `pytest -k test_github_outputs_key_set_and_derived_counts` · stage: `make test`
 
-- [ ] **AC-GA-4 (non-success):** The envelope a real `validate --format
+- [x] **AC-GA-4 (non-success):** The envelope a real `validate --format
   json` prints for an `openspec/changes/` directory with no packages —
   `specs_checked` zero, `blocking` zero — yields `status=indeterminate`,
   never `pass`. (R-GA-5, DEC-GA-005)
-  _Verified by:_ `tests/test_report.py` (to be written in Milestone 2) · stage: `make test`
+  _Verified by:_ `pytest -k test_zero_spec_envelope_from_real_validate_is_indeterminate` · stage: `make test`
 
-- [ ] **AC-GA-5:** `report --format github-annotations` emits one command
+- [x] **AC-GA-5:** `report --format github-annotations` emits one command
   per finding in envelope order, maps `ERROR`/`WARN`/`INFO` to
   `::error`/`::warning`/`::notice`, carries `file=` for a finding with a
   path and omits it for a pathless one, omits `line=` when `line` is zero
@@ -379,28 +415,28 @@ held equal to `SKILL.md`'s read-only table.
   `%`, carriage return, newline, `:` and `,` as the workflow-command rules
   require — checked on a constructed finding whose message contains every
   one of those characters. (R-GA-12)
-  _Verified by:_ `tests/test_report.py` (to be written in Milestone 2) · stage: `make test`
+  _Verified by:_ `pytest -k test_annotation_escaping_and_location_rules` · stage: `make test`
 
-- [ ] **AC-GA-6 (non-success):** With more findings than the cap, the
+- [x] **AC-GA-6 (non-success):** With more findings than the cap, the
   annotation output holds exactly the cap's count of finding commands plus
   one trailing `::notice::` naming the withheld count; with fewer, no notice
   is emitted. Constructed input, so the criterion cannot pass on an empty
   set. (R-GA-12, DEC-GA-010)
-  _Verified by:_ `tests/test_report.py` (to be written in Milestone 2) · stage: `make test`
+  _Verified by:_ `pytest -k test_annotation_cap_emits_trailing_notice` · stage: `make test`
 
-- [ ] **AC-GA-7:** `report --format github-summary` is a pure function of
+- [x] **AC-GA-7:** `report --format github-summary` is a pure function of
   the envelope: two calls over one envelope are byte-identical, the output
   names the status and the counts, and it is capped with the same trailing
   note as the annotations. (R-GA-14)
-  _Verified by:_ `tests/test_report.py` (to be written in Milestone 2) · stage: `make test`
+  _Verified by:_ `pytest -k test_step_summary_is_deterministic_and_capped` · stage: `make test`
 
-- [ ] **AC-GA-8:** `openspec_graph/report.py` imports only the standard
+- [x] **AC-GA-8:** `openspec_graph/report.py` imports only the standard
   library, imports no module of this package, and is listed in
   `_NEW_MODULES`, so both properties are checked mechanically. (R-GA-15,
   C-GA-3)
   _Verified by:_ `pytest -k "test_new_modules_stdlib_only or test_import_boundary_discipline"` · stage: `make test`
 
-- [ ] **AC-GA-9 (non-success):** `report` creates, modifies and removes no
+- [x] **AC-GA-9 (non-success):** `report` creates, modifies and removes no
   file in the target tree. Enforced by adding a `report` invocation to
   `READ_ONLY_INVOCATIONS`, whose whole-tree digest comparison then covers it
   and whose exit-code guard keeps the assertion from passing because the
@@ -408,22 +444,24 @@ held equal to `SKILL.md`'s read-only table.
   table to list `report`. (R-GA-10, C-GA-4, DEC-GA-014)
   _Verified by:_ `pytest -k "test_read_only_verbs_leave_tree_byte_identical or test_read_only_invocations_cover_every_verb_the_skill_calls_read_only"` · stage: `make test`
 
-- [ ] **AC-GA-10:** The verb surface is exactly the previous nine verbs
+- [x] **AC-GA-10:** The verb surface is exactly the previous nine verbs
   plus `report`, and no authoring verb was added. (C-GA-2)
   _Verified by:_ `pytest -k "test_cli_verbs_are_exactly_the_allow_list or test_cli_rejects_authoring_verbs"` · stage: `make test`
 
-- [ ] **AC-GA-11 (non-success):** The golden hashes for `validate`, `graph`
+- [x] **AC-GA-11 (non-success):** The golden hashes for `validate`, `graph`
   and `rules` are unchanged and the rule set matches the committed baseline:
   a new verb and a new module changed no existing output. (C-GA-1, C-GA-2)
   _Verified by:_ `pytest -k "test_output_byte_identical or test_rule_set_matches_baseline"` · stage: `make test`
 
-- [ ] **AC-GA-12:** `.github/actions/planlint/action.yml` declares exactly
+- [x] **AC-GA-12:** `.github/actions/planlint/action.yml` declares exactly
   the seven inputs and at least the thirteen outputs of the contract;
   contains one `validate --format json` invocation and no
   `validate --format sarif`; invokes `report` for the SARIF, annotation,
   summary and outputs surfaces; roots its evidence under `RUNNER_TEMP`;
   uploads the artifact under `always()`; guards the SARIF upload on the
-  fork condition; installs from `GITHUB_ACTION_PATH` by default and from
+  fork-or-push condition of R-GA-20 (including
+  `github.event_name != 'pull_request'`) and a path-based existence check,
+  not `hashFiles`; installs from `GITHUB_ACTION_PATH` by default and from
   the index on a line naming the distribution when `version` is set;
   carries three distinct gate messages, one each for `fail`, `error` and
   `indeterminate`; and is discovered by the adopter corpus rather than
@@ -431,12 +469,12 @@ held equal to `SKILL.md`'s read-only table.
   R-GA-4, R-GA-6, R-GA-7, R-GA-8, R-GA-9, R-GA-17, R-GA-20)
   _Verified by:_ `pytest -k "test_the_composite_action_declares_the_expected_steps or test_the_adopter_corpus_includes_the_composite_action or test_install_lines_spell_this_project_the_way_it_is_published"` · stage: `make test`
 
-- [ ] **AC-GA-13 (non-success):** The string `pull_request_target` appears
+- [x] **AC-GA-13 (non-success):** The string `pull_request_target` appears
   in no file under `.github/`, `templates/` or `skills/`, and the action
   declares no input whose name contains `token`. (R-GA-19, DEC-GA-015)
-  _Verified by:_ `tests/test_sarif.py` (to be written in Milestone 5) · stage: `make test`
+  _Verified by:_ `pytest -k "test_no_workflow_or_template_uses_pull_request_target or test_the_action_declares_no_token_input"` · stage: `make test`
 
-- [ ] **AC-GA-14:** `templates/spec-gate.yml` and the skill asset are
+- [x] **AC-GA-14:** `templates/spec-gate.yml` and the skill asset are
   byte-identical; the template declares job `permissions` with
   `contents: read`, checks out with `persist-credentials: false`, and pins
   `uses: ianshank/planlint/.github/actions/planlint@v<X.Y.Z>` where `X.Y.Z`
@@ -444,36 +482,36 @@ held equal to `SKILL.md`'s read-only table.
   `planlint-min-version`. (R-GA-18, R-GA-19, C-GA-4, DEC-GA-012)
   _Verified by:_ `pytest -k "test_skill_asset_matches_template or test_ci_template_pins_the_floor_the_skill_enforces"` · stage: `make test`
 
-- [ ] **AC-GA-15:** `.github/workflows/ci.yml` defines an `action-contract`
+- [x] **AC-GA-15:** `.github/workflows/ci.yml` defines an `action-contract`
   job that checks out this repository, uses `./.github/actions/planlint`
   once per fixture directory under `tests/fixtures/action/`, runs under
   `permissions: contents: read`, reads no secret, and asserts the status
   each fixture is labelled with; the job is listed in `docs/hooks.md`'s CI
   table and carries no threshold literal or tool pin; the Makefile does not
   reference it. (R-GA-21, R-GA-22, C-GA-5)
-  _Verified by:_ `pytest -k "test_hooks_ci_table_lists_every_ci_job or test_no_hardcoded_passes_on_clean_repo"` plus a structural job test in `tests/test_ci_hardening.py` (to be written in Milestone 7) · stage: `make test`
+  _Verified by:_ `pytest -k "test_hooks_ci_table_lists_every_ci_job or test_ci_workflow_has_an_action_contract_job or test_no_hardcoded_passes_on_clean_repo"` · stage: `make test`
 
-- [ ] **AC-GA-16:** Each fixture under `tests/fixtures/action/` produces,
+- [x] **AC-GA-16:** Each fixture under `tests/fixtures/action/` produces,
   under the installed CLI, the result its name promises: `passing/` exits 0
   with at least one spec checked, `failing/` exits 1 with `blocking` above
   zero, `empty-tree/` exits 0 with `specs_checked` zero, `no-tree/` exits 2
   printing the no-spec-tree message, and `nested/` passes only when the
   target is its subdirectory. (R-GA-21)
-  _Verified by:_ `tests/test_report.py` (to be written in Milestone 4) · stage: `make test`
+  _Verified by:_ `pytest -k test_action_fixtures_match_their_labels` · stage: `make test`
 
-- [ ] **AC-GA-17:** Two consecutive runs over an unchanged fixture produce
+- [x] **AC-GA-17:** Two consecutive runs over an unchanged fixture produce
   byte-identical `validate --format json`, `validate --format sarif` and
   `detect --format json` output, and byte-identical `report` projections of
   the same envelope. (R-GA-8)
-  _Verified by:_ `pytest -k "test_validate_json_is_deterministic or test_sarif_output_is_byte_stable_across_runs or test_detect_format_json_is_byte_identical_across_runs"` plus a `report` determinism test in `tests/test_report.py` (to be written in Milestone 2) · stage: `make test`
+  _Verified by:_ `pytest -k "test_validate_json_is_deterministic or test_sarif_output_is_byte_stable_across_runs or test_detect_format_json_is_byte_identical_across_runs or test_report_projections_are_deterministic"` · stage: `make test`
 
-- [ ] **AC-GA-18:** When the envelope's `tool_version` differs from the
+- [x] **AC-GA-18:** When the envelope's `tool_version` differs from the
   running build's, `report` prints one warning to stderr and its stdout is
   byte-identical to the matching-version run; it never exits 2 for the
   mismatch alone. (R-GA-16)
-  _Verified by:_ `tests/test_report.py` (to be written in Milestone 3) · stage: `make test`
+  _Verified by:_ `pytest -k test_report_warns_on_tool_version_mismatch_without_changing_stdout` · stage: `make test`
 
-- [ ] **AC-GA-19:** `README.md`, `SKILL.md`, `references/exit-codes.md`,
+- [x] **AC-GA-19:** `README.md`, `SKILL.md`, `references/exit-codes.md`,
   `llms.txt`, `docs/hooks.md`, `docs/architecture/c4.md` and `CHANGELOG.md`
   describe `report`, the action's inputs, outputs and statuses, the
   evidence artifact, the exact-ref pinning rule, and the security posture;

@@ -275,10 +275,10 @@ def test_the_colliding_name_is_present_and_marked_unrelated(path: Path) -> None:
 def test_ci_template_pins_the_floor_the_skill_enforces() -> None:
     """Two floors, one meaning: the adopter's and the agent's must be one number.
 
-    The template pins a lower bound so a future major with a different
-    exit-code contract cannot walk into an adopter's CI. The skill refuses to
-    run against a CLI older than its own declared minimum. If those drift, an
-    adopter installs a version their agent then rejects.
+    The template pins the composite action to `@vX.Y.Z`. The skill refuses to
+    run against a CLI older than its own declared minimum. The package version
+    is the third leg (DEC-GA-012): the tag the template names is the version
+    this checkout will ship.
     """
     text = SKILL_MD.read_text(encoding="utf-8")
     _, fence, body = text.partition("\n---\n")
@@ -291,12 +291,23 @@ def test_ci_template_pins_the_floor_the_skill_enforces() -> None:
     declared = re.search(r"^[ \t]+planlint-min-version:[ \t]*(\S+)$", frontmatter, re.MULTILINE)
     assert declared, "SKILL.md declares no indented metadata.planlint-min-version"
 
-    pinned = re.search(r"planlint>=([0-9.]+),<\d", TEMPLATE.read_text(encoding="utf-8"))
-    assert pinned, "templates/spec-gate.yml no longer pins a planlint lower bound"
+    pinned = re.search(
+        r"uses:\s*ianshank/planlint/\.github/actions/planlint@v([0-9.]+)",
+        TEMPLATE.read_text(encoding="utf-8"),
+    )
+    assert pinned, "templates/spec-gate.yml no longer pins the composite action to @vX.Y.Z"
     assert pinned.group(1) == declared.group(1), (
-        f"the CI template installs planlint>={pinned.group(1)} but the skill requires "
+        f"the CI template pins @v{pinned.group(1)} but the skill requires "
         f"{declared.group(1)}; an adopter would install a CLI their agent refuses"
     )
+    assert pinned.group(1) == __version__, (
+        f"the CI template pins @v{pinned.group(1)} but openspec_graph.__version__ "
+        f"is {__version__}"
+    )
+    template = TEMPLATE.read_text(encoding="utf-8")
+    assert "persist-credentials: false" in template
+    assert "contents: read" in template
+    assert "security-events: write" in template
 
 
 def test_every_changelog_version_links_to_its_release_tag() -> None:
