@@ -155,3 +155,4 @@ artifact that gate is measured on, and today it cannot be reproduced at all.
 ## Affected Capabilities
 
 - `github-action-contract`
+

@@ -203,12 +203,14 @@ distribution it invokes stayed put.
 
 ## Adding a new pure derived-output module
 
-`dialect_card.py`, `ledger.py`, and `mermaid.py` are all the same shape: a
+`dialect_card.py`, `ledger.py`, `mermaid.py`, `sarif.py`, and `report.py` are
+all the same shape: a
 pure, stdlib-only module that projects a data structure some other module
 already computed (a `StackProfile`, a `ParsedSpec` tree, `build_graph()`'s
-dict) into a derived output — a diffable snapshot, a ledger, a diagram —
-without registering a `Rule` or doing its own filesystem/network I/O.
-`dialect_card.py` and `mermaid.py` import no sibling module at all;
+dict, a findings envelope) into a derived output — a diffable snapshot, a ledger, a diagram,
+SARIF, GitHub annotations — without registering a `Rule` or doing its own filesystem/network I/O.
+`dialect_card.py`, `mermaid.py`, `sarif.py` and `report.py` import no sibling
+module at all;
 `ledger.py` imports `detect.to_posix_relative` — a shared pure-formatting
 helper, not a data type it consumes — to render its `path` field the same
 way every other consumer of that function does.

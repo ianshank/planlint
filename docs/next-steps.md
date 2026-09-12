@@ -84,6 +84,27 @@ over-engineering.
    is only as good as the fields it is projecting, which is worth checking
    before assuming one is mechanical.
 
+   Deferred from `add-github-action-contract`, each with a reopen trigger
+   rather than a date:
+
+   - **Pull-request comments via a `workflow_run` reporter.** The action stays
+     unprivileged (`contents: read`). Reopen when an adopter needs review
+     comments that code-scanning annotations do not cover.
+   - **`extra-args` input.** Rejected as a raw pass-through. Reopen only for a
+     named, tested flag that the CLI already supports.
+   - **Floating major tag and Marketplace listing.** Held until 1.0
+     (`DEC-GA-011`). Reopen when the contract is declared stable; a Marketplace
+     listing needs a root `action.yml`.
+   - **SARIF subdirectory prefix.** `target` other than `.` still places
+     annotations relative to the wrong base (`DEC-GA-007`). Reopen when an
+     adopter has a monorepo that cannot run the action with a working
+     directory.
+   - **`evidence-sha256` output.** Reopen if two runs of the same tree need a
+     machine-checkable identity stronger than byte-identical evidence files.
+   - **Widening `indeterminate`.** Today it is "zero specs checked". Reopen if
+     "no machinery detected" (no Makefile, no coverage floor) should fail
+     closed the same way.
+
 6. **Coverage trend gating** — `check_coverage_floor.py` gates against an
    absolute floor. A trend gate (branch coverage must not *decrease* vs.
    merge-base) would mirror the graph-diff pattern for coverage.

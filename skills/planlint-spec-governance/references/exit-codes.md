@@ -94,6 +94,23 @@ sha that is not exactly forty hexadecimal characters, a coverage value that is
 not a finite number between zero and one hundred, and an unwritable witness
 store.
 
+**`report`, unusable findings file.** The `--findings` file is missing, is not
+valid JSON, is valid JSON that is not an object, carries a `schema_version`
+other than this build's findings envelope, or is a JSON object that is not a
+findings envelope (`findings` is not a list, or `blocking` / `specs_checked`
+is not an integer). A dialect card from `detect --format json` is refused this
+way. All of these exit 2 with empty stdout; `report` never exits 1:
+
+```
+cannot read --findings <path>: <reason>
+cannot read --findings <path>: expected a JSON object, got list
+cannot read --findings <path>: unsupported schema_version <got> (expected <n>)
+cannot read --findings <path>: not a findings envelope (need findings list, integer blocking, integer specs_checked)
+```
+
+A `tool_version` that differs from this build prints one stderr WARNING and
+still projects the envelope. That is not an exit 2.
+
 **`init` and `new`, unwritable target.** A read-only checkout, a full disk, or
 a permission-denied path exits 2 with `ERROR cannot write to <target>`. This is
 a precondition failure, not a spec failure -- the same distinction the bad

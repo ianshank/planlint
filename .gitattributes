@@ -7,3 +7,4 @@
 # Git for Windows' autocrlf default, which would otherwise rewrite them).
 tests/corpus/targets/** -text
 tests/fixtures/phrasing/** -text
+tests/fixtures/action/** -text
