@@ -110,6 +110,17 @@ resolves.
 PyPI still 404s, the release workflow is red. That is a half-product. Do
 steps 2–6 in one sitting.
 
+**First foreign CI adopter (after the tag, or on the SHA until then).** Copy
+`templates/spec-gate.yml` into `ianshank/Agents` at `fail-on: ERROR`. A live
+scan of that clone at this writing is exit 0 with four G009 WARNs — keep
+ERROR so those warnings do not fail the first install. Do not enable the
+gate on `Mouse-Droid-AGI` (45 ERROR; unstable default branch) or
+`Hex-vision` (zero specs checked, dialect `unknown`: a hollow pass). A
+follow-up in Agents, not here: eval-corpus-plan D6 — `planlint validate
+--fail-on ERROR` as the objective grader for `openspec-quality-plan` /
+`openspec-peer-review`, paired with `detect` so exit 2 is not conflated
+with fail.
+
 ## 4. Phase 1 — in-repo slices
 
 ### Slice 1 — hygiene, guards, evaluation fixes — **shipped**
