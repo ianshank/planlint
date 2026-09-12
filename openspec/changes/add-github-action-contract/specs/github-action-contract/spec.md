@@ -76,9 +76,11 @@ held equal to `SKILL.md`'s read-only table.
 
 ### Evidence
 
-- R-GA-7: Every file the action writes MUST live under a directory beneath
-  `$RUNNER_TEMP`, never under `GITHUB_WORKSPACE`. The action MUST leave the
-  target tree unchanged.
+- R-GA-7: Every action-managed evidence or intermediate file the action writes
+  MUST live under a directory beneath `$RUNNER_TEMP`, never under
+  `GITHUB_WORKSPACE`. The only allowed writes outside that directory are
+  appends to runner-managed command files (`$GITHUB_OUTPUT`,
+  `$GITHUB_STEP_SUMMARY`). The action MUST leave the target tree unchanged.
 - R-GA-8: The evidence directory MUST always contain `run.json` (the
   validate exit code, the tool version, the action ref, and timestamps)
   and, when detect ran, `detect.txt` and `dialect-card.json`.
@@ -100,10 +102,13 @@ held equal to `SKILL.md`'s read-only table.
   remove any file, MUST exit 0 on success, MUST exit 2 with a stderr message
   and empty stdout when `FILE` is unreadable, is not a JSON object, carries
   a `schema_version` other than `rules.FINDINGS_SCHEMA_VERSION`, or is a
-  JSON object that is not a findings envelope — `findings` is not a list,
-  or `blocking` or `specs_checked` is not an integer. A dialect card
-  (`detect --format json`) shares `schema_version` 1 and MUST be refused
-  this way, not projected. It MUST NOT exit 1 under any input.
+  JSON object that is not a findings envelope. Required envelope fields and
+  types MUST be validated before projection (`findings` list, `blocking`
+  integer, `specs_checked` integer, `tool_version` string), and each finding
+  entry MUST be validated for projection-required fields and types (`rule`,
+  `severity`, `message` strings; `path` null or string; `line` integer). A
+  dialect card (`detect --format json`) shares `schema_version` 1 and MUST be
+  refused this way, not projected. It MUST NOT exit 1 under any input.
 - R-GA-11: `report --format sarif` over the envelope `validate --format json`
   printed MUST produce stdout byte-identical to `validate --format sarif` for
   the same tree and the same build. The renderer MUST be `print(json.dumps(...,
@@ -165,10 +170,10 @@ held equal to `SKILL.md`'s read-only table.
 - R-GA-19: The string `pull_request_target` MUST NOT appear in any file
   under `.github/`, `templates/` or `skills/`. The template MUST declare job
   `permissions` explicitly — `contents: read`, plus `security-events: write`
-  only for the SARIF upload, plus `actions: read` annotated as required
-  only on a private repository — and MUST check out with
-  `persist-credentials: false`. The action MUST require no secret and MUST
-  declare no token input.
+  only for the SARIF upload, plus `actions: read` (in addition to
+  `security-events: write`) annotated as required only on a private
+  repository — and MUST check out with `persist-credentials: false`. The
+  action MUST require no secret and MUST declare no token input.
 - R-GA-20: The SARIF upload step MUST be skipped, not failed, when
   `upload-sarif` is not `true`, when no SARIF file exists, or when the event
   is a pull request whose head repository is not the workflow's repository
@@ -387,7 +392,9 @@ held equal to `SKILL.md`'s read-only table.
 - [x] **AC-GA-2 (non-success):** `report` exits 2, prints one line to
   stderr, and prints nothing to stdout for each of: a missing file, a file
   that is not JSON, a JSON array, an envelope whose `schema_version` is
-  not the current one, and a `detect --format json` dialect card (same
+  not the current one, an object missing required envelope keys/types (for
+  example `{"schema_version": 1}`), a finding entry missing required
+  projection fields/types, and a `detect --format json` dialect card (same
   `schema_version`, missing envelope keys). No input makes it exit 1.
   (R-GA-10)
   _Verified by:_ `pytest -k test_report_exit_two_inputs_and_never_exit_one` · stage: `make test`

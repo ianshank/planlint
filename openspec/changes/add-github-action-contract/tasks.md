@@ -138,9 +138,10 @@
   "$INPUT_TARGET"` to `detect.txt` and `detect --target "$INPUT_TARGET"
   --format json` to `dialect-card.json`; `validate --target "$INPUT_TARGET"
   --format json --fail-on "$INPUT_FAIL_ON"` to `findings.json` under
-  `set +e`, capturing the exit code and writing `run.json`; `report --format
-  sarif` to `findings.sarif` when `findings.json` exists as a JSON object
-  (including an empty `findings` list); `report --format
+  `set +e`, capturing the exit code, retaining stderr in evidence for the
+  final gate message, and writing `run.json`; `report --format sarif` to
+  `findings.sarif` when `findings.json` exists as a JSON object (including an
+  empty `findings` list); `report --format
   github-annotations` to stdout; `report --format github-summary` appended
   to `$GITHUB_STEP_SUMMARY`; `report --format github-outputs` appended to
   `$GITHUB_OUTPUT`, with the action itself emitting `status=error` and the
@@ -192,8 +193,9 @@
 
 - `.github/workflows/ci.yml`: new `action-contract` job, `ubuntu-latest`,
   `permissions: contents: read`, matrix over the five fixture names.
-  Steps: checkout; `uses: ./.github/actions/planlint` with `id: planlint`,
-  `continue-on-error: true`, `target: tests/fixtures/action/<fixture>`
+  Steps: checkout (`persist-credentials: false`);
+  `uses: ./.github/actions/planlint` with `id: planlint`, `continue-on-error:
+  true`, `target: tests/fixtures/action/<fixture>`
   (`nested/` points at its subdirectory), `upload-sarif: false`,
   `artifact-name: planlint-evidence-<fixture>`; an assertion step in bash
   comparing `steps.planlint.outcome` and every `steps.planlint.outputs.*`
