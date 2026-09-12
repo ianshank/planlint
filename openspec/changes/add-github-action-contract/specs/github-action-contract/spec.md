@@ -465,12 +465,15 @@ merely incomplete:
   table, and no Makefile target composes it. (R-GA-27, C-GA-5)
   _Verified by:_ `pytest -k "test_ci_workflow_has_an_action_contract_job or test_every_action_fixture_has_a_contract_leg or test_the_contract_job_is_not_wired_into_a_make_target or test_hooks_ci_table_lists_every_ci_job"` · stage: `make test`
 
-- [ ] **AC-GA-23:** The hosted `action-contract` job is green on the pull
+- [x] **AC-GA-23:** The hosted `action-contract` job is green on the pull
   request that lands this change, with every fixture's assertion step passing.
   This is the first execution of the action on a runner, and the only evidence
   that a checkout of this repository is enough to run it. The local simulation
   covers the shell; only a runner covers the `uses:` steps, the artifact upload
-  and the action path. (R-GA-27)
+  and the action path. Observed: all five legs — `passing`, `failing`,
+  `empty-tree`, `no-tree`, `nested` — reported their labelled outcome, status
+  and exit code on the first hosted run, under a read-only token with no
+  secret. (R-GA-27)
   _Verified by:_ the `action-contract` job's own assertion steps on the pull request · stage: `make ci` must also be green on the same commit
 
 - [x] **AC-GA-24:** The README, SKILL.md, the exit-code reference, `llms.txt`,

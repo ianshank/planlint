@@ -1,9 +1,11 @@
 # Milestones
 
-> Every milestone below is implemented and verified. `AC-GA-23` is the one
-> criterion still open: it can only be closed by the hosted `action-contract`
-> job running green on the pull request, because a local simulation cannot
-> cover the `uses:` steps, the artifact upload, or the action path.
+> Every milestone below is implemented and verified, `AC-GA-23` included: the
+> hosted `action-contract` job ran green on its first attempt, all five legs
+> reporting the outcome, status and exit code their fixture is labelled with.
+> The local simulation had already covered the shell, which is why the runner
+> found nothing left to find -- the one defect that would have surfaced there
+> (composite steps starting under errexit) was caught locally instead.
 
 ## Milestone 0 — Grounding pass [DONE]
 
@@ -73,12 +75,12 @@
   the action. The pin-parity test now reads the `uses:` ref and additionally
   requires it to equal the package version.
 
-## Milestone 7 — The hosted contract job [DONE, pending its first green run]
+## Milestone 7 — The hosted contract job [DONE]
 
 - `action-contract` in `ci.yml`, matrixed over every fixture, under a read-only
   token with no secret; `docs/hooks.md`'s CI table row; three structural guards
   including one that fails when a fixture has no leg.
-- `AC-GA-23` stays unchecked until the job is observed green.
+- Green on the first hosted run, all five legs. `AC-GA-23` closed.
 
 ## Milestone 8 — Docs and close-out [DONE]
 
