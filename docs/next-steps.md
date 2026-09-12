@@ -84,6 +84,27 @@ over-engineering.
    is only as good as the fields it is projecting, which is worth checking
    before assuming one is mechanical.
 
+   Deferred from `add-github-action-contract`, each with a reopen trigger
+   rather than a date:
+
+   - **Pull-request comments via a `workflow_run` reporter.** The action stays
+     unprivileged (`contents: read`). Reopen when an adopter needs review
+     comments that code-scanning annotations do not cover.
+   - **`extra-args` input.** Rejected as a raw pass-through. Reopen only for a
+     named, tested flag that the CLI already supports.
+   - **Floating major tag and Marketplace listing.** Held until 1.0
+     (`DEC-GA-011`). Reopen when the contract is declared stable; a Marketplace
+     listing needs a root `action.yml`.
+   - **SARIF subdirectory prefix.** `target` other than `.` still places
+     annotations relative to the wrong base (`DEC-GA-007`). Reopen when an
+     adopter has a monorepo that cannot run the action with a working
+     directory.
+   - **`evidence-sha256` output.** Reopen if two runs of the same tree need a
+     machine-checkable identity stronger than byte-identical evidence files.
+   - **Widening `indeterminate`.** Today it is "zero specs checked". Reopen if
+     "no machinery detected" (no Makefile, no coverage floor) should fail
+     closed the same way.
+
 6. **Coverage trend gating** — `check_coverage_floor.py` gates against an
    absolute floor. A trend gate (branch coverage must not *decrease* vs.
    merge-base) would mirror the graph-diff pattern for coverage.
@@ -138,6 +159,21 @@ guard**~~ — shipped in `harden-two-track-e2e-aqa`: a `test-windows` leg
    (the suite on `windows-latest`) and an `encoding-stress` leg (`make
    e2e-live` under `PYTHONIOENCODING=ascii`), closing the ubuntu-only gap
    that let three Windows-blind defects ship green.
+
+## Deferred by the GitHub Action contract (`add-github-action-contract`)
+
+Each was considered while designing the composite action, and each is deferred
+with the trigger that reopens it — not omitted.
+
+| Deferred | Reopen when |
+|---|---|
+| **Pull-request comments.** | An adopter says annotations, the job summary and the evidence artifact are not enough. The shape is already decided: an unprivileged scanner on `pull_request` uploading an artifact, and a separate `workflow_run` workflow that checks out trusted default-branch code, downloads that artifact and comments. Never a write permission on the scan job, and never `pull_request_target`. |
+| **An `extra-args` input.** | A named external adopter cannot reach a flag they need. Three real `validate` flags are currently unreachable through the action — `--change`, `--dialect`, `--require-witness` — and each should become its own named input when somebody wants it, rather than a pass-through that makes the whole CLI an undocumented public API. `--require-witness` is the one to leave alone: the witness store is gitignored, so a fresh CI checkout always fails it closed. |
+| **A floating `v1` tag and a Marketplace listing.** | The contract is declared stable at 1.0. Both need a root `action.yml` or a moving tag, and moving a tag on every release needs `contents: write` in the release workflow, which currently holds `contents: read` plus `id-token: write` on the publish job alone. Widening that for a convenience is the wrong trade while an exact tag already pins the CLI. |
+| **SHA-pinning the third-party actions inside `action.yml`.** | The pins can be resolved and verified. `setup-python@v5` and `upload-artifact@v4` float by major tag today while the README tells adopters to pin exactly — a real inconsistency, deferred only because a wrong sha is worse than a floating tag and this pass could not verify them. |
+| **Rebasing SARIF paths for a subdirectory target.** | Someone runs the action in a monorepo. Annotations already carry the prefix (`report --path-prefix`); SARIF does not, because rebasing it would break the byte-identity with `validate --format sarif` that the projection is held to. The fix is the same flag applied to the SARIF projection, behind the same opt-in. |
+| **Widening `indeterminate` to "no machinery detected".** | The rule-semantics question gets its own spec-drafter → spec-adversary pass. A target with no Makefile and no coverage floor passes the cited-stage and hard-coded-threshold rules vacuously; the action now *reports* that through `discovery-warnings` and a warning annotation, which is projection. Changing what `status` says about it is policy, and policy belongs in the rules. |
+| **A per-rule canonical-envelope snapshot corpus.** | The rule set stops changing shape. Each rule already has passing and violating fixtures in the test suite; what does not exist is a committed golden envelope per rule, which would re-pin on every registry edit for a property the existing tests already hold. |
 
 ## Deferred / out of scope
 

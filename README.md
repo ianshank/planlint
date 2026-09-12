@@ -356,18 +356,55 @@ still accepted); JSON stdout stays parseable. See [`docs/aqa.md`](docs/aqa.md).
 
 ## Wiring it into CI
 
-`planlint validate` is the gate. Add to `.github/workflows/`:
+One step. Copy [`templates/spec-gate.yml`](templates/spec-gate.yml) into
+`.github/workflows/` and push:
 
 ```yaml
-name: spec-gate
-on: [pull_request]
+permissions:
+  contents: read
+
 jobs:
   specs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
+        with:
+          persist-credentials: false
+      - uses: ianshank/planlint/.github/actions/planlint@v0.2.0
+        with:
+          target: "."
+          fail-on: ERROR
+```
+
+The action installs the CLI, runs the gate once, annotates the pull request,
+writes a job summary, and uploads the complete evidence bundle — the findings
+envelope, its SARIF projection, the dialect card and the run metadata — as a
+workflow artifact you can download on a red build.
+
+Pin an exact release tag, as above, or a full commit sha for a stricter supply
+chain. The tag pins the adapter and the CLI together, so nothing floats
+underneath a green build. The action needs no token and no secret: it reads the
+repository and writes nothing into it, which is the posture a fork pull request
+gets anyway.
+
+**It reports four results, and only the first is green.**
+
+| `status` | Meaning |
+|---|---|
+| `pass` | Specs were checked and nothing reached the threshold. |
+| `fail` | Findings reached the threshold. The count is in `blocking`. |
+| `indeterminate` | Nothing was checked. A spec tree exists and holds no change package, so the gate measured nothing — a green check here would be a lie. |
+| `error` | The scan could not run: a bad target, or no spec tree at all. Not a spec failure. |
+
+Every count, the triggered rule ids, the detected dialect and the evidence
+paths are step outputs, so a workflow can branch on the result without scraping
+a log. `make-targets` and `coverage-floor` report what the run had to check
+against: a target with neither gives two of the rules nothing to compare, and
+the action says so rather than letting the silence read as a pass.
+
+Or run the CLI directly, without the action:
+
+```yaml
       - run: pip install planlint
       - run: planlint --target . detect                       # surfaces drift in the log
       - run: planlint --target . validate --fail-on ERROR     # exit 1 blocks the merge

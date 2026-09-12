@@ -44,6 +44,11 @@ RENDERER = REPO_ROOT / "tools" / "render_rule_catalog.py"
 # whose byte-for-byte stability the test is measuring.
 _BASELINE_PLACEHOLDER = "<BASELINE>"
 
+# Same mechanism, for the findings envelope `report` projects. Substituted with
+# a path outside the target for the same reason: the file this verb reads must
+# not itself show up as a created file in the digest below.
+_FINDINGS_PLACEHOLDER = "<FINDINGS>"
+
 # Exactly the verbs SKILL.md's own read-only table lists, in its order. If a
 # verb moves between that table and the "writes files" one, this list must
 # move with it -- that is the point.
@@ -66,6 +71,11 @@ READ_ONLY_INVOCATIONS: tuple[tuple[str, ...], ...] = (
     # would show up as a created file and mask what the verb itself did.
     ("delta", "--baseline", _BASELINE_PLACEHOLDER),
     ("delta", "--baseline", _BASELINE_PLACEHOLDER, "--format", "json"),
+    # `report` reads a saved envelope and never the target at all, which is
+    # exactly why it belongs here: "leaves the tree byte-identical" is the
+    # claim, and a verb that should touch nothing is worth holding to it.
+    ("report", "--findings", _FINDINGS_PLACEHOLDER, "--format", "github-outputs"),
+    ("report", "--findings", _FINDINGS_PLACEHOLDER, "--format", "sarif"),
     # The only read-only invocation that reaches the witness store at all.
     # Without it the store's directory is never touched during this test, so
     # the empty-directory case above would be untested in practice.
@@ -150,8 +160,15 @@ def test_read_only_verbs_leave_tree_byte_identical(populated_repo: Path) -> None
     assert card.returncode == 0, card.stderr
     baseline.write_text(card.stdout, encoding="utf-8")
 
+    # One real envelope, also written outside the tree under test.
+    findings = populated_repo.parent / "read-only-findings.json"
+    envelope = run_cli(populated_repo, "validate", "--format", "json")
+    assert envelope.returncode in _ALLOWED_READ_ONLY_EXITS, envelope.stderr
+    findings.write_text(envelope.stdout, encoding="utf-8")
+
+    substitutions = {_BASELINE_PLACEHOLDER: str(baseline), _FINDINGS_PLACEHOLDER: str(findings)}
     for argv in READ_ONLY_INVOCATIONS:
-        argv = tuple(str(baseline) if a == _BASELINE_PLACEHOLDER else a for a in argv)
+        argv = tuple(substitutions.get(a, a) for a in argv)
         result = run_cli(populated_repo, *argv)
         # Without this the test passes vacuously if a verb regresses into an
         # immediate refusal: it would touch nothing precisely because it did

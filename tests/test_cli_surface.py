@@ -25,6 +25,11 @@ from tests.support import normalize_root, run_cli, write_spec
 # apply, chat) are explicitly excluded (the non-success criterion of AC-RP-3).
 ALLOWED_VERBS = {
     "detect", "init", "new", "validate", "graph", "rules", "waivers", "delta", "witness",
+    # `report` projects a saved findings envelope into SARIF or a GitHub CI
+    # surface. Read-only and non-authoring: it renders a run that already
+    # happened and cannot evaluate a rule, which is the property this
+    # allow-list exists to protect (AC-RP-3).
+    "report",
 }
 REJECTED_VERBS = {"propose", "apply", "chat", "generate", "draft"}
 

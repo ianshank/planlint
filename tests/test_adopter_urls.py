@@ -113,8 +113,15 @@ def _requirements(line: str) -> list[str]:
                 break
             if token.endswith((".txt", ".whl", ".tar.gz")) or "*" in token:
                 break
-            # `planlint[dev]>=0.2.0,<1` -> `planlint`
-            name = re.split(r"[\[<>=!~;]", token, maxsplit=1)[0]
+            # `planlint[dev]>=0.2.0,<1` -> `planlint`, and
+            # `planlint==${INPUT_VERSION}` -> `planlint`. The `$` is not
+            # cosmetic: without it a composite action's install line parsed as
+            # the whole token, which `_confusable()` then did not recognise as
+            # ours -- so the line was skipped as somebody else's package and
+            # neither the spelling check below nor the corpus count covered it.
+            # An install line inside a shell command is exactly where a rename
+            # goes unnoticed, which is the drift this module exists for.
+            name = re.split(r"[\[<>=!~;${]", token, maxsplit=1)[0]
             if name:
                 names.append(name)
             break  # the first positional is the requirement; the rest is noise
@@ -291,11 +298,26 @@ def test_ci_template_pins_the_floor_the_skill_enforces() -> None:
     declared = re.search(r"^[ \t]+planlint-min-version:[ \t]*(\S+)$", frontmatter, re.MULTILINE)
     assert declared, "SKILL.md declares no indented metadata.planlint-min-version"
 
-    pinned = re.search(r"planlint>=([0-9.]+),<\d", TEMPLATE.read_text(encoding="utf-8"))
-    assert pinned, "templates/spec-gate.yml no longer pins a planlint lower bound"
+    # The template now calls the composite action rather than running `pip
+    # install`, and the action installs the CLI from its own checkout -- so the
+    # `uses:` ref is what pins the version an adopter gets, and it is that ref
+    # the skill's declared minimum has to agree with.
+    pinned = re.search(
+        r"uses: ianshank/planlint/\.github/actions/planlint@v([0-9.]+)",
+        TEMPLATE.read_text(encoding="utf-8"),
+    )
+    assert pinned, "templates/spec-gate.yml no longer pins the action to an exact release tag"
     assert pinned.group(1) == declared.group(1), (
-        f"the CI template installs planlint>={pinned.group(1)} but the skill requires "
-        f"{declared.group(1)}; an adopter would install a CLI their agent refuses"
+        f"the CI template pins the action at v{pinned.group(1)} but the skill requires "
+        f"planlint {declared.group(1)}; an adopter would install a CLI their agent refuses"
+    )
+    # And the tag has to be a release of *this* tree, or the template names a
+    # ref that will never exist.
+    from openspec_graph import __version__
+
+    assert pinned.group(1) == __version__, (
+        f"the template pins v{pinned.group(1)} but this package is {__version__}; "
+        "the tag the release workflow will cut is the one the template must name"
     )
 
 

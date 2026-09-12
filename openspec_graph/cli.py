@@ -16,6 +16,7 @@ Verbs:
   waivers   list every waived rule across the tree, with file, line, reason, change
   delta     list specs whose citations went stale since a saved dialect card
   witness   record proof a stage actually ran (CI-side; see validate --require-witness)
+  report    project a saved findings envelope into SARIF or a GitHub CI surface
 
 Exit codes: 0 clean, 1 findings at or above the fail level, 2 usage error.
 """
@@ -34,7 +35,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import delta, detect, dialect_card, ledger, mermaid, rules, sarif, scaffold, witness
+from . import delta, detect, dialect_card, ledger, mermaid, report, rules, sarif, scaffold, witness
 from . import graph as graph_module
 from .log import configure as configure_logging
 from .parse import ParsedSpec, SpecReadError, parse_spec
@@ -331,6 +332,28 @@ def _load_card(path_str: str, label: str) -> tuple[dict[str, object] | None, int
         )
         return None, 2
     return card, 0
+
+
+def _read_json(path_str: str, label: str) -> tuple[object, int]:
+    """Decode a JSON file, or render the exit-2 diagnostic for it.
+
+    Sibling of :func:`_load_card`, which additionally insists the payload is an
+    object. This one stops at "is it JSON", because the verbs built on it hand
+    the payload to a validator with a better message than a generic type error
+    -- and because the code, not the returned value, is what the caller checks:
+    a valid JSON ``null`` is indistinguishable from a read failure otherwise.
+
+    ``utf-8-sig`` for the reason every other read in this package uses it: a
+    file written by a Windows editor may carry a byte-order mark, which
+    ``json.loads`` rejects outright.
+    """
+    path = Path(path_str)
+    try:
+        return json.loads(path.read_text(encoding="utf-8-sig")), 0
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.debug("cannot read %s %s: %s", label, path, exc)
+        print(f"ERROR cannot read {label} {path}: {exc}", file=sys.stderr)
+        return None, 2
 
 
 def _sort_key(finding: rules.Finding, root: Path) -> tuple[str, str]:
@@ -674,6 +697,92 @@ def cmd_waivers(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_report(args: argparse.Namespace) -> int:
+    """Project a saved findings envelope into a GitHub CI surface.
+
+    The only verb that never reads the target repository: it is handed a file
+    ``validate --format json`` wrote earlier, possibly on another machine, and
+    reshapes it. That is what makes the composite action a translation layer
+    rather than a second implementation -- one ``validate`` run produces the
+    envelope, and every other surface is a projection of that one file.
+
+    Exit 0 on success and 2 on any input it cannot project. Never 1: exit 1
+    means "findings were reported at or above the threshold" everywhere else
+    in this CLI, and a renderer has no opinion about that. The gate is
+    ``validate``'s; this verb only says what the gate found.
+    """
+    payload, code = _read_json(args.findings, "--findings")
+    if code:
+        return code
+    try:
+        envelope = report.parse_envelope(payload, schema_version=rules.FINDINGS_SCHEMA_VERSION)
+    except report.EnvelopeError as exc:
+        print(f"ERROR {args.findings}: {exc}", file=sys.stderr)
+        return 2
+    logger.debug(
+        "envelope: specs_checked=%d findings=%d blocking=%d tool_version=%s",
+        envelope.specs_checked, len(envelope.findings), envelope.blocking, envelope.tool_version,
+    )
+
+    card: report.DiscoveryCard | None = None
+    if args.card:
+        card_payload, code = _read_json(args.card, "--card")
+        if code:
+            return code
+        try:
+            card = report.parse_card(card_payload, schema_version=dialect_card.SCHEMA_VERSION)
+        except report.EnvelopeError as exc:
+            print(f"ERROR {args.card}: {exc}", file=sys.stderr)
+            return 2
+        logger.debug(
+            "card: dialect=%s make_targets=%d threshold=%s",
+            card.dialect, card.make_target_count, card.threshold_locator,
+        )
+
+    # A warning, never a refusal. An envelope produced by a different build is
+    # still the honest record of that run, and a CI job that downloads an
+    # artifact from an earlier commit has a legitimate reason to project it.
+    # Silence would be the wrong call the other way: a rule renamed between the
+    # two versions would render with the newer registry's metadata and nothing
+    # would say so.
+    running = _package_version()
+    if envelope.tool_version != running:
+        print(
+            f"WARNING findings were produced by planlint {envelope.tool_version} but this "
+            f"is {running}; rule metadata is rendered from the running build",
+            file=sys.stderr,
+        )
+
+    if args.format == "sarif":
+        # The producer's version, not the running one, so the driver block
+        # matches what `validate --format sarif` emitted for the same run --
+        # the byte-identity this verb is required to hold.
+        print(
+            json.dumps(
+                sarif.to_sarif(
+                    envelope.raw_findings,
+                    rules.rule_table(),
+                    tool_version=envelope.tool_version,
+                ),
+                indent=2,
+            )
+        )
+        return 0
+
+    if args.format == "github-annotations":
+        for line in report.to_annotations(envelope, card=card, path_prefix=args.path_prefix):
+            print(line)
+        return 0
+
+    if args.format == "github-summary":
+        print(report.to_step_summary(envelope, card=card), end="")
+        return 0
+
+    for key, value in report.to_outputs(envelope, card=card).items():
+        print(f"{key}={value}")
+    return 0
+
+
 def cmd_witness(args: argparse.Namespace) -> int:
     """Record one witness -- proof `--stage` actually ran, at `--sha`, with
     this outcome -- as a content-addressed file under `.planlint/witnesses/`
@@ -816,6 +925,33 @@ def build_parser() -> argparse.ArgumentParser:
     p_delta.add_argument("--dialect", choices=["harness", "upstream", "speckit", "auto"])
     p_delta.add_argument("--format", choices=["text", "json"], default="text")
     p_delta.set_defaults(func=cmd_delta)
+
+    p_report = sub.add_parser(
+        "report", help="project a saved findings envelope into SARIF or a GitHub CI surface"
+    )
+    p_report.add_argument(
+        "--findings", required=True, metavar="FINDINGS.json",
+        help="an envelope saved earlier by `validate --format json`; this verb reads "
+        "that file and never the target repository, so the global --target does not apply",
+    )
+    p_report.add_argument(
+        "--card", metavar="CARD.json",
+        help="a dialect card saved by `detect --format json`; adds the detected dialect, "
+        "make-target count and coverage-floor locator, and warns when a rule had no "
+        "machinery to check citations against",
+    )
+    p_report.add_argument(
+        "--path-prefix", default="",
+        help="the target's path inside the repository, for a run whose --target was a "
+        "subdirectory; prepended to annotation file paths, which GitHub resolves "
+        "against the repository root rather than against the target",
+    )
+    p_report.add_argument(
+        "--format", required=True,
+        choices=["sarif", "github-annotations", "github-summary", "github-outputs"],
+        help="the surface to render",
+    )
+    p_report.set_defaults(func=cmd_report)
 
     p_witness = sub.add_parser("witness", help="record proof a stage actually ran")
     p_witness.add_argument(

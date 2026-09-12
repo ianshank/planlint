@@ -1,30 +1,41 @@
-# A composite action so a repository can gate its specs without copying a
-# workflow and keeping it in step with this project's flags. Time to a first
-# red X on a foreign repository is the number this exists to move: add the
-# step, push, see the findings on the diff.
+# A thin, unprivileged scan adapter around the planlint CLI.
 #
-# It uploads SARIF rather than printing findings, because a CI log is a place
-# nobody looks and the pull request is a place everybody already does.
+# Its only job is translation: GitHub Actions inputs to CLI flags, one
+# machine-readable run to GitHub's own surfaces, and the CLI's exit code to a
+# job result. It discovers nothing, parses no findings, and decides no policy
+# -- `--fail-on` is passed through untouched and the gate is what `validate`
+# reported. Every projection below is a `planlint report` call, so the logic
+# that formats an annotation or counts a severity is ordinary Python with
+# ordinary tests, not shell inside YAML.
+#
+# What it deliberately does NOT do: upload SARIF, post a pull-request comment,
+# or take a token. Uploading needs `security-events: write`, which belongs in
+# the workflow an adopter can read rather than hidden in an action they call --
+# and a private repository without code scanning enabled fails that upload for
+# reasons that have nothing to do with their specs. The `sarif-path` output and
+# `templates/spec-gate.yml` show the three-line consumer-side upload instead.
 name: planlint
 description: Lint implementation plans and specs against a repository's real machinery.
 
 inputs:
   target:
     description: >-
-      Repository path to lint. Finding paths in the SARIF are relative to this
-      target, and code scanning resolves them against the repository root, so
-      a target other than "." will place annotations relative to the wrong
-      base. Lint a subdirectory by running the action with a working
-      directory instead.
+      Repository path to lint, relative to the workspace. Finding paths are
+      relative to this target while GitHub resolves annotations against the
+      repository root, so the difference is passed to `report --path-prefix`
+      and annotations land correctly for a subdirectory target. SARIF is not
+      rebased: a nested target's uploaded results resolve from the target, so
+      prefer running the action from the repository root where you can.
     required: false
     default: "."
   version:
     description: >-
-      planlint version specifier. Pinned by default: an action that floats to
-      the newest release can turn a green pull request red without anybody
-      changing a line of the repository it is gating.
+      An exact planlint version to install from the package index, e.g.
+      "0.2.0". Left empty -- the default -- the CLI is installed from this
+      action's own checkout, so the `uses:` ref pins the tool and the adapter
+      together and there is no published release to wait for.
     required: false
-    default: ">=0.2.0,<1"
+    default: ""
   fail-on:
     description: Lowest severity that fails the job (INFO, WARN, or ERROR).
     required: false
@@ -33,80 +44,314 @@ inputs:
     description: Python used to install and run the CLI.
     required: false
     default: "3.12"
-  upload-sarif:
+  upload-artifact:
     description: >-
-      Upload results to GitHub code scanning. Requires `security-events: write`
-      on the calling job, and `actions: read` as well on a private repository.
-      Set to "false" where code scanning is not enabled, so the upload step
-      cannot fail on permissions rather than on anything about the specs.
+      Upload the complete evidence bundle (the findings envelope, its SARIF
+      projection, the dialect card, the annotations, and the run metadata) as a
+      workflow artifact. On by default: the annotations are capped and the job
+      summary is a summary, so this is the only place the whole run survives.
     required: false
     default: "true"
+  artifact-name:
+    description: >-
+      Name of the evidence artifact. Must be unique within a workflow run, so
+      a matrix that calls this action more than once has to vary it.
+    required: false
+    default: "planlint-evidence"
+
+outputs:
+  status:
+    description: >-
+      pass, fail, error, or indeterminate. `fail` means the specs were checked
+      and findings reached the threshold; `indeterminate` means nothing was
+      checked; `error` means the scan could not run. Only `pass` leaves the job
+      green.
+    value: ${{ steps.project.outputs.status }}
+  exit-code:
+    description: The raw `planlint validate` exit code (0 clean, 1 findings, 2 could not run).
+    value: ${{ steps.scan.outputs.exit-code }}
+  errors:
+    description: Number of ERROR findings.
+    value: ${{ steps.project.outputs.errors }}
+  warnings:
+    description: Number of WARN findings.
+    value: ${{ steps.project.outputs.warnings }}
+  infos:
+    description: Number of INFO findings.
+    value: ${{ steps.project.outputs.infos }}
+  findings:
+    description: Total number of findings, at every severity.
+    value: ${{ steps.project.outputs.findings }}
+  blocking:
+    description: Findings at or above `fail-on` -- the number that decides the gate.
+    value: ${{ steps.project.outputs.blocking }}
+  specs-checked:
+    description: How many spec files were read. Zero is what makes a run indeterminate.
+    value: ${{ steps.project.outputs.specs-checked }}
+  rules-triggered:
+    description: Sorted, comma-separated ids of the rules that fired.
+    value: ${{ steps.project.outputs.rules-triggered }}
+  dialect:
+    description: The spec dialect detected in the target (harness, upstream, speckit, or unknown).
+    value: ${{ steps.project.outputs.dialect }}
+  make-targets:
+    description: >-
+      How many make targets were detected. Zero means the cited-stage rule had
+      nothing to check citations against, so a pass proves less than it looks
+      like it proves.
+    value: ${{ steps.project.outputs.make-targets }}
+  coverage-floor:
+    description: The coverage-floor locator detected, or empty when none was found.
+    value: ${{ steps.project.outputs.coverage-floor }}
+  discovery-warnings:
+    description: How many rules had no machinery to check against in this target.
+    value: ${{ steps.project.outputs.discovery-warnings }}
+  version:
+    description: The planlint version that produced the evidence.
+    value: ${{ steps.install.outputs.version }}
+  evidence-dir:
+    description: Directory holding the complete evidence bundle, outside the workspace.
+    value: ${{ steps.paths.outputs.evidence-dir }}
+  json-path:
+    description: Path to the findings envelope, the canonical record every other surface projects.
+    value: ${{ steps.paths.outputs.json-path }}
+  sarif-path:
+    description: >-
+      Path to the SARIF projection. Written only when the scan produced an
+      envelope; check `status` before uploading it.
+    value: ${{ steps.paths.outputs.sarif-path }}
+  evidence-sha256:
+    description: SHA-256 of the findings envelope, so a downloaded artifact can be tied to this run.
+    value: ${{ steps.project.outputs.evidence-sha256 }}
 
 runs:
   using: composite
   steps:
+    # Evidence lives under RUNNER_TEMP, never in the workspace. planlint's
+    # headline guarantee is that it only reads the tree it is pointed at, and
+    # an adapter that drops a report file into the checkout breaks that
+    # guarantee one directory up -- a later step could commit it.
+    - id: paths
+      shell: bash
+      run: |
+        set -euo pipefail
+        evidence="${RUNNER_TEMP}/planlint-evidence"
+        mkdir -p "$evidence"
+        {
+          echo "evidence-dir=${evidence}"
+          echo "json-path=${evidence}/findings.json"
+          echo "sarif-path=${evidence}/findings.sarif"
+        } >> "$GITHUB_OUTPUT"
+
     - uses: actions/setup-python@v5
       with:
         python-version: ${{ inputs.python-version }}
 
-    - name: Install planlint
+    - id: install
       shell: bash
-      run: python -m pip install --quiet "planlint${{ inputs.version }}"
-
-    # Detection first, and unconditionally: every finding is phrased against
-    # the conventions detected here, so a reader who disagrees with a finding
-    # needs this output to see which assumption produced it.
-    - name: Report detected conventions
-      shell: bash
-      run: planlint --target "${{ inputs.target }}" detect
-
-    # One invocation, and that matters. Running validate twice -- once for the
-    # SARIF, once for the exit code -- would spend double the work to ask the
-    # same question, and the two runs could in principle disagree. The exit
-    # code is captured here and re-applied after the upload, so findings reach
-    # the diff even when the gate fails.
-    - name: Validate and emit SARIF
-      id: validate
-      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        EVIDENCE: ${{ steps.paths.outputs.evidence-dir }}
       run: |
-        # `set +e` rather than `continue-on-error:`, which composite action
-        # steps do not support: GitHub runs these with `bash -e`, so a
-        # non-zero planlint would abort the step before the exit code could
-        # be recorded and the SARIF uploaded.
-        set +e
-        planlint --target "${{ inputs.target }}" validate \
-          --fail-on "${{ inputs.fail-on }}" --format sarif > planlint.sarif
-        gate=$?
-        set -e
-        echo "gate=$gate" >> "$GITHUB_OUTPUT"
+        set -euo pipefail
+        if [ -n "$INPUT_VERSION" ]; then
+          python -m pip install --quiet "planlint==${INPUT_VERSION}"
+          # A release predating this contract installs perfectly well and then
+          # has no verb to project with, so the run would fail somewhere in the
+          # middle with a usage error about a subcommand. Checked here instead,
+          # against the installed CLI rather than against a pinned version
+          # number, so the floor moves by itself when the verb does.
+          if ! planlint report --help >/dev/null 2>&1; then
+            echo "::error title=planlint::planlint ${INPUT_VERSION} has no 'report' verb,"
+            echo "so this action cannot project its results. Use a release that carries"
+            echo "it, or leave 'version' empty to install from this action's own checkout."
+            exit 1
+          fi
+        else
+          # Built from a copy rather than in place: pip builds a source
+          # directory in that directory, leaving build/ and *.egg-info behind.
+          # When this action is referenced as `./.github/actions/planlint` the
+          # action path *is* the workspace, so an in-place build would write
+          # into the repository being scanned. The copy is derived, never a
+          # hard-coded file list, so a change to the package layout cannot
+          # silently stop shipping part of it.
+          src="${EVIDENCE}/planlint-src"
+          python - "$GITHUB_ACTION_PATH/../../.." "$src" <<'PY'
+        import shutil, sys
+        shutil.copytree(
+            sys.argv[1],
+            sys.argv[2],
+            ignore=shutil.ignore_patterns(
+                ".git", "build", "dist", "*.egg-info", "__pycache__", ".venv", "venv",
+            ),
+            dirs_exist_ok=True,
+        )
+        PY
+          python -m pip install --quiet "$src"
+        fi
+        echo "version=$(planlint --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
 
-    # Guarded on the file being non-empty: an exit-2 usage error (no spec tree,
-    # a bad target) writes nothing, and uploading an empty file fails inside
-    # the upload action -- which would abort the run before the gate step could
-    # report the real reason.
-    - name: Upload SARIF
-      if: ${{ inputs.upload-sarif == 'true' && hashFiles('planlint.sarif') != '' }}
-      uses: github/codeql-action/upload-sarif@v3
+    # One run of the rule engine, into one file. Every other surface below is a
+    # projection of this envelope, so the SARIF, the annotations, the summary
+    # and the outputs cannot disagree with each other or with the exit code.
+    - id: scan
+      shell: bash
+      env:
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        EVIDENCE: ${{ steps.paths.outputs.evidence-dir }}
+        PLANLINT_VERSION: ${{ steps.install.outputs.version }}
+      run: |
+        # `set +e` explicitly, not merely the absence of `set -e`: GitHub runs
+        # a composite `shell: bash` step as `bash --noprofile --norc -eo
+        # pipefail {0}`, so errexit is already on before this line. Every
+        # command below is expected to be able to fail -- the exit code is the
+        # product -- and without this the step would die on the first non-zero
+        # result, before the code was recorded and before anything explained
+        # why. Composite steps do not support `continue-on-error:`.
+        set +e -uo pipefail
+
+        # Read-only, and never allowed to abort the scan: detect exits 2 on a
+        # bad target, which would otherwise kill this step before validate ran
+        # and before anything explained why.
+        planlint --target "$INPUT_TARGET" detect > "${EVIDENCE}/detect.txt" 2>&1 || true
+        planlint --target "$INPUT_TARGET" detect --format json \
+          > "${EVIDENCE}/dialect-card.json" 2>/dev/null || true
+        [ -s "${EVIDENCE}/dialect-card.json" ] || rm -f "${EVIDENCE}/dialect-card.json"
+
+        planlint --target "$INPUT_TARGET" validate \
+          --fail-on "$INPUT_FAIL_ON" --format json \
+          > "${EVIDENCE}/findings.json" 2> "${EVIDENCE}/validate.stderr.txt"
+        code=$?
+        echo "exit-code=${code}" >> "$GITHUB_OUTPUT"
+
+        # An exit-2 run prints its diagnostic to stderr and nothing to stdout,
+        # so the envelope file exists but is empty. Remove it rather than
+        # leaving a zero-byte file that later steps would try to parse.
+        [ -s "${EVIDENCE}/findings.json" ] || rm -f "${EVIDENCE}/findings.json"
+
+        # Run metadata is quarantined here, away from findings.json and
+        # dialect-card.json, so those two stay byte-identical between two runs
+        # over an unchanged tree and can be diffed across commits.
+        cat > "${EVIDENCE}/run.json" <<JSON
+        {
+          "planlint_version": "${PLANLINT_VERSION}",
+          "validate_exit_code": ${code},
+          "fail_on": "${INPUT_FAIL_ON}",
+          "target": "${INPUT_TARGET}",
+          "action_ref": "${GITHUB_ACTION_REF:-local}",
+          "repository": "${GITHUB_REPOSITORY:-}",
+          "sha": "${GITHUB_SHA:-}",
+          "run_id": "${GITHUB_RUN_ID:-}",
+          "finished_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        }
+        JSON
+        echo "planlint validate exited ${code}"
+        exit 0
+
+    - id: project
+      shell: bash
+      env:
+        INPUT_TARGET: ${{ inputs.target }}
+        EVIDENCE: ${{ steps.paths.outputs.evidence-dir }}
+        SCAN_EXIT: ${{ steps.scan.outputs.exit-code }}
+      run: |
+        set +e -uo pipefail  # see the scan step: composite steps start under errexit
+        findings="${EVIDENCE}/findings.json"
+        card="${EVIDENCE}/dialect-card.json"
+
+        if [ ! -s "$findings" ]; then
+          # No envelope means the scan never got far enough to have an opinion.
+          # That is `error`, and it is the one status the envelope cannot
+          # describe, so the adapter owns it -- and it owns nothing else.
+          echo "status=error" >> "$GITHUB_OUTPUT"
+          echo "evidence-sha256=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        # Finding paths are relative to the target; GitHub resolves file= from
+        # the repository root. Passing the difference is what keeps a nested
+        # target's annotations pointing at files that exist.
+        prefix=""
+        if [ "$INPUT_TARGET" != "." ] && [ -n "$INPUT_TARGET" ]; then
+          prefix="${INPUT_TARGET#./}"
+        fi
+
+        args=( --findings "$findings" )
+        [ -s "$card" ] && args+=( --card "$card" )
+
+        planlint report "${args[@]}" --format sarif > "${EVIDENCE}/findings.sarif" || {
+          echo "::error title=planlint::could not project the findings envelope to SARIF"
+          echo "status=error" >> "$GITHUB_OUTPUT"
+          exit 0
+        }
+
+        # tee'd to the bundle as well as to the log: a later assertion step
+        # cannot read another step's log, and a capped annotation set is not
+        # the whole record anyway.
+        planlint report "${args[@]}" --path-prefix "$prefix" \
+          --format github-annotations | tee "${EVIDENCE}/annotations.txt"
+
+        planlint report "${args[@]}" --format github-summary \
+          | tee "${EVIDENCE}/summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+        planlint report "${args[@]}" --format github-outputs >> "$GITHUB_OUTPUT" || {
+          echo "::error title=planlint::could not derive outputs from the findings envelope"
+          echo "status=error" >> "$GITHUB_OUTPUT"
+          exit 0
+        }
+
+        echo "evidence-sha256=$(sha256sum "$findings" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+        exit 0
+
+    # Unconditional on the gate's verdict: a failing run is exactly when
+    # somebody needs the evidence.
+    - if: ${{ always() && inputs.upload-artifact == 'true' }}
+      uses: actions/upload-artifact@v4
       with:
-        sarif_file: planlint.sarif
-        category: planlint
+        name: ${{ inputs.artifact-name }}
+        path: ${{ steps.paths.outputs.evidence-dir }}
+        if-no-files-found: warn
 
-    # Last, so findings are visible on the diff even when the gate fails.
-    # Exit 2 is reported distinctly: it means planlint could not run at all,
-    # and calling that "findings were reported" would send a reader looking
-    # for specs to fix that do not exist.
-    - name: Apply the gate
+    # Last, so the annotations and the summary are already in place when the
+    # job goes red. Each status gets its own message: a reader who sees a red X
+    # must be able to tell "your specs are wrong" from "there was nothing to
+    # check" from "the tool could not run", because the three need different
+    # things done about them.
+    - id: gate
       shell: bash
+      env:
+        STATUS: ${{ steps.project.outputs.status }}
+        EXIT_CODE: ${{ steps.scan.outputs.exit-code }}
+        BLOCKING: ${{ steps.project.outputs.blocking }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        EVIDENCE: ${{ steps.paths.outputs.evidence-dir }}
       run: |
-        case "${{ steps.validate.outputs.gate }}" in
-          0) ;;
-          1)
-            echo "planlint reported findings at or above ${{ inputs.fail-on }}"
+        set +e -uo pipefail  # see the scan step: composite steps start under errexit
+        case "${STATUS:-error}" in
+          pass)
+            echo "planlint: no findings at or above ${FAIL_ON}."
+            ;;
+          fail)
+            echo "::error title=planlint::${BLOCKING} finding(s) at or above ${FAIL_ON}."
+            echo "planlint reported ${BLOCKING} finding(s) at or above ${FAIL_ON}."
+            echo "See the job summary and the evidence artifact for the full set."
+            exit 1
+            ;;
+          indeterminate)
+            echo "::error title=planlint::no spec was checked, so this run gates nothing."
+            echo "planlint found a spec tree but no change package in it, so zero specs"
+            echo "were checked. A pass here would be a green check over an unmeasured"
+            echo "repository. Add a change package under openspec/changes/ (or a SpecKit"
+            echo "feature under specs/), or set continue-on-error on this step while the"
+            echo "first package is being written."
             exit 1
             ;;
           *)
-            echo "planlint could not run (exit ${{ steps.validate.outputs.gate }});"
-            echo "this is a precondition or usage error, not a spec failure."
+            echo "::error title=planlint::the scan could not run (exit ${EXIT_CODE:-unknown})."
+            echo "This is a precondition or usage error, not a spec failure: planlint"
+            echo "never got far enough to have an opinion about the specs."
+            [ -s "${EVIDENCE}/validate.stderr.txt" ] && cat "${EVIDENCE}/validate.stderr.txt"
             exit 1
             ;;
         esac

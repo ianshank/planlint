@@ -1,7 +1,14 @@
 # Drop into .github/workflows/spec-gate.yml in the target repository.
 #
-# ``planlint detect`` is read-only and always runs, so dialect/threshold drift shows
-# up in the log even when the gate passes. ``planlint validate`` is the gate itself.
+# One step runs the gate. Everything it needs is in this file, so the
+# permissions the job holds are visible to whoever grants them rather than
+# hidden inside an action they call.
+#
+# Deliberately the `pull_request` event, and never the `_target` variant of
+# it: this workflow checks out and scans the contents of the pull request,
+# which on a fork is untrusted, and that variant would hand the same checkout
+# write permissions and secrets. `pull_request` gives it a read-only token and
+# none, which is exactly the posture a linter wants.
 name: spec-gate
 
 on:
@@ -14,39 +21,64 @@ on:
       - "specs/**"
       - "Makefile"
       - "pyproject.toml"
+      # This file itself, so the pull request that installs the gate is the
+      # first one the gate runs on. Without it a reviewer merges a workflow
+      # nobody has seen execute.
+      - ".github/workflows/spec-gate.yml"
+  push:
+    # The default-branch run is what code scanning uses as the baseline a pull
+    # request's alerts are compared against.
+    branches: [main]
   workflow_dispatch:
+
+# Least privilege, stated rather than inherited: anything not listed is `none`.
+permissions:
+  # Everything the scan itself needs.
+  contents: read
+  # Both are only for the optional SARIF upload below, and a private
+  # repository needs the second as well as the first. Delete them with that
+  # step if the repository does not have code scanning enabled -- without it
+  # the gate still fails the build, it just reports through annotations and the
+  # job summary instead of the Security tab.
+  security-events: write
+  actions: read
 
 jobs:
   specs:
+    name: Validate executable specs
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          # The scan needs no credentials, so it should not be handed any: an
+          # unused token left in the checkout's git config is reachable by
+          # anything else that runs in this job.
+          persist-credentials: false
 
-      - name: Install planlint
-        # Pinned to a compatible range, not bare: this workflow is copied
-        # into other repositories, where an unpinned install would pull a
-        # future major with a different exit-code contract straight into
-        # their CI. Requires planlint on PyPI (published by the v* tag).
-        run: pip install --quiet "planlint>=0.2.0,<1"
-
-      - name: Report detected conventions
-        run: planlint detect
-
-      - name: Validate every change package
-        run: planlint validate --fail-on ERROR
-
-      # Warnings are recorded as an artifact rather than failing the build, so
-      # the WARN backlog is visible without blocking unrelated work.
-      - name: Record warnings
-        if: always()
-        run: planlint validate --fail-on WARN --json > spec-findings.json || true
-
-      - uses: actions/upload-artifact@v4
-        if: always()
+      # Pinned to an exact release tag. The tag pins the adapter and the CLI
+      # together, so nothing floats underneath a green build. For a stricter
+      # supply chain, pin the full commit sha instead:
+      #   uses: ianshank/planlint/.github/actions/planlint@<40-character sha>
+      - id: planlint
+        uses: ianshank/planlint/.github/actions/planlint@v0.2.0
         with:
-          name: spec-findings
-          path: spec-findings.json
+          target: "."
+          fail-on: ERROR
+
+      # Optional. Puts each finding on the diff in the Security tab, on top of
+      # the inline annotations the action already emits. Skipped rather than
+      # failed where it cannot work: a fork's token is read-only, and a
+      # repository without code scanning rejects the upload for reasons that
+      # have nothing to do with its specs.
+      - name: Upload SARIF to code scanning
+        if: >-
+          always() &&
+          steps.planlint.outputs.status != 'error' &&
+          (github.event_name != 'pull_request' ||
+           github.event.pull_request.head.repo.full_name == github.repository)
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.planlint.outputs.sarif-path }}
+          category: planlint

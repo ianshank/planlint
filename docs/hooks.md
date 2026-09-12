@@ -54,6 +54,7 @@ a local net before the round-trip to CI.
 | `encoding-stress` | push + PR | `make e2e-live` under `PYTHONIOENCODING=ascii` (hard) |
 | `self-validate` | push + PR | `planlint validate --fail-on ERROR` (hard) |
 | `packaging` | push + PR | wheel build + `tools/check_wheel_metadata.py` (hard) |
+| `action-contract` | push + PR | the composite action run against every labelled fixture under `tests/fixtures/action/`, under a read-only token with no secrets (hard) |
 | `graph-diff` | PR only | `tools/diff_spec_graph.py` base→head (AC-CH-5/6) |
 | `security` | push + PR | gitleaks + no-hardcoded-thresholds (hard) |
 | `docs` | push + PR | `make docs-check` (hard) |
@@ -202,12 +203,14 @@ distribution it invokes stayed put.
 
 ## Adding a new pure derived-output module
 
-`dialect_card.py`, `ledger.py`, and `mermaid.py` are all the same shape: a
+`dialect_card.py`, `ledger.py`, `mermaid.py`, `sarif.py`, and `report.py` are
+all the same shape: a
 pure, stdlib-only module that projects a data structure some other module
 already computed (a `StackProfile`, a `ParsedSpec` tree, `build_graph()`'s
-dict) into a derived output — a diffable snapshot, a ledger, a diagram —
-without registering a `Rule` or doing its own filesystem/network I/O.
-`dialect_card.py` and `mermaid.py` import no sibling module at all;
+dict, a findings envelope) into a derived output — a diffable snapshot, a ledger, a diagram,
+SARIF, GitHub annotations — without registering a `Rule` or doing its own filesystem/network I/O.
+`dialect_card.py`, `mermaid.py`, `sarif.py` and `report.py` import no sibling
+module at all;
 `ledger.py` imports `detect.to_posix_relative` — a shared pure-formatting
 helper, not a data type it consumes — to render its `path` field the same
 way every other consumer of that function does.
@@ -215,7 +218,13 @@ way every other consumer of that function does.
 Follow the same shape for a new one:
 
 1. One public function, `to_<thing>(data) -> <output>`, taking a shape the
-   caller already has in hand rather than recomputing it.
+   caller already has in hand rather than recomputing it. A module whose input
+   comes from *outside* this process rather than from a sibling may instead
+   expose one validating entry point plus a projection per output shape --
+   `report.py` is the instance: it is handed a file somebody else wrote,
+   possibly by another build, so `parse_envelope` raises a typed error once and
+   every projection downstream of it is total. The rule the split preserves is
+   the same one: no projection may re-check a field or raise.
 2. Stdlib-only — no new dependency (`dependencies = []` in `pyproject.toml`
    is a load-bearing product boundary; see `docs/architecture/c4.md`).
 3. Deterministic: same input, byte-identical output, every call. Add a

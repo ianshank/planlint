@@ -201,6 +201,114 @@ jobs:
             base.json
             head.json
 
+  action-contract:
+    # The composite action, executed. Every other gate in this repository reads
+    # the action as text; this is the only one that runs it, against labelled
+    # fixture targets whose expected result is committed beside them. The
+    # action shipped once before with an install line that resolved to nothing
+    # and no outputs at all, and nothing here could see it.
+    #
+    # Least privilege on purpose, and asserted: the scan reads untrusted
+    # repository content, so it must work with a read-only token and no
+    # secrets -- the posture a fork pull request gets.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - fixture: passing
+            target: tests/fixtures/action/passing
+            outcome: success
+            status: pass
+            exit_code: "0"
+          - fixture: failing
+            target: tests/fixtures/action/failing
+            outcome: failure
+            status: fail
+            exit_code: "1"
+          - fixture: empty-tree
+            target: tests/fixtures/action/empty-tree
+            outcome: failure
+            status: indeterminate
+            exit_code: "0"
+          - fixture: no-tree
+            target: tests/fixtures/action/no-tree
+            outcome: failure
+            status: error
+            exit_code: "2"
+          - fixture: nested
+            target: tests/fixtures/action/nested/sub
+            outcome: success
+            status: pass
+            exit_code: "0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # continue-on-error lives on the caller, not inside the action: composite
+      # steps do not support it, and the point here is to let a deliberately
+      # red fixture report its outputs instead of ending the job.
+      - id: planlint
+        continue-on-error: true
+        uses: ./.github/actions/planlint
+        with:
+          target: ${{ matrix.target }}
+          artifact-name: planlint-evidence-${{ matrix.fixture }}
+
+      - name: Assert the action reported this fixture's labelled result
+        env:
+          EXPECTED_OUTCOME: ${{ matrix.outcome }}
+          EXPECTED_STATUS: ${{ matrix.status }}
+          EXPECTED_EXIT: ${{ matrix.exit_code }}
+          ACTUAL_OUTCOME: ${{ steps.planlint.outcome }}
+          ACTUAL_STATUS: ${{ steps.planlint.outputs.status }}
+          ACTUAL_EXIT: ${{ steps.planlint.outputs.exit-code }}
+          EVIDENCE: ${{ steps.planlint.outputs.evidence-dir }}
+          VERSION: ${{ steps.planlint.outputs.version }}
+        run: |
+          set -euo pipefail
+          fail=0
+          check() {
+            if [ "$2" != "$3" ]; then
+              echo "::error::$1: expected '$2', got '$3'"
+              fail=1
+            else
+              echo "ok: $1 = $3"
+            fi
+          }
+          check outcome "$EXPECTED_OUTCOME" "$ACTUAL_OUTCOME"
+          check status "$EXPECTED_STATUS" "$ACTUAL_STATUS"
+          check exit-code "$EXPECTED_EXIT" "$ACTUAL_EXIT"
+
+          # Outputs must survive the composite action's own failing gate step,
+          # or every red result above is unreadable to a consuming workflow.
+          [ -n "$VERSION" ] || { echo "::error::no version output"; fail=1; }
+          [ -d "$EVIDENCE" ] || { echo "::error::no evidence directory"; fail=1; }
+          [ -f "$EVIDENCE/run.json" ] || { echo "::error::run.json missing"; fail=1; }
+
+          if [ "$EXPECTED_STATUS" = "error" ]; then
+            [ ! -f "$EVIDENCE/findings.json" ] \
+              || { echo "::error::an unscannable target must write no envelope"; fail=1; }
+          else
+            [ -s "$EVIDENCE/findings.json" ] || { echo "::error::no envelope"; fail=1; }
+            [ -s "$EVIDENCE/findings.sarif" ] || { echo "::error::no SARIF"; fail=1; }
+            [ -s "$EVIDENCE/summary.md" ] || { echo "::error::no job summary"; fail=1; }
+          fi
+
+          if [ "$EXPECTED_STATUS" = "fail" ]; then
+            grep -q '^::error ' "$EVIDENCE/annotations.txt" \
+              || { echo "::error::a failing scan produced no error annotation"; fail=1; }
+          fi
+
+          # The action must not write into the tree it scanned.
+          git diff --quiet --exit-code \
+            || { echo "::error::the action modified the workspace"; git diff --stat; fail=1; }
+
+          exit "$fail"
+
   security:
     # Secret scan + no-hardcoded-threshold guard (AC-EH-3, AC-EH-6). gitleaks
     # is the real scanner; the no-hardcoded check is a Python script that reads

@@ -5,6 +5,61 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — the composite action as a thin scan adapter (`add-github-action-contract`)
+
+- **`planlint report`**, a read-only verb that renders a findings envelope
+  saved earlier by `validate --format json` as SARIF, GitHub workflow-command
+  annotations, a job-summary table, or CI step outputs. It reads no repository
+  — the global `--target` does not apply — so it can project an artifact
+  downloaded from another machine, and it never exits 1: the gate was decided
+  by the run that wrote the envelope. `report --format sarif` is byte-identical
+  to `validate --format sarif` for the same run, which is what makes "one
+  validate run, every other surface a projection of it" a fact rather than an
+  intention.
+- **New `openspec_graph/report.py`**, pure and stdlib-only with zero
+  intra-package imports, in the shape `sarif.py` and `mermaid.py` already hold.
+  The schema versions it validates against are passed in rather than imported,
+  so `rule_types.FINDINGS_SCHEMA_VERSION` stays the single declaration of that
+  number.
+- **The composite action rewritten** to seven inputs and eighteen outputs,
+  around a four-way `status`: `pass`, `fail`, `indeterminate`, `error`. Only
+  `pass` leaves the job green. Evidence is written under `RUNNER_TEMP`, never
+  into the repository being scanned, and uploaded as an artifact on every
+  outcome.
+- **A `discovery-warnings` output and matching annotations.** The cited-stage
+  and hard-coded-threshold rules relax when the target has no Makefile or no
+  coverage floor — correct for a rule, but it means a clean run over such a
+  repository proves less than it looks like it proves. `report --card` reads
+  the dialect card and says so.
+- **`tests/fixtures/action/`**, five labelled target repositories, and
+  `tests/test_action_contract.py`, which extracts the action's own shell steps
+  and executes them against each one with GitHub's environment simulated — so
+  the status derivation, the evidence bundle and the three gate messages are
+  covered by `make test` rather than discovered on a runner. A new
+  `action-contract` CI job then runs the real action against the same fixtures.
+
+### Fixed
+
+- **The action's install line could never have worked.** It installed
+  `planlint>=0.2.0,<1` from PyPI, where nothing is published: the only tag is
+  `v0.1.0`, under the pre-rename distribution name. The CLI is now installed
+  from the action's own checkout by default, so the `uses:` ref pins the tool
+  and the adapter together and the action works at any ref; `version` remains
+  as an explicit package-index override.
+- **A zero-spec run was reported as a pass.** `validate` over a spec tree with
+  no change package exits 0 having checked nothing, and the action relayed that
+  as a green check. It is now `indeterminate`, and fails the job.
+- **The adopter install-line guard was hollow.** `_requirements()` split a
+  requirement token at `[<>=!~;` only, so a shell-interpolated install line
+  parsed as a package name nobody publishes and was skipped as somebody else's
+  — the composite action's install line has been outside the rename guard since
+  it landed. The split now also stops at `$` and `{`.
+- **The SARIF upload had no fork guard and could not have been guarded where
+  it was.** It has moved to the consumer workflow, where the
+  `security-events: write` it needs is visible to whoever grants it, and where
+  a fork pull request and a repository without code scanning are both skipped
+  rather than failed.
+
 ### Fixed — detection defects found by a labelled corpus (`fix-detect-corpus-defects`)
 
 - **False G004 from a UTF-8 byte-order mark.** U+FEFF is a format character,
