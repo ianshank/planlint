@@ -5,6 +5,36 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-12
+
+> `v0.1.0` was tagged in git (`cdc94ca`) under the previous distribution name
+> `openspec-graph`, and was never published to a package index. `v0.2.0` is the
+> first release under the `planlint` name and the first intended for PyPI;
+> publication happens when the tag is pushed and `.github/workflows/release.yml`
+> runs. This section includes every change that sat under Unreleased until the
+> tag (through PR #24): `report`, the four-way Action contract, SARIF, `delta`,
+> the labelled detect corpus, matcher precision, and the findings envelope.
+
+### Changed — release-train honesty
+
+- **Changelog no longer splits 0.2.0.** The work that accumulated under
+  Unreleased after a dated `[0.2.0] — 2026-09-02` heading — a heading for a
+  tag that was never pushed — is now this section. The date is the first
+  public tag, not the freeze that never shipped.
+- **Adopter Action pin is a commit SHA until that tag exists.** The composite
+  action installs the CLI from its own checkout, so any ref of this repository
+  works today; `@v0.2.0` 404s until the release workflow cuts it. Templates,
+  the README snippet, and `.pre-commit-hooks.yaml` name the SHA of the last
+  Action implementation (`a853b72f05a0a1ecbfed52eca6791bf2bb9ffa11`) and the
+  tag to switch to once it exists.
+- **`--require-witness` is documented as a fresh-CI trap.** The store lives
+  under `.planlint/`, which this repository gitignores, so a clean checkout
+  always fails W001 closed. Default `validate` is unchanged. The Action still
+  does not expose the flag.
+- **Stale planning status is corrected.** `docs/distribution-plan.md` no
+  longer lists shipped slice-1 work as "Not started"; the differentiation
+  roadmap no longer presents CP-1..3 as the next PRs.
+
 ### Added — the composite action as a thin scan adapter (`add-github-action-contract`)
 
 - **`planlint report`**, a read-only verb that renders a findings envelope
@@ -369,14 +399,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   with no licence, silently. Wired into a new `packaging` job on every pull
   request, and into the release workflow before anything is uploaded to an
   index whose versions are immutable.
-
-## [0.2.0] — 2026-09-02
-
-> `v0.1.0` was tagged in git (`cdc94ca`) under the previous distribution name
-> `openspec-graph`, and was never published to a package index. `v0.2.0` is the
-> first release under the `planlint` name and the first intended for PyPI;
-> publication happens when the tag is pushed and `.github/workflows/release.yml`
-> runs.
 
 ### Added — adopter-facing guards and an agent entry point
 

@@ -395,8 +395,8 @@ def detect_dialect(spec_paths: list[Path]) -> str:
     present = sum(1 for count in (upstream, harness, speckit) if count)
     if present > 1:
         # The one verdict a user cannot act on without knowing which files
-        # disagreed. `validate` prints "more than one spec dialect" and stops;
-        # this is the only place the evidence exists.
+        # disagreed. `validate` does not abort on mixed: it remaps per file
+        # (parse.parse_spec). This is the only place the vote evidence exists.
         logger.debug(
             "dialect: mixed -- upstream=%s harness=%s speckit=%s",
             votes["upstream"], votes["harness"], votes["speckit"],

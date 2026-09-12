@@ -282,10 +282,12 @@ def test_the_colliding_name_is_present_and_marked_unrelated(path: Path) -> None:
 def test_ci_template_pins_the_floor_the_skill_enforces() -> None:
     """Two floors, one meaning: the adopter's and the agent's must be one number.
 
-    The template pins a lower bound so a future major with a different
-    exit-code contract cannot walk into an adopter's CI. The skill refuses to
-    run against a CLI older than its own declared minimum. If those drift, an
-    adopter installs a version their agent then rejects.
+    The skill refuses to run against a CLI older than its declared minimum.
+    The template's `uses:` ref is what pins the adapter and the CLI together
+    (checkout install). That ref is either the package version as a tag, once
+    it exists, or a full commit SHA until then -- a missing tag 404s. The
+    skill minimum still has to equal this package version either way, or an
+    adopter would pin a CLI their agent then rejects.
     """
     text = SKILL_MD.read_text(encoding="utf-8")
     _, fence, body = text.partition("\n---\n")
@@ -298,26 +300,35 @@ def test_ci_template_pins_the_floor_the_skill_enforces() -> None:
     declared = re.search(r"^[ \t]+planlint-min-version:[ \t]*(\S+)$", frontmatter, re.MULTILINE)
     assert declared, "SKILL.md declares no indented metadata.planlint-min-version"
 
-    # The template now calls the composite action rather than running `pip
-    # install`, and the action installs the CLI from its own checkout -- so the
-    # `uses:` ref is what pins the version an adopter gets, and it is that ref
-    # the skill's declared minimum has to agree with.
+    # The template calls the composite action, which installs the CLI from its
+    # own checkout -- so the `uses:` ref is what pins the adapter and the CLI
+    # together. Until the first public tag exists that ref is a full commit
+    # SHA (any ref of this repository works). After the tag is cut it should
+    # be `@v<package version>`, matching the skill's declared minimum.
+    template = TEMPLATE.read_text(encoding="utf-8")
     pinned = re.search(
-        r"uses: ianshank/planlint/\.github/actions/planlint@v([0-9.]+)",
-        TEMPLATE.read_text(encoding="utf-8"),
+        r"uses: ianshank/planlint/\.github/actions/planlint@(\S+)",
+        template,
     )
-    assert pinned, "templates/spec-gate.yml no longer pins the action to an exact release tag"
-    assert pinned.group(1) == declared.group(1), (
-        f"the CI template pins the action at v{pinned.group(1)} but the skill requires "
-        f"planlint {declared.group(1)}; an adopter would install a CLI their agent refuses"
-    )
-    # And the tag has to be a release of *this* tree, or the template names a
-    # ref that will never exist.
+    assert pinned, "templates/spec-gate.yml no longer pins the action to a git ref"
+    ref = pinned.group(1)
     from openspec_graph import __version__
 
-    assert pinned.group(1) == __version__, (
-        f"the template pins v{pinned.group(1)} but this package is {__version__}; "
-        "the tag the release workflow will cut is the one the template must name"
+    assert declared.group(1) == __version__, (
+        f"the skill requires planlint {declared.group(1)} but this package is "
+        f"{__version__}; an adopter would install a CLI their agent refuses"
+    )
+    tag = f"v{__version__}"
+    if ref == tag:
+        return
+    assert re.fullmatch(r"[0-9a-f]{40}", ref), (
+        f"the CI template pins {ref!r}; that must be either {tag} (once the "
+        f"release tag exists) or a full 40-character commit SHA (until then). "
+        "A missing tag 404s; a floating branch name is not a pin."
+    )
+    assert f"@{tag}" in template, (
+        f"the template pins a SHA because {tag} is not cut yet, but it no "
+        f"longer names @{tag} as the ref to switch to after the tag exists"
     )
 
 

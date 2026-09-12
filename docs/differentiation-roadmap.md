@@ -69,10 +69,9 @@ corpus with a published catch-rate. Category claims die; catch-rate claims sell.
 
 ## Candidate Change Packages
 
-Eight packages. Not scaffolded yet — each is a sketch with acceptance criteria
-(including a non-success criterion, per the repo's own G002 rule — see
-`tests/fixtures/good_harness.md` / `tests/fixtures/good_upstream.md`), a code touch map
-against the real current tree, and a cutline.
+Eight packages were sketched here. All but CP-8 have since shipped; this
+section is the original sketch, kept as history. For the live remainder see
+**Status as of 0.2.0** at the bottom of this file.
 
 ### CP-1: `rename-cli-and-positioning` (v1, first)
 
@@ -566,28 +565,44 @@ module below the hub layer imports `cli` or `graph`).
 
 ---
 
-## First Three PRs to Execute (in order)
+## Status as of 0.2.0 (live remainder)
 
-1. **CP-1 `rename-cli-and-positioning`** — but only after the Name Gate
-   clears. Includes the README wedge, comparison table, non-goals, and the
-   `test_cli_surface.py` verb allow-list guard. This is the cheapest change
-   that makes the product *read* as the wedge. Doc-only branch or feature
-   branch off `main` after PR #4 merges.
+CP-1 through CP-7, CP-GV, CP-AD, CP-GA, and CP-6 are **implemented** on
+`main`. The "First three PRs" ordering below is historical: it was the
+execution sequence when this document was a sketch, and it is not the live
+backlog.
 
-2. **CP-3 `parse-repo-machinery-structurally`** — the highest-leverage v1
-   change: it removes the G003/G004 false-positive class the competitors will
-   always have, and it is the foundation for delta lint (CP-5) and witness
-   coverage numbers (CP-7). In progress — see the CP-3 section above for
-   current status.
+What remains after the first public tag, in this order, each as its own
+change package (spec-drafter → spec-adversary first):
 
-3. **CP-2 `add-dialect-cards`** — turns `detect` into a product and makes the
-   read-only guarantee a tested invariant. Together with CP-3, this is the v1
-   moat: structural machinery parsing + a diffable, read-only dialect card.
+1. **Vacuous-pass policy** — a target with no Makefile and no coverage floor
+   currently passes G003/G004 vacuously; the Action warns via
+   `discovery-warnings`. Widening `indeterminate` is a rule-semantics
+   question, not an Action projection.
+2. **Finding line numbers** — `Rule.check` returns strings; `Finding.line`
+   stays 0; SARIF omits the region. Criteria and waivers already carry
+   lines. This is a check-contract change, not a wire-up.
+3. **Named Action inputs** for `--change` and `--dialect`. No raw
+   `extra-args`. Leave `--require-witness` off the Action.
+4. **One real `evals/` run**, then **CP-8** (`add-agent-threat-corpus` +
+   H007): public catch-rate. Detect-corpus and matcher-floor prerequisites
+   already shipped.
+5. SpecKit wrong-level heading WARN and U004 modal design — design pass
+   required; regex widening is how G002 last degraded.
+6. **Marketplace + floating `v1` only at 1.0** (DEC-GA-011).
 
-CP-4 through CP-8 follow once the v1 moat is real, in the order:
-CP-4 → CP-5 (v1 complete) → CP-7 (v2) → CP-8 + CP-6 (v4, distribution + eval
-land together so the public corpus and the SARIF/Action path ship as one
-story).
+Later or never: rule-pack plugins, configurable discovery lists, coverage
+trend gating, mutation testing, `make watch`, evals-in-CI, Docker-as-primary,
+any `propose`/`apply` verb (AC-RP-3).
+
+### Historical: first three PRs (already executed)
+
+1. **CP-1 `rename-cli-and-positioning`** — shipped.
+2. **CP-3 `parse-repo-machinery-structurally`** — shipped.
+3. **CP-2 `add-dialect-cards`** — shipped.
+
+Then CP-4 → CP-5 → CP-7 → CP-6/CP-GA. **CP-8 is the remaining sketched
+package.**
 
 ---
 

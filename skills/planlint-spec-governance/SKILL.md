@@ -155,6 +155,13 @@ when `--require-witness` is passed, and their absence from a normal run is by
 design, not a gap. Do not describe a passing `validate` as proof that any
 stage actually executed.
 
+`--require-witness` reads files under `.planlint/witnesses/`. That directory
+is gitignored in this repository, and a fresh CI checkout typically has no
+store, so the flag **fails closed** (W001) on every clean clone. Do not pass
+it in CI unless the job that ran the cited stage recorded witnesses and the
+store is present in that checkout. Do not expose it through the composite
+Action. Never run `witness` yourself to make the flag pass.
+
 ## What it does to the repository
 
 Nothing, for the read-only verbs above. `planlint` never runs `make` and never
@@ -167,9 +174,12 @@ treated as "unknown" rather than as an error.
 
 `assets/spec-gate.yml` is a ready workflow. Copy it into the target
 repository's own workflows directory. It calls this project's composite
-action, pinned to an exact release tag, which installs the CLI, runs the gate
-once, annotates the pull request, writes a job summary, and uploads the
-complete evidence bundle as a workflow artifact.
+action. The Action installs the CLI from its own checkout, so the `uses:`
+ref pins the adapter and the CLI together. Until `v0.2.0` is tagged, that
+ref is a commit SHA; after the tag exists, switch it to `@v0.2.0`. The
+composite steps are bash and the template's runner is `ubuntu-latest`. The
+workflow runs the gate once, annotates the pull request, writes a job
+summary, and uploads the complete evidence bundle as a workflow artifact.
 
 The action distinguishes four results, and only the first is green: the specs
 passed; findings reached the threshold; nothing was checked, so the run gated

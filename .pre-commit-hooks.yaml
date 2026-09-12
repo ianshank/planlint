@@ -7,7 +7,9 @@
 #
 #   repos:
 #     - repo: https://github.com/ianshank/planlint
-#       rev: v0.2.0
+#       # Until v0.2.0 is tagged, pin a commit SHA. After the tag exists, use
+#       # rev: v0.2.0 instead.
+#       rev: a853b72f05a0a1ecbfed52eca6791bf2bb9ffa11
 #       hooks:
 #         - id: planlint
 - id: planlint
