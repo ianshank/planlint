@@ -435,7 +435,7 @@ def _withheld_notice(withheld: int, limit: int) -> str:
     return (
         f"::notice title=planlint::{withheld} further finding(s) not annotated "
         f"(GitHub renders at most {limit} annotations per severity per step); "
-        "the complete set is in the evidence artifact."
+        "the complete set is in the run's evidence directory."
     )
 
 
@@ -543,7 +543,10 @@ def to_step_summary(
                 f"| {_cell(finding.path or '')} | {_cell(finding.message)} |"
             )
         if withheld:
-            lines += ["", f"_{withheld} further finding(s) not listed; see the evidence artifact._"]
+            lines += [
+                "",
+                f"_{withheld} further finding(s) not listed; see the run's evidence._",
+            ]
 
     lines.append("")
     return "\n".join(lines)

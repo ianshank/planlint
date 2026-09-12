@@ -95,8 +95,11 @@ merely incomplete:
 ### Evidence
 
 - R-GA-8: Every file the action writes MUST live under a directory beneath
-  `$RUNNER_TEMP`. The action MUST NOT create, modify or remove any file in
-  `GITHUB_WORKSPACE`, including build artifacts from installing the CLI.
+  `$RUNNER_TEMP`, with exactly two exemptions: `$GITHUB_OUTPUT` and
+  `$GITHUB_STEP_SUMMARY`, the runner's own command files, which are how a step
+  reports anything at all and are outside the action's control. The action MUST
+  NOT create, modify or remove any file in `GITHUB_WORKSPACE`, including build
+  artifacts from installing the CLI.
 - R-GA-9: The evidence directory MUST contain `run.json` on every run, and —
   whenever `validate` exited 0 or 1 — the envelope byte-for-byte as `validate`
   printed it, its SARIF projection, the dialect card, the annotation stream and
@@ -186,7 +189,8 @@ merely incomplete:
   needing a write permission.
 - R-GA-25: SARIF upload MUST live in the consumer workflow, not the action, so
   the permission it needs is declared where an adopter can read it. The
-  template MUST declare `permissions` explicitly, MUST check out with
+  template MUST declare `permissions` explicitly — including the additional
+  read permission a private repository's upload requires — MUST check out with
   `persist-credentials: false`, MUST skip rather than fail the upload on a fork
   pull request and where code scanning is unavailable, and MUST trigger on
   `pull_request`, `push` to the default branch and `workflow_dispatch`, with

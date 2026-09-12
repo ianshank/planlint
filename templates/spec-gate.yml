@@ -35,11 +35,13 @@ on:
 permissions:
   # Everything the scan itself needs.
   contents: read
-  # Only for the optional SARIF upload below. Delete this line and that step
-  # together if the repository does not have code scanning enabled -- with the
-  # step removed the gate still fails the build, it just reports through
-  # annotations and the job summary instead of the Security tab.
+  # Both are only for the optional SARIF upload below, and a private
+  # repository needs the second as well as the first. Delete them with that
+  # step if the repository does not have code scanning enabled -- without it
+  # the gate still fails the build, it just reports through annotations and the
+  # job summary instead of the Security tab.
   security-events: write
+  actions: read
 
 jobs:
   specs:

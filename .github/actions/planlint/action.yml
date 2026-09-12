@@ -156,6 +156,17 @@ runs:
         set -euo pipefail
         if [ -n "$INPUT_VERSION" ]; then
           python -m pip install --quiet "planlint==${INPUT_VERSION}"
+          # A release predating this contract installs perfectly well and then
+          # has no verb to project with, so the run would fail somewhere in the
+          # middle with a usage error about a subcommand. Checked here instead,
+          # against the installed CLI rather than against a pinned version
+          # number, so the floor moves by itself when the verb does.
+          if ! planlint report --help >/dev/null 2>&1; then
+            echo "::error title=planlint::planlint ${INPUT_VERSION} has no 'report' verb,"
+            echo "so this action cannot project its results. Use a release that carries"
+            echo "it, or leave 'version' empty to install from this action's own checkout."
+            exit 1
+          fi
         else
           # Built from a copy rather than in place: pip builds a source
           # directory in that directory, leaving build/ and *.egg-info behind.

@@ -218,7 +218,13 @@ way every other consumer of that function does.
 Follow the same shape for a new one:
 
 1. One public function, `to_<thing>(data) -> <output>`, taking a shape the
-   caller already has in hand rather than recomputing it.
+   caller already has in hand rather than recomputing it. A module whose input
+   comes from *outside* this process rather than from a sibling may instead
+   expose one validating entry point plus a projection per output shape --
+   `report.py` is the instance: it is handed a file somebody else wrote,
+   possibly by another build, so `parse_envelope` raises a typed error once and
+   every projection downstream of it is total. The rule the split preserves is
+   the same one: no projection may re-check a field or raise.
 2. Stdlib-only — no new dependency (`dependencies = []` in `pyproject.toml`
    is a load-bearing product boundary; see `docs/architecture/c4.md`).
 3. Deterministic: same input, byte-identical output, every call. Add a

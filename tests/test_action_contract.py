@@ -112,6 +112,54 @@ def test_evidence_is_written_outside_the_workspace() -> None:
     assert "GITHUB_WORKSPACE" not in text
 
 
+def test_the_action_writes_only_to_evidence_and_the_runner_command_files() -> None:
+    """Non-success: every redirection in the action has an approved target.
+
+    "Evidence lives outside the workspace" is easy to assert about the
+    directory and easy to break with one stray redirection somewhere else. The
+    two exemptions are the runner's own command files, which are how a step
+    reports anything at all and are not the action's to relocate.
+    """
+    allowed_prefixes = ("${EVIDENCE}", "${RUNNER_TEMP}", "${OUT_DIR}", "$evidence")
+    allowed_exact = ("$GITHUB_OUTPUT", "$GITHUB_STEP_SUMMARY")
+
+    offenders: list[str] = []
+    for step in _steps(_action_text()):
+        body = step.get("run")
+        if not isinstance(body, str):
+            continue
+        for target in re.findall(r">>?\s*(\S+)", body):
+            target = target.strip('"')
+            # `2>&1` duplicates a descriptor and `>/dev/null` discards; neither
+            # creates a file, so neither is this check's subject.
+            if target.startswith(("&", "/dev/")):
+                continue
+            if target in allowed_exact or target.startswith(allowed_prefixes):
+                continue
+            offenders.append(f"{step.get('id')}: {target}")
+    assert not offenders, f"the action redirects to unapproved path(s): {offenders}"
+
+
+def test_an_index_install_refuses_a_release_without_the_report_verb() -> None:
+    """A version predating this contract installs cleanly and then has no verb
+    to project with, so the run would die mid-projection with a usage error
+    about a subcommand. The check is against the installed CLI, not a pinned
+    version number, so the floor moves by itself when the verb does."""
+    text = _action_text()
+    assert "planlint report --help" in text
+    assert "has no 'report' verb" in text
+
+
+def test_the_template_grants_what_a_private_repository_needs() -> None:
+    """`upload-sarif` needs a second read permission on a private repository,
+    so an adopter who enabled the documented option would otherwise fail in the
+    upload step rather than on anything about their specs."""
+    template = (REPO_ROOT / "templates" / "spec-gate.yml").read_text(encoding="utf-8")
+    block = template.split("permissions:", 1)[1].split("jobs:", 1)[0]
+    for permission in ("contents: read", "security-events: write", "actions: read"):
+        assert permission in block, permission
+
+
 def test_the_artifact_upload_survives_a_failing_gate() -> None:
     """A red run is exactly when somebody needs the evidence."""
     text = _action_text()
