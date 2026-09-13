@@ -9,7 +9,7 @@ from .parse_semantics import (
     REQ_REF,
     VERIFIED_BY,
     line_of,
-    section_body,
+    section_span,
     strip_waiver_comments,
 )
 
@@ -17,16 +17,18 @@ __all__ = ["parse_harness"]
 
 
 def parse_harness(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion, ...]]:
+    req_origin, req_body = section_span(text, "Requirements")
     reqs = tuple(
         Requirement(
             ident=m.group(1),
             text=m.group(2),
             kind="constraint" if m.group(1).startswith("C-") else "functional",
+            line=line_of(text, req_origin + m.start()),
         )
-        for m in REQ_DECL.finditer(section_body(text, "Requirements"))
+        for m in REQ_DECL.finditer(req_body)
     )
 
-    ac_body = section_body(text, "Acceptance Criteria")
+    ac_origin, ac_body = section_span(text, "Acceptance Criteria")
     matches = list(AC.finditer(ac_body))
     criteria: list[Criterion] = []
     for idx, match in enumerate(matches):
@@ -52,7 +54,11 @@ def parse_harness(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion, 
                 text=strip_waiver_comments(match.group(4)).strip(),
                 verified_by=verified.group(1) if verified else "",
                 requirement_refs=tuple(sorted(set(REQ_REF.findall(block)))),
-                line=line_of(text, text.find(block[:60])) if block else 0,
+                # Span origin plus match.start(), not text.find of a prefix:
+                # the first sixty characters of the block include the ident,
+                # but a quoted copy earlier in the document used to win
+                # (DEC-LH-007).
+                line=line_of(text, ac_origin + match.start()),
             )
         )
     return reqs, tuple(criteria)

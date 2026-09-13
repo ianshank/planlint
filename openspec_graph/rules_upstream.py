@@ -6,12 +6,12 @@ from collections.abc import Iterable
 
 from .detect import StackProfile
 from .parse import ParsedSpec, scenario_has_gwt
-from .rule_types import ERROR, WARN, Rule
+from .rule_types import ERROR, WARN, CheckHit, CheckResult, Rule
 
 __all__ = ["UPSTREAM_RULES"]
 
 
-def _missing_delta_header(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
+def _missing_delta_header(spec: ParsedSpec, _p: StackProfile) -> Iterable[CheckResult]:
     if not spec.delta_headers:
         yield (
             "no ADDED/MODIFIED/REMOVED Requirements header; an upstream spec delta "
@@ -19,30 +19,37 @@ def _missing_delta_header(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
         )
 
 
-def _requirement_without_scenario(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
+def _requirement_without_scenario(spec: ParsedSpec, _p: StackProfile) -> Iterable[CheckResult]:
     orphans = set(spec.orphan_requirements)
     for req in spec.requirements:
         if req.ident in orphans:
-            yield f"requirement {req.ident!r} ({req.text[:60]}...) has no Scenario"
-
-
-def _scenario_without_gwt(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
-    for crit in spec.criteria:
-        if not scenario_has_gwt(crit):
-            yield (
-                f"{crit.ident} ({crit.text[:50]}...) is missing WHEN or "
-                "THEN and is therefore not executable"
+            yield CheckHit(
+                f"requirement {req.ident!r} ({req.text[:60]}...) has no Scenario",
+                line=req.line,
             )
 
 
-def _heading_drift(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
+def _scenario_without_gwt(spec: ParsedSpec, _p: StackProfile) -> Iterable[CheckResult]:
+    for crit in spec.criteria:
+        if not scenario_has_gwt(crit):
+            yield CheckHit(
+                f"{crit.ident} ({crit.text[:50]}...) is missing WHEN or "
+                "THEN and is therefore not executable",
+                line=crit.line,
+            )
+
+
+def _heading_drift(spec: ParsedSpec, _p: StackProfile) -> Iterable[CheckResult]:
     yield from spec.heading_drift
 
 
-def _requirement_without_modal(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
+def _requirement_without_modal(spec: ParsedSpec, _p: StackProfile) -> Iterable[CheckResult]:
     for req in spec.requirements:
         if not req.is_normative:
-            yield f"requirement {req.text[:60]!r} uses no SHALL/MUST; it is not normative"
+            yield CheckHit(
+                f"requirement {req.text[:60]!r} uses no SHALL/MUST; it is not normative",
+                line=req.line,
+            )
 
 
 UPSTREAM_RULES: tuple[Rule, ...] = (

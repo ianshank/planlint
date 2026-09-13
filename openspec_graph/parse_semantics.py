@@ -427,14 +427,24 @@ NEGATIVE_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
 )
 
 
-def section_body(text: str, name: str) -> str:
+def section_span(text: str, name: str) -> tuple[int, str]:
+    """Return ``(body_start_offset, body)`` for the named ``##`` section.
+
+    Offset is the start of the body (end of the heading match), which is the
+    origin a body-scoped ``finditer`` match is relative to. A missing
+    section yields ``(0, "")``.
+    """
     bounds = [(m.group(1), m.start(), m.end()) for m in SECTION.finditer(text)]
     for idx, (title, _start, end) in enumerate(bounds):
         if title.strip().lower() != name.lower():
             continue
         stop = bounds[idx + 1][1] if idx + 1 < len(bounds) else len(text)
-        return text[end:stop]
-    return ""
+        return end, text[end:stop]
+    return 0, ""
+
+
+def section_body(text: str, name: str) -> str:
+    return section_span(text, name)[1]
 
 
 # Strips a trailing markdown-emphasized parenthetical off a heading title,
@@ -462,6 +472,11 @@ def speckit_section_body(text: str, name: str) -> str:
     such annotations today, and this repo has an explicit
     zero-behavior-change commitment for both (C-SK-8).
     """
+    return speckit_section_span(text, name)[1]
+
+
+def speckit_section_span(text: str, name: str) -> tuple[int, str]:
+    """Like :func:`section_span`, but tolerates a trailing heading annotation."""
     bounds = [(m.group(1), m.start(), m.end()) for m in SECTION.finditer(text)]
     name_lower = name.lower()
     for idx, (title, _start, end) in enumerate(bounds):
@@ -469,8 +484,8 @@ def speckit_section_body(text: str, name: str) -> str:
         if normalized != name_lower:
             continue
         stop = bounds[idx + 1][1] if idx + 1 < len(bounds) else len(text)
-        return text[end:stop]
-    return ""
+        return end, text[end:stop]
+    return 0, ""
 
 
 def speckit_subsection_body(section_text: str, name: str) -> str:
@@ -487,14 +502,19 @@ def speckit_subsection_body(section_text: str, name: str) -> str:
     at H2, closes that gap: a wrong-heading or missing-heading document
     yields an empty span, not a false match.
     """
+    return speckit_subsection_span(section_text, name)[1]
+
+
+def speckit_subsection_span(section_text: str, name: str) -> tuple[int, str]:
+    """Like :func:`speckit_section_span`, one heading level down inside an H2."""
     bounds = [(m.group(1), m.start(), m.end()) for m in SUBSECTION.finditer(section_text)]
     name_lower = name.lower()
     for idx, (title, _start, end) in enumerate(bounds):
         if title.strip().lower() != name_lower:
             continue
         stop = bounds[idx + 1][1] if idx + 1 < len(bounds) else len(section_text)
-        return section_text[end:stop]
-    return ""
+        return end, section_text[end:stop]
+    return 0, ""
 
 
 def line_of(text: str, offset: int) -> int:

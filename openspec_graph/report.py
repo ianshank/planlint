@@ -422,8 +422,8 @@ def _properties(finding: FindingRecord, path_prefix: str = "") -> str:
         located = f"{path_prefix.rstrip('/')}/{finding.path}" if path_prefix else finding.path
         parts.insert(0, f"file={_escape(located, _PROPERTY_ESCAPES)}")
         # SARIF's startLine minimum is 1 and a workflow command's is the same,
-        # so a line of 0 -- which is every finding this tool produces today,
-        # since no rule sets one -- emits no line property at all rather than
+        # so a line of 0 — a CheckHit without a locus, an unmigrated check,
+        # or a whole-tree finding — emits no line property at all rather than
         # being clamped to 1. A wrong location a reviewer cannot tell is wrong
         # costs more than no location.
         if finding.line >= 1:

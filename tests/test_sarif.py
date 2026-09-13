@@ -9,10 +9,10 @@ the trip at all.
 
 Two of those are less obvious than they look:
 
-- **Every** finding currently has `line == 0`, because no rule sets a line.
-  Clamping that to SARIF's minimum of 1 would put a wrong annotation on the
-  first line of every file in every pull request, and a reviewer could not
-  tell it was wrong. The region is omitted instead.
+- A finding with ``line == 0`` (no locus, or an unmigrated check) omits the
+  SARIF region rather than clamping to 1. Rules that hold a real locus now
+  copy it onto ``Finding.line`` via ``CheckHit``; inventing line 1 would
+  still annotate the wrong content.
 - A finding with no path must still be emitted. Dropping it would lose a real
   result to make a schema happy, which is the one failure this format must
   not introduce.

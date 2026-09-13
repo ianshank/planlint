@@ -18,10 +18,13 @@ __all__ = [
     "FINDINGS_SCHEMA_VERSION",
     "INFO",
     "WARN",
+    "CheckHit",
+    "CheckResult",
     "Finding",
     "ParsedSpec",
     "Rule",
     "StackProfile",
+    "as_check_hit",
 ]
 
 ERROR, WARN, INFO = "ERROR", "WARN", "INFO"
@@ -91,12 +94,38 @@ class Finding:
 
 
 @dataclasses.dataclass(frozen=True)
+class CheckHit:
+    """One rule hit: the message plus an optional 1-based locus.
+
+    ``line`` defaults to the same sentinel ``Finding.line`` uses. A bare
+    ``str`` from ``Rule.check`` means the same thing — see ``as_check_hit``.
+    """
+
+    message: str
+    line: int = 0
+
+
+CheckResult = str | CheckHit
+
+
+def as_check_hit(item: CheckResult) -> CheckHit:
+    """Total coercion so ``evaluate()`` does not grow an ``isinstance`` ladder.
+
+    A bare ``str`` becomes ``CheckHit(message=item, line=0)``. A ``CheckHit``
+    is returned unchanged, including a non-positive ``line``.
+    """
+    if isinstance(item, CheckHit):
+        return item
+    return CheckHit(message=item)
+
+
+@dataclasses.dataclass(frozen=True)
 class Rule:
     ident: str
     severity: str
     dialects: tuple[str, ...]  # ("*",) for any
     summary: str
-    check: Callable[[ParsedSpec, StackProfile], Iterable[str]]
+    check: Callable[[ParsedSpec, StackProfile], Iterable[CheckResult]]
 
     def applies(self, dialect: str) -> bool:
         return "*" in self.dialects or dialect in self.dialects

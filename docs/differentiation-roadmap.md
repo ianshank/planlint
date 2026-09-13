@@ -390,10 +390,11 @@ still cite the old number."
 > Status: implemented. See the approved spec at
 > `openspec/changes/add-sarif-and-actions/specs/sarif-output/spec.md`
 > (`AC-SA-1..19`). The sketch below called SARIF a projection of fields the
-> findings "already carry" — true of `path`/`rule`/`severity`, but **no
-> rule sets a line**, so every finding has `line == 0`. SARIF's `startLine`
-> minimum is 1, so the region is omitted rather than clamped: clamping
-> would annotate the first line of every file in every pull request.
+> findings "already carry" — true of `path`/`rule`/`severity`. When that
+> change shipped, **no rule set a line**, so every finding had `line == 0`.
+> SARIF's `startLine` minimum is 1, so the region is omitted rather than
+> clamped. `add-finding-line-hits` later copies an honest locus onto
+> `Finding.line` via `CheckHit`; the omit-when-`< 1` rule stands.
 
 SARIF output so findings appear inline in the GitHub PR the org already has,
 plus a one-file composite Action and a pre-commit hook. Time-to-first-red-X

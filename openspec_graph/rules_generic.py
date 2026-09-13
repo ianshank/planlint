@@ -12,12 +12,12 @@ from collections.abc import Iterable, Sequence
 
 from .detect import StackProfile
 from .parse import ParsedSpec, threshold_values
-from .rule_types import ERROR, GENERIC_STAGES, WARN, Rule
+from .rule_types import ERROR, GENERIC_STAGES, WARN, CheckHit, CheckResult, Rule
 
 __all__ = ["GENERIC_RULES"]
 
 
-def _no_criteria(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
+def _no_criteria(spec: ParsedSpec, _p: StackProfile) -> Iterable[CheckResult]:
     if spec.criteria:
         return
     if spec.requirements:
@@ -33,7 +33,7 @@ def _no_criteria(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
         )
 
 
-def _needs_negative(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
+def _needs_negative(spec: ParsedSpec, _p: StackProfile) -> Iterable[CheckResult]:
     if spec.criteria and not spec.has_negative_criterion:
         yield (
             "no criterion names a non-success outcome; a plan that only describes "
@@ -41,7 +41,7 @@ def _needs_negative(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
         )
 
 
-def _hard_coded_threshold(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
+def _hard_coded_threshold(spec: ParsedSpec, profile: StackProfile) -> Iterable[CheckResult]:
     locator = profile.threshold.locator if profile.threshold else "the governance policy"
     real_value = profile.threshold.value if profile.threshold else None
     for offender in spec.hard_coded_thresholds:
@@ -57,7 +57,7 @@ def _hard_coded_threshold(spec: ParsedSpec, profile: StackProfile) -> Iterable[s
         yield f"hard-coded threshold; read it from {locator} instead -- {offender!r}"
 
 
-def _unknown_make_target(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
+def _unknown_make_target(spec: ParsedSpec, profile: StackProfile) -> Iterable[CheckResult]:
     # No confidence-level branching needed here: detect._make_target_facts
     # already widens profile.make_targets with the regex fallback whenever
     # structural parsing is low-confidence, so this rule, graph.py, and
@@ -74,7 +74,7 @@ def _unknown_make_target(spec: ParsedSpec, profile: StackProfile) -> Iterable[st
             )
 
 
-def _unknown_invariant(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
+def _unknown_invariant(spec: ParsedSpec, profile: StackProfile) -> Iterable[CheckResult]:
     if not profile.invariant_ids:
         return
     known = set(profile.invariant_ids)
@@ -83,12 +83,13 @@ def _unknown_invariant(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]
             yield f"references {ref}, which is not declared in {profile.invariant_source_name}"
 
 
-def _unjustified_waiver(spec: ParsedSpec, _p: StackProfile) -> Iterable[str]:
+def _unjustified_waiver(spec: ParsedSpec, _p: StackProfile) -> Iterable[CheckResult]:
     for waiver in spec.waivers:
         if not waiver.reason:
-            yield (
+            yield CheckHit(
                 f"waiver of {waiver.rule} at line {waiver.line} has no reason; "
-                "a waiver is a claim that must justify itself"
+                "a waiver is a claim that must justify itself",
+                line=waiver.line,
             )
 
 
@@ -105,14 +106,14 @@ def orphan_invariant_ids(specs: Sequence[ParsedSpec], profile: StackProfile) -> 
     return tuple(inv for inv in profile.invariant_ids if inv not in cited)
 
 
-def _orphan_invariant_registry_stub(_s: ParsedSpec, _p: StackProfile) -> Iterable[str]:
+def _orphan_invariant_registry_stub(_s: ParsedSpec, _p: StackProfile) -> Iterable[CheckResult]:
     # Inert: the real cross-tree check is orphan_invariant_ids(), run once
     # per validate/graph pass by rules.evaluate_tree(), not per spec. This
     # stub exists only so `planlint rules`/`rules --json` lists G006.
     return ()
 
 
-def _unknown_adr(spec: ParsedSpec, profile: StackProfile) -> Iterable[str]:
+def _unknown_adr(spec: ParsedSpec, profile: StackProfile) -> Iterable[CheckResult]:
     if not profile.adr_ids:
         return
     known = set(profile.adr_ids)
@@ -134,7 +135,7 @@ def orphan_adr_ids(specs: Sequence[ParsedSpec], profile: StackProfile) -> tuple[
     return tuple(adr for adr in profile.adr_ids if adr not in cited)
 
 
-def _orphan_adr_registry_stub(_s: ParsedSpec, _p: StackProfile) -> Iterable[str]:
+def _orphan_adr_registry_stub(_s: ParsedSpec, _p: StackProfile) -> Iterable[CheckResult]:
     # Inert: the real cross-tree check is orphan_adr_ids(), run once per
     # validate/graph pass by rules.evaluate_tree(), not per spec. This stub
     # exists only so `planlint rules`/`rules --json` lists G009.

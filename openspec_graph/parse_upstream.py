@@ -22,6 +22,7 @@ def parse_upstream(text: str) -> tuple[tuple[Requirement, ...], tuple[Criterion,
             body=strip_waiver_comments(
                 text[m.end() : (req_matches[i + 1].start() if i + 1 < len(req_matches) else len(text))]
             ),
+            line=line_of(text, m.start()),
         )
         for i, m in enumerate(req_matches)
     )

@@ -10,10 +10,10 @@ Decomposed into focused modules; this file is the facade/registry:
 - :mod:`rules_witness` — witness-mode rules W001-W002, evaluated only under
   ``--require-witness`` (``NON_WITNESS_RULES``/``evaluate(rule_set=...)``).
 
-Public surface (``Finding``, ``Rule``, ``evaluate``, ``rule_table``, ``RULES``,
-``NON_WITNESS_RULES``, ``ERROR``/``WARN``/``INFO``) is re-exported here so
-existing ``from openspec_graph.rules import ...`` imports keep working
-(R-DG-1).
+Public surface (``Finding``, ``Rule``, ``CheckHit``, ``evaluate``,
+``rule_table``, ``RULES``, ``NON_WITNESS_RULES``, ``ERROR``/``WARN``/``INFO``)
+is re-exported here so existing ``from openspec_graph.rules import ...``
+imports keep working (R-DG-1).
 
 Severity contract:
   ERROR -- blocks the gate. The document makes an unverifiable or false claim.
@@ -23,12 +23,23 @@ Severity contract:
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 
 from . import rules_generic
 from .detect import StackProfile
 from .parse import ParsedSpec
-from .rule_types import ERROR, FINDINGS_SCHEMA_VERSION, INFO, WARN, Finding, Rule
+from .rule_types import (
+    ERROR,
+    FINDINGS_SCHEMA_VERSION,
+    INFO,
+    WARN,
+    CheckHit,
+    CheckResult,
+    Finding,
+    Rule,
+    as_check_hit,
+)
 from .rules_generic import GENERIC_RULES
 from .rules_harness import HARNESS_RULES
 from .rules_speckit import SPECKIT_RULES
@@ -42,8 +53,11 @@ __all__ = [
     "NON_WITNESS_RULES",
     "RULES",
     "WARN",
+    "CheckHit",
+    "CheckResult",
     "Finding",
     "Rule",
+    "as_check_hit",
     "evaluate",
     "evaluate_tree",
     "rule_table",
@@ -55,6 +69,11 @@ __all__ = [
 # isn't set (DEC-WM-007). Declared before RULES so RULES can build on it.
 NON_WITNESS_RULES: tuple[Rule, ...] = GENERIC_RULES + HARNESS_RULES + UPSTREAM_RULES + SPECKIT_RULES
 RULES: tuple[Rule, ...] = NON_WITNESS_RULES + WITNESS_RULES
+
+# Child of ``planlint``; ``log.configure()`` owns the handler. Do not attach
+# another one here (DEC-LH-005) — the parent has propagate=False, so a
+# second handler on this logger would duplicate every DEBUG line.
+logger = logging.getLogger("planlint.rules")
 
 # G007 (a waiver must state a reason) cannot be silenced by naming itself in
 # a reason-less waiver -- that would let the enforcement rule trivially
@@ -82,13 +101,24 @@ def evaluate(spec: ParsedSpec, profile: StackProfile, rule_set: Sequence[Rule] =
         if not rule.applies(spec.dialect):
             continue
         suppressed = rule.ident in spec.suppressed and rule.ident not in _NON_WAIVABLE
-        for message in rule.check(spec, profile):
+        for item in rule.check(spec, profile):
+            hit = as_check_hit(item)
+            # Never clamp a missing or negative locus to 1: SARIF's startLine
+            # minimum is 1, and inventing line 1 annotates the wrong content
+            # (DEC-LH-003). The projections already omit region when line < 1.
+            line = hit.line if hit.line >= 1 else 0
+            logger.debug(
+                "rule %s attached line %s",
+                rule.ident,
+                line if line else "unset",
+            )
             findings.append(
                 Finding(
                     rule=rule.ident,
                     severity=INFO if suppressed else rule.severity,
-                    message=f"[waived] {message}" if suppressed else message,
+                    message=f"[waived] {hit.message}" if suppressed else hit.message,
                     path=spec.path,
+                    line=line,
                 )
             )
     return findings

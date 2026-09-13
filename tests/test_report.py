@@ -190,9 +190,9 @@ def test_annotation_escaping_covers_every_documented_character() -> None:
 
 
 def test_a_line_of_zero_emits_no_line_property() -> None:
-    """Every finding this tool produces today has line == 0, because no rule
-    sets one. Clamping to 1 would put every annotation on the first line of a
-    real file, pointing at content the finding is not about."""
+    """A finding with no locus (line 0) omits the workflow-command line=
+    property rather than clamping to 1, which would annotate the first line
+    of a real file. Migrated rules fill the field when they hold one."""
     line = report.to_annotations(_parse(findings=[_finding(line=0)], blocking=1))[0]
     assert "line=" not in line
 
