@@ -18,6 +18,26 @@ from types import ModuleType
 _PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 
 
+def supports_case_sensitive_filenames() -> bool:
+    """Whether this filesystem holds ``makefile`` and ``Makefile`` as two files.
+
+    macOS and Windows default to case-insensitive, where the two names are one
+    path -- a fixture pinning their precedence could not even be checked out
+    there. A capability probe rather than a ``sys.platform`` check, for the
+    same reason as :func:`supports_symlinks`: a case-sensitive volume mounted
+    on macOS should still run the tests this guards.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        lower = Path(td) / "makefile"
+        upper = Path(td) / "Makefile"
+        lower.write_text("lower", encoding="utf-8")
+        upper.write_text("upper", encoding="utf-8")
+        try:
+            return lower.read_text(encoding="utf-8") == "lower"
+        except OSError:
+            return False
+
+
 def supports_symlinks() -> bool:
     """Whether this process can create a filesystem symlink right now.
 

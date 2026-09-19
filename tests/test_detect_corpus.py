@@ -27,6 +27,7 @@ from pathlib import Path
 import pytest
 
 from openspec_graph import detect, dialect_card, machinery
+from tests import support
 
 CORPUS_ROOT = Path(__file__).resolve().parent / "corpus" / "targets"
 CORPUS_README = CORPUS_ROOT / "README.md"
@@ -249,18 +250,71 @@ def test_gnumakefile_shadows_makefile_rather_than_merging(tmp_path: Path) -> Non
     assert detect.profile(tmp_path).make_targets == ("gnu-only",)
 
 
+@pytest.mark.skipif(
+    not support.supports_case_sensitive_filenames(),
+    reason="case-insensitive filesystem: `makefile` and `Makefile` are one path",
+)
 def test_lowercase_makefile_shadows_capitalised_makefile(tmp_path: Path) -> None:
     """`makefile` precedes `Makefile` in GNU Make's order.
 
     Not a committed corpus shape: the two names are the same path on a
     case-insensitive filesystem, so the fixture could not be checked out on
-    macOS. Generated here instead, and skipped where the filesystem cannot
-    hold both as distinct files -- probed, never inferred from sys.platform.
+    macOS at all. Generated here instead, behind a capability probe rather
+    than a sys.platform guess.
     """
     (tmp_path / "makefile").write_text("lower-only:\n\t@echo l\n", encoding="utf-8")
     (tmp_path / "Makefile").write_text("upper-only:\n\t@echo u\n", encoding="utf-8")
-    if (tmp_path / "makefile").read_text(encoding="utf-8") == (
-        tmp_path / "Makefile"
-    ).read_text(encoding="utf-8"):
-        pytest.skip("case-insensitive filesystem: the two names are one file")
     assert detect.profile(tmp_path).make_targets == ("lower-only",)
+
+
+def test_an_unreadable_candidate_does_not_shadow_a_readable_one(tmp_path: Path) -> None:
+    """A directory named `GNUmakefile` must not disable G004.
+
+    Resolving to the first *existing* candidate rather than the first
+    *readable* one re-created this change's own fail-open one step lower: the
+    unreadable higher-precedence name shadowed a perfectly good `Makefile` and
+    the repo reported zero targets. Deliberately diverges from GNU Make, which
+    aborts instead of falling through -- planlint never executes what it reads,
+    so more detection is the conservative direction here.
+    """
+    (tmp_path / "GNUmakefile").mkdir()
+    (tmp_path / "Makefile").write_text("build:\n\t@echo b\n", encoding="utf-8")
+    assert detect.profile(tmp_path).make_targets == ("build",)
+
+
+def test_an_empty_candidate_does_shadow(tmp_path: Path) -> None:
+    """Readable-but-empty is NOT the same as unreadable.
+
+    A zero-byte `GNUmakefile` genuinely declares no rules, so `make build`
+    would fail and reporting no targets is correct. The resolver's test must
+    therefore be ``is None``, never falsiness -- `""` is a successful read.
+    """
+    (tmp_path / "GNUmakefile").write_text("", encoding="utf-8")
+    (tmp_path / "Makefile").write_text("build:\n\t@echo b\n", encoding="utf-8")
+    assert detect.profile(tmp_path).make_targets == ()
+
+
+def test_makefile_names_are_not_duplicated_as_inline_literals() -> None:
+    """The constant must be the single source, not decoration beside literals.
+
+    Guards the regression where someone re-adds `root / "Makefile"` at a call
+    site and the other two names quietly stop being honoured again.
+    """
+    import ast
+
+    source = Path(detect.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    lowered = {n.lower() for n in detect.MAKEFILE_NAMES}
+    for func in ast.walk(tree):
+        if not isinstance(func, ast.FunctionDef):
+            continue
+        offenders = [
+            node.value
+            for node in ast.walk(func)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and node.value.lower() in lowered
+        ]
+        assert not offenders, (
+            f"{func.name}() hard-codes {offenders}; use detect.MAKEFILE_NAMES"
+        )

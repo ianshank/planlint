@@ -251,35 +251,57 @@ def _legacy_make_targets(text: str) -> tuple[str, ...]:
 MAKEFILE_NAMES: tuple[str, ...] = ("GNUmakefile", "makefile", "Makefile")
 
 
-def _resolve_makefile(root: Path) -> Path | None:
-    """The makefile GNU Make itself would read, or ``None`` if there is none.
+def _resolve_makefile(root: Path) -> tuple[Path, str] | None:
+    """The makefile GNU Make would read, with its text, or ``None``.
+
+    Returns the first *readable* candidate, not merely the first existing one,
+    and that distinction is load-bearing. A candidate that exists but cannot be
+    read -- a directory carrying the name, a permission denial, a dangling
+    symlink -- is skipped so the next name still gets its turn. Resolving to an
+    unreadable `GNUmakefile` and stopping would let it shadow a perfectly good
+    `Makefile` and report zero targets, which disables G004: the exact
+    fail-open this function exists to close, re-created one step lower.
+
+    This deliberately diverges from GNU Make, which aborts rather than falling
+    through. planlint reads untrusted foreign repositories and never executes
+    them, so the useful answer is the targets a maintainer would recognise,
+    and the conservative direction here is *more* detection, not less.
+
+    An **empty but readable** candidate is not skipped. A zero-byte
+    `GNUmakefile` genuinely declares no rules, so reporting no targets matches
+    what `make` would do -- hence the test below is ``is None``, never
+    falsiness, which would wrongly treat "" as "not found" and fall through.
 
     On a case-insensitive filesystem (macOS by default) `makefile` matches a
-    file written as `Makefile`, so the candidate returned may differ in case
-    from the name on disk. That is harmless and deliberately not corrected:
-    both resolve to the same bytes, so the parsed targets -- and therefore the
-    dialect card, which carries `make_targets` and never the filename -- are
-    identical either way. The card's byte-stability contract is unaffected.
+    file written `Makefile`, so the candidate returned may differ in case from
+    the name on disk. Harmless and deliberately not normalised: both resolve to
+    the same bytes, and the dialect card carries `make_targets` and never the
+    filename, so its byte-stability contract is untouched.
     """
     for name in MAKEFILE_NAMES:
         candidate = root / name
-        if candidate.exists():
-            logger.debug("make_targets: reading %s", name)
-            return candidate
-    logger.debug("make_targets: no makefile found under any of %s", MAKEFILE_NAMES)
+        if not candidate.exists():
+            continue
+        text = read_text_or_none(candidate, "make_targets")
+        if text is None:
+            logger.debug(
+                "make_targets: %s exists but is unreadable; trying the next name", name
+            )
+            continue
+        logger.debug("make_targets: reading %s", name)
+        return candidate, text
+    logger.debug("make_targets: no readable makefile under any of %s", MAKEFILE_NAMES)
     return None
 
 
 def _make_target_facts(root: Path) -> machinery.MakefileFacts:
-    makefile = _resolve_makefile(root)
-    if makefile is None:
+    resolved = _resolve_makefile(root)
+    if resolved is None:
+        # No readable makefile under any name GNU Make honours. "No Makefile"
+        # is the safe reading: with no targets, G004 returns early rather than
+        # manufacturing findings against a repo that may not use Make at all.
         return machinery.MakefileFacts((), False, False, 0)
-    text = read_text_or_none(makefile, "make_targets")
-    if text is None:
-        # Exists but unreadable (a directory named `Makefile`, a permission
-        # denial, a dangling symlink). "No Makefile" is the safe reading: with
-        # no targets, G004 returns early rather than manufacturing findings.
-        return machinery.MakefileFacts((), False, False, 0)
+    _makefile, text = resolved
     facts = machinery.parse_makefile(text)
     if facts.confidence == "low":
         # Widen, never replace: structural parsing found real targets too,
