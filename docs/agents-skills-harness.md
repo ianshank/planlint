@@ -119,3 +119,16 @@ order, findings are appended in that order, and JSON output preserves it.
 refactor that introduces unordered iteration fails the gate. This is the
 enterprise-grade guarantee: a spec review is an auditable artifact, not an
 opinion.
+
+## Per-directory guidance (proposed)
+
+Everything above describes one root-level `AGENTS.md` and a set of skills that
+apply repository-wide. [`agent-directory-wiring-plan.md`](agent-directory-wiring-plan.md)
+proposes the next step: an `AGENTS.md` per working directory, each naming the
+subagents and skills that apply to work in it, under the convention's
+nearest-file-wins precedence.
+
+It is sequenced gates-first, because nine new prose files are nine new places
+for a claim to rot, and this repository's existing guard against exactly that
+(`test_every_root_markdown_file_is_wired_into_the_docs_gate`) enumerates the
+repository root only. The plan also records what would make it wrong.

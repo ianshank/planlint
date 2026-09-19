@@ -294,6 +294,17 @@ it is not cargo-culted into the v0.1 surface.
 
 ## Skills / agents
 
+**Per-directory `AGENTS.md`** — proposed in
+[`agent-directory-wiring-plan.md`](agent-directory-wiring-plan.md), not started.
+Milestone 1 is the only prerequisite worth landing on its own: the guards that
+would keep nested agent files honest
+(`test_every_root_markdown_file_is_wired_into_the_docs_gate`,
+`AGENT_INDEXES`) enumerate the repository root non-recursively today, so a
+nested `AGENTS.md` would land in no gate at all. Verified against the code:
+`detect.INVARIANT_SOURCES` iterates fixed root-relative paths, so a nested
+file cannot be adopted as this repo's invariant source — the trap
+`test_agents_md_declares_no_invariant_ids` guards is root-only.
+
 13. **Rules as reusable skills** — the 29 rules already are the reusable
     "skills" and the evaluator is the deterministic harness (see
     `docs/agents-skills-harness.md`). The future extension point for composing
