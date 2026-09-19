@@ -22,6 +22,7 @@ import pytest
 from openspec_graph import detect
 from openspec_graph import graph as graph_module
 from openspec_graph.rules import RULES, rule_table
+from tests.support import load_tool
 from tests.support import write_spec as _write_spec
 
 TOOLS = Path(__file__).resolve().parent.parent / "tools"
@@ -645,3 +646,82 @@ def test_dependabot_does_not_add_a_pip_ecosystem() -> None:
     """
     text = DEPENDABOT.read_text(encoding="utf-8")
     assert 'package-ecosystem: "pip"' not in text
+
+
+# --- the threshold guard's own coverage, which was close to inverted --------
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "python -m pytest --cov-fail-under=90",
+        "\t@pytest --cov-fail-under=90",            # was ALLOWED by the `@\w` veto
+        "\t$(PY) -m pytest --cov-fail-under=90",    # was ALLOWED by the `$(` veto
+        "\tmake-believe --floor 85",                # was ALLOWED: `\bmake\b` at the hyphen
+        "\t@ruff check --line-length 100",
+    ],
+)
+def test_threshold_guard_flags_numbers_in_ordinary_recipe_idioms(line: str) -> None:
+    """`@`-prefixed and `$(VAR)`-using recipes are the dominant Makefile idiom.
+
+    The allowances used to be whole-line vetoes, so any line containing them
+    escaped the scan entirely — the guard enforcing this project's flagship
+    rule on itself covered close to the inverse of what it claimed. They are
+    token exclusions now: the `$(...)` span and a leading `@` are removed and
+    whatever remains is scanned.
+    """
+    module = load_tool("check_no_hardcoded_thresholds", "check_no_hardcoded_thresholds.py")
+    assert not module._is_allowed(line), "only a comment is a whole-line exemption"
+    assert list(module._THRESHOLD_TOKEN.finditer(module.scannable(line))), line
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "# a comment mentioning 90",
+        "\t$(PY) tools/check_coverage_floor.py coverage.json",
+        "\tpython -m pytest tests/",
+    ],
+)
+def test_threshold_guard_stays_quiet_on_legitimate_lines(line: str) -> None:
+    """Non-success: strengthening the scan must not start failing clean recipes.
+
+    A `$(...)` span is genuinely not a literal — its value comes from
+    elsewhere — so stripping it rather than vetoing the line keeps the real
+    Makefile green, which `make thresholds` confirms end to end.
+    """
+    module = load_tool("check_no_hardcoded_thresholds", "check_no_hardcoded_thresholds.py")
+    if module._is_allowed(line):
+        return
+    assert not list(module._THRESHOLD_TOKEN.finditer(module.scannable(line))), line
+
+
+def test_tools_and_package_agree_on_the_makefile_search_order() -> None:
+    """The one duplication `tools/` is allowed, pinned so it cannot drift.
+
+    `tools/` is stdlib-only and runs before the package is installed, so it
+    cannot import `openspec_graph.detect.MAKEFILE_NAMES` — the gates would
+    then depend on the thing they gate. The copy is therefore deliberate, and
+    this is what makes a divergence a failure instead of the silent
+    single-name lookup that existed in both places at once.
+    """
+    from openspec_graph import detect as package_detect
+
+    common = load_tool("_common", "_common.py")
+    assert common.MAKEFILE_NAMES == package_detect.MAKEFILE_NAMES
+
+
+def test_threshold_guard_finds_a_makefile_under_every_honoured_name(tmp_path: Path) -> None:
+    """Same single-name bug this branch fixed in detect.py, in the guard itself.
+
+    A repo using `GNUmakefile` got a silent PASS: the missing `Makefile` path
+    returned [], and the basename dispatch would have routed it to the
+    workflow checker anyway.
+    """
+    common = load_tool("_common", "_common.py")
+    for name in common.MAKEFILE_NAMES:
+        root = tmp_path / name
+        root.mkdir()
+        (root / name).write_text("build:\n\t@echo b\n", encoding="utf-8")
+        assert common.resolve_makefile(root) == root / name, name
+    assert common.resolve_makefile(tmp_path / "empty") is None

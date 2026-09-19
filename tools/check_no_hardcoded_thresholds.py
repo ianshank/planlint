@@ -20,25 +20,49 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _common import repo_root
+from _common import repo_root, resolve_makefile
 
 REPO_ROOT = repo_root()
 
-# Lines in the Makefile / workflows that legitimately carry numbers. We match on
-# intent, not a blanket "any digit" rule, so legitimate targets stay green.
-_ALLOWED_PATTERNS = (
-    re.compile(r"^\s*#"),           # comments
-    re.compile(r"\$\("),           # make variables / functions
-    re.compile(r"@\w"),            # @echo / @grep recipe prefixes
-    re.compile(r"\bmake\b", re.IGNORECASE), # invoking make recursively
-)
+# A comment is the only whole-line exemption: none of it executes.
+_COMMENT_LINE = re.compile(r"^\s*#")
+
+# Everything else is removed as a TOKEN before scanning, not used to veto the
+# whole line. The previous version vetoed any line containing `$(`, `@\w`, or
+# the word "make" -- and `@`-prefixed and `$(VAR)`-using recipes are the
+# dominant Makefile idiom, so the guard's real coverage was close to inverted
+# from its claim. Measured against the old `_is_allowed`:
+#
+#   python -m pytest --cov-fail-under=90     FLAGGED
+#   @pytest --cov-fail-under=90              ALLOWED   <- the `@\w` veto
+#   $(PY) -m pytest --cov-fail-under=90      ALLOWED   <- the `$(` veto
+#   make-believe --floor 85                  ALLOWED   <- `\bmake\b`, at the hyphen
+#
+# A `$(...)` span is genuinely not a literal (its value comes from elsewhere),
+# and a leading `@` is recipe-echo syntax carrying no number -- so both are
+# stripped and whatever remains is scanned. The `make` rule is dropped
+# outright: `$(MAKE)` is already covered by the span strip, and a bare "make"
+# never justified ignoring a number on the rest of the line.
+_MAKE_EXPANSION = re.compile(r"\$\([^()]*(?:\([^()]*\)[^()]*)*\)")
+_RECIPE_ECHO_PREFIX = re.compile(r"^\s*@")
 
 # A numeric literal on a recipe/CI command line that is NOT an exit code 0/1.
 _THRESHOLD_TOKEN = re.compile(r"(?<![\w.-])(\d{2,})(?![\w.])")
 
 
 def _is_allowed(line: str) -> bool:
-    return any(pattern.search(line) for pattern in _ALLOWED_PATTERNS)
+    """Whether the whole line is exempt. Only a comment ever is."""
+    return bool(_COMMENT_LINE.match(line))
+
+
+def scannable(line: str) -> str:
+    """The part of a recipe line a hard-coded number could hide in.
+
+    Strips `$(...)` expansions (nested one level, which covers `$(shell $(PY)
+    ...)`) and a leading `@`, then returns the rest. Exposed rather than
+    private so a test can assert on the reduction directly.
+    """
+    return _MAKE_EXPANSION.sub(" ", _RECIPE_ECHO_PREFIX.sub("", line))
 
 
 def check_makefile(path: Path) -> list[str]:
@@ -51,7 +75,7 @@ def check_makefile(path: Path) -> list[str]:
             continue
         if _is_allowed(line):
             continue
-        for match in _THRESHOLD_TOKEN.finditer(line):
+        for match in _THRESHOLD_TOKEN.finditer(scannable(line)):
             value = match.group(1)
             findings.append(f"{path}:{lineno}: hard-coded numeric literal '{value}' in: {stripped}")
     return findings
@@ -88,13 +112,23 @@ def targets() -> list[Path]:
     """
     workflows_dir = REPO_ROOT / ".github" / "workflows"
     workflows = sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml"))
-    return [REPO_ROOT / "Makefile", *workflows]
+    # By GNU Make's search order, not the literal name `Makefile`. This guard
+    # had the same single-name bug `fix-makefile-discovery-names` fixed in
+    # detect.py: a repo (or an adopter copying this script) using `GNUmakefile`
+    # or `makefile` got a silent PASS, because the missing path returned [].
+    makefile = resolve_makefile(REPO_ROOT)
+    return ([makefile] if makefile else []) + workflows
 
 
 def main(argv: list[str]) -> int:
     findings: list[str] = []
+    makefile = resolve_makefile(REPO_ROOT)
     for target in targets():
-        findings.extend(check_makefile(target) if target.name == "Makefile" else check_workflow(target))
+        # Dispatch on which list the path came from, never on its basename: a
+        # makefile named `GNUmakefile` would otherwise be routed to the
+        # workflow checker, which scans for entirely different shapes.
+        is_makefile = makefile is not None and target == makefile
+        findings.extend(check_makefile(target) if is_makefile else check_workflow(target))
 
     if findings:
         for message in findings:

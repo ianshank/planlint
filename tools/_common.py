@@ -55,6 +55,27 @@ _configure_from_env()
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
+# GNU Make's search order, duplicated here on purpose.
+#
+# `openspec_graph.detect.MAKEFILE_NAMES` is the same tuple, and this module
+# deliberately does not import it: `tools/` is stdlib-only and runs before the
+# package is installed (pre-commit, a fresh checkout), so a package import
+# would make the gates depend on the thing they gate. The duplication is
+# pinned by a test asserting the two tuples are equal, so a drift is a failure
+# rather than a silent divergence -- which is how the single-name lookup this
+# replaces survived in both places at once.
+MAKEFILE_NAMES = ("GNUmakefile", "makefile", "Makefile")
+
+
+def resolve_makefile(root: Path) -> Path | None:
+    """The makefile GNU Make would read under ``root``, or ``None``."""
+    for name in MAKEFILE_NAMES:
+        candidate = root / name
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def repo_root() -> Path:
     """Return the repository root (the parent of the ``tools/`` directory)."""
     return REPO_ROOT
