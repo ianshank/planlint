@@ -122,13 +122,26 @@ under one would hide them from the other two.
 
 ## 6. Sequencing — gates before prose
 
-**M1 — make the guards recursive (no new prose).** Extend
-`test_every_root_markdown_file_is_wired_into_the_docs_gate` to enumerate
-nested `AGENTS.md` files, and `AGENT_INDEXES` to discover them by glob rather
-than by a fixed 2-tuple. State the root-scoping of
-`test_agents_md_declares_no_invariant_ids` explicitly. **Land this alone,**
-proving it fails when an ungated nested file is planted — otherwise the
-mechanism protecting the plan is itself unverified.
+**M1 — make the guards recursive (no new prose).** *Shipped, with the
+discovery mechanism changed from what this line originally proposed.*
+
+`AGENT_INDEXES` becomes discovered rather than a fixed 2-tuple, and the
+nested files get their own contract tests instead of being forced into
+`REQUIRED_DOCS` (which would also demand a README link for each). The
+root-scoping of `test_agents_md_declares_no_invariant_ids` and of the
+root-markdown gate is now stated in both, so neither reads as covering the
+other's ground.
+
+Discovery is **`git ls-files --cached --others --exclude-standard`**, not the
+glob this originally said. The property wanted is "files this repository
+ships", which is literally what that is; a glob needs a blocklist that drifts
+from `.gitignore`, and `--others` additionally sees a nested file on the run
+that *creates* it — the run where a gate about orphaned files most needs to
+fire. `tests/corpus/` and `tests/fixtures/` are excluded by name, because a
+corpus target may legitimately carry an `AGENTS.md`.
+
+Landed alone, and proven: a planted nested file with no precedence line, an
+`INV-1` and no diagram fails three contracts by name.
 
 **M2 — two files, the highest-traffic pair:** `tools/` and `tests/`. Both have
 a specific defect this branch already hit (a root bound into a signature

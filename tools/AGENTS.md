@@ -8,7 +8,7 @@ added to catch. Three of these did exactly that until
 ```mermaid
 flowchart LR
     cfg["pyproject.toml<br/>fail_under, branch_fail_under<br/>tools_line/branch_fail_under"] --> gates
-    subgraph gates["tools/ — stdlib only, runs before install"]
+    subgraph gates["tools/ — no third-party deps; the 7 gates are stdlib-only"]
         direction TB
         cov["check_coverage_floor<br/>check_branch_coverage<br/>--scope sums one subtree"]
         sec["check_secrets<br/>gitleaks, else a real fallback"]
@@ -29,12 +29,19 @@ Three things this directory gets wrong if you are not watching:
   [`check_no_hardcoded_thresholds.py`](check_no_hardcoded_thresholds.py)
   fails the build over it, and a governance tool that pins its own numbers
   argues against its own rule.
-- **Stdlib only.** These run in a bare CI runner before anything is installed.
-  Shared helpers go in [`_common.py`](_common.py), never a new dependency.
+- **No third-party dependencies, ever.** Shared helpers go in
+  [`_common.py`](_common.py). The seven gate scripts are additionally
+  **stdlib-only** and run in a bare CI runner before anything is installed;
+  the four generators (`matcher_accuracy`, `render_mermaid`,
+  `render_plugin_manifests`, `render_rule_catalog`) import `openspec_graph`
+  deliberately, to avoid a second copy of logic that would drift, and so need
+  the package installed.
 
-Argv convention is split and both halves are load-bearing: eight scripts take
-`sys.argv` and index `argv[1]`; the two argparse ones
-(`render_plugin_manifests`, `render_rule_catalog`) take `sys.argv[1:]`.
+Three argv conventions, and the split is not "argparse or not" — group by
+what `main` expects. Program name first: the seven hand-rolled scripts, plus
+`matcher_accuracy`, which strips it itself. Arguments only:
+`render_plugin_manifests`, `render_rule_catalog`, and `check_wheel_metadata`
+(whose `main` defaults `argv` to `None`). `run_tool_main`'s `pass_argv0` picks.
 
 Test behaviour in-process against `main(argv)` — a subprocess is invisible to
 coverage. The `python tools/<script>.py` path is covered once for the whole

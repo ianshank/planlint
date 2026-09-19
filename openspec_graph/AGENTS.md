@@ -1,9 +1,12 @@
 # Working in `openspec_graph/`
 
-The product: a spec tree in, a verdict out. Everything here is pure except the
-filesystem reads in `detect.py` and `parse.py` — the scan executes **nothing**
-from the repository it is pointed at, which is the one security guarantee this
-tool makes ([`../SECURITY.md`](../SECURITY.md)).
+The product: a spec tree in, a verdict out. The guarantee is about the **scan
+path** specifically — `validate`, `graph` and `detect` only read, and execute
+**nothing** from the repository they are pointed at
+([`../SECURITY.md`](../SECURITY.md)). It is not a claim that this directory
+never writes: `scaffold.py` writes a spec tree for `init`/`new`, and
+`witness.py` writes the witness store. Those are the explicit writer commands,
+and keeping them out of the scan path is the point.
 
 ```mermaid
 flowchart LR

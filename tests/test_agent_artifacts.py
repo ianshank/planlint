@@ -64,7 +64,12 @@ def nested_agents_files(root: Path = REPO_ROOT) -> list[Path]:
     return sorted(
         root / line
         for line in result.stdout.splitlines()
-        if line.endswith("AGENTS.md")
+        # Split on "/" rather than `endswith("AGENTS.md")`: that substring test
+        # also matches a path ending in the filename, so a future
+        # `docs/NOTAGENTS.md` would be held to the nested-agent contracts it
+        # was never meant to satisfy. A path segment comparison is what the
+        # docstring above claims and what the caller expects.
+        if line.rpartition("/")[2] == "AGENTS.md"
         and line != "AGENTS.md"
         and not line.startswith(FIXTURE_TREES)
     )
@@ -709,7 +714,10 @@ def test_nested_agents_discovery_finds_a_planted_file(tmp_path: Path) -> None:
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
     (tmp_path / "AGENTS.md").write_text("root\n", encoding="utf-8")
     for rel in ("tools/AGENTS.md", "tests/AGENTS.md",
-                "tests/corpus/targets/shape/AGENTS.md", "build/AGENTS.md"):
+                "tests/corpus/targets/shape/AGENTS.md", "build/AGENTS.md",
+                # Matched by a naive endswith("AGENTS.md") and by nothing a
+                # reader would call a nested agent file.
+                "docs/NOTAGENTS.md"):
         path = tmp_path / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("x\n", encoding="utf-8")

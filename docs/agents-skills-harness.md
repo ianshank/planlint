@@ -120,15 +120,22 @@ refactor that introduces unordered iteration fails the gate. This is the
 enterprise-grade guarantee: a spec review is an auditable artifact, not an
 opinion.
 
-## Per-directory guidance (proposed)
+## Per-directory guidance
 
 Everything above describes one root-level `AGENTS.md` and a set of skills that
-apply repository-wide. [`agent-directory-wiring-plan.md`](agent-directory-wiring-plan.md)
-proposes the next step: an `AGENTS.md` per working directory, each naming the
+apply repository-wide. That is no longer the whole picture: **eight nested
+`AGENTS.md` files** now sit in `openspec_graph/`, `tools/`, `tests/`,
+`openspec/`, `docs/`, `skills/`, `evals/` and `templates/`, each naming the
 subagents and skills that apply to work in it, under the convention's
-nearest-file-wins precedence.
+nearest-file-wins precedence. Each carries a diagram of what its directory is
+for, and states that `SKILL.md` outranks it — nothing in a nested file is the
+only place a rule is written.
 
-It is sequenced gates-first, because nine new prose files are nine new places
-for a claim to rot, and this repository's existing guard against exactly that
-(`test_every_root_markdown_file_is_wired_into_the_docs_gate`) enumerates the
-repository root only. The plan also records what would make it wrong.
+They are held by six gates rather than by good intentions: precedence stated,
+no `INV-n`, under 60 lines, a balanced mermaid fence, links that resolve from
+the containing directory, and every cited `make <stage>` checked against this
+repository's real targets by G004's own matcher.
+
+[`agent-directory-wiring-plan.md`](agent-directory-wiring-plan.md) is the plan
+they came from, kept for its record of what it got wrong and of the one claim
+it could not test.

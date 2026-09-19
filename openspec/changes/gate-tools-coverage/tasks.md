@@ -43,9 +43,15 @@
   throwaway directory, and coverage resolves a relative `source` entry against
   that same cwd (DEC-GTC-003, R-GTC-3).
 - `tests/support.py`: `pass_argv0` as an explicit parameter, with the argv
-  split named in the docstring — eight scripts take `sys.argv`, the two
-  argparse ones take `sys.argv[1:]`, and the mismatch is loud in one direction
-  and silent in the other (DEC-GTC-004, R-GTC-4, AC-GTC-5).
+  split named in the docstring. Three conventions, grouped by what `main`
+  expects rather than by whether the script uses argparse — which is what an
+  earlier draft of this note got wrong. Program name first: the seven
+  hand-rolled scripts plus `matcher_accuracy`, which is argparse-based but
+  strips the name itself via `parse_args(argv[1:])`. Arguments only:
+  `render_plugin_manifests` and `render_rule_catalog`, plus
+  `check_wheel_metadata`, whose `main` defaults `argv` to `None`. The mismatch
+  is loud in one direction and silent in the other (DEC-GTC-004, R-GTC-4,
+  AC-GTC-5).
 - `tests/test_ci_hardening.py`: convert the `check_branch_coverage`,
   `check_coverage_floor`, `diff_spec_graph` and `render_mermaid` tests from
   `subprocess.run` to `run_tool_main` (AC-GTC-4).
