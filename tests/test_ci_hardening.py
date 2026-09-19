@@ -588,3 +588,60 @@ def test_the_contract_job_is_not_wired_into_a_make_target() -> None:
     would make the local gate unrunnable rather than more thorough."""
     makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
     assert "action-contract" not in makefile
+
+
+# --- Dependabot: every action-bearing directory must actually be watched -----
+
+
+DEPENDABOT = REPO_ROOT / ".github" / "dependabot.yml"
+
+
+def _dependabot_directories() -> set[str]:
+    """The `directory:` values declared in dependabot.yml, as text.
+
+    Parsed with `re` rather than PyYAML for the same reason every other config
+    assertion here is: the package declares zero dependencies and the test
+    suite does not get to import one the product cannot.
+    """
+    text = DEPENDABOT.read_text(encoding="utf-8")
+    return set(re.findall(r'^\s*directory:\s*"([^"]+)"', text, re.MULTILINE))
+
+
+def test_dependabot_config_exists_and_watches_github_actions() -> None:
+    assert DEPENDABOT.is_file(), "no .github/dependabot.yml; action pins would go stale silently"
+    text = DEPENDABOT.read_text(encoding="utf-8")
+    assert 'package-ecosystem: "github-actions"' in text
+
+
+def test_every_composite_action_directory_is_watched_by_dependabot() -> None:
+    """A nested composite action is invisible to the root entry.
+
+    Dependabot's github-actions ecosystem discovers workflow files under the
+    `/` entry, but an `action.yml` in a subdirectory needs that subdirectory
+    declared explicitly. Adding a second composite action without a matching
+    entry would leave its pins unwatched, and nothing else in this suite would
+    notice -- which is exactly how the floating tags this config exists to
+    manage got there in the first place.
+    """
+    watched = _dependabot_directories()
+    assert "/" in watched, watched
+
+    for action_yml in sorted((REPO_ROOT / ".github" / "actions").glob("*/action.yml")):
+        rel = "/" + str(action_yml.parent.relative_to(REPO_ROOT)).replace("\\", "/")
+        assert rel in watched, (
+            f"{rel} holds a composite action but is not a dependabot `directory:` entry; "
+            f"its third-party pins would never be updated. Watched: {sorted(watched)}"
+        )
+
+
+def test_dependabot_does_not_add_a_pip_ecosystem() -> None:
+    """Non-success: the dev extras are unpinned on purpose.
+
+    `[project] dependencies` is empty and guarded, and
+    `tools/check_no_hardcoded_thresholds.py` fails the build on a reintroduced
+    `ruff==`/`mypy==`/`pytest==` pin. A pip ecosystem entry would open pull
+    requests arguing with that decision every release, so its absence is a
+    decision worth pinning rather than an omission.
+    """
+    text = DEPENDABOT.read_text(encoding="utf-8")
+    assert 'package-ecosystem: "pip"' not in text

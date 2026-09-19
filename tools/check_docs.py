@@ -31,6 +31,10 @@ REQUIRED_DOCS = [
     # decides to read anything else, so an unlinked copy is a file no human
     # reviews and every agent obeys.
     "AGENTS.md",
+    # The disclosure route and the threat model. A security policy nobody can
+    # find from the front page is a policy in name only, and GitHub surfaces
+    # this file to reporters before they read anything else here.
+    "SECURITY.md",
 ]
 
 

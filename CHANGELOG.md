@@ -5,6 +5,103 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — three rules closing the fail-opens the peer review measured
+
+Rule count 26 -> 29. All three are additive: no repository that passes
+`--fail-on ERROR` today starts failing. Observable rather than asserted — the
+`validate` and `graph` golden hashes in `tests/test_decomposition.py` are
+byte-identical across all three additions; only the `rules` hash moved.
+
+- **`G010` (INFO) — `make` citations are reported when no make targets were
+  detected.** G004 correctly returns early when the target repo has no
+  discoverable makefile, but the CLI then said nothing at all, even at
+  `--fail-on INFO`: a spec citing a stage that cannot exist reported PASS with
+  zero findings. The composite Action computed this separately as
+  `discovery-warnings`; the CLI, which pre-commit, `make validate` and every
+  agent invocation use, did not. INFO because it changes no verdict.
+
+  It reports **only what it observed**. `profile.make_targets == ()` conflates
+  a missing makefile, a present-but-empty one, one declaring only special
+  targets, and one that cannot be read, so the message says "no make targets
+  were detected" rather than naming a cause. It counts *distinct* stages,
+  since `make_refs` is a deduplicated name set.
+
+  Known limitation: a waiver downgrades a finding toward INFO, so waiving an
+  already-INFO rule only adds a `[waived]` prefix — **G010 is effectively
+  unwaivable** and still counts at `--fail-on INFO`. Dropping waived INFO
+  findings is an engine change affecting every rule and is not done here.
+
+- **`G011` (WARN) — a cited generic stage exists, when the repo does use
+  Make.** `GENERIC_STAGES` (`ci`/`test`/`validate`/`lint`/`coverage`) are
+  exempt from G004 entirely, which is most of the traffic: against a Makefile
+  declaring only `build`, `make regression` yielded a finding and each of the
+  five yielded none. The exemption is kept, because "run `make test`" is
+  idiomatic English and a tox/npm/just repo has not lied by writing it — but
+  it now applies only while `make_targets` is empty. Where the repo
+  demonstrably uses Make and declares no such target, that is a WARN.
+
+- **`S005` (WARN, speckit) — declared `FR-` bullets reach the graph.** A
+  `## Functional Requirements` heading at H2 instead of the nested H3 dropped
+  every requirement from the graph while `validate` reported `0/0/0`, PASS,
+  `broken_links: 0`. The predicate is **data loss, not document shape**: FR
+  bullets present and none extracted. A user-story-only draft, a prose-only
+  section and a non-functional-only spec are all silent, because nothing was
+  lost — a heading-shaped predicate fires on all three, which is the false
+  positive `docs/next-steps.md` item 4b refused. It also catches `FR-` bullets
+  under a differently-titled subheading, which the parser refuses by design.
+
+  Known limitation: a wrong-level spec that *also* lacks a Success Criteria
+  section is not discovered as SpecKit at all (`is_speckit_marked`), so S005
+  cannot see it. That case exits 2 rather than passing, so it is loud.
+
+`GENERIC_STAGES` now carries an in-source note naming the rules that narrow
+it, and the README severity contract documents `INFO` and what a waiver does
+to one — G010 is this project's first INFO-severity rule.
+
+### Fixed — detection and parsing fail-opens
+
+- **The makefile GNU Make would read, not only `Makefile`.** GNU Make's search
+  order is `GNUmakefile`, `makefile`, `Makefile`, first match wins. `detect`
+  looked for the last one only, so a repo using either of the others reported
+  zero targets, tripped G004's empty-guard, and passed a broken citation
+  clean. Three corpus shapes pin the lookup and the precedence.
+
+  The same fail-open recurred twice more during review and both are closed:
+  an **unreadable** candidate (a directory carrying the name) is terminal
+  rather than falling through, matching `make`, which aborts rather than
+  trying the next name — falling through reported the shadowed file's targets
+  and green-lit a citation that cannot run. And a **dangling symlink** is
+  present-but-unreadable, not absent: `Path.exists()` follows links, so
+  resolution now uses `lstat()`, which asks whether the directory entry is
+  there. A readable-but-empty candidate still shadows, because a zero-byte
+  makefile genuinely declares no rules.
+
+- **An empty-bodied `FR-` bullet no longer consumes the next one.**
+  `FR_DECL`'s `\s*(.+?)\s*$` matched across newlines, so `- **FR-001**:` with
+  no body took the FOLLOWING bullet as its text and that bullet vanished from
+  the graph. Reproduced at the *correct* heading level: two declared
+  requirements yielded one node, labelled with the other's text. Now
+  line-anchored with `[^\S\n]` and an optional body, so an empty declaration
+  is a recognised-but-empty requirement that `S003` reports as non-normative.
+
+- **`hard_coded()`'s scope is documented and pinned.** It reads only lines
+  beginning `-` or `|`, so a threshold in prose, a heading, or a trailing
+  `_Verified by:_` line is invisible to G003. Recorded as a deliberate limit
+  with its cost stated rather than widened — widening reintroduces the
+  false-positive class `fix-prose-matcher-precision` was spent lowering.
+
+### Added — Dependabot
+
+- `.github/dependabot.yml` watches the GitHub Actions ecosystem for both the
+  workflows and the composite action, which needs its own `directory:` entry
+  to be seen at all. Six third-party actions float on major tags and one
+  (`pypa/gh-action-pypi-publish@release/v1`) tracks a *branch*;
+  `docs/distribution-plan.md` defers SHA-pinning "until the pins can be
+  resolved and verified", and an update bot is the prerequisite for that
+  rather than a substitute. A `pip` ecosystem is deliberately absent — the dev
+  extras are unpinned by design — and a test pins that absence along with the
+  requirement that every composite-action directory is watched.
+
 ### Added — peer review of the rule surface (`docs/peer-review-2026-09.md`)
 
 - **Measured what the gate checks when it says PASS**, by building target

@@ -337,16 +337,38 @@ be split rather than widened. Three separable pieces, in increasing cost:
 Replaces `docs/next-steps.md` item 1 and `docs/differentiation-roadmap.md`
 "Status as of 0.2.0" item 1. Everything else in both documents stands.
 
-| Id | Work | Size | Order |
+| Id | Work | Size | Status |
 |---|---|---|---|
-| **R1** | Find `GNUmakefile` and `makefile`; add the corpus shape (F1) | hours | before promoting |
-| **R2** | Document `GENERIC_STAGES` in the rule description and README (F3) | hours | before promoting |
-| **R3** | Document `hard_coded()`'s bullet/table scoping, or widen it (F5) | hours | before promoting |
-| **R4** | INFO finding when a rule skips for want of machinery (D3.2) | days | 0.3 |
-| **R5** | WARN on a generic-stage citation when Make *is* in use (D2) | days | 0.3 |
-| **R6** | WARN when a `Requirements`-shaped section yields zero FRs (F4) | days | 0.3 |
-| **R7** | Witness artifacts as a CI upload/download, not a local store (F7) | design pass | before v2 is claimed anywhere |
-| **R8** | Widen `indeterminate` (D3.3) | policy | 1.0, as already planned |
+| **R1** | Find `GNUmakefile` and `makefile`; add the corpus shape (F1) | hours | **shipped** — `fix-makefile-discovery-names` |
+| **R2** | Document `GENERIC_STAGES` in the rule description and README (F3) | hours | **shipped** |
+| **R3** | Document `hard_coded()`'s bullet/table scoping, or widen it (F5) | hours | **shipped** — documented and pinned, not widened |
+| **R4** | INFO finding when a rule skips for want of machinery (D3.2) | days | **shipped** — `G010` |
+| **R5** | WARN on a generic-stage citation when Make *is* in use (D2) | days | **shipped** — `G011` |
+| **R6** | WARN when declared `FR-` bullets never reach the graph (F4) | days | **shipped** — `S005`, with the predicate revised from the heading-shaped one this review proposed |
+| **R7** | Witness artifacts as a CI upload/download, not a local store (F7) | design pass | open — before v2 is claimed anywhere |
+| **R8** | Widen `indeterminate` (D3.3) | policy | open — 1.0, as already planned |
+
+> **R1–R6 landed together**, through three OpenSpec change packages and three
+> review rounds (`spec-adversary`, then two Copilot passes). What the reviews
+> changed is worth recording, because this table's own proposals were wrong
+> twice:
+>
+> - **R6's predicate was wrong as specified here.** A `Requirements`-shaped
+>   heading that yields nothing fires on a legitimately non-functional-only
+>   spec, because SpecKit's template makes the level-2 wrapper mandatory —
+>   exactly the false positive item 4b refused. The shipped rule keys on data
+>   loss (FR bullets present, none extracted) instead.
+> - **R1's first implementation re-opened the fail-open it closed**, twice: an
+>   unreadable candidate fell through to a lower-precedence name, and a
+>   dangling symlink read as absent because `Path.exists()` follows links.
+>   Both are terminal now, matching `make`.
+> - Following R6 also surfaced a **pre-existing parser bug**: an empty-bodied
+>   `FR-` bullet consumed the next one, deleting a well-formed requirement
+>   from the graph at the *correct* heading level.
+>
+> Three new limitations are recorded rather than closed: G010 is effectively
+> unwaivable, S005 cannot see a wrong-level spec that also lacks Success
+> Criteria, and AC-MFD-10 is a cross-host invariant no single CI leg verifies.
 
 R1–R3 are the ones this review would defend as pre-promotion: each is
 hours, each closes a case where the gate says PASS on a lying spec, and

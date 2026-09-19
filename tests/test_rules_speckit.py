@@ -398,7 +398,9 @@ def test_s005_does_not_match_non_functional_requirements(repo: Path) -> None:
     `Non-Functional Requirements` declares something else and promises no FR
     bullets; matching it by substring would fire on a correct document.
     """
-    body = _USER_STORY_ONLY.replace("## User Scenarios *(mandatory)*", "## Non-Functional Requirements")
+    body = _USER_STORY_ONLY.replace(
+        "## User Scenarios *(mandatory)*", "## Non-Functional Requirements"
+    )
     assert "S005" not in {f.rule for f in findings_for(repo, body)}
 
 
