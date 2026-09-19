@@ -67,9 +67,17 @@ def scannable(line: str) -> str:
 
 def check_makefile(path: Path) -> list[str]:
     findings: list[str] = []
-    if not path.exists():
+    if not path.is_file():
+        # Present but not a regular file -- a directory carrying the name, a
+        # dangling symlink. `resolve_makefile` stops here deliberately (make
+        # does too), so there is nothing to scan and nothing lower-precedence
+        # to fall back to.
         return findings
-    for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return findings
+    for lineno, line in enumerate(text.splitlines(), 1):
         stripped = line.strip()
         if not stripped or stripped.startswith(".PHONY"):
             continue

@@ -68,11 +68,32 @@ MAKEFILE_NAMES = ("GNUmakefile", "makefile", "Makefile")
 
 
 def resolve_makefile(root: Path) -> Path | None:
-    """The makefile GNU Make would read under ``root``, or ``None``."""
+    """The makefile GNU Make would read under ``root``, or ``None``.
+
+    Matched against the directory LISTING rather than by probing
+    ``(root / name).is_file()`` per candidate, for two reasons the Windows CI
+    leg found the hard way:
+
+    1. On a case-insensitive filesystem, probing `makefile` succeeds against a
+       file written `Makefile`, and the returned path then carries the
+       *candidate's* spelling rather than the real one. `detect` can shrug that
+       off -- its dialect card carries targets, never the filename -- but this
+       function's result is a scanned path that a caller reports on, so the
+       wrong spelling is user-visible. The listing gives the true name.
+    2. Presence, not readability, is what ends the search. `make` stops at the
+       first name that EXISTS, even if it cannot open it, so a directory named
+       `GNUmakefile` must not let a lower-precedence `Makefile` be scanned --
+       that would report on a file `make` would never read. Readability is the
+       caller's problem, which is why ``check_makefile`` tolerates a path it
+       cannot open rather than this function silently skipping it.
+    """
+    try:
+        present = {entry.name for entry in root.iterdir()}
+    except OSError:
+        return None
     for name in MAKEFILE_NAMES:
-        candidate = root / name
-        if candidate.is_file():
-            return candidate
+        if name in present:
+            return root / name
     return None
 
 

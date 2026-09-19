@@ -63,8 +63,8 @@ claim the parser could not honour.
   (`rules_speckit.py:65-70`) — at WARN severity, with
   `dialects=("speckit",)`, appended after S004 so `SPECKIT_RULES` stays
   append-ordered.
-- R-SER-2 **(revised — see R-SER-3a for the predicate)**: S005 MUST emit
-  exactly one finding for a speckit-dialect spec that satisfies R-SER-3a. It
+- R-SER-2 **(revised — see R-SER-13 for the predicate)**: S005 MUST emit
+  exactly one finding for a speckit-dialect spec that satisfies R-SER-13. It
   MUST NOT emit one finding per dropped bullet, per candidate heading, or per
   section: the condition is a property of the document, and one finding per
   document is what an author can act on. The original conditioned this on "a
@@ -78,9 +78,9 @@ claim the parser could not honour.
 > tells its author that requirements were "dropped" when none existed — exactly
 > the false positive `docs/next-steps.md` item 4b refused. R-SER-3's equality
 > rule protected only the unrealistic case where the non-functional heading is
-> the document's *only* requirements-like heading. Replaced by R-SER-3a.
+> the document's *only* requirements-like heading. Replaced by R-SER-13.
 
-- R-SER-3a **(replaces R-SER-3 and R-SER-4)**: S005's predicate MUST be **data
+- R-SER-13 **(replaces R-SER-3 and R-SER-4)**: S005's predicate MUST be **data
   loss, not document shape**. It MUST fire when an `FR-`-shaped declaration
   bullet is present in the document and `spec.requirements` is empty — the
   bullets were written and did not reach the graph — and MUST stay silent
@@ -99,15 +99,15 @@ claim the parser could not honour.
 - R-SER-5: S005 MUST NOT emit any finding when `spec.requirements` is
   non-empty, regardless of how many headings match R-SER-3.
 > **R-SER-6 is superseded.** It required S005 to fire on a prose-only section
-> and on a section holding only non-`FR-` bullets. Under R-SER-3a neither
+> and on a section holding only non-`FR-` bullets. Under R-SER-13 neither
 > fires, and that is the point: no `FR-` bullet was written, so none was
 > dropped, and reporting "requirements were dropped" against a document that
 > declared none is the false positive item 4b refused. A `- **NFR-001**: ...`
 > sibling is a *different kind* of requirement, not a malformed one.
 >
-> What survives is its anti-fragmentation clause, kept as R-SER-6a.
+> What survives is its anti-fragmentation clause, kept as R-SER-14.
 
-- R-SER-6a **(replaces R-SER-6)**: every shape that satisfies R-SER-3a MUST
+- R-SER-14 **(replaces R-SER-6)**: every shape that satisfies R-SER-13 MUST
   report under one rule identifier, one severity and one message. A wrong-level
   heading, a correctly-nested heading whose bullets are malformed, and `FR-`
   bullets under a differently-titled subheading MUST NOT be split into distinct
@@ -287,11 +287,14 @@ claim the parser could not honour.
   only prose — no bullets of any shape — produces one S005 finding. (R-SER-6)
   _Verified by:_ `make test` · stage: `make test`
 
-- [ ] **AC-SER-4:** a speckit spec whose `Requirements`-shaped section contains
-  only non-`FR-`-shaped bullets (a `- **NFR-001**: ...` list) produces one S005
-  finding, with the same message as AC-SER-1 and AC-SER-3 — not a distinct
-  message, severity, or rule id. (R-SER-6)
-  _Verified by:_ `make test` · stage: `make test`
+- [x] **AC-SER-4 (superseded — now a non-success criterion):** a speckit spec
+  whose `Requirements`-shaped section contains only non-`FR-`-shaped bullets
+  (a `- **NFR-001**: ...` list) produces **no** S005 finding. The original
+  required a warning here, which is the false positive `docs/next-steps.md`
+  item 4b refused: no `FR-` bullet was written, so none was dropped, and
+  `NFR-001` is a different *kind* of requirement rather than a malformed one.
+  Under R-SER-13 the predicate is data loss, not document shape. (R-SER-13)
+  _Verified by:_ `pytest -k test_s005_is_silent_on_a_non_functional_only_spec` · stage: `make test`
 
 - [ ] **AC-SER-5 (non-success):** a legitimately FR-less, user-story-only
   speckit draft — no `Requirements`-shaped heading anywhere in the document —

@@ -27,7 +27,7 @@ what remains is §3, and §3 is entirely outside this repository.
 |---|---|---|
 | Full enterprise ladder | `make pre-pr` | exit 0 |
 | Coverage | `tools/check_coverage_floor.py`, `check_branch_coverage.py` | line 99.3% (floor 90), branch 97.6% (floor 80) |
-| Self-validation | `planlint --target . validate --fail-on ERROR` | 37 specs, 0 error / 0 warn / 0 info |
+| Self-validation | `planlint --target . validate --fail-on ERROR` | 40 specs, 0 error / 0 warn / 0 info (37 at `a1b6868`; three change packages added since) |
 | Types, lint | `make typecheck`, `make lint` | mypy clean over 42 files; ruff clean |
 | Live CLI, incl. ASCII console | `make e2e-live` | exit 0 |
 | Prose-matcher floors | `make matcher-accuracy` | every configured floor met |

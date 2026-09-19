@@ -719,9 +719,50 @@ def test_threshold_guard_finds_a_makefile_under_every_honoured_name(tmp_path: Pa
     workflow checker anyway.
     """
     common = load_tool("_common", "_common.py")
-    for name in common.MAKEFILE_NAMES:
-        root = tmp_path / name
+    # One numbered directory per name, never a directory NAMED after the file:
+    # `makefile/` and `Makefile/` are the same path on a case-insensitive
+    # filesystem, so the second mkdir raised FileExistsError on the Windows CI
+    # leg. A test about case-insensitivity that is itself case-unsafe.
+    for index, name in enumerate(common.MAKEFILE_NAMES):
+        root = tmp_path / f"case-{index}"
         root.mkdir()
         (root / name).write_text("build:\n\t@echo b\n", encoding="utf-8")
         assert common.resolve_makefile(root) == root / name, name
     assert common.resolve_makefile(tmp_path / "empty") is None
+
+
+def test_threshold_guard_reports_the_on_disk_makefile_spelling(tmp_path: Path) -> None:
+    """Resolution must not leak the candidate's spelling.
+
+    Probing `(root / "makefile").is_file()` succeeds against a file written
+    `Makefile` on a case-insensitive filesystem, and the returned path then
+    carries the wrong name — which a caller reports on. Matching the directory
+    listing returns the real one. This passes trivially on a case-sensitive
+    filesystem and is the actual assertion on Windows and macOS.
+    """
+    common = load_tool("_common", "_common.py")
+    (tmp_path / "Makefile").write_text("build:\n\t@echo b\n", encoding="utf-8")
+    resolved = common.resolve_makefile(tmp_path)
+    assert resolved is not None and resolved.name == "Makefile", resolved
+
+
+def test_threshold_guard_stops_at_an_unreadable_higher_precedence_candidate(
+    tmp_path: Path,
+) -> None:
+    """Non-success: presence ends the search, not readability.
+
+    `make` stops at the first name that EXISTS even if it cannot open it, so a
+    directory named `GNUmakefile` must not let a lower-precedence `Makefile`
+    be scanned — reporting on a file `make` would never read. This keeps the
+    tool consistent with `detect._resolve_makefile`, which is terminal for the
+    same reason.
+    """
+    common = load_tool("_common", "_common.py")
+    nht = load_tool("check_no_hardcoded_thresholds", "check_no_hardcoded_thresholds.py")
+    (tmp_path / "GNUmakefile").mkdir()
+    (tmp_path / "Makefile").write_text("\t@pytest --cov-fail-under=90\n", encoding="utf-8")
+
+    resolved = common.resolve_makefile(tmp_path)
+    assert resolved is not None and resolved.name == "GNUmakefile", resolved
+    # And scanning it yields nothing rather than raising or falling through.
+    assert nht.check_makefile(resolved) == []

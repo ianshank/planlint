@@ -41,11 +41,18 @@ blind to its *name*.
 
 ## Requirements
 
-- R-MFD-1: `detect._make_target_facts` MUST resolve the target
+- R-MFD-1 **(revised)**: `detect._make_target_facts` MUST resolve the target
   repository's makefile in GNU Make's documented search order —
-  `GNUmakefile`, then `makefile`, then `Makefile` — and MUST report the
-  targets of the first candidate it can read, so a repository using either
-  of the first two names is detected exactly as one using the third.
+  `GNUmakefile`, then `makefile`, then `Makefile` — stopping at the first
+  candidate that **exists**, so a repository using either of the first two
+  names is detected exactly as one using the third.
+
+  The original said "the first candidate it can read", which contradicted the
+  revised R-MFD-6: taken together they required both falling through past an
+  unreadable candidate and not falling through, for the same case. **R-MFD-6
+  governs what happens to a candidate that exists and cannot be read**; this
+  requirement governs only the search order. Presence ends the search;
+  readability decides whether targets are reported or none are.
 - R-MFD-2: Resolution MUST stop at the first usable candidate. A
   lower-precedence candidate's targets MUST NOT be unioned into, nor
   substituted for, the resolved candidate's. `GNUmakefile` shadowing
