@@ -41,26 +41,37 @@ _FALLBACK_PATTERNS = [
 _SKIP_DIRS = {".git", ".venv", "venv", "__pycache__", ".ruff_cache", ".mypy_cache", "node_modules"}
 
 
-def _tracked_files() -> list[Path]:
+def _tracked_files(root: Path | None = None) -> list[Path]:
+    root = REPO_ROOT if root is None else root
     result = subprocess.run(
-        ["git", "ls-files"], cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+        ["git", "ls-files"], cwd=root, capture_output=True, text=True, check=False,
     )
     if result.returncode != 0:
         return []
-    return [REPO_ROOT / line for line in result.stdout.splitlines() if line.strip()]
+    return [root / line for line in result.stdout.splitlines() if line.strip()]
 
 
-def _is_allowlisted(path: Path) -> bool:
-    rel = path.relative_to(REPO_ROOT)
+def _is_allowlisted(path: Path, root: Path | None = None) -> bool:
+    rel = path.relative_to(REPO_ROOT if root is None else root)
     # Test sources are scanned on purpose: a real secret committed in a test
     # must fail the gate. Only vendored/generated dirs are skipped.
     return any(part in _SKIP_DIRS for part in rel.parts)
 
 
-def fallback_scan() -> list[str]:
+def fallback_scan(root: Path | None = None) -> list[str]:
+    """Scan ``root``'s git-tracked files for the high-entropy token shapes.
+
+    Every ``root`` here defaults through ``None`` rather than through
+    ``REPO_ROOT`` directly, so the module-level constant is read at call time.
+    A default bound at definition time would ignore a caller that reassigns
+    ``REPO_ROOT`` -- which is exactly how this scanner is aimed at a fixture
+    repository holding a planted key, since a gate asserting "a committed
+    secret fails non-zero" is worth nothing until it has been shown to fire.
+    """
+    root = REPO_ROOT if root is None else root
     findings: list[str] = []
-    for path in _tracked_files():
-        if not path.is_file() or _is_allowlisted(path):
+    for path in _tracked_files(root):
+        if not path.is_file() or _is_allowlisted(path, root):
             continue
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
@@ -69,30 +80,32 @@ def fallback_scan() -> list[str]:
         for pattern in _FALLBACK_PATTERNS:
             for match in pattern.finditer(text):
                 snippet = match.group(0)[:12] + "..."
-                findings.append(f"{path.relative_to(REPO_ROOT)}: potential secret ({snippet})")
+                findings.append(f"{path.relative_to(root)}: potential secret ({snippet})")
     return findings
 
 
-def run_gitleaks() -> tuple[int, str]:
+def run_gitleaks(root: Path | None = None) -> tuple[int, str]:
+    """Run gitleaks over ``root``; ``(-1, ...)`` when the binary is absent."""
+    root = REPO_ROOT if root is None else root
     binary = shutil.which("gitleaks")
     if binary is None:
         return -1, "gitleaks not installed"
     result = subprocess.run(
-        [binary, "detect", "--source", str(REPO_ROOT), "--config", str(GITLEAKS_CONFIG), "--no-banner"],
+        [binary, "detect", "--source", str(root), "--config", str(GITLEAKS_CONFIG), "--no-banner"],
         capture_output=True, text=True, check=False,
     )
     return result.returncode, result.stdout + result.stderr
 
 
-def main(argv: list[str]) -> int:
-    code, output = run_gitleaks()
+def main(argv: list[str], root: Path | None = None) -> int:
+    code, output = run_gitleaks(root)
     if code == 0:
         print("PASS: gitleaks found no secrets")
         return 0
     if code == -1:
         # gitleaks absent locally — use the deterministic fallback so the gate
         # still runs. CI uses real gitleaks; this is the local safety net.
-        findings = fallback_scan()
+        findings = fallback_scan(root)
         if findings:
             for message in findings:
                 print(f"FAIL: {message}")

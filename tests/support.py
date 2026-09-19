@@ -213,7 +213,13 @@ def working_directory(path: Path) -> Iterator[None]:
         os.chdir(prior)
 
 
-def run_tool_main(module_name: str, filename: str, *args: str, cwd: Path | None = None) -> int:
+def run_tool_main(
+    module_name: str,
+    filename: str,
+    *args: str,
+    cwd: Path | None = None,
+    pass_argv0: bool = True,
+) -> int:
     """Call a ``tools/`` script's ``main()`` in-process and return its exit code.
 
     In-process rather than as a subprocess for the reason :func:`load_tool`
@@ -228,15 +234,20 @@ def run_tool_main(module_name: str, filename: str, *args: str, cwd: Path | None 
     Four gate scripts read 0% that way while being thoroughly tested, which is
     a gate that cannot tell a tested script from an untested one.
 
-    ``argv[0]`` is supplied here because every one of these scripts is called
-    as ``main(sys.argv)`` rather than ``main(sys.argv[1:])``, so a caller that
-    passed only real arguments would silently lose the first one.
+    ``tools/`` is split on the argv convention, so ``pass_argv0`` is explicit
+    rather than assumed: the eight hand-rolled scripts index ``argv[1]`` and
+    are called as ``main(sys.argv)``, while the two argparse ones
+    (``render_plugin_manifests``, ``render_rule_catalog``) are called as
+    ``main(sys.argv[1:])``, because argparse treats every element it is given
+    as an argument. Passing the wrong one is not a quiet mismatch in either
+    direction -- argparse rejects the stray filename as an unrecognized
+    argument, and a hand-rolled script silently drops the first real argument.
 
     The end-to-end `python tools/<script>.py` invocation the Makefile actually
     uses stays covered by its own subprocess test; this covers the logic.
     """
     tool = load_tool(module_name, filename)
-    argv = [filename, *args]
+    argv = [filename, *args] if pass_argv0 else list(args)
     if cwd is None:
         return int(tool.main(argv))
     with working_directory(cwd):
