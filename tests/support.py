@@ -7,11 +7,13 @@ because each variant asserts behavior specific to its content.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import os
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
 
@@ -192,3 +194,50 @@ def env_without_coverage(**overrides: str) -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if k not in COVERAGE_ENV_VARS}
     env.update(overrides)
     return env
+
+
+@contextlib.contextmanager
+def working_directory(path: Path) -> Iterator[None]:
+    """Run the block with the process cwd set to ``path``, restoring it after.
+
+    ``contextlib.chdir`` would do, but it is 3.11+ and this project supports
+    3.10 (``requires-python``), so it is spelled out. Restores in a ``finally``
+    so a failing assertion inside the block cannot strand the whole session in
+    a temporary directory that the fixture is about to delete.
+    """
+    prior = Path.cwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(prior)
+
+
+def run_tool_main(module_name: str, filename: str, *args: str, cwd: Path | None = None) -> int:
+    """Call a ``tools/`` script's ``main()`` in-process and return its exit code.
+
+    In-process rather than as a subprocess for the reason :func:`load_tool`
+    already gives, but with a second consequence that only shows up on the
+    gate scripts: **a subprocess's execution is invisible to coverage** unless
+    it is handed the coverage config, and handing it over is not simply a
+    matter of setting ``COVERAGE_PROCESS_START``. These scripts read
+    ``Path("pyproject.toml")`` from the cwd, so their tests run them with
+    ``cwd`` set to a throwaway directory -- and coverage resolves a *relative*
+    ``source`` entry against that same cwd, so ``source = ["tools"]`` would
+    resolve to a ``tools`` directory inside the fixture that does not exist.
+    Four gate scripts read 0% that way while being thoroughly tested, which is
+    a gate that cannot tell a tested script from an untested one.
+
+    ``argv[0]`` is supplied here because every one of these scripts is called
+    as ``main(sys.argv)`` rather than ``main(sys.argv[1:])``, so a caller that
+    passed only real arguments would silently lose the first one.
+
+    The end-to-end `python tools/<script>.py` invocation the Makefile actually
+    uses stays covered by its own subprocess test; this covers the logic.
+    """
+    tool = load_tool(module_name, filename)
+    argv = [filename, *args]
+    if cwd is None:
+        return int(tool.main(argv))
+    with working_directory(cwd):
+        return int(tool.main(argv))

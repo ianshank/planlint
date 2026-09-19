@@ -23,7 +23,7 @@ import pytest
 from openspec_graph import detect
 from openspec_graph import graph as graph_module
 from openspec_graph.rules import RULES, rule_table
-from tests.support import env_without_coverage, load_tool
+from tests.support import env_without_coverage, load_tool, run_tool_main
 from tests.support import write_spec as _write_spec
 
 TOOLS = Path(__file__).resolve().parent.parent / "tools"
@@ -85,29 +85,18 @@ def test_branch_check_fails_when_floor_not_configured(tmp_path: Path) -> None:
 
 
 def _run_branch_check(cwd: Path) -> int:
-    result = subprocess.run(
-        [sys.executable, str(TOOLS / "check_branch_coverage.py"), "coverage.json"],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=False,
+    return run_tool_main(
+        "check_branch_coverage", "check_branch_coverage.py", "coverage.json", cwd=cwd
     )
-    sys.stdout.write(result.stdout)
-    sys.stderr.write(result.stderr)
-    return result.returncode
 
 
 # --- AC-CH-1 / AC-CH-2: the line-coverage floor (read from pyproject) ---------
 
 
 def _run_cov_floor_check(cwd: Path) -> int:
-    result = subprocess.run(
-        [sys.executable, str(TOOLS / "check_coverage_floor.py"), "coverage.json"],
-        cwd=cwd, capture_output=True, text=True, check=False,
+    return run_tool_main(
+        "check_coverage_floor", "check_coverage_floor.py", "coverage.json", cwd=cwd
     )
-    sys.stdout.write(result.stdout)
-    sys.stderr.write(result.stderr)
-    return result.returncode
 
 
 def _write_cov_lines(path: Path, statements: int, covered: int) -> Path:
@@ -299,13 +288,9 @@ def _diff(base: dict, head: dict) -> int:
         hp = Path(d) / "head.json"
         bp.write_text(json.dumps(base))
         hp.write_text(json.dumps(head))
-        result = subprocess.run(
-            [sys.executable, str(TOOLS / "diff_spec_graph.py"), str(bp), str(hp)],
-            capture_output=True, text=True, check=False,
-        )
-        sys.stdout.write(result.stdout)
-        sys.stderr.write(result.stderr)
-        return result.returncode
+        # Absolute paths, so no cwd is needed -- unlike the two coverage gates,
+        # this script reads nothing relative to where it was started.
+        return run_tool_main("diff_spec_graph", "diff_spec_graph.py", str(bp), str(hp))
 
 
 def test_graph_diff_passes_when_clean(repo: Path) -> None:
@@ -362,17 +347,13 @@ def test_graph_diff_passes_when_orphan_fixed(repo: Path) -> None:
 
 
 def test_graph_diff_rejects_bad_args() -> None:
-    result = subprocess.run(
-        [sys.executable, str(TOOLS / "diff_spec_graph.py"), "only-one-arg"],
-        capture_output=True, text=True, check=False,
-    )
-    assert result.returncode == 2
+    assert run_tool_main("diff_spec_graph", "diff_spec_graph.py", "only-one-arg") == 2
 
 
 # --- render_mermaid.py: thin consumer of a saved graph.json (CP-GV) ---------
 
 
-def test_render_mermaid_matches_to_mermaid_byte_for_byte(repo: Path, tmp_path: Path) -> None:
+def test_render_mermaid_matches_to_mermaid_byte_for_byte(repo: Path, tmp_path: Path, capsys) -> None:
     from openspec_graph.mermaid import to_mermaid
 
     _write_spec(repo, "c1", "cap1", GOOD_HARNESS)
@@ -380,20 +361,72 @@ def test_render_mermaid_matches_to_mermaid_byte_for_byte(repo: Path, tmp_path: P
     graph_path = tmp_path / "graph.json"
     graph_path.write_text(json.dumps(graph))
 
-    result = subprocess.run(
-        [sys.executable, str(TOOLS / "render_mermaid.py"), str(graph_path)],
-        capture_output=True, text=True, check=False,
-    )
-    assert result.returncode == 0
-    assert result.stdout == to_mermaid(graph)
+    assert run_tool_main("render_mermaid", "render_mermaid.py", str(graph_path)) == 0
+    # `print(..., end="")`, so stdout is the rendering with nothing appended.
+    assert capsys.readouterr().out == to_mermaid(graph)
 
 
 def test_render_mermaid_rejects_bad_args() -> None:
+    assert run_tool_main("render_mermaid", "render_mermaid.py") == 2
+
+
+# --- the executable contract, once rather than per script --------------------
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "check_branch_coverage.py",
+        "check_coverage_floor.py",
+        "diff_spec_graph.py",
+        "render_mermaid.py",
+        "check_docs.py",
+        "check_no_hardcoded_thresholds.py",
+        "check_secrets.py",
+        "check_wheel_metadata.py",
+        "matcher_accuracy.py",
+        "render_plugin_manifests.py",
+        "render_rule_catalog.py",
+    ],
+)
+def test_gate_script_is_runnable_as_a_script(script: str, tmp_path: Path) -> None:
+    """``python tools/<script>.py`` starts and returns an exit code.
+
+    Every behaviour of these scripts is asserted in-process, against
+    ``main(argv)``, because a subprocess's execution is invisible to coverage
+    (see ``run_tool_main``). That leaves exactly one thing in-process testing
+    cannot see: whether the file still *runs* as a script -- an import that
+    only resolves because pytest put the repo root on ``sys.path``, a
+    ``sys.path`` bootstrap line deleted as dead code, a syntax error under the
+    ``if __name__ == "__main__"`` guard. The Makefile and the workflows invoke
+    every one of these this way, so that path is a real contract.
+
+    Asserted here once for the whole directory rather than once per script, so
+    a new gate script is covered by adding one line. Run from a throwaway cwd
+    with no arguments: what matters is that the interpreter got far enough to
+    reach the script's own argument handling, not which verdict it reached.
+    """
     result = subprocess.run(
-        [sys.executable, str(TOOLS / "render_mermaid.py")],
-        capture_output=True, text=True, check=False,
+        [sys.executable, str(TOOLS / script)],
+        cwd=tmp_path, capture_output=True, text=True, check=False,
+        env=env_without_coverage(),
     )
-    assert result.returncode == 2
+    # Checked by marker rather than by exit code alone, because the two ways a
+    # script fails to load do not agree on either signal. A failed import
+    # raises and prints "Traceback (most recent call last)"; a SyntaxError is
+    # reported by the compiler in a different format with no such line -- and
+    # both exit 1, which is a documented code here (a gate that found a
+    # violation). Exit code alone therefore cannot tell "the gate ran and
+    # failed the repo" from "the file is not loadable at all".
+    for marker in ("Traceback (most recent call last)", "SyntaxError",
+                   "ModuleNotFoundError", "ImportError", "IndentationError"):
+        assert marker not in result.stderr, f"{script}: {marker}\n{result.stderr}"
+    # 0/1/2 are the documented codes. Anything else (a negative code for a
+    # fatal signal, or an unhandled SystemExit payload) says the script did
+    # not reach its own exit path.
+    assert result.returncode in (0, 1, 2), (
+        f"{script} exited {result.returncode}\n{result.stdout}\n{result.stderr}"
+    )
 
 
 # --- AC-CH-8 / C-CH-1: the rule set matches the committed baseline -----------
