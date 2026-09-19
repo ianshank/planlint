@@ -334,7 +334,7 @@ runs:
     # Unconditional on the gate's verdict: a failing run is exactly when
     # somebody needs the evidence.
     - if: ${{ always() && inputs.upload-artifact == 'true' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.artifact-name }}
         path: ${{ steps.paths.outputs.evidence-dir }}
