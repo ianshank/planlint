@@ -558,10 +558,14 @@ def find_speckit_spec_files(speckit_root: Path) -> list[Path]:
     found: list[Path] = []
     skipped: list[str] = []
     for path in _dedupe_by_identity(sorted(speckit_root.glob("*/spec.md"))):
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
-            logger.debug("speckit: cannot read %s: %s", path, exc)
+        # read_text_or_none, not a second raw read: it carries the is_file()
+        # guard, and without it a FIFO named spec.md blocks `open()` until a
+        # writer appears -- planlint hangs forever on a tree it was pointed at,
+        # which is the one thing "safe to point at an unfamiliar repo" cannot
+        # mean. repo_io documents that hazard and it was guarded for Makefile
+        # and pyproject.toml but not here, where the most files are read.
+        text = read_text_or_none(path, "speckit")
+        if text is None:
             continue
         if is_speckit_marked(text):
             found.append(path)

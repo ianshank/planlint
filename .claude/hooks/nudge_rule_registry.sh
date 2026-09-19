@@ -28,7 +28,15 @@ FILE_NORM=$(printf '%s' "$FILE" | sed 's/\\\\/\//g; s/\\/\//g')
 
 case "/$FILE_NORM" in
   */openspec_graph/rules.py|*/openspec_graph/rules_*.py)
-    printf '{"decision": "block", "reason": "You just edited a rules module. Before finishing: regenerate tests/baseline_rules.json via `planlint rules --json > tests/baseline_rules.json`, then run `make skill-catalog` to regenerate the distributable skill rule catalog, then run `pytest tests/test_rule_registry_docs.py tests/test_skill_contract.py` and fix every doc location they report out of sync (see the planlint-add-rule skill)."}'
+    printf '{"decision": "block", "reason": "You just edited a rules module. Before finishing: regenerate tests/baseline_rules.json via `planlint rules --json > tests/baseline_rules.json`, then run `make skill-catalog` to regenerate the distributable skill rule catalog, then run `pytest tests/test_rule_registry_docs.py tests/test_skill_contract.py` and fix every doc location they report out of sync (see the planlint-add-rule skill). ALSO re-pin tests/test_decomposition.py _EXPECTED_HASHES for the rules verb: adding, removing or re-wording a Rule changes `planlint rules --json` byte-for-byte. Check that the validate and graph hashes did NOT move -- if they did, the change is not additive and that is the finding, not the hash."}'
+    exit 0
+    ;;
+  */openspec/changes/*/specs/*/spec.md)
+    printf '{"decision": "block", "reason": "You just edited a change package spec -- the NORMATIVE half. Run `make validate` (the spec is subject to the same rules it describes; MAKE_REF scans the whole document, so a backticked `make <target>` in explanatory prose reads as a real citation). Then check the spec against what the code actually does: twice in review, a revision note went into proposal.md while spec.md kept requiring the superseded behaviour, leaving the package contradicting its own implementation. A proposal.md note is not a spec change."}'
+    exit 0
+    ;;
+  */.github/dependabot.yml|*/.github/actions/*/action.yml)
+    printf '{"decision": "block", "reason": "You just edited Dependabot config or a composite action. Run `pytest tests/test_ci_hardening.py -k dependabot` -- every directory holding an action.yml needs its own dependabot `directory:` entry or its third-party pins are never updated, and nothing else notices."}'
     exit 0
     ;;
   */Makefile|*/.github/workflows/*.yml|*/.github/workflows/*.yaml)

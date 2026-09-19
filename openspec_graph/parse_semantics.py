@@ -46,18 +46,36 @@ SC_ID = re.compile(r"\bSC-\d+\b")
 # like `- **NFR-001**: text` (a plausible "Non-Functional Requirements"
 # subsection) cannot match: `\*\*(FR-\d+)` requires the literal `F`
 # immediately after the opening `**`, not after an `N`.
-# Body is horizontal-whitespace-scoped and may be empty. `\s*` around the
-# body matched newlines, and `.+?` then reached past a blank line to the next
-# non-blank one -- so `- **FR-001**:` with no body silently took the FOLLOWING
-# bullet as its text and that bullet vanished from the graph. Reproduced at a
-# *correct* heading level: FR-001 came back labelled `- **FR-002**: ...` and
-# FR-002 was gone. `[^\S\n]` is "whitespace but not a newline", so a
-# declaration can no longer span lines, and `(.*?)` lets an empty body be a
-# recognised-but-empty requirement rather than an unmatched line.
-FR_DECL = re.compile(
-    r"^-\s*\*\*(FR-\d+)\*\*[^\S\n]*:[^\S\n]*(.*?)[^\S\n]*$", re.MULTILINE
-)
-SC_DECL = re.compile(r"^-\s*\*\*(SC-\d+)\*\*\s*:\s*(.+?)\s*$", re.MULTILINE)
+def _bullet_decl(prefix: str) -> re.Pattern[str]:
+    """The `- **XX-001**: body` declaration grammar, for one id prefix.
+
+    Built from a template because FR and SC are the *same* bullet with a
+    different prefix, and writing them twice has already cost once: when
+    `FR_DECL` was fixed for the defect below, `SC_DECL` sat four lines away
+    and kept it. That is the third "two copies, one fixed" event in this
+    module -- `strip_waiver_comments`'s docstring records the `ADR_REF`/
+    `INV_REF` instance. A template makes the next fix structurally unable to
+    land on one and miss the other.
+
+    Every span is horizontal-whitespace-only (`[^\\S\\n]`, "whitespace but not
+    a newline") and the body may be empty. The original used `\\s*`, which
+    matches newlines, so `.+?` reached past a blank line to the next non-blank
+    one: `- **FR-001**:` with no body silently took the FOLLOWING bullet as
+    its text, and that bullet vanished from the graph. Reproduced at a
+    *correct* heading level for both prefixes -- FR-001 came back labelled
+    `- **FR-002**: ...` with FR-002 gone, and SC-001 likewise ate SC-002.
+    `(.*?)` lets an empty declaration be a recognised-but-empty entry rather
+    than an unmatched line, which is a diagnosable state instead of a silent
+    deletion.
+    """
+    return re.compile(
+        rf"^-[^\S\n]*\*\*({prefix}-\d+)\*\*[^\S\n]*:[^\S\n]*(.*?)[^\S\n]*$",
+        re.MULTILINE,
+    )
+
+
+FR_DECL = _bullet_decl("FR")
+SC_DECL = _bullet_decl("SC")
 # The bare (unannotated) heading name speckit_section_body() looks up --
 # shared by parse_speckit.py's own Success Criteria lookup and this module's
 # hard_coded() exemption below, so the two can't independently drift.
@@ -593,10 +611,23 @@ def hard_coded(text: str, dialect: str = "") -> tuple[str, ...]:
     """
     scan_text = text
     if dialect == "speckit":
-        span = speckit_section_body(text, SPECKIT_SUCCESS_CRITERIA_HEADING)
+        # The span's own offset, not text.index(span). speckit_section_span
+        # already returns where the body starts; the previous code threw that
+        # away and re-derived it by searching for the body text, which finds
+        # the FIRST occurrence. When an earlier section's body was
+        # byte-identical to the Success Criteria body, the wrong region was
+        # blanked and the exemption silently failed -- a bare percentage in a
+        # legitimate Success Criterion became a false G003 ERROR, failing a
+        # clean repository on the one construct this exemption exists to
+        # permit. It also drops an O(n*m) substring scan.
+        start, span = speckit_section_span(text, SPECKIT_SUCCESS_CRITERIA_HEADING)
         if span:
-            start = text.index(span)
-            scan_text = text[:start] + " " * len(span) + text[start + len(span) :]
+            # Newline-preserving fill, matching blank_html_comments: blanking
+            # them would merge the section into one logical line. Harmless
+            # today because this function returns line strings and never
+            # counts lines, but a trap for the next caller who does.
+            blanked = "".join("\n" if ch == "\n" else " " for ch in span)
+            scan_text = text[:start] + blanked + text[start + len(span) :]
     offenders: list[str] = []
     for raw_line in scan_text.splitlines():
         line = raw_line.strip()

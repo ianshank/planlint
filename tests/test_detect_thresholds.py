@@ -361,3 +361,87 @@ def test_hard_coded_reads_bullets_and_table_rows_only() -> None:
     assert hard_coded("_Verified by: `make regression`, coverage floor 97%_") == ()
     assert hard_coded("The suite must hold branch coverage at 97% or better.") == ()
     assert hard_coded("## Coverage at 97%") == ()
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs are a POSIX feature")
+def test_a_fifo_where_a_spec_file_belongs_does_not_hang(tmp_path: Path) -> None:
+    """The same hazard at the paths that read the most files.
+
+    The guard above covered `Makefile` and `pyproject.toml`; the two *spec*
+    read sites bypassed `read_text_or_none` with their own `read_text()`, so
+    a FIFO named `spec.md` blocked forever. `detect` hangs first, and every
+    verb calls `profile()`, so this took the whole CLI down on a tree it was
+    merely pointed at — the one failure a "safe to point at an unfamiliar
+    repository" promise cannot survive.
+    """
+    (tmp_path / "Makefile").write_text("test:\n\t@echo t\n", encoding="utf-8")
+    feature = tmp_path / "specs" / "001-x"
+    feature.mkdir(parents=True)
+    os.mkfifo(feature / "spec.md")
+
+    profile = detect.profile(tmp_path)  # would block here before the fix
+    assert profile.speckit_root is None
+
+
+@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs are a POSIX feature")
+def test_a_fifo_spec_raises_spec_read_error_rather_than_blocking(tmp_path: Path) -> None:
+    """`parse_spec` owes a `SpecReadError`, not `None`.
+
+    Exit 2 ("this repository could not be inspected") has to stay
+    distinguishable from exit 1 ("its specs have findings"), so the precheck
+    raises rather than skipping. A directory, socket or device node lands on
+    the same branch, and "not a regular file" is the honest reason for all.
+    """
+    from openspec_graph.parse import SpecReadError, parse_spec
+
+    target = tmp_path / "spec.md"
+    os.mkfifo(target)
+    with pytest.raises(SpecReadError) as excinfo:
+        parse_spec(target, "auto")  # would block here before the fix
+    assert "not a regular file" in str(excinfo.value)
+
+
+# --- SC_DECL: the twin of the FR_DECL defect -------------------------------
+
+
+def test_sc_and_fr_declarations_share_one_grammar() -> None:
+    """Built from `_bullet_decl`, so a fix cannot land on one and miss the other.
+
+    It already did once: `FR_DECL` was line-anchored and `SC_DECL`, four lines
+    below, kept the cross-line body — `- **SC-001**:` swallowed the whole of
+    the next bullet's line and that criterion left the graph, invisible to
+    every rule (S005 keys on FR bullets only).
+    """
+    from openspec_graph.parse_semantics import FR_DECL, SC_DECL
+
+    for pattern, prefix in ((FR_DECL, "FR"), (SC_DECL, "SC")):
+        doc = f"- **{prefix}-001**:\n- **{prefix}-002**: a real body\n"
+        assert [(m.group(1), m.group(2)) for m in pattern.finditer(doc)] == [
+            (f"{prefix}-001", ""),
+            (f"{prefix}-002", "a real body"),
+        ], prefix
+        # And the leading hyphen may not cross a newline either.
+        assert pattern.search(f"-\n**{prefix}-001**: x") is None, prefix
+
+
+# --- hard_coded: blank the real span, not the first identical one ----------
+
+
+def test_speckit_exemption_blanks_the_success_criteria_span_not_a_twin() -> None:
+    """`text.index(body)` found the FIRST occurrence of the body text.
+
+    When an earlier section's body was byte-identical, the wrong region was
+    blanked: the exemption silently failed and a legitimate bare percentage in
+    a Success Criterion became a false G003 ERROR — failing a clean repository
+    on the one construct the exemption exists to permit.
+    """
+    from openspec_graph.parse_semantics import hard_coded
+
+    body = "- **SC-001**: 95% of new users complete onboarding.\n"
+    doc = "# F\n\n## Notes\n\n" + body + "\n## Success Criteria *(mandatory)*\n\n" + body
+
+    offenders = hard_coded(doc, "speckit")
+    # Exactly one: the copy under `## Notes`, which is not exempt. The copy
+    # under Success Criteria is. Before the fix the exempted span was the
+    # `## Notes` one, so the Success Criteria copy was reported instead.
+    assert len(offenders) == 1, offenders
