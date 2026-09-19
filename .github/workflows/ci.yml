@@ -121,7 +121,7 @@ jobs:
         if: always()
         run: planlint --target . validate --fail-on WARN --json > spec-findings.json || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: spec-artifacts
@@ -193,7 +193,7 @@ jobs:
       - name: Diff graphs (fail on new broken edges or orphans)
         run: python tools/diff_spec_graph.py base.json head.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: spec-graph-diff
