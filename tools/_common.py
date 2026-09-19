@@ -7,6 +7,7 @@ discovery or text reading is made once.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -53,6 +54,48 @@ _configure_from_env()
 
 # tools/ sits one level below the repo root.
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+# GNU Make's search order, duplicated here on purpose.
+#
+# `openspec_graph.detect.MAKEFILE_NAMES` is the same tuple, and this module
+# deliberately does not import it: `tools/` is stdlib-only and runs before the
+# package is installed (pre-commit, a fresh checkout), so a package import
+# would make the gates depend on the thing they gate. The duplication is
+# pinned by a test asserting the two tuples are equal, so a drift is a failure
+# rather than a silent divergence -- which is how the single-name lookup this
+# replaces survived in both places at once.
+MAKEFILE_NAMES = ("GNUmakefile", "makefile", "Makefile")
+
+
+def resolve_makefile(root: Path) -> Path | None:
+    """The makefile GNU Make would read under ``root``, or ``None``.
+
+    Matched against the directory LISTING rather than by probing
+    ``(root / name).is_file()`` per candidate, for two reasons the Windows CI
+    leg found the hard way:
+
+    1. On a case-insensitive filesystem, probing `makefile` succeeds against a
+       file written `Makefile`, and the returned path then carries the
+       *candidate's* spelling rather than the real one. `detect` can shrug that
+       off -- its dialect card carries targets, never the filename -- but this
+       function's result is a scanned path that a caller reports on, so the
+       wrong spelling is user-visible. The listing gives the true name.
+    2. Presence, not readability, is what ends the search. `make` stops at the
+       first name that EXISTS, even if it cannot open it, so a directory named
+       `GNUmakefile` must not let a lower-precedence `Makefile` be scanned --
+       that would report on a file `make` would never read. Readability is the
+       caller's problem, which is why ``check_makefile`` tolerates a path it
+       cannot open rather than this function silently skipping it.
+    """
+    try:
+        present = {entry.name for entry in root.iterdir()}
+    except OSError:
+        return None
+    for name in MAKEFILE_NAMES:
+        if name in present:
+            return root / name
+    return None
 
 
 def repo_root() -> Path:
@@ -148,3 +191,78 @@ def write_or_check(path: Path, expected: str, *, write: bool, label: str) -> int
         return 1
     logger.debug("write_or_check: %s is fresh", rel)
     return 0
+
+
+#: Where a scoped floor lives, given ``--scope NAME``: ``[tool.specgraph]``
+#: key ``NAME_line_fail_under`` / ``NAME_branch_fail_under``. Derived rather
+#: than listed so adding a second measured tree is a config line, not a code
+#: change -- and kept in one place so the two checkers cannot disagree.
+SCOPED_FLOOR_SECTION = "[tool.specgraph]"
+
+
+def scoped_floor_key(scope: str, kind: str) -> str:
+    """``("tools", "line") -> "tools_line_fail_under"``."""
+    return f"{scope}_{kind}_fail_under"
+
+
+def coverage_totals(
+    cov_path: Path, covered_key: str, total_key: str, scope: str | None = None
+) -> tuple[int, int]:
+    """Sum one coverage.json counter pair, optionally over one subtree only.
+
+    ``scope=None`` reads the report's own ``totals``, which is every measured
+    source. A ``scope`` instead sums the per-file summaries under that
+    directory, so one test run can gate two trees against two floors without
+    either number being diluted by the other -- the package and its own gate
+    scripts have genuinely different coverage, and a combined figure hides
+    both.
+
+    Separator-normalized before matching: coverage.py writes the paths as the
+    platform spells them, so a backslash-separated ``tools`` path on Windows
+    would never match a ``tools/`` prefix. Returns ``(0, 0)`` for a scope that matches
+    nothing, which every caller already treats as a misconfiguration and
+    fails loudly on, rather than as a vacuous pass.
+    """
+    data = json.loads(cov_path.read_text(encoding="utf-8"))
+    if scope is None:
+        totals = data.get("totals", {})
+        return int(totals.get(covered_key, 0)), int(totals.get(total_key, 0))
+
+    prefix = scope.replace("\\", "/").rstrip("/") + "/"
+    covered = total = 0
+    for raw_path, entry in data.get("files", {}).items():
+        if not raw_path.replace("\\", "/").startswith(prefix):
+            continue
+        summary = entry.get("summary", {})
+        covered += int(summary.get(covered_key, 0))
+        total += int(summary.get(total_key, 0))
+    return covered, total
+
+
+def parse_coverage_argv(argv: list[str]) -> tuple[Path, str | None]:
+    """``(coverage.json path, scope)`` from a gate script's argv.
+
+    Hand-rolled rather than argparse to match the other eight scripts in this
+    directory, which index ``argv`` directly -- and because the accepted shape
+    is exactly two optional things. ``--scope`` may be given as
+    ``--scope NAME`` or ``--scope=NAME``.
+    """
+    cov_path = Path("coverage.json")
+    scope: str | None = None
+    rest = list(argv[1:])
+    positional: list[str] = []
+    while rest:
+        arg = rest.pop(0)
+        if arg.startswith("--scope="):
+            scope = arg.split("=", 1)[1]
+        elif arg == "--scope":
+            if not rest:
+                raise ValueError("--scope requires a directory name")
+            scope = rest.pop(0)
+        else:
+            positional.append(arg)
+    if positional:
+        cov_path = Path(positional[0])
+    if scope is not None and not scope.strip():
+        raise ValueError("--scope requires a directory name")
+    return cov_path, scope

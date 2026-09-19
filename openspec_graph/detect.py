@@ -14,7 +14,13 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from . import dialect_card, machinery, witness
-from .parse_semantics import is_harness_marked, is_speckit_marked, is_upstream_marked
+from .parse_semantics import (
+    ADR_REF,
+    INV_REF,
+    is_harness_marked,
+    is_speckit_marked,
+    is_upstream_marked,
+)
 from .repo_io import read_text_or_none, to_posix_relative
 from .thresholds import (
     COVERAGE_REPORT_TABLE,
@@ -91,8 +97,14 @@ ADR_SOURCES: tuple[str, ...] = (
 logger = logging.getLogger("planlint.detect")
 
 _MAKE_TARGET = re.compile(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", re.MULTILINE)
-_INV_ID = re.compile(r"\bINV-\d+\b")
-_ADR_ID = re.compile(r"\bADR-\d+\b")
+# The DECLARATION side of the same grammar `parse_semantics` uses for the
+# CITATION side -- these were two byte-identical compiles of `INV-\d+` and
+# `ADR-\d+`. If they ever drifted, G005/G006/G008/G009 would stop matching
+# declarations against citations and simply find nothing, which is a fail-open:
+# a cited-but-undeclared invariant would report clean. This module already
+# imports from parse_semantics, so there was never a cycle to justify the copy.
+_INV_ID = INV_REF
+_ADR_ID = ADR_REF
 # A markdown heading line ("# Title", "## Title", ...) -- used to prefer an
 # ADR file's own title over an earlier body reference to a different ADR
 # when picking its declared id (see _adrs()).
@@ -232,16 +244,89 @@ def _legacy_make_targets(text: str) -> tuple[str, ...]:
     return tuple(sorted(set(targets)))
 
 
+# GNU Make's own search order ("What Name to Give Your Makefile"): it reads
+# the FIRST of these that exists and never opens the others, so `GNUmakefile`
+# shadows `Makefile` where both are present. Ordered, because the order *is*
+# the contract -- reporting the union of two files would describe a build
+# that never happens.
+#
+# `detect` previously looked only for `Makefile`, which meant a repository
+# using either of the other two spellings reported zero targets. That tripped
+# G004's empty-guard and silently disabled the rule: a valid repository with a
+# genuinely broken `make` citation passed clean, which is the one direction a
+# governance gate must never fail in.
+#
+# A named constant rather than an override knob on purpose. Making the list
+# configurable reopens the "should a hand-editable file change live-detected
+# behaviour?" question `fix-init-snapshot-wording` resolved against, and
+# these three names are fixed by GNU Make, not by a house style.
+MAKEFILE_NAMES: tuple[str, ...] = ("GNUmakefile", "makefile", "Makefile")
+
+
+def _resolve_makefile(root: Path) -> tuple[Path, str] | None:
+    """The makefile GNU Make would read, with its text, or ``None``.
+
+    GNU Make skips a candidate that does not *exist*; it does not skip one that
+    exists and cannot be opened. There it aborts -- ``make: *** GNUmakefile:
+    Is a directory.  Stop.`` -- so no target in that repository runs at all.
+    This function matches that, and the distinction is load-bearing in the
+    direction that matters.
+
+    An earlier revision fell through to the next name instead, on the argument
+    that planlint never executes what it reads so more detection is safer.
+    That argument is wrong. Falling through reports the shadowed file's targets
+    and green-lights a citation that *cannot run in that repository* -- a
+    green check that is evidence of nothing, which is the exact failure this
+    module exists to prevent, and strictly worse than reporting nothing.
+    Silence is now covered anyway: G010 raises an INFO saying the citations
+    could not be checked, so parity plus a diagnostic beats a confident lie.
+
+    An **empty but readable** candidate is a successful read, not a failure,
+    and does shadow: a zero-byte `GNUmakefile` genuinely declares no rules, so
+    reporting no targets is what `make` itself would do. Hence the test below
+    is ``is None`` and never falsiness, which would wrongly treat "" as
+    "unreadable" and fall through.
+
+    On a case-insensitive filesystem (macOS by default) `makefile` matches a
+    file written `Makefile`, so the candidate returned may differ in case from
+    the name on disk. Harmless and deliberately not normalised: both resolve to
+    the same bytes, and the dialect card carries `make_targets` and never the
+    filename, so its byte-stability contract is untouched.
+    """
+    for name in MAKEFILE_NAMES:
+        candidate = root / name
+        try:
+            # lstat, not exists(): `exists()` follows symlinks and so reports a
+            # DANGLING link as absent, which would fall through to a
+            # lower-precedence name. `make` does not -- it stops with
+            # "GNUmakefile: No such file or directory" and runs nothing, so
+            # falling through would green-light a citation that cannot run.
+            # lstat asks whether the directory ENTRY is there, link or not.
+            candidate.lstat()
+        except OSError:
+            continue
+        text = read_text_or_none(candidate, "make_targets")
+        if text is None:
+            # Terminal, not a fall-through: `make` itself stops here.
+            logger.debug(
+                "make_targets: %s exists but cannot be read; make would abort here, "
+                "so no targets are reported", name
+            )
+            return None
+        logger.debug("make_targets: reading %s", name)
+        return candidate, text
+    logger.debug("make_targets: no readable makefile under any of %s", MAKEFILE_NAMES)
+    return None
+
+
 def _make_target_facts(root: Path) -> machinery.MakefileFacts:
-    makefile = root / "Makefile"
-    if not makefile.exists():
+    resolved = _resolve_makefile(root)
+    if resolved is None:
+        # No readable makefile under any name GNU Make honours. "No Makefile"
+        # is the safe reading: with no targets, G004 returns early rather than
+        # manufacturing findings against a repo that may not use Make at all.
         return machinery.MakefileFacts((), False, False, 0)
-    text = read_text_or_none(makefile, "make_targets")
-    if text is None:
-        # Exists but unreadable (a directory named `Makefile`, a permission
-        # denial, a dangling symlink). "No Makefile" is the safe reading: with
-        # no targets, G004 returns early rather than manufacturing findings.
-        return machinery.MakefileFacts((), False, False, 0)
+    _makefile, text = resolved
     facts = machinery.parse_makefile(text)
     if facts.confidence == "low":
         # Widen, never replace: structural parsing found real targets too,
@@ -485,10 +570,14 @@ def find_speckit_spec_files(speckit_root: Path) -> list[Path]:
     found: list[Path] = []
     skipped: list[str] = []
     for path in _dedupe_by_identity(sorted(speckit_root.glob("*/spec.md"))):
-        try:
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError as exc:
-            logger.debug("speckit: cannot read %s: %s", path, exc)
+        # read_text_or_none, not a second raw read: it carries the is_file()
+        # guard, and without it a FIFO named spec.md blocks `open()` until a
+        # writer appears -- planlint hangs forever on a tree it was pointed at,
+        # which is the one thing "safe to point at an unfamiliar repo" cannot
+        # mean. repo_io documents that hazard and it was guarded for Makefile
+        # and pyproject.toml but not here, where the most files are read.
+        text = read_text_or_none(path, "speckit")
+        if text is None:
             continue
         if is_speckit_marked(text):
             found.append(path)

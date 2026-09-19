@@ -7,15 +7,37 @@ because each variant asserts behavior specific to its content.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import os
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
 
 _PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
+
+
+def supports_case_sensitive_filenames() -> bool:
+    """Whether this filesystem holds ``makefile`` and ``Makefile`` as two files.
+
+    macOS and Windows default to case-insensitive, where the two names are one
+    path -- a fixture pinning their precedence could not even be checked out
+    there. A capability probe rather than a ``sys.platform`` check, for the
+    same reason as :func:`supports_symlinks`: a case-sensitive volume mounted
+    on macOS should still run the tests this guards.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        lower = Path(td) / "makefile"
+        upper = Path(td) / "Makefile"
+        lower.write_text("lower", encoding="utf-8")
+        upper.write_text("upper", encoding="utf-8")
+        try:
+            return lower.read_text(encoding="utf-8") == "lower"
+        except OSError:
+            return False
 
 
 def supports_symlinks() -> bool:
@@ -38,7 +60,7 @@ def supports_symlinks() -> bool:
             # os.symlink doesn't exist on this platform at all -- letting
             # this one escape would crash the *importing* test module at
             # collection time (see the module-level probes in
-            # test_witness.py/test_graft.py), the exact all-or-nothing
+            # test_witness.py/graft_support.py), the exact all-or-nothing
             # failure this capability probe exists to avoid.
             return False
         return True
@@ -128,3 +150,105 @@ def normalize_root(text: str, root: Path) -> str:
     for spelling in spellings:
         text = text.replace(spelling, "<ROOT>").replace(spelling.replace("\\", "\\\\"), "<ROOT>")
     return text
+
+
+#: Environment variables that hand a child process this run's coverage identity.
+#:
+#: ``COVERAGE_FILE`` names the data file; ``COVERAGE_PROCESS_START`` names the
+#: config a child reads on startup (``run_cli`` sets it deliberately); the
+#: ``COV_CORE_*`` family is pytest-cov's own subprocess channel. Which of these
+#: are actually present depends on the pytest-cov version and on whether the
+#: outer run was invoked with ``--cov`` at all, so the set is stripped whole
+#: rather than probed -- removing an unset name is a no-op, and the point is
+#: that a nested run must not share this repo's coverage identity by any route.
+COVERAGE_ENV_VARS: tuple[str, ...] = (
+    "COVERAGE_FILE",
+    "COVERAGE_PROCESS_START",
+    "COV_CORE_SOURCE",
+    "COV_CORE_CONFIG",
+    "COV_CORE_DATAFILE",
+    "COV_CORE_BRANCH",
+)
+
+
+def env_without_coverage(**overrides: str) -> dict[str, str]:
+    """``os.environ`` with every coverage variable removed, plus ``overrides``.
+
+    For subprocesses that run *their own* coverage session -- the nested
+    ``pytest --cov`` runs that prove pytest-cov's ``--cov-fail-under`` gate
+    fires. Those children must write their data somewhere this run will never
+    combine, because they measure a throwaway package with different settings.
+
+    Inheriting ``COVERAGE_FILE`` is the failure case, and it is not a test
+    failure but a crash: with ``[tool.coverage.run] parallel = true`` the outer
+    run combines every sibling data file at teardown, the nested run writes
+    statement-only data (no ``--cov-branch``) into that same location, and
+    ``combine`` raises ``DataError: Can't combine branch coverage data with
+    statement data`` from inside pytest's teardown -- INTERNALERROR, exit 3,
+    the whole suite gone rather than one test red.
+
+    Nothing in this repository sets ``COVERAGE_FILE``, so the trap is ambient:
+    it springs for anyone whose CI names a per-leg data file, the standard way
+    to keep a build matrix's coverage separate.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in COVERAGE_ENV_VARS}
+    env.update(overrides)
+    return env
+
+
+@contextlib.contextmanager
+def working_directory(path: Path) -> Iterator[None]:
+    """Run the block with the process cwd set to ``path``, restoring it after.
+
+    ``contextlib.chdir`` would do, but it is 3.11+ and this project supports
+    3.10 (``requires-python``), so it is spelled out. Restores in a ``finally``
+    so a failing assertion inside the block cannot strand the whole session in
+    a temporary directory that the fixture is about to delete.
+    """
+    prior = Path.cwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(prior)
+
+
+def run_tool_main(
+    module_name: str,
+    filename: str,
+    *args: str,
+    cwd: Path | None = None,
+    pass_argv0: bool = True,
+) -> int:
+    """Call a ``tools/`` script's ``main()`` in-process and return its exit code.
+
+    In-process rather than as a subprocess for the reason :func:`load_tool`
+    already gives, but with a second consequence that only shows up on the
+    gate scripts: **a subprocess's execution is invisible to coverage** unless
+    it is handed the coverage config, and handing it over is not simply a
+    matter of setting ``COVERAGE_PROCESS_START``. These scripts read
+    ``Path("pyproject.toml")`` from the cwd, so their tests run them with
+    ``cwd`` set to a throwaway directory -- and coverage resolves a *relative*
+    ``source`` entry against that same cwd, so ``source = ["tools"]`` would
+    resolve to a ``tools`` directory inside the fixture that does not exist.
+    Four gate scripts read 0% that way while being thoroughly tested, which is
+    a gate that cannot tell a tested script from an untested one.
+
+    ``tools/`` is split on the argv convention, so ``pass_argv0`` is explicit
+    rather than assumed: the eight hand-rolled scripts index ``argv[1]`` and
+    are called as ``main(sys.argv)``, while the two argparse ones
+    (``render_plugin_manifests``, ``render_rule_catalog``) are called as
+    ``main(sys.argv[1:])``, because argparse treats every element it is given
+    as an argument. Passing the wrong one is not a quiet mismatch in either
+    direction -- argparse rejects the stray filename as an unrecognized
+    argument, and a hand-rolled script silently drops the first real argument.
+
+    The end-to-end `python tools/<script>.py` invocation the Makefile actually
+    uses stays covered by its own subprocess test; this covers the logic.
+    """
+    tool = load_tool(module_name, filename)
+    argv = [filename, *args] if pass_argv0 else list(args)
+    if cwd is None:
+        return int(tool.main(argv))
+    with working_directory(cwd):
+        return int(tool.main(argv))

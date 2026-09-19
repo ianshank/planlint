@@ -51,6 +51,13 @@ planlint --target /path/to/clone graph --format mermaid  # a picture, not just J
 planlint --version                           # print the installed version and exit
 ```
 
+> **Not on PyPI yet.** `v0.2.0` is the first release intended for a package
+> index and the tag has not been pushed, so `pip install planlint` 404s today.
+> Until it resolves, install from the repository —
+> `pip install git+https://github.com/ianshank/planlint@a1b686864282e27c754ec1d49ac6f931e1e140e1`
+> — or use the composite Action below, which installs the CLI from its own
+> checkout and needs no index at all. Delete this note when the tag is cut.
+
 The distribution and the command are both `planlint`, with no hyphen.
 `plan-lint` on PyPI is an unrelated project, analysing LLM agent plans; this
 one gates OpenSpec and SpecKit change packages against a repository's real
@@ -151,7 +158,11 @@ unfamiliar clone.
 ## Rules
 
 Prose conventions, mechanized. `ERROR` blocks the gate; `WARN` degrades review
-quality without making the document wrong.
+quality without making the document wrong; `INFO` is an observation that never
+blocks at the default `--fail-on ERROR` — it reports what the gate *could not*
+check, so a vacuous pass is legible rather than silent. A waiver downgrades a
+finding one step toward `INFO`, which means a waived `INFO` finding still
+appears (with a `[waived]` prefix) and still counts at `--fail-on INFO`.
 
 | ID | Sev | Dialect | Checks |
 |---|---|---|---|
@@ -164,6 +175,8 @@ quality without making the document wrong.
 | G007 | ERROR | any | Every waiver (`specgraph:allow`) states a reason |
 | G008 | WARN | any | Every cited `ADR-n` is declared in the ADR source |
 | G009 | WARN | any | Every declared ADR is cited by a living spec, or waived |
+| G010 | INFO | any | `make` citations are reported when no make targets were detected, so a vacuous pass is legible |
+| G011 | WARN | any | A cited generic stage (`ci`/`test`/`validate`/`lint`/`coverage`) exists, when the repo does use Make |
 | H001 | ERROR | harness | Every AC has `_Verified by:_` naming a runnable stage |
 | H002 | WARN | harness | Every AC traces to an `R-`/`C-` requirement |
 | H003 | WARN | harness | No orphan requirements (every one is verified by some AC) |
@@ -179,6 +192,7 @@ quality without making the document wrong.
 | S002 | ERROR | speckit | `FR-`/`SC-` identifiers are unique |
 | S003 | WARN | speckit | Functional requirements use SHALL / MUST |
 | S004 | WARN | speckit | Acceptance scenarios name a stimulus (`WHEN`) and an outcome (`THEN`) |
+| S005 | WARN | speckit | Declared `FR-` bullets reach the graph (none silently dropped by heading level) |
 | W001 | ERROR | any | Every cited stage has a fresh, exit-0 witness (only under `--require-witness`) |
 | W002 | ERROR | any | A witness's recorded coverage meets the detected floor (only under `--require-witness`) |
 
@@ -386,7 +400,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: ianshank/planlint/.github/actions/planlint@a853b72f05a0a1ecbfed52eca6791bf2bb9ffa11
+      - uses: ianshank/planlint/.github/actions/planlint@a1b686864282e27c754ec1d49ac6f931e1e140e1
         with:
           target: "."
           fail-on: ERROR
@@ -424,6 +438,33 @@ paths are step outputs, so a workflow can branch on the result without scraping
 a log. `make-targets` and `coverage-floor` report what the run had to check
 against: a target with neither gives two of the rules nothing to compare, and
 the action says so rather than letting the silence read as a pass.
+
+**Narrowing the scan.** Two optional inputs pass a single named CLI flag
+each; both default to empty, which omits the flag entirely.
+
+| Input | Passes | Empty (the default) |
+|---|---|---|
+| `change` | `--change <name>` — lint one OpenSpec change package | the whole spec tree is checked |
+| `dialect` | `--dialect <harness\|upstream\|speckit\|auto>` — override detection | the detected dialect is used |
+
+```yaml
+      - uses: ianshank/planlint/.github/actions/planlint@a1b686864282e27c754ec1d49ac6f931e1e140e1
+        with:
+          change: add-payment-retry
+          dialect: speckit
+```
+
+Scoping with `change` narrows what the gate can see: the tree-wide rules
+(`G006`, `G009`) cannot be answered from one package and report as skipped
+`INFO` lines rather than passing. A scoped run is a useful fast signal on a
+pull request, not a replacement for an unscoped gate.
+
+There is deliberately **no `extra-args` input**: a raw pass-through would make
+the whole CLI an undocumented public API. Each flag an adopter needs becomes
+its own named input. `--require-witness` is deliberately absent — the witness
+store is gitignored, so a fresh CI checkout always fails it closed. The
+`dialect` *input* overrides detection; the `dialect` *output* still reports
+what the scan actually detected.
 
 Or run the CLI directly, without the action:
 
@@ -524,5 +565,11 @@ change package.
   comparison, and the candidate change packages
 - [Distribution plan](docs/distribution-plan.md) — what remains between this
   repository and a published release, and what was deliberately cut
+- [Security policy](SECURITY.md) — how to report a vulnerability, and the
+  one guarantee this tool makes about scanning a repository you do not
+  control: it parses, it never executes
+- [Peer review (2026-09)](docs/peer-review-2026-09.md) — what the gate
+  actually checks when it says PASS, measured against built target
+  repositories, and the rewritten remainder that follows from it
 
 Upstream OpenSpec conventions: [Fission-AI/OpenSpec concepts](https://github.com/Fission-AI/OpenSpec/blob/main/docs/concepts.md).

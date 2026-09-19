@@ -1,0 +1,2 @@
+makefile-only:
+	echo shadowed

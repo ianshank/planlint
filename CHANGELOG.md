@@ -5,6 +5,166 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — three rules closing the fail-opens the peer review measured
+
+Rule count 26 -> 29. All three are additive: no repository that passes
+`--fail-on ERROR` today starts failing. Observable rather than asserted — the
+`validate` and `graph` golden hashes in `tests/test_decomposition.py` are
+byte-identical across all three additions; only the `rules` hash moved.
+
+- **`G010` (INFO) — `make` citations are reported when no make targets were
+  detected.** G004 correctly returns early when the target repo has no
+  discoverable makefile, but the CLI then said nothing at all, even at
+  `--fail-on INFO`: a spec citing a stage that cannot exist reported PASS with
+  zero findings. The composite Action computed this separately as
+  `discovery-warnings`; the CLI, which pre-commit, `make validate` and every
+  agent invocation use, did not. INFO because it changes no verdict.
+
+  It reports **only what it observed**. `profile.make_targets == ()` conflates
+  a missing makefile, a present-but-empty one, one declaring only special
+  targets, and one that cannot be read, so the message says "no make targets
+  were detected" rather than naming a cause. It counts *distinct* stages,
+  since `make_refs` is a deduplicated name set.
+
+  Known limitation: a waiver downgrades a finding toward INFO, so waiving an
+  already-INFO rule only adds a `[waived]` prefix — **G010 is effectively
+  unwaivable** and still counts at `--fail-on INFO`. Dropping waived INFO
+  findings is an engine change affecting every rule and is not done here.
+
+- **`G011` (WARN) — a cited generic stage exists, when the repo does use
+  Make.** `GENERIC_STAGES` (`ci`/`test`/`validate`/`lint`/`coverage`) are
+  exempt from G004 entirely, which is most of the traffic: against a Makefile
+  declaring only `build`, `make regression` yielded a finding and each of the
+  five yielded none. The exemption is kept, because "run `make test`" is
+  idiomatic English and a tox/npm/just repo has not lied by writing it — but
+  it now applies only while `make_targets` is empty. Where the repo
+  demonstrably uses Make and declares no such target, that is a WARN.
+
+- **`S005` (WARN, speckit) — declared `FR-` bullets reach the graph.** A
+  `## Functional Requirements` heading at H2 instead of the nested H3 dropped
+  every requirement from the graph while `validate` reported `0/0/0`, PASS,
+  `broken_links: 0`. The predicate is **data loss, not document shape**: FR
+  bullets present and none extracted. A user-story-only draft, a prose-only
+  section and a non-functional-only spec are all silent, because nothing was
+  lost — a heading-shaped predicate fires on all three, which is the false
+  positive `docs/next-steps.md` item 4b refused. It also catches `FR-` bullets
+  under a differently-titled subheading, which the parser refuses by design.
+
+  Known limitation: a wrong-level spec that *also* lacks a Success Criteria
+  section is not discovered as SpecKit at all (`is_speckit_marked`), so S005
+  cannot see it. That case exits 2 rather than passing, so it is loud.
+
+`GENERIC_STAGES` now carries an in-source note naming the rules that narrow
+it, and the README severity contract documents `INFO` and what a waiver does
+to one — G010 is this project's first INFO-severity rule.
+
+### Fixed — detection and parsing fail-opens
+
+- **The makefile GNU Make would read, not only `Makefile`.** GNU Make's search
+  order is `GNUmakefile`, `makefile`, `Makefile`, first match wins. `detect`
+  looked for the last one only, so a repo using either of the others reported
+  zero targets, tripped G004's empty-guard, and passed a broken citation
+  clean. Three corpus shapes pin the lookup and the precedence.
+
+  The same fail-open recurred twice more during review and both are closed:
+  an **unreadable** candidate (a directory carrying the name) is terminal
+  rather than falling through, matching `make`, which aborts rather than
+  trying the next name — falling through reported the shadowed file's targets
+  and green-lit a citation that cannot run. And a **dangling symlink** is
+  present-but-unreadable, not absent: `Path.exists()` follows links, so
+  resolution now uses `lstat()`, which asks whether the directory entry is
+  there. A readable-but-empty candidate still shadows, because a zero-byte
+  makefile genuinely declares no rules.
+
+- **An empty-bodied `FR-` bullet no longer consumes the next one.**
+  `FR_DECL`'s `\s*(.+?)\s*$` matched across newlines, so `- **FR-001**:` with
+  no body took the FOLLOWING bullet as its text and that bullet vanished from
+  the graph. Reproduced at the *correct* heading level: two declared
+  requirements yielded one node, labelled with the other's text. Now
+  line-anchored with `[^\S\n]` and an optional body, so an empty declaration
+  is a recognised-but-empty requirement that `S003` reports as non-normative.
+
+- **`hard_coded()`'s scope is documented and pinned.** It reads only lines
+  beginning `-` or `|`, so a threshold in prose, a heading, or a trailing
+  `_Verified by:_` line is invisible to G003. Recorded as a deliberate limit
+  with its cost stated rather than widened — widening reintroduces the
+  false-positive class `fix-prose-matcher-precision` was spent lowering.
+
+### Added — Dependabot
+
+- `.github/dependabot.yml` watches the GitHub Actions ecosystem for both the
+  workflows and the composite action, which needs its own `directory:` entry
+  to be seen at all. Six third-party actions float on major tags and one
+  (`pypa/gh-action-pypi-publish@release/v1`) tracks a *branch*;
+  `docs/distribution-plan.md` defers SHA-pinning "until the pins can be
+  resolved and verified", and an update bot is the prerequisite for that
+  rather than a substitute. A `pip` ecosystem is deliberately absent — the dev
+  extras are unpinned by design — and a test pins that absence along with the
+  requirement that every composite-action directory is watched.
+
+### Added — peer review of the rule surface (`docs/peer-review-2026-09.md`)
+
+- **Measured what the gate checks when it says PASS**, by building target
+  repositories and running the shipped CLI against them rather than reading
+  the rules. Seven findings, each reproduced. The wedge sentence holds in
+  the case the README demonstrates and fails open in several others.
+- **`GNUmakefile` and lowercase `makefile` are not discovered.** `detect`
+  looks only for `root/"Makefile"`, while GNU Make honours all three and
+  prefers `GNUmakefile`. A repo using either reports `0 make targets`, which
+  trips G004's empty-guard: a genuinely broken `make` citation reports PASS,
+  exit 0. The 21-shape detection corpus covers Makefile *contents*
+  exhaustively and never varies the *filename*.
+- **`GENERIC_STAGES` exempts `ci`/`test`/`validate`/`lint`/`coverage` from
+  G004** — the five most likely citations — and `planlint new` scaffolds
+  `make test` five times. The exemption is defensible; being undocumented
+  everywhere is not.
+- **A wrong-level SpecKit heading is silent data loss**, not merely a
+  missing diagnostic: `## Functional Requirements` at H2 drops every FR from
+  the graph while `validate` reports `0 error · 0 warn · 0 info` and
+  `broken_links: 0`.
+
+### Changed — planning documents corrected against measurement
+
+- **The vacuous-pass item named the wrong rule.** Three documents said "a
+  target with no Makefile and no coverage floor passes G003/G004 vacuously".
+  G003 has no empty-guard and fires normally with no floor detected; only
+  G004 fails open, and the coverage floor is irrelevant to it. The
+  mis-statement had deferred a one-guard-clause fix behind a design pass it
+  does not need.
+- **Two stale numbers in `docs/next-steps.md`.** E501 is 122 violations, not
+  100 (28 `openspec_graph`, 8 `tools`, 86 tests). Adding `--cov=tools` now
+  reports 91.41% line / 89.32% branch — **both floors pass**, so item 19's
+  stated blocker is gone; its diagnosis survives, and `tools/` alone is
+  66.5% with four scripts at 0%.
+- **`docs/eval-corpus-plan.md`'s `is_normative` row is marked fixed.** It was
+  `[Certain]` and correct when measured and went stale without a marker.
+- **The roadmap notes that v2 does not reach CI.** The witness store is
+  gitignored, so `--require-witness` always fails closed on a fresh checkout
+  — documented honestly elsewhere, but never connected to the fact that the
+  v2 claim depends on it, and v3/v4 are sequenced ahead.
+
+### Fixed — pre-release adopter-surface drift
+
+- **The `[0.2.0]` section no longer repeats itself.** The `v0.1.0` provenance
+  note appeared twice, verbatim. The GitHub release is cut from this section,
+  so the duplicate would have shipped into the published release notes.
+- **Adopter pins name the commit that carries the current Action.** Every
+  `uses:` ref and the `.pre-commit-hooks.yaml` example pinned `a853b72`, the
+  commit *before* `change` and `dialect` existed — so the two inputs shipped
+  in `add-finding-line-hits` were unreachable from every documented pin. They
+  now name `a1b6868`, which is the convention this project already stated:
+  the pin is the SHA of the last Action implementation.
+- **`change` and `dialect` are documented.** Both shipped with no adopter-
+  facing documentation; the README's CI section covered `target` and
+  `fail-on` only. The README now carries an input table, a worked snippet,
+  and the standing reasons there is no `extra-args` and no
+  `--require-witness`.
+- **The README no longer opens with a command that 404s.** `pip install
+  planlint` is correct only after the tag is pushed. A note above it gives
+  the `git+https://` install that works today — verified in a clean
+  virtualenv — and says to delete itself when the tag is cut.
+
+
 ## [0.2.0] — 2026-09-12
 
 > `v0.1.0` was tagged in git (`cdc94ca`) under the previous distribution name
@@ -31,14 +191,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   level checks stay at line 0 on purpose.
 - **Named Action inputs `change` and `dialect`.** Empty defaults omit the
   CLI flag. No `extra-args`. No `--require-witness` on the Action.
-
-> `v0.1.0` was tagged in git (`cdc94ca`) under the previous distribution name
-> `openspec-graph`, and was never published to a package index. `v0.2.0` is the
-> first release under the `planlint` name and the first intended for PyPI;
-> publication happens when the tag is pushed and `.github/workflows/release.yml`
-> runs. This section includes every change that sat under Unreleased until the
-> tag (through PR #24): `report`, the four-way Action contract, SARIF, `delta`,
-> the labelled detect corpus, matcher precision, and the findings envelope.
 
 ### Changed — release-train honesty
 

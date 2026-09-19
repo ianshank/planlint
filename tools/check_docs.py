@@ -31,10 +31,23 @@ REQUIRED_DOCS = [
     # decides to read anything else, so an unlinked copy is a file no human
     # reviews and every agent obeys.
     "AGENTS.md",
+    # The disclosure route and the threat model. A security policy nobody can
+    # find from the front page is a policy in name only, and GitHub surfaces
+    # this file to reporters before they read anything else here.
+    "SECURITY.md",
 ]
 
 
-def check(root: Path = REPO_ROOT) -> list[str]:
+def check(root: Path | None = None) -> list[str]:
+    """Report every required doc that is absent or unlinked under ``root``.
+
+    ``root=None`` rather than ``root=REPO_ROOT`` so the default is read at
+    call time, not bound at definition time. With the default bound at def
+    time this function could only ever be run against the directory the
+    module was imported from, which is why its own gate logic had no test
+    that could point it at a fixture tree.
+    """
+    root = REPO_ROOT if root is None else root
     problems: list[str] = []
     readme_text = read_text(root / "README.md")
     for doc in REQUIRED_DOCS:
@@ -45,8 +58,8 @@ def check(root: Path = REPO_ROOT) -> list[str]:
     return problems
 
 
-def main(argv: list[str]) -> int:
-    problems = check()
+def main(argv: list[str], root: Path | None = None) -> int:
+    problems = check(root)
     if problems:
         for problem in problems:
             print(f"FAIL: {problem}")

@@ -37,6 +37,20 @@ ERROR, WARN, INFO = "ERROR", "WARN", "INFO"
 FINDINGS_SCHEMA_VERSION = 1
 
 # Make targets a spec may cite without them existing yet in the Makefile.
+#
+# G004 skips a citation naming any of these, which is a real and deliberate
+# narrowing of that rule: "run `make test`" is idiomatic English for "run the
+# suite", and a repo using tox, npm scripts or `just` has not lied about its
+# machinery by writing it. These are also the five names a spec is most likely
+# to cite, so the exemption is not a corner case -- it is most of the traffic,
+# and it went undocumented in the rule description, the README and every
+# planning document until `docs/peer-review-2026-09.md` F3 measured it.
+#
+# The exemption is not unconditional any more. G011 (WARN) fires on a cited
+# generic stage when `make_targets` is NON-empty -- the repo demonstrably uses
+# Make and still declares no such target -- and G010 (INFO) reports the
+# citations G004 could not check at all. Between them the silence is gone
+# without ERROR-level false positives against a repo that never used Make.
 GENERIC_STAGES = {"ci", "test", "validate", "lint", "coverage"}
 
 

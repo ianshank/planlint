@@ -16,6 +16,7 @@ tests/test_decomposition.py's static import guard.
 from __future__ import annotations
 
 import dataclasses
+import logging
 import re
 
 __all__ = ["MakefileFacts", "parse_makefile", "strip_bom", "strip_define_blocks"]
@@ -180,12 +181,21 @@ def strip_define_blocks(text: str) -> tuple[str, bool]:
     return "\n".join(out_lines), had_define
 
 
+# Module logger. "Why does planlint say `make deploy` does not exist when it is
+# right there in my Makefile?" is answered here and nowhere else -- the names
+# this parser declines to resolve, and the reason confidence was downgraded,
+# were computed and then discarded. A count in the dialect card cannot say
+# WHICH name was skipped.
+logger = logging.getLogger("planlint.machinery")
+
+
 def parse_makefile(text: str) -> MakefileFacts:
     text, has_define = strip_define_blocks(strip_bom(text))
     targets: set[str] = set()
     has_include = False
     has_conditional = False
     unresolved_count = 0
+    unresolved_names: list[str] = []
 
     for raw_line in text.splitlines():
         if raw_line[:1] in ("\t", " "):
@@ -211,12 +221,37 @@ def parse_makefile(text: str) -> MakefileFacts:
         for name in match.group(1).split():
             if _VAR_EXPANSION.search(name):
                 unresolved_count += 1  # never guess what a $(VAR) expands to
+                unresolved_names.append(name)
                 continue
             if "%" in name:
+                logger.debug("skipping pattern rule %r (DEC-MP-004)", name)
                 continue  # pattern rule (DEC-MP-004): excluded by design
             if name in _SPECIAL_TARGETS:
                 continue
             targets.add(name)
+
+    if unresolved_names:
+        # The names a G004 finding will claim do not exist. Logged rather than
+        # only counted, because the count reaches the card and the *names* are
+        # what an author needs to recognise their own target.
+        logger.debug(
+            "unresolved target name(s), value comes from a variable: %s", unresolved_names
+        )
+    reasons = [
+        label
+        for label, present in (
+            ("include directive", has_include),
+            ("conditional", has_conditional),
+            ("define block", has_define),
+            (f"{unresolved_count} unresolved name(s)", bool(unresolved_count)),
+        )
+        if present
+    ]
+    if reasons:
+        # Low confidence makes detect widen with the regex fallback rather than
+        # trust this result; without this line the widening looks arbitrary.
+        logger.debug("makefile confidence lowered by: %s", ", ".join(reasons))
+    logger.debug("parsed %d target(s) from the makefile", len(targets))
 
     return MakefileFacts(
         targets=tuple(sorted(targets)),

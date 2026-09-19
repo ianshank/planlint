@@ -36,7 +36,22 @@ SCENARIO = re.compile(r"^(#{3,5})\s+Scenario\s*[:\u2014-]\s*(.+?)\s*$", re.MULTI
 CANONICAL_REQ_LEVEL = 3
 CANONICAL_SCEN_LEVEL = 4
 
-SUPPRESS = re.compile(r"<!--\s*specgraph:allow\s+([A-Z]\d{3}(?:\s*,\s*[A-Z]\d{3})*)\s*(.*?)-->")
+# re.DOTALL, so a waiver whose reason spans lines is matched.
+#
+# Without it `(.*?)` could not cross a newline and a multi-line waiver was
+# SILENTLY INERT: it suppressed nothing, registered in `planlint waivers` as
+# nothing, and raised no G007 -- the author got a finding they thought they
+# had waived and no signal that the comment did nothing. Silence is the one
+# answer a governance tool must not give.
+#
+# `strip_waiver_comments` below fills the span newline-preservingly for this
+# reason: the old `" " * len(...)` fill would merge a multi-line waiver into
+# one logical line and shift every subsequent finding's locus (DEC-LH /
+# R-LH-14).
+SUPPRESS = re.compile(
+    r"<!--\s*specgraph:allow\s+([A-Z]\d{3}(?:\s*,\s*[A-Z]\d{3})*)\s*(.*?)-->",
+    re.DOTALL,
+)
 
 # --- speckit dialect ---------------------------------------------------------
 FR_ID = re.compile(r"\bFR-\d+\b")
@@ -46,8 +61,48 @@ SC_ID = re.compile(r"\bSC-\d+\b")
 # like `- **NFR-001**: text` (a plausible "Non-Functional Requirements"
 # subsection) cannot match: `\*\*(FR-\d+)` requires the literal `F`
 # immediately after the opening `**`, not after an `N`.
-FR_DECL = re.compile(r"^-\s*\*\*(FR-\d+)\*\*\s*:\s*(.+?)\s*$", re.MULTILINE)
-SC_DECL = re.compile(r"^-\s*\*\*(SC-\d+)\*\*\s*:\s*(.+?)\s*$", re.MULTILINE)
+def _bullet_decl(prefix: str) -> re.Pattern[str]:
+    """The `- **XX-001**: body` declaration grammar, for one id prefix.
+
+    Built from a template because FR and SC are the *same* bullet with a
+    different prefix, and writing them twice has already cost once: when
+    `FR_DECL` was fixed for the defect below, `SC_DECL` sat four lines away
+    and kept it. That is the third "two copies, one fixed" event in this
+    module -- `strip_waiver_comments`'s docstring records the `ADR_REF`/
+    `INV_REF` instance. A template makes the next fix structurally unable to
+    land on one and miss the other.
+
+    Every span is horizontal-whitespace-only (`[^\\S\\n]`, "whitespace but not
+    a newline") and the body may be empty. The original used `\\s*`, which
+    matches newlines, so `.+?` reached past a blank line to the next non-blank
+    one: `- **FR-001**:` with no body silently took the FOLLOWING bullet as
+    its text, and that bullet vanished from the graph. Reproduced at a
+    *correct* heading level for both prefixes -- FR-001 came back labelled
+    `- **FR-002**: ...` with FR-002 gone, and SC-001 likewise ate SC-002.
+    `(.*?)` lets an empty declaration be a recognised-but-empty entry rather
+    than an unmatched line, which is a diagnosable state instead of a silent
+    deletion.
+    """
+    return re.compile(
+        rf"^-[^\S\n]*\*\*({prefix}-\d+)\*\*[^\S\n]*:[^\S\n]*(.*?)[^\S\n]*$",
+        re.MULTILINE,
+    )
+
+
+# S005's probe, deliberately looser than the parser's own grammar above.
+#
+# `FR_DECL` anchors the hyphen at column 0, so an indented bullet
+# (`  - **FR-001**: ...`, a sub-item under a grouping line) is not a
+# requirement to the parser -- it is silently dropped. Detecting that loss
+# with the *same* pattern that caused it is a contradiction: the two share the
+# blind spot, so the case S005 exists for is undetectable by construction.
+# This one allows leading whitespace, and nothing else differs.
+FR_DECL_LOOSE = re.compile(
+    r"^[^\S\n]*-[^\S\n]*\*\*(FR-\d+)\*\*[^\S\n]*:", re.MULTILINE
+)
+
+FR_DECL = _bullet_decl("FR")
+SC_DECL = _bullet_decl("SC")
 # The bare (unannotated) heading name speckit_section_body() looks up --
 # shared by parse_speckit.py's own Success Criteria lookup and this module's
 # hard_coded() exemption below, so the two can't independently drift.
@@ -517,12 +572,72 @@ def speckit_subsection_span(section_text: str, name: str) -> tuple[int, str]:
     return 0, ""
 
 
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+_FENCED_BLOCK = re.compile(r"^(?P<fence>```+|~~~+).*?(?:\n(?P=fence)[^\S\n]*$|\Z)", re.MULTILINE | re.DOTALL)
+
+
+def blank_fenced_code(text: str) -> str:
+    """Blank fenced code blocks, preserving length and line structure.
+
+    A fenced block is an *illustration*, not a declaration. Without this, a
+    spec that documents the canonical requirement form -- which SpecKit
+    authors and this repository's own change packages do constantly -- was
+    told its requirements had been dropped. An unterminated fence runs to end
+    of document, matching how a reader sees it.
+
+    Same newline-preserving fill as :func:`blank_html_comments`, and for the
+    same reason: a locus reported after the block must still name the right
+    line.
+    """
+    return _FENCED_BLOCK.sub(
+        lambda m: "".join("\n" if ch == "\n" else " " for ch in m.group()), text
+    )
+
+
+def blank_html_comments(text: str) -> str:
+    """Blank every HTML comment, preserving both length and line structure.
+
+    ``strip_waiver_comments`` only blanks comments ``SUPPRESS`` matched, and
+    ``SUPPRESS`` has no ``re.DOTALL`` -- so a *multi-line* waiver comment is
+    left intact and its reason text keeps reading as document structure. That
+    is the third recurrence of this class (the `ADR_REF` and `INV_REF` cases
+    are in ``strip_waiver_comments``'s own docstring), so a rule scanning raw
+    markdown needs a comment-blind view that does not depend on whether a
+    comment happened to be a well-formed waiver.
+
+    Newlines are preserved rather than blanked, unlike
+    ``strip_waiver_comments``'s single-line span fill: blanking them would
+    merge lines and shift every subsequent locus, breaking the 1-based line
+    contract (DEC-LH / R-LH-14). Length is preserved too, so an offset into
+    the result indexes the raw document.
+    """
+    return _HTML_COMMENT.sub(
+        lambda m: "".join("\n" if ch == "\n" else " " for ch in m.group()), text
+    )
+
+
 def line_of(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 
 
 def hard_coded(text: str, dialect: str = "") -> tuple[str, ...]:
     """Every hard-coded-threshold offender line, dialect-neutral by default.
+
+    **Scope: bullets and table rows only.** A line is considered only when it
+    starts with ``-`` or ``|``. A threshold written in a prose paragraph, in a
+    heading, or on a trailing ``_Verified by:_`` line is invisible to G003.
+
+    That is a deliberate limit, not an oversight. Criteria live in bullets and
+    tables, and widening the scan to running prose reintroduces exactly the
+    false-positive class ``fix-prose-matcher-precision`` was spent lowering --
+    a narrative "we raised it from 80% to 90%" is a description, not a
+    hard-coded gate. The cost is real and is recorded rather than hidden: a
+    genuine offender phrased as prose is missed, and G003 is silent about it.
+    Widening this is a matcher change and would need the labelled-corpus and
+    ``make matcher-accuracy`` treatment the prose matchers get, not a looser
+    ``startswith``. Pinned by ``test_hard_coded_reads_bullets_and_table_rows_only``.
 
     ``dialect == "speckit"`` exempts the ``Success Criteria`` section body
     from the scan (R-SK-19, mandatory fix): a conventional, purely
@@ -544,10 +659,23 @@ def hard_coded(text: str, dialect: str = "") -> tuple[str, ...]:
     """
     scan_text = text
     if dialect == "speckit":
-        span = speckit_section_body(text, SPECKIT_SUCCESS_CRITERIA_HEADING)
+        # The span's own offset, not text.index(span). speckit_section_span
+        # already returns where the body starts; the previous code threw that
+        # away and re-derived it by searching for the body text, which finds
+        # the FIRST occurrence. When an earlier section's body was
+        # byte-identical to the Success Criteria body, the wrong region was
+        # blanked and the exemption silently failed -- a bare percentage in a
+        # legitimate Success Criterion became a false G003 ERROR, failing a
+        # clean repository on the one construct this exemption exists to
+        # permit. It also drops an O(n*m) substring scan.
+        start, span = speckit_section_span(text, SPECKIT_SUCCESS_CRITERIA_HEADING)
         if span:
-            start = text.index(span)
-            scan_text = text[:start] + " " * len(span) + text[start + len(span) :]
+            # Newline-preserving fill, matching blank_html_comments: blanking
+            # them would merge the section into one logical line. Harmless
+            # today because this function returns line strings and never
+            # counts lines, but a trap for the next caller who does.
+            blanked = "".join("\n" if ch == "\n" else " " for ch in span)
+            scan_text = text[:start] + blanked + text[start + len(span) :]
     offenders: list[str] = []
     for raw_line in scan_text.splitlines():
         line = raw_line.strip()
@@ -628,4 +756,9 @@ def strip_waiver_comments(text: str) -> str:
     ``INV_REF``/``ADR_REF``) scans this function's output, never the raw
     text directly, for exactly that reason.
     """
-    return SUPPRESS.sub(lambda m: " " * len(m.group()), text)
+    # Newlines preserved, not blanked: `SUPPRESS` is `re.DOTALL` now, so a
+    # span can cover several lines, and a flat space fill would merge them and
+    # shift every later locus by the number of lines swallowed.
+    return SUPPRESS.sub(
+        lambda m: "".join("\n" if ch == "\n" else " " for ch in m.group()), text
+    )

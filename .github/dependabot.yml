@@ -1,0 +1,60 @@
+# Dependabot configuration for planlint.
+#
+# Scope is deliberately narrow: GitHub Actions only.
+#
+# Why not `pip`: this project declares ZERO runtime dependencies
+# (`[project] dependencies = []` in pyproject.toml, load-bearing and guarded by
+# the stdlib-only test `test_new_modules_stdlib_only`), and the `[dev]` extras
+# are intentionally unpinned so contributors and CI resolve the same floating
+# tool versions. `tools/check_no_hardcoded_thresholds.py` fails the build if a
+# `ruff==`/`mypy==`/`pytest==` pin is reintroduced into the Makefile or a
+# workflow. A pip ecosystem entry here would open pull requests arguing with
+# that decision on every release, so it is omitted on purpose rather than
+# forgotten.
+#
+# Why Actions matter: six third-party actions are referenced across
+# `.github/workflows/` and the composite action, every one on a floating major
+# tag, and `pypa/gh-action-pypi-publish@release/v1` is a *branch* ref rather
+# than a tag. `docs/distribution-plan.md` records SHA-pinning them as deferred
+# "until the pins can be resolved and verified" -- an update bot is the thing
+# that makes pinned SHAs maintainable rather than instantly stale, so this is
+# the prerequisite for closing that item, not a substitute for it.
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    # "/" covers .github/workflows/. The composite action under
+    # .github/actions/planlint/ needs its own entry: Dependabot resolves
+    # `directory` against the repository root and only discovers workflow files
+    # at the root entry, so a nested composite action is invisible without it.
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+    groups:
+      # One pull request for the routine first-party bumps rather than four.
+      # `pypa/gh-action-pypi-publish` is deliberately excluded from the group:
+      # it is the only action with write access to a package index, its ref is
+      # a moving branch, and its updates deserve to be read on their own.
+      actions-minor:
+        patterns:
+          - "actions/*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  - package-ecosystem: "github-actions"
+    directory: "/.github/actions/planlint"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"

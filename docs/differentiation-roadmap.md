@@ -53,6 +53,18 @@ Witness mode. A spec's `_Verified by:` stops being fan fiction — it must cite 
 CI-uploaded witness stub (target, exit code, coverage number, commit SHA).
 This is the line competitors cannot cross without becoming CI infrastructure.
 
+> **As shipped, v2 does not yet reach CI** (`docs/peer-review-2026-09.md`
+> F7). The witness store is `.planlint/witnesses` and `.gitignore` line 52 is
+> `.planlint/`, so a fresh checkout has an empty store and
+> `--require-witness` always fails W001 closed. The repository documents this
+> honestly and the Action deliberately omits the flag — neither is a defect.
+> The gap is that this paragraph's claim depends on the part that does not
+> work: a witness proving a stage ran on one laptop, in a store that never
+> leaves it, is a weaker claim than the `_Verified by:` citation it replaces.
+> The wording above ("CI-uploaded witness stub") describes the design that
+> would deliver it; the implementation is a local store. Tracked as **R7**,
+> and it is sequenced *behind* v3 and v4 today, which is the wrong order.
+
 ### v3 — Portfolio Nervous System
 
 One tool across many house styles. Dialect cards as a diffable CI artifact, an
@@ -293,7 +305,7 @@ stays rejected; this doesn't reopen that non-goal, only adds to it.
 undeclared `INV-n`, or a declared invariant no living spec cites (G005/G006).
 Nothing extended that discipline to architecture decision records. New rules
 `G008` (cited-must-exist) and `G009` (declared-must-be-cited) mirror
-G005/G006 exactly; 26 rules total today — this change itself took the count
+G005/G006 exactly; 29 rules total today — this change itself took the count
 from 18 to 20 (see CP-7 below for the next increment, to 22).
 
 - **AC-AD-1..9:** ADR ids are discovered from either a directory of
@@ -441,7 +453,7 @@ as a content-addressed file under `.planlint/witnesses/`. A spec citing
 `` `make test` `` no longer just has to *name* a real target (H001) — under
 `--require-witness` it has to prove that target actually ran, at the current
 commit, and passed. New rules `W001` (missing/stale/failing witness) and
-`W002` (witness coverage below the detected floor); 26 rules total today —
+`W002` (witness coverage below the detected floor); 29 rules total today —
 this change itself took the count from 20 to 22 (see the SpecKit-dialect
 change for the next increment, to 26).
 
@@ -576,10 +588,15 @@ backlog.
 What remains after the first public tag, in this order, each as its own
 change package (spec-drafter → spec-adversary first):
 
-1. **Vacuous-pass policy** — a target with no Makefile and no coverage floor
-   currently passes G003/G004 vacuously; the Action warns via
-   `discovery-warnings`. Widening `indeterminate` is a rule-semantics
-   question, not an Action projection.
+1. **Vacuous-pass policy — restated; see `docs/peer-review-2026-09.md`.**
+   This line said "passes G003/G004 vacuously". Measured, that is half
+   wrong: G003 fires normally with no floor detected; only G004 fails open,
+   through a single empty-guard, and the coverage floor is irrelevant to it.
+   The review splits the item into R1–R8. Three are hours of work and close
+   live fail-open cases — most importantly **`GNUmakefile` and lowercase
+   `makefile` are not discovered at all**, so a repo with a valid makefile
+   and a genuinely broken citation reports PASS. Widening `indeterminate`
+   remains a 1.0 policy question.
 2. **Finding line numbers** — `Rule.check` returns strings; `Finding.line`
    stays 0; SARIF omits the region. Criteria and waivers already carry
    lines. This is a check-contract change, not a wire-up.

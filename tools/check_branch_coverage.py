@@ -19,49 +19,57 @@ disagreed.
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _common import read_pyproject_int
+from _common import (
+    SCOPED_FLOOR_SECTION,
+    coverage_totals,
+    parse_coverage_argv,
+    read_pyproject_int,
+    scoped_floor_key,
+)
 
 
-def _read_branch_floor(pyproject: Path) -> int | None:
-    """Read branch_fail_under from [tool.specgraph] in the given pyproject.toml.
+def _read_branch_floor(pyproject: Path, scope: str | None = None) -> int | None:
+    """Read the branch floor for ``scope``, or the repo-wide one if None.
 
-    This is specgraph's own gate key, kept out of ``[tool.coverage.*]`` so
+    Both are specgraph's own gate keys, kept out of ``[tool.coverage.*]`` so
     coverage.py doesn't warn about an unknown option.
     """
-    return read_pyproject_int(pyproject, "[tool.specgraph]", "branch_fail_under")
+    key = "branch_fail_under" if scope is None else scoped_floor_key(scope, "branch")
+    return read_pyproject_int(pyproject, SCOPED_FLOOR_SECTION, key)
 
 
-def branch_coverage(cov_path: Path) -> tuple[float, int, int]:
-    data = json.loads(cov_path.read_text(encoding="utf-8"))
-    totals = data.get("totals", {})
-    num = int(totals.get("num_branches", 0))
-    covered = int(totals.get("covered_branches", 0))
+def branch_coverage(cov_path: Path, scope: str | None = None) -> tuple[float, int, int]:
+    covered, num = coverage_totals(cov_path, "covered_branches", "num_branches", scope)
     pct = (100.0 * covered / num) if num else 0.0
     return pct, covered, num
 
 
 def main(argv: list[str]) -> int:
-    cov_path = Path(argv[1]) if len(argv) > 1 else Path("coverage.json")
-    floor = _read_branch_floor(Path("pyproject.toml"))
+    try:
+        cov_path, scope = parse_coverage_argv(argv)
+    except ValueError as exc:
+        print(f"usage error: {exc}", file=sys.stderr)
+        return 2
+    floor = _read_branch_floor(Path("pyproject.toml"), scope)
 
     if floor is None:
         # A repo that turns this gate on MUST configure branch_fail_under.
         # Missing it is a misconfiguration, not a skip — fail loud so CI never
         # passes silently on a gate it claims to enforce.
-        print("no branch_fail_under set in pyproject.toml [tool.specgraph]", file=sys.stderr)
+        key = "branch_fail_under" if scope is None else scoped_floor_key(scope, "branch")
+        print(f"no {key} set in pyproject.toml {SCOPED_FLOOR_SECTION}", file=sys.stderr)
         return 2
 
     if not cov_path.exists():
         print(f"coverage file not found: {cov_path}; run coverage first", file=sys.stderr)
         return 2
 
-    pct, covered, num = branch_coverage(cov_path)
+    pct, covered, num = branch_coverage(cov_path, scope)
     if num == 0:
         # branch=true is set in pyproject; zero branches means coverage didn't
         # instrument the source at all — a real misconfiguration, not a pass.
@@ -71,13 +79,14 @@ def main(argv: list[str]) -> int:
         )
         return 2
 
+    label = "branch coverage" if scope is None else f"{scope}/ branch coverage"
     if pct < floor:
         print(
-            f"branch coverage {pct:.1f}% ({covered}/{num} branches) "
+            f"{label} {pct:.1f}% ({covered}/{num} branches) "
             f"below floor {floor}% from pyproject.toml"
         )
         return 1
-    print(f"branch coverage {pct:.1f}% ({covered}/{num}) meets floor {floor}%")
+    print(f"{label} {pct:.1f}% ({covered}/{num}) meets floor {floor}%")
     return 0
 
 

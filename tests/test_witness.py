@@ -2,7 +2,7 @@
 
 Pure, no CLI/subprocess -- mirrors test_ledger.py's/test_dialect_card.py's
 style. Direct function calls against openspec_graph.witness, not through
-detect.profile() (that's covered separately in test_graft.py, since it also
+detect.profile() (that's covered separately in test_graft_witness.py, since it also
 exercises the git-dependent _current_sha() lazy wiring).
 """
 

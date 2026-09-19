@@ -96,6 +96,21 @@ class SpecReadError(Exception):
 
 
 def parse_spec(path: Path, dialect: str) -> ParsedSpec:
+    # Narrow on purpose: only the shapes whose `open()` BLOCKS rather than
+    # raising. A FIFO waits for a writer -- forever, here -- so planlint hangs
+    # on a repository it was merely asked to inspect, and every verb calls
+    # this. Sockets and device nodes can block the same way.
+    #
+    # Everything else is deliberately left to `open()` below, because the
+    # OSError it raises is worth more than this precheck could say: a
+    # directory yields "Is a directory" and a permission failure yields
+    # "Permission denied", each surfaced in the message (AC-RE-2) and chained
+    # as `__cause__` (AC-RE-3). A blanket `is_file()` guard here passed the
+    # FIFO test and silently degraded both of those to "not a regular file"
+    # with no cause -- which the existing suite caught.
+    if path.is_fifo() or path.is_socket() or path.is_block_device() or path.is_char_device():
+        logger.debug("unreadable spec %s: not a regular file", path)
+        raise SpecReadError(path, "not a regular file")
     try:
         # utf-8-sig, matching every read in detect.py: a BOM-prefixed spec
         # whose first line is a criterion otherwise loses that criterion to the

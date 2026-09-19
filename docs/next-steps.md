@@ -10,12 +10,22 @@ Do **not** start this list before `v0.2.0` is tagged and `pip install planlint`
 resolves. The in-tree remainder is not more rules; it is 1.0 credibility.
 Each item is its own OpenSpec change, spec-drafter → spec-adversary first.
 
-1. **Vacuous-pass policy.** A target with no Makefile and no coverage floor
-   currently passes G003/G004 vacuously. The Action already reports that
-   through `discovery-warnings`. Widening `indeterminate` to cover "no
-   machinery detected" is a rule-semantics question (reopen trigger already
-   recorded under the Action contract deferrals below). Docs for CLI
-   adopters now sit in the README; the remaining work is the policy decision.
+1. **Vacuous-pass policy — superseded by `docs/peer-review-2026-09.md`.**
+   This item said "a target with no Makefile and no coverage floor currently
+   passes G003/G004 vacuously". That was measured and is **half wrong**:
+   G003 has no empty-guard and fires normally with no floor detected,
+   falling back to `locator = "the governance policy"`. Only G004 fails
+   open, through one line (`if not profile.make_targets: return`), and the
+   coverage floor has nothing to do with it.
+
+   The mis-statement was load-bearing. Framed as two rules and two kinds of
+   machinery, the item read as a broad rule-semantics question and was
+   deferred behind a design pass it does not need. The review splits it into
+   R1–R8 there; three of those (find `GNUmakefile`/`makefile`; document
+   `GENERIC_STAGES`; document `hard_coded()`'s bullet scoping) are hours of
+   work each and close cases where the gate currently says PASS on a spec
+   that is lying. Widening `indeterminate` stays a 1.0 policy question,
+   exactly as the Action-contract deferral table records.
 2. ~~**Finding line numbers.**~~ Shipped in `add-finding-line-hits`.
    `Rule.check` may yield `CheckHit` with a 1-based locus; `evaluate()` copies
    it onto `Finding.line` when `>= 1`. SARIF region and GitHub `line=` still
@@ -50,7 +60,7 @@ later than this list. They sharpen a tool nobody has adopted yet.
    external consumer of the saved JSON, not a core-projection change) is the
    template to follow.
 
-3. **Rule-pack plugins** — today the 26 rules are a fixed tuple. If a target
+3. **Rule-pack plugins** — today the 29 rules are a fixed tuple. If a target
    repo needs a custom convention (e.g. "every AC cites a JIRA ticket"), allow
    registering extra `Rule` objects via entry points. The deterministic
    contract (sorted, byte-stable JSON) must hold for plugins too.
@@ -98,6 +108,15 @@ later than this list. They sharpen a tool nobody has adopted yet.
    design pass the rest of this rule family got, not a rushed addition —
    false-positive risk against a legitimately FR-less, user-story-only draft
    spec needs real design work, not a guess.
+
+   **Reproduced** at `c304a3d` (`docs/peer-review-2026-09.md` F4), and it is
+   worse than "no diagnostic": it is silent data loss from the graph. One
+   file, one heading level changed — H3 yields nodes `FR-001`, `FR-002`,
+   `SC-001`; H2 yields `SC-001` alone. Both report `0 error · 0 warn · 0
+   info`, `PASS`, `broken_links: 0`. The deferral reason above still holds,
+   and does not apply to the discriminating case: a `Requirements`-shaped
+   section that exists and yields zero FR bullets is not the same as no
+   section at all, and only the former needs to warn. Tracked as **R6**.
 
 ## Medium term
 
@@ -242,9 +261,11 @@ it is not cargo-culted into the v0.1 surface.
 18. **`E501` is configured but not enforced** — `[tool.ruff] line-length = 100`
     has always been set, but ruff's `select` was never set either, so the
     default `E4/E7/E9/F` applied and the `E5` group (line length) was never
-    on. Turning it on today reports **100 violations**: 33 in
-    `openspec_graph/` and `tools/`, the rest in tests, with a median overage
-    of six characters and a maximum of 214. The `select` list added alongside
+    on. Turning it on reported **100 violations** when this note was
+    written; re-measured at `c304a3d` it is **122**: 28 in `openspec_graph/`,
+    8 in `tools/`, 86 in tests. The debt grew 22% while being tracked here as
+    a fixed number, which is the argument for doing the rewrap rather than
+    re-counting it again. The `select` list added alongside
     this note enables every family that was already at or near zero, and
     names `E501` as the one deliberate omission. The work owed is the
     rewrap, as its own change: bundling 100 reflowed lines across a dozen
@@ -253,8 +274,15 @@ it is not cargo-culted into the v0.1 surface.
 19. **`tools/` is linted and typechecked but measured by nothing** —
     `[tool.coverage.run] source` is `["openspec_graph"]`, so the gate scripts
     that enforce every other gate have no coverage number of their own. Adding
-    `--cov=tools` today reports 88.3% line / 84.6% branch overall, which fails
-    the 90% floor -- but the shortfall is mostly *measurement*, not absence:
+    `--cov=tools` reported 88.3% line / 84.6% branch when this note was
+    written, "which fails the 90% floor". **That premise no longer holds.**
+    Re-measured at `c304a3d`: **91.41% line, 89.32% branch — both floors
+    pass**, so nothing blocks turning it on. The diagnosis below survives its
+    numbers, and is sharper than the figures suggest: `tools/` alone measures
+    66.5% line, with four scripts at *literally* 0%
+    (`check_coverage_floor`, `check_branch_coverage`, `diff_spec_graph`,
+    `render_mermaid`) despite `tests/test_ci_hardening.py` demonstrably
+    executing them. The shortfall is mostly *measurement*, not absence:
     several tools are exercised only through `subprocess.run` calls that do
     not inject `COVERAGE_PROCESS_START`, so their lines are invisible even
     though tests run them. `tests/support.py`'s `run_cli` already does this
@@ -266,7 +294,7 @@ it is not cargo-culted into the v0.1 surface.
 
 ## Skills / agents
 
-13. **Rules as reusable skills** — the 26 rules already are the reusable
+13. **Rules as reusable skills** — the 29 rules already are the reusable
     "skills" and the evaluator is the deterministic harness (see
     `docs/agents-skills-harness.md`). The future extension point for composing
     rule packs across repos is item 3 (entry-point `Rule` registration). No

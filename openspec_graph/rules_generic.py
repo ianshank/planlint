@@ -1,4 +1,4 @@
-"""Universal (dialect-agnostic) rules: G001-G009.
+"""Universal (dialect-agnostic) rules: G001-G011.
 
 G006/G009's real checks are cross-tree (a declared invariant/ADR cited by no
 living spec anywhere), so neither can be expressed as a per-spec
@@ -12,7 +12,7 @@ from collections.abc import Iterable, Sequence
 
 from .detect import StackProfile
 from .parse import ParsedSpec, threshold_values
-from .rule_types import ERROR, GENERIC_STAGES, WARN, CheckHit, CheckResult, Rule
+from .rule_types import ERROR, GENERIC_STAGES, INFO, WARN, CheckHit, CheckResult, Rule
 
 __all__ = ["GENERIC_RULES"]
 
@@ -71,6 +71,71 @@ def _unknown_make_target(spec: ParsedSpec, profile: StackProfile) -> Iterable[Ch
             yield (
                 f"cites `make {target}` which is not a target in the target "
                 f"repo's Makefile; the criterion cannot be executed as written"
+            )
+
+
+def _unchecked_make_citations(spec: ParsedSpec, profile: StackProfile) -> Iterable[CheckResult]:
+    """G010: the citations G004 could not check, no make targets being detected.
+
+    G004 returns early when ``profile.make_targets`` is empty, and that is
+    correct -- a repo that does not use Make has not lied by mentioning it.
+    What was wrong is that the CLI then said nothing at all, so a spec citing
+    a stage that cannot exist reported PASS with zero findings even at
+    ``--fail-on INFO``. The Action computed this separately as
+    ``discovery-warnings``; the CLI, which pre-commit and every agent
+    invocation use, did not.
+
+    INFO precisely because it changes no verdict: ``--fail-on ERROR`` and
+    ``--fail-on WARN`` runs keep a byte-identical pass/fail outcome. It reports
+    an *unrun check*, never a missing makefile -- a spec with no `make`
+    citation has nothing unchecked and stays silent.
+
+    One finding per spec, not per citation: the fact being reported is a
+    property of the run, and n copies of one unrun check would drown the
+    findings a reader can act on.
+    """
+    if profile.make_targets or not spec.make_refs:
+        return
+    # "no make targets were detected" and not "no makefile was found": the
+    # only fact available here is `profile.make_targets == ()`, which conflates
+    # a missing makefile, a present-but-empty one, one declaring nothing but
+    # special targets, and one that exists and cannot be read. Naming the
+    # wrong cause sends the author looking for a file that is sitting right
+    # there. `detect` prints which names it looked for; this reports what it
+    # found.
+    #
+    # `make_refs` is a deduplicated set of target names (parse.parse_spec), so
+    # this counts distinct stages, not citation occurrences. Said plainly
+    # rather than left for a reader to discover from a surprising number.
+    yield (
+        f"{len(spec.make_refs)} distinct `make` stage(s) not checked: no make "
+        f"targets were detected in the target repo, so G004 could not run"
+    )
+
+
+def _generic_stage_not_a_target(spec: ParsedSpec, profile: StackProfile) -> Iterable[CheckResult]:
+    """G011: a generic stage cited against a Makefile that does not declare it.
+
+    ``GENERIC_STAGES`` are exempt from G004 for a real reason: "run `make
+    test`" is idiomatic English for "run the suite", and a repo using tox, npm
+    scripts or `just` is not lying by writing it. That argument holds only
+    while the repo has not shown that it uses Make.
+
+    So this fires only when ``make_targets`` is non-empty -- the repo
+    demonstrably uses Make and still declares no such target. WARN, not ERROR,
+    because the shorthand reading survives even then. Where there is no
+    makefile at all, G010 covers the citation and this stays silent, so no
+    citation is ever reported by two rules.
+    """
+    if not profile.make_targets:
+        return
+    known = set(profile.make_targets)
+    for target in spec.make_refs:
+        if target in GENERIC_STAGES and target not in known:
+            yield (
+                f"cites `make {target}`, which this repo's Makefile does not "
+                f"declare; it is exempt from G004 as a conventional stage name, "
+                f"but the repo does use Make, so the citation may not run"
             )
 
 
@@ -169,5 +234,19 @@ GENERIC_RULES: tuple[Rule, ...] = (
         ("*",),
         "declared ADRs are cited by a living spec or waived",
         _orphan_adr_registry_stub,
+    ),
+    Rule(
+        "G010",
+        INFO,
+        ("*",),
+        "make citations are reported when no make targets were detected",
+        _unchecked_make_citations,
+    ),
+    Rule(
+        "G011",
+        WARN,
+        ("*",),
+        "cited generic stages exist when the repo uses Make",
+        _generic_stage_not_a_target,
     ),
 )

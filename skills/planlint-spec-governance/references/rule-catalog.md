@@ -21,6 +21,8 @@ Dialect `any` means the rule applies to every dialect.
 | G007 | ERROR | any | every waiver states a reason |
 | G008 | WARN | any | cited ADRs are declared |
 | G009 | WARN | any | declared ADRs are cited by a living spec or waived |
+| G010 | INFO | any | make citations are reported when no make targets were detected |
+| G011 | WARN | any | cited generic stages exist when the repo uses Make |
 | H001 | ERROR | harness | every AC is verifiable |
 | H002 | WARN | harness | every AC traces to a requirement |
 | H003 | WARN | harness | no orphan requirements |
@@ -36,5 +38,6 @@ Dialect `any` means the rule applies to every dialect.
 | S002 | ERROR | speckit | FR-/SC- identifiers are unique |
 | S003 | WARN | speckit | functional requirements are normative |
 | S004 | WARN | speckit | acceptance scenarios state a stimulus and an outcome |
+| S005 | WARN | speckit | declared FR- bullets reach the graph |
 | W001 | ERROR | any | every cited stage has a fresh, passing witness |
 | W002 | ERROR | any | a witness's recorded coverage meets the detected floor |

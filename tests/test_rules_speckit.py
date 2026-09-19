@@ -1,9 +1,9 @@
-"""Tests for the speckit rule family S001-S004, and the mandatory G002/G003
+"""Tests for the speckit rule family S001-S005, and the mandatory G002/G003
 fix (add-speckit-dialect, Milestone 4).
 
 "A linter that never fails is a decoration" -- each rule gets a fixture that
 violates it and an assertion the rule fires on exactly that violation
-(tests/test_graft.py's own stated philosophy, mirrored here).
+(the philosophy stated in tests/test_graft_rules.py, mirrored here).
 """
 
 from __future__ import annotations
@@ -291,8 +291,22 @@ def test_rules_py_registers_speckit_rules_additively() -> None:
 
 
 def test_no_orphan_requirement_rule_exists_for_speckit() -> None:
+    """C-SK-4: no *orphaned-requirement* rule may be added for speckit.
+
+    The second assertion is the load-bearing one and is unchanged. The set
+    below is a proxy that grew with `lint-empty-speckit-requirements`, which
+    added S005.
+
+    AC-SK-38 wrote "lists exactly S001-S004 as the new speckit family", which
+    was a true description of what *that* change added. It is not a standing
+    bar on the family ever growing -- read that way it would freeze the
+    dialect permanently, which C-SK-4, the actual constraint, does not say.
+    S005 flags a Requirements section that yielded no requirement; it is an
+    empty-section rule, not an orphan-requirement rule, so C-SK-4 holds
+    intact. See DEC-SER in the change package for the full argument.
+    """
     speckit_idents = {r.ident for r in rules.RULES if "speckit" in r.dialects}
-    assert speckit_idents == {"S001", "S002", "S003", "S004"}
+    assert speckit_idents == {"S001", "S002", "S003", "S004", "S005"}
     for r in rules.RULES:
         if r.ident.startswith("S"):
             assert "orphan" not in r.summary.lower()
@@ -307,3 +321,294 @@ def test_scaffold_still_only_offers_harness_and_upstream() -> None:
     assert hasattr(scaffold_templates, "spec_harness")
     assert hasattr(scaffold_templates, "spec_upstream")
     assert not hasattr(scaffold_templates, "spec_speckit")
+
+
+# --- S005: a Requirements section that yielded nothing ----------------------
+#
+# docs/peer-review-2026-09.md F4. `parse_speckit` scopes the FR scan to a
+# level-3 heading nested in the level-2 `Requirements` span; a hand-edited spec
+# writing it one level up loses every requirement from the graph while validate
+# reports 0/0/0 PASS and broken_links 0.
+
+_WRONG_LEVEL = textwrap.dedent(
+    """\
+    # Feature Specification: Demo
+
+    ## Requirements *(mandatory)*
+
+    ## Functional Requirements
+
+    - **FR-001**: The system MUST do the thing.
+    - **FR-002**: The system MUST reject a bad input.
+
+    ## Success Criteria *(mandatory)*
+
+    - **SC-001**: The thing completes in under a second.
+    """
+)
+
+_USER_STORY_ONLY = textwrap.dedent(
+    """\
+    # Feature Specification: Demo
+
+    ## User Scenarios *(mandatory)*
+
+    - As a user I want the thing so that it helps.
+
+    ## Success Criteria *(mandatory)*
+
+    - **SC-001**: The thing completes in under a second.
+    """
+)
+
+
+def test_s005_fires_when_a_requirements_section_yields_nothing(repo: Path) -> None:
+    found = [f for f in findings_for(repo, _WRONG_LEVEL) if f.rule == "S005"]
+    assert len(found) == 1, found
+    assert found[0].severity == "WARN"
+    # The exact line, not merely a positive one: the contract is that the locus
+    # is the FIRST DROPPED BULLET -- the token the author has to move. A
+    # regression reporting the heading, or line 1, would satisfy `> 0`.
+    expected = next(
+        i for i, ln in enumerate(_WRONG_LEVEL.splitlines(), 1)
+        if ln.startswith("- **FR-001**")
+    )
+    assert found[0].line == expected, (found[0].line, expected)
+
+
+def test_s005_is_silent_on_the_canonical_nesting(repo: Path) -> None:
+    """Non-success: the shape SpecKit's own template produces must stay quiet."""
+    body = _WRONG_LEVEL.replace("## Functional Requirements", "### Functional Requirements")
+    assert "S005" not in {f.rule for f in findings_for(repo, body)}
+
+
+def test_s005_is_silent_on_a_user_story_only_draft(repo: Path) -> None:
+    """Non-success: THE false positive docs/next-steps.md item 4b refused.
+
+    A draft that never declares a Requirements section has not lost anything;
+    the discrimination is "declared and yielded nothing", not "yielded
+    nothing".
+    """
+    assert "S005" not in {f.rule for f in findings_for(repo, _USER_STORY_ONLY)}
+
+
+def test_s005_does_not_match_non_functional_requirements(repo: Path) -> None:
+    """Non-success: equality, never containment.
+
+    `Non-Functional Requirements` declares something else and promises no FR
+    bullets; matching it by substring would fire on a correct document.
+    """
+    body = _USER_STORY_ONLY.replace(
+        "## User Scenarios *(mandatory)*", "## Non-Functional Requirements"
+    )
+    assert "S005" not in {f.rule for f in findings_for(repo, body)}
+
+
+def test_s005_is_silent_on_a_requirements_section_with_no_bullets(repo: Path) -> None:
+    """Non-success: the predicate is data loss, not document shape.
+
+    A section that declares no FR- bullet has not lost one. An earlier draft
+    keyed on the heading and fired here; the adversarial review showed the same
+    predicate also fires on a legitimately NFR-only spec under SpecKit's own
+    mandatory `## Requirements` wrapper, which is the false positive
+    docs/next-steps.md item 4b refused. Keying on dropped bullets removes both.
+    """
+    body = textwrap.dedent(
+        """\
+        # Feature Specification: Demo
+
+        ## Requirements *(mandatory)*
+
+        We will decide the requirements once the design settles.
+
+        ## Success Criteria *(mandatory)*
+
+        - **SC-001**: The thing completes in under a second.
+        """
+    )
+    assert "S005" not in {f.rule for f in findings_for(repo, body)}
+
+
+def test_s005_is_silent_on_a_non_functional_only_spec(repo: Path) -> None:
+    """Non-success: THE false positive the adversarial review reproduced.
+
+    SpecKit's template makes the `## Requirements` H2 wrapper mandatory, so a
+    heading-based predicate swallows every document whose requirements are
+    non-functional and tells its author things were "dropped" when none existed.
+    """
+    body = textwrap.dedent(
+        """\
+        # Feature Specification: Demo
+
+        ## Requirements *(mandatory)*
+
+        ### Non-Functional Requirements
+
+        - The system responds within one second under nominal load.
+
+        ## Success Criteria *(mandatory)*
+
+        - **SC-001**: The thing completes in under a second.
+        """
+    )
+    assert "S005" not in {f.rule for f in findings_for(repo, body)}
+
+
+def test_s005_fires_on_fr_bullets_under_a_differently_titled_subheading(repo: Path) -> None:
+    """A shape a heading-based predicate misses entirely.
+
+    `### Core Requirements` holding FR- bullets is refused by the parser
+    (AC-SK-49) and is exactly as lost as the wrong-level case.
+    """
+    body = textwrap.dedent(
+        """\
+        # Feature Specification: Demo
+
+        ## Requirements *(mandatory)*
+
+        ### Core Requirements
+
+        - **FR-001**: The system MUST do the thing.
+
+        ## Success Criteria *(mandatory)*
+
+        - **SC-001**: The thing completes in under a second.
+        """
+    )
+    assert "S005" in {f.rule for f in findings_for(repo, body)}
+
+
+def test_s005_ignores_fr_bullets_inside_a_multiline_comment(repo: Path) -> None:
+    """Non-success: a comment's own text is not the document's content.
+
+    `strip_waiver_comments` alone is not enough here. `SUPPRESS` has no
+    `re.DOTALL`, so a MULTI-LINE waiver comment is never matched and its reason
+    text survives into the scanned document -- reproduced by the adversarial
+    review, where the waiver both failed to register and tripped the rule it
+    was trying to waive. That is the third recurrence of the class
+    `strip_waiver_comments`'s own docstring records, so S005 blanks every HTML
+    comment rather than only the well-formed waivers.
+    """
+    body = textwrap.dedent(
+        """\
+        # Feature Specification: Demo
+
+        <!-- specgraph:allow S005
+        - **FR-001**: quoted inside this waiver's reason text
+        -->
+
+        ## Success Criteria *(mandatory)*
+
+        - **SC-001**: The thing completes in under a second.
+        """
+    )
+    assert "S005" not in {f.rule for f in findings_for(repo, body)}
+
+
+def test_blank_html_comments_preserves_length_and_line_numbers() -> None:
+    """The locus contract (DEC-LH / R-LH-14) survives blanking.
+
+    Blanking newlines would merge lines and shift every subsequent finding's
+    line by an amount nobody can see.
+    """
+    from openspec_graph.parse_semantics import blank_html_comments
+
+    raw = "a\n<!-- one\ntwo -->\nb\n"
+    out = blank_html_comments(raw)
+    assert len(out) == len(raw)
+    assert out.count("\n") == raw.count("\n")
+    assert out.splitlines()[0] == "a"
+    assert out.splitlines()[3] == "b"
+    assert "one" not in out and "two" not in out
+
+
+def test_s005_never_evaluates_for_the_harness_dialect(repo: Path) -> None:
+    """Non-success: this repo's own harness specs all carry `## Requirements`
+    and zero FR- bullets. A dialect leak would light up its entire tree."""
+    from openspec_graph.rules import RULES
+
+    s005 = next(r for r in RULES if r.ident == "S005")
+    assert not s005.applies("harness")
+    assert not s005.applies("upstream")
+    assert s005.applies("speckit")
+
+
+def test_s005_is_silent_on_fr_bullets_inside_a_fenced_code_block(repo: Path) -> None:
+    """Non-success: a fenced block illustrates, it does not declare.
+
+    S005 scans the raw document deliberately -- the whole point is to see
+    bullets the parser's scoped span missed -- which meant a spec DOCUMENTING
+    the canonical requirement form was told its requirements had been dropped.
+    SpecKit authors and this repository's own change packages write that block
+    constantly.
+    """
+    body = textwrap.dedent(
+        """\
+        # Feature Specification: Demo
+
+        ## Overview
+
+        The canonical form looks like this:
+
+        ```markdown
+        ### Functional Requirements
+
+        - **FR-001**: The system MUST do the thing.
+        ```
+
+        ## Success Criteria *(mandatory)*
+
+        - **SC-001**: The thing completes in under a second.
+        """
+    )
+    assert "S005" not in {f.rule for f in findings_for(repo, body)}
+
+
+def test_s005_fires_on_indented_fr_bullets_the_parser_drops(repo: Path) -> None:
+    """The failure mode S005 exists for, previously invisible by construction.
+
+    `FR_DECL` anchors the hyphen at column 0, so a sub-item under a grouping
+    line is dropped silently. Detecting that loss with the same pattern that
+    caused it cannot work -- the probe and the parser shared the blind spot.
+    `FR_DECL_LOOSE` allows leading whitespace and differs in nothing else, so
+    the probe is a strict superset of the grammar it audits.
+    """
+    body = textwrap.dedent(
+        """\
+        # Feature Specification: Demo
+
+        ## Requirements *(mandatory)*
+
+        ### Functional Requirements
+
+        - Group A:
+          - **FR-001**: The system MUST do the thing.
+
+        ## Success Criteria *(mandatory)*
+
+        - **SC-001**: The thing completes in under a second.
+        """
+    )
+    found = [f for f in findings_for(repo, body) if f.rule == "S005"]
+    assert len(found) == 1, found
+
+
+def test_blank_fenced_code_preserves_length_and_lines() -> None:
+    """The locus contract again: a finding after a block must name its real line."""
+    from openspec_graph.parse_semantics import blank_fenced_code
+
+    raw = "a\n```py\nx = 1\n```\nb\n"
+    out = blank_fenced_code(raw)
+    assert len(out) == len(raw)
+    assert out.count("\n") == raw.count("\n")
+    assert out.splitlines()[0] == "a"
+    assert out.splitlines()[4] == "b"
+    assert "x = 1" not in out
+
+
+def test_blank_fenced_code_handles_an_unterminated_fence() -> None:
+    """An unterminated fence runs to end of document, as a reader sees it."""
+    from openspec_graph.parse_semantics import blank_fenced_code
+
+    out = blank_fenced_code("a\n```\n- **FR-001**: x\n")
+    assert "FR-001" not in out

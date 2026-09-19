@@ -16,12 +16,14 @@ import subprocess
 import sys
 import textwrap
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
 from openspec_graph import detect
 from openspec_graph import graph as graph_module
 from openspec_graph.rules import RULES, rule_table
+from tests.support import env_without_coverage, load_tool, run_tool_main
 from tests.support import write_spec as _write_spec
 
 TOOLS = Path(__file__).resolve().parent.parent / "tools"
@@ -83,29 +85,18 @@ def test_branch_check_fails_when_floor_not_configured(tmp_path: Path) -> None:
 
 
 def _run_branch_check(cwd: Path) -> int:
-    result = subprocess.run(
-        [sys.executable, str(TOOLS / "check_branch_coverage.py"), "coverage.json"],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=False,
+    return run_tool_main(
+        "check_branch_coverage", "check_branch_coverage.py", "coverage.json", cwd=cwd
     )
-    sys.stdout.write(result.stdout)
-    sys.stderr.write(result.stderr)
-    return result.returncode
 
 
 # --- AC-CH-1 / AC-CH-2: the line-coverage floor (read from pyproject) ---------
 
 
 def _run_cov_floor_check(cwd: Path) -> int:
-    result = subprocess.run(
-        [sys.executable, str(TOOLS / "check_coverage_floor.py"), "coverage.json"],
-        cwd=cwd, capture_output=True, text=True, check=False,
+    return run_tool_main(
+        "check_coverage_floor", "check_coverage_floor.py", "coverage.json", cwd=cwd
     )
-    sys.stdout.write(result.stdout)
-    sys.stderr.write(result.stderr)
-    return result.returncode
 
 
 def _write_cov_lines(path: Path, statements: int, covered: int) -> Path:
@@ -155,7 +146,8 @@ def test_coverage_floor_fails_below_threshold_pytest(tmp_path: Path) -> None:
         [sys.executable, "-m", "pytest", str(pkg / "test_mod.py"),
          "--cov=mod", "--cov-fail-under=100", "-q"],
         cwd=pkg.parent, capture_output=True, text=True, check=False,
-        env={**os.environ, "PYTHONPATH": str(pkg)},
+        # Its own coverage session, not this repo's -- see env_without_coverage.
+        env=env_without_coverage(PYTHONPATH=str(pkg)),
     )
     assert result.returncode != 0, "below-floor coverage must fail the gate"
 
@@ -169,9 +161,64 @@ def test_coverage_floor_passes_at_threshold(tmp_path: Path) -> None:
         [sys.executable, "-m", "pytest", str(pkg / "test_mod.py"),
          "--cov=mod", "--cov-fail-under=90", "-q"],
         cwd=pkg.parent, capture_output=True, text=True, check=False,
-        env={**os.environ, "PYTHONPATH": str(pkg)},
+        env=env_without_coverage(PYTHONPATH=str(pkg)),
     )
     assert result.returncode == 0
+
+
+def test_suite_survives_an_ambient_coverage_file(tmp_path: Path) -> None:
+    """An inherited ``COVERAGE_FILE`` must not crash the run at teardown.
+
+    Naming a per-leg coverage data file is the standard way to keep a build
+    matrix's coverage separate, and nothing in this repository sets the
+    variable, so the trap is entirely ambient. Before ``env_without_coverage``
+    the two nested ``pytest --cov`` tests above inherited it and wrote
+    statement-only data into this run's data file; with ``parallel = true`` the
+    outer run combines every sibling at teardown and raises ``DataError:
+    Can't combine branch coverage data with statement data`` from inside
+    pytest's own teardown hook. That is INTERNALERROR and exit 3 -- the entire
+    suite lost, no test marked red, which is why an ordinary test of those two
+    functions could never have caught it.
+
+    Runs them in a nested pytest under the conditions that spring the trap
+    (``COVERAGE_FILE`` set, ``--cov-branch`` on the parent) and asserts the
+    outcome is a real verdict rather than a crash.
+    """
+    data_file = tmp_path / "ambient.coverage"
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest",
+         str(REPO_ROOT / "tests" / "test_ci_hardening.py"),
+         "-k", "coverage_floor_passes_at_threshold",
+         # --cov-branch is half the trap: it makes the OUTER data branch-typed,
+         # so the nested statement-only data cannot combine with it. The
+         # explicit fail-under=0 overrides pyproject's 90 for this nested run
+         # only -- it measures `tools` while running one test that touches
+         # none of it, so the real floor would fail it at 0% for reasons that
+         # have nothing to do with the crash under test, and exit 0 would stop
+         # meaning anything.
+         "--cov=tools", "--cov-branch", "--cov-fail-under=0",
+         "-p", "no:cacheprovider", "-q"],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+        env=env_without_coverage(COVERAGE_FILE=str(data_file)),
+    )
+    combined = result.stdout + result.stderr
+    assert "INTERNALERROR" not in combined, combined[-3000:]
+    # Exit 3 is pytest's internal-error code, and it is the whole subject here.
+    assert result.returncode != 3, f"INTERNALERROR at teardown:\n{combined[-3000:]}"
+    assert result.returncode == 0, combined[-3000:]
+
+
+def test_env_without_coverage_strips_every_coverage_variable() -> None:
+    """The helper removes the whole family and applies overrides on top."""
+    from tests.support import COVERAGE_ENV_VARS
+
+    planted = dict.fromkeys(COVERAGE_ENV_VARS, "planted")
+    with mock.patch.dict(os.environ, planted):
+        env = env_without_coverage(PYTHONPATH="/somewhere")
+    assert not [name for name in COVERAGE_ENV_VARS if name in env]
+    assert env["PYTHONPATH"] == "/somewhere"
+    # Not a whitelist: everything unrelated survives.
+    assert "PATH" in env
 
 
 # --- AC-CH-5 / AC-CH-6: graph-diff fails on regressions, passes on fixes ----
@@ -241,13 +288,9 @@ def _diff(base: dict, head: dict) -> int:
         hp = Path(d) / "head.json"
         bp.write_text(json.dumps(base))
         hp.write_text(json.dumps(head))
-        result = subprocess.run(
-            [sys.executable, str(TOOLS / "diff_spec_graph.py"), str(bp), str(hp)],
-            capture_output=True, text=True, check=False,
-        )
-        sys.stdout.write(result.stdout)
-        sys.stderr.write(result.stderr)
-        return result.returncode
+        # Absolute paths, so no cwd is needed -- unlike the two coverage gates,
+        # this script reads nothing relative to where it was started.
+        return run_tool_main("diff_spec_graph", "diff_spec_graph.py", str(bp), str(hp))
 
 
 def test_graph_diff_passes_when_clean(repo: Path) -> None:
@@ -304,17 +347,13 @@ def test_graph_diff_passes_when_orphan_fixed(repo: Path) -> None:
 
 
 def test_graph_diff_rejects_bad_args() -> None:
-    result = subprocess.run(
-        [sys.executable, str(TOOLS / "diff_spec_graph.py"), "only-one-arg"],
-        capture_output=True, text=True, check=False,
-    )
-    assert result.returncode == 2
+    assert run_tool_main("diff_spec_graph", "diff_spec_graph.py", "only-one-arg") == 2
 
 
 # --- render_mermaid.py: thin consumer of a saved graph.json (CP-GV) ---------
 
 
-def test_render_mermaid_matches_to_mermaid_byte_for_byte(repo: Path, tmp_path: Path) -> None:
+def test_render_mermaid_matches_to_mermaid_byte_for_byte(repo: Path, tmp_path: Path, capsys) -> None:
     from openspec_graph.mermaid import to_mermaid
 
     _write_spec(repo, "c1", "cap1", GOOD_HARNESS)
@@ -322,20 +361,72 @@ def test_render_mermaid_matches_to_mermaid_byte_for_byte(repo: Path, tmp_path: P
     graph_path = tmp_path / "graph.json"
     graph_path.write_text(json.dumps(graph))
 
-    result = subprocess.run(
-        [sys.executable, str(TOOLS / "render_mermaid.py"), str(graph_path)],
-        capture_output=True, text=True, check=False,
-    )
-    assert result.returncode == 0
-    assert result.stdout == to_mermaid(graph)
+    assert run_tool_main("render_mermaid", "render_mermaid.py", str(graph_path)) == 0
+    # `print(..., end="")`, so stdout is the rendering with nothing appended.
+    assert capsys.readouterr().out == to_mermaid(graph)
 
 
 def test_render_mermaid_rejects_bad_args() -> None:
+    assert run_tool_main("render_mermaid", "render_mermaid.py") == 2
+
+
+# --- the executable contract, once rather than per script --------------------
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        "check_branch_coverage.py",
+        "check_coverage_floor.py",
+        "diff_spec_graph.py",
+        "render_mermaid.py",
+        "check_docs.py",
+        "check_no_hardcoded_thresholds.py",
+        "check_secrets.py",
+        "check_wheel_metadata.py",
+        "matcher_accuracy.py",
+        "render_plugin_manifests.py",
+        "render_rule_catalog.py",
+    ],
+)
+def test_gate_script_is_runnable_as_a_script(script: str, tmp_path: Path) -> None:
+    """``python tools/<script>.py`` starts and returns an exit code.
+
+    Every behaviour of these scripts is asserted in-process, against
+    ``main(argv)``, because a subprocess's execution is invisible to coverage
+    (see ``run_tool_main``). That leaves exactly one thing in-process testing
+    cannot see: whether the file still *runs* as a script -- an import that
+    only resolves because pytest put the repo root on ``sys.path``, a
+    ``sys.path`` bootstrap line deleted as dead code, a syntax error under the
+    ``if __name__ == "__main__"`` guard. The Makefile and the workflows invoke
+    every one of these this way, so that path is a real contract.
+
+    Asserted here once for the whole directory rather than once per script, so
+    a new gate script is covered by adding one line. Run from a throwaway cwd
+    with no arguments: what matters is that the interpreter got far enough to
+    reach the script's own argument handling, not which verdict it reached.
+    """
     result = subprocess.run(
-        [sys.executable, str(TOOLS / "render_mermaid.py")],
-        capture_output=True, text=True, check=False,
+        [sys.executable, str(TOOLS / script)],
+        cwd=tmp_path, capture_output=True, text=True, check=False,
+        env=env_without_coverage(),
     )
-    assert result.returncode == 2
+    # Checked by marker rather than by exit code alone, because the two ways a
+    # script fails to load do not agree on either signal. A failed import
+    # raises and prints "Traceback (most recent call last)"; a SyntaxError is
+    # reported by the compiler in a different format with no such line -- and
+    # both exit 1, which is a documented code here (a gate that found a
+    # violation). Exit code alone therefore cannot tell "the gate ran and
+    # failed the repo" from "the file is not loadable at all".
+    for marker in ("Traceback (most recent call last)", "SyntaxError",
+                   "ModuleNotFoundError", "ImportError", "IndentationError"):
+        assert marker not in result.stderr, f"{script}: {marker}\n{result.stderr}"
+    # 0/1/2 are the documented codes. Anything else (a negative code for a
+    # fatal signal, or an unhandled SystemExit payload) says the script did
+    # not reach its own exit path.
+    assert result.returncode in (0, 1, 2), (
+        f"{script} exited {result.returncode}\n{result.stdout}\n{result.stderr}"
+    )
 
 
 # --- AC-CH-8 / C-CH-1: the rule set matches the committed baseline -----------
@@ -588,3 +679,180 @@ def test_the_contract_job_is_not_wired_into_a_make_target() -> None:
     would make the local gate unrunnable rather than more thorough."""
     makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
     assert "action-contract" not in makefile
+
+
+# --- Dependabot: every action-bearing directory must actually be watched -----
+
+
+DEPENDABOT = REPO_ROOT / ".github" / "dependabot.yml"
+
+
+def _dependabot_directories() -> set[str]:
+    """The `directory:` values declared in dependabot.yml, as text.
+
+    Parsed with `re` rather than PyYAML for the same reason every other config
+    assertion here is: the package declares zero dependencies and the test
+    suite does not get to import one the product cannot.
+    """
+    text = DEPENDABOT.read_text(encoding="utf-8")
+    return set(re.findall(r'^\s*directory:\s*"([^"]+)"', text, re.MULTILINE))
+
+
+def test_dependabot_config_exists_and_watches_github_actions() -> None:
+    assert DEPENDABOT.is_file(), "no .github/dependabot.yml; action pins would go stale silently"
+    text = DEPENDABOT.read_text(encoding="utf-8")
+    assert 'package-ecosystem: "github-actions"' in text
+
+
+def test_every_composite_action_directory_is_watched_by_dependabot() -> None:
+    """A nested composite action is invisible to the root entry.
+
+    Dependabot's github-actions ecosystem discovers workflow files under the
+    `/` entry, but an `action.yml` in a subdirectory needs that subdirectory
+    declared explicitly. Adding a second composite action without a matching
+    entry would leave its pins unwatched, and nothing else in this suite would
+    notice -- which is exactly how the floating tags this config exists to
+    manage got there in the first place.
+    """
+    watched = _dependabot_directories()
+    assert "/" in watched, watched
+
+    for action_yml in sorted((REPO_ROOT / ".github" / "actions").glob("*/action.yml")):
+        rel = "/" + str(action_yml.parent.relative_to(REPO_ROOT)).replace("\\", "/")
+        assert rel in watched, (
+            f"{rel} holds a composite action but is not a dependabot `directory:` entry; "
+            f"its third-party pins would never be updated. Watched: {sorted(watched)}"
+        )
+
+
+def test_dependabot_does_not_add_a_pip_ecosystem() -> None:
+    """Non-success: the dev extras are unpinned on purpose.
+
+    `[project] dependencies` is empty and guarded, and
+    `tools/check_no_hardcoded_thresholds.py` fails the build on a reintroduced
+    `ruff==`/`mypy==`/`pytest==` pin. A pip ecosystem entry would open pull
+    requests arguing with that decision every release, so its absence is a
+    decision worth pinning rather than an omission.
+    """
+    text = DEPENDABOT.read_text(encoding="utf-8")
+    assert 'package-ecosystem: "pip"' not in text
+
+
+# --- the threshold guard's own coverage, which was close to inverted --------
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "python -m pytest --cov-fail-under=90",
+        "\t@pytest --cov-fail-under=90",            # was ALLOWED by the `@\w` veto
+        "\t$(PY) -m pytest --cov-fail-under=90",    # was ALLOWED by the `$(` veto
+        "\tmake-believe --floor 85",                # was ALLOWED: `\bmake\b` at the hyphen
+        "\t@ruff check --line-length 100",
+    ],
+)
+def test_threshold_guard_flags_numbers_in_ordinary_recipe_idioms(line: str) -> None:
+    """`@`-prefixed and `$(VAR)`-using recipes are the dominant Makefile idiom.
+
+    The allowances used to be whole-line vetoes, so any line containing them
+    escaped the scan entirely — the guard enforcing this project's flagship
+    rule on itself covered close to the inverse of what it claimed. They are
+    token exclusions now: the `$(...)` span and a leading `@` are removed and
+    whatever remains is scanned.
+    """
+    module = load_tool("check_no_hardcoded_thresholds", "check_no_hardcoded_thresholds.py")
+    assert not module._is_allowed(line), "only a comment is a whole-line exemption"
+    assert list(module._THRESHOLD_TOKEN.finditer(module.scannable(line))), line
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "# a comment mentioning 90",
+        "\t$(PY) tools/check_coverage_floor.py coverage.json",
+        "\tpython -m pytest tests/",
+    ],
+)
+def test_threshold_guard_stays_quiet_on_legitimate_lines(line: str) -> None:
+    """Non-success: strengthening the scan must not start failing clean recipes.
+
+    A `$(...)` span is genuinely not a literal — its value comes from
+    elsewhere — so stripping it rather than vetoing the line keeps the real
+    Makefile green, which `make thresholds` confirms end to end.
+    """
+    module = load_tool("check_no_hardcoded_thresholds", "check_no_hardcoded_thresholds.py")
+    if module._is_allowed(line):
+        return
+    assert not list(module._THRESHOLD_TOKEN.finditer(module.scannable(line))), line
+
+
+def test_tools_and_package_agree_on_the_makefile_search_order() -> None:
+    """The one duplication `tools/` is allowed, pinned so it cannot drift.
+
+    `tools/` is stdlib-only and runs before the package is installed, so it
+    cannot import `openspec_graph.detect.MAKEFILE_NAMES` — the gates would
+    then depend on the thing they gate. The copy is therefore deliberate, and
+    this is what makes a divergence a failure instead of the silent
+    single-name lookup that existed in both places at once.
+    """
+    from openspec_graph import detect as package_detect
+
+    common = load_tool("_common", "_common.py")
+    assert common.MAKEFILE_NAMES == package_detect.MAKEFILE_NAMES
+
+
+def test_threshold_guard_finds_a_makefile_under_every_honoured_name(tmp_path: Path) -> None:
+    """Same single-name bug this branch fixed in detect.py, in the guard itself.
+
+    A repo using `GNUmakefile` got a silent PASS: the missing `Makefile` path
+    returned [], and the basename dispatch would have routed it to the
+    workflow checker anyway.
+    """
+    common = load_tool("_common", "_common.py")
+    # One numbered directory per name, never a directory NAMED after the file:
+    # `makefile/` and `Makefile/` are the same path on a case-insensitive
+    # filesystem, so the second mkdir raised FileExistsError on the Windows CI
+    # leg. A test about case-insensitivity that is itself case-unsafe.
+    for index, name in enumerate(common.MAKEFILE_NAMES):
+        root = tmp_path / f"case-{index}"
+        root.mkdir()
+        (root / name).write_text("build:\n\t@echo b\n", encoding="utf-8")
+        assert common.resolve_makefile(root) == root / name, name
+    assert common.resolve_makefile(tmp_path / "empty") is None
+
+
+def test_threshold_guard_reports_the_on_disk_makefile_spelling(tmp_path: Path) -> None:
+    """Resolution must not leak the candidate's spelling.
+
+    Probing `(root / "makefile").is_file()` succeeds against a file written
+    `Makefile` on a case-insensitive filesystem, and the returned path then
+    carries the wrong name — which a caller reports on. Matching the directory
+    listing returns the real one. This passes trivially on a case-sensitive
+    filesystem and is the actual assertion on Windows and macOS.
+    """
+    common = load_tool("_common", "_common.py")
+    (tmp_path / "Makefile").write_text("build:\n\t@echo b\n", encoding="utf-8")
+    resolved = common.resolve_makefile(tmp_path)
+    assert resolved is not None and resolved.name == "Makefile", resolved
+
+
+def test_threshold_guard_stops_at_an_unreadable_higher_precedence_candidate(
+    tmp_path: Path,
+) -> None:
+    """Non-success: presence ends the search, not readability.
+
+    `make` stops at the first name that EXISTS even if it cannot open it, so a
+    directory named `GNUmakefile` must not let a lower-precedence `Makefile`
+    be scanned — reporting on a file `make` would never read. This keeps the
+    tool consistent with `detect._resolve_makefile`, which is terminal for the
+    same reason.
+    """
+    common = load_tool("_common", "_common.py")
+    nht = load_tool("check_no_hardcoded_thresholds", "check_no_hardcoded_thresholds.py")
+    (tmp_path / "GNUmakefile").mkdir()
+    (tmp_path / "Makefile").write_text("\t@pytest --cov-fail-under=90\n", encoding="utf-8")
+
+    resolved = common.resolve_makefile(tmp_path)
+    assert resolved is not None and resolved.name == "GNUmakefile", resolved
+    # And scanning it yields nothing rather than raising or falling through.
+    assert nht.check_makefile(resolved) == []

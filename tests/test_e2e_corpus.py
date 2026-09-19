@@ -223,3 +223,137 @@ def test_detect_debug_logging_names_the_rejected_floor(tmp_path: Path) -> None:
     result = run_cli(tmp_path, "detect", env={**os.environ, "PLANLINT_LOG_LEVEL": "DEBUG"})
     assert result.returncode == 0
     assert "fail_under found under [tool.other]" in result.stderr
+
+
+# --- G010 / G011 / S005 at the exit-code and stdout boundary ---------------
+#
+# These three shipped with dense unit and negative coverage and NOTHING at the
+# CLI layer, so the pyramid was inverted: every assertion was against
+# `rules.evaluate(...)` in process, and no test pinned the exit code a user
+# actually sees, the findings envelope CI uploads, or the SARIF a code-scanning
+# upload consumes.
+
+_MAKEFILE_LESS_SPEC = (
+    "## Problem Statement\n\nThe thing must run.\n\n"
+    "## Requirements\n\n- R-XY-1: The thing runs.\n\n## Acceptance Criteria\n\n"
+    "- [ ] **AC-XY-1:** The thing runs. (R-XY-1)\n"
+    "  _Verified by:_ `pytest -k test_a` · stage: `make regression`\n"
+    "- [ ] **AC-XY-2 (non-success):** A failure exits non-zero. (R-XY-1)\n"
+    "  _Verified by:_ `pytest -k test_b` · stage: `make regression`\n\n"
+    "## Validation Matrix\n\n| Stage | Covers |\n|---|---|\n"
+    "| `make regression` | AC-XY-1..2 |\n"
+)
+
+
+def _findings(repo: Path, *args: str) -> list[dict]:
+    result = run_cli(repo, "validate", "--format", "json", *args)
+    payload = json.loads(result.stdout)
+    assert isinstance(payload, dict), payload
+    found = payload["findings"]
+    assert isinstance(found, list)
+    return found
+
+
+def test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict(tmp_path: Path) -> None:
+    """INFO exists so no currently-passing repository starts failing.
+
+    Asserted at the boundary that matters: the exit code, not the severity
+    constant. A repo with no makefile whose spec cites one still exits 0 at
+    the default threshold and 1 only when INFO is explicitly requested.
+    """
+    _harness_spec(tmp_path, _MAKEFILE_LESS_SPEC)
+    assert run_cli(tmp_path, "validate", "--fail-on", "ERROR").returncode == 0
+    assert run_cli(tmp_path, "validate", "--fail-on", "WARN").returncode == 0
+    assert run_cli(tmp_path, "validate", "--fail-on", "INFO").returncode == 1
+
+    rules_seen = {f["rule"] for f in _findings(tmp_path, "--fail-on", "INFO")}
+    assert "G010" in rules_seen
+    assert "G004" not in rules_seen, "G004 must stay silent; G010 speaks for it"
+
+
+def test_a_waived_g010_still_fails_a_fail_on_info_run(tmp_path: Path) -> None:
+    """Pins the limitation rather than leaving it to prose.
+
+    `evaluate()` is `severity = INFO if suppressed else rule.severity`, so
+    waiving an already-INFO rule only adds a `[waived]` prefix — G010 is
+    effectively unwaivable. That is recorded in the change package as a known
+    limitation; without this test, someone "fixing" it would do so silently
+    and no gate would notice the behaviour change.
+    """
+    waiver = "<!-- specgraph:allow G010 reason: this target does not use Make -->\n"
+    _harness_spec(tmp_path, waiver + _MAKEFILE_LESS_SPEC)
+
+    assert run_cli(tmp_path, "validate", "--fail-on", "INFO").returncode == 1
+    g010 = [f for f in _findings(tmp_path, "--fail-on", "INFO") if f["rule"] == "G010"]
+    assert len(g010) == 1 and g010[0]["message"].startswith("[waived]"), g010
+
+
+def test_g011_warns_through_the_cli_and_only_fails_at_the_warn_threshold(
+    tmp_path: Path,
+) -> None:
+    """The repo demonstrably uses Make and declares no `coverage` target."""
+    (tmp_path / "Makefile").write_text("build:\n\t@echo b\n", encoding="utf-8")
+    _harness_spec(tmp_path, _MAKEFILE_LESS_SPEC.replace("make regression", "make coverage"))
+
+    assert run_cli(tmp_path, "validate", "--fail-on", "ERROR").returncode == 0
+    assert run_cli(tmp_path, "validate", "--fail-on", "WARN").returncode == 1
+
+    g011 = [f for f in _findings(tmp_path, "--fail-on", "WARN") if f["rule"] == "G011"]
+    assert len(g011) == 1 and g011[0]["severity"] == "WARN", g011
+
+
+def test_g010_is_projected_to_sarif_without_a_bogus_region(tmp_path: Path) -> None:
+    """A citation-level finding has no locus, and SARIF must omit the region.
+
+    SARIF's `startLine` minimum is 1, so clamping a line-0 finding would put a
+    confident, wrong annotation on the first line of the file with nothing to
+    tell a reviewer it was invented. The omit-when-absent rule predates these
+    rules; this proves G010 obeys it through the real projection.
+    """
+    _harness_spec(tmp_path, _MAKEFILE_LESS_SPEC)
+    result = run_cli(tmp_path, "validate", "--format", "sarif", "--fail-on", "INFO")
+    sarif = json.loads(result.stdout)
+
+    g010 = [
+        r for r in sarif["runs"][0]["results"] if r["ruleId"] == "G010"
+    ]
+    assert len(g010) == 1, sarif["runs"][0]["results"]
+    location = g010[0]["locations"][0]["physicalLocation"]
+    assert "region" not in location, location
+
+
+def test_s005_reaches_the_cli_carrying_the_dropped_bullet_locus(tmp_path: Path) -> None:
+    """S005's contract is that the locus is the token the author must move."""
+    (tmp_path / "Makefile").write_text("test:\n\t@echo t\n", encoding="utf-8")
+    feature = tmp_path / "specs" / "001-demo"
+    feature.mkdir(parents=True)
+    body = (
+        "# Feature Specification: Demo\n\n"
+        "## Requirements *(mandatory)*\n\n"
+        "## Functional Requirements\n\n"
+        "- **FR-001**: The system MUST do the thing.\n\n"
+        "## Success Criteria *(mandatory)*\n\n"
+        "- **SC-001**: It completes quickly.\n"
+    )
+    (feature / "spec.md").write_text(body, encoding="utf-8")
+    expected_line = next(
+        i for i, ln in enumerate(body.splitlines(), 1) if ln.startswith("- **FR-001**")
+    )
+
+    found = [
+        f for f in _findings(tmp_path, "--dialect", "speckit", "--fail-on", "WARN")
+        if f["rule"] == "S005"
+    ]
+    assert len(found) == 1, found
+    assert found[0]["line"] == expected_line, (found[0]["line"], expected_line)
+
+    sarif = json.loads(
+        run_cli(
+            tmp_path, "validate", "--format", "sarif", "--dialect", "speckit",
+            "--fail-on", "WARN",
+        ).stdout
+    )
+    s005 = [r for r in sarif["runs"][0]["results"] if r["ruleId"] == "S005"]
+    assert len(s005) == 1
+    region = s005[0]["locations"][0]["physicalLocation"]["region"]
+    assert region["startLine"] == expected_line, region

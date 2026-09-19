@@ -1,0 +1,2 @@
+gnu-only:
+	echo gnu

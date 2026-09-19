@@ -3,10 +3,10 @@
 Decomposed into focused modules; this file is the facade/registry:
 
 - :mod:`rule_types` — ``Finding``/``Rule`` dataclasses, severity constants.
-- :mod:`rules_generic` — universal rules G001-G009.
+- :mod:`rules_generic` — universal rules G001-G011.
 - :mod:`rules_harness` — harness-dialect rules H001-H006.
 - :mod:`rules_upstream` — upstream-dialect rules U001-U005.
-- :mod:`rules_speckit` — speckit-dialect rules S001-S004.
+- :mod:`rules_speckit` — speckit-dialect rules S001-S005.
 - :mod:`rules_witness` — witness-mode rules W001-W002, evaluated only under
   ``--require-witness`` (``NON_WITNESS_RULES``/``evaluate(rule_set=...)``).
 

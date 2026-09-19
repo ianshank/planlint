@@ -27,6 +27,7 @@ from pathlib import Path
 import pytest
 
 from openspec_graph import detect, dialect_card, machinery
+from tests import support
 
 CORPUS_ROOT = Path(__file__).resolve().parent / "corpus" / "targets"
 CORPUS_README = CORPUS_ROOT / "README.md"
@@ -209,3 +210,130 @@ def test_both_makefile_parsers_agree_on_a_bom_prefixed_file() -> None:
     text = "﻿all: build\n\t@echo a\nbuild:\n\t@echo b\n"
     assert machinery.parse_makefile(text).targets == ("all", "build")
     assert detect._legacy_make_targets(text) == ("all", "build")
+
+
+# --- makefile filename resolution (GNU Make's own search order) -------------
+
+
+def test_makefile_names_are_gnu_makes_own_search_order() -> None:
+    """The order is the contract, not an implementation detail.
+
+    GNU Make reads the first of these that exists and never opens the rest,
+    so a list in any other order would describe a different build.
+    """
+    assert detect.MAKEFILE_NAMES == ("GNUmakefile", "makefile", "Makefile")
+
+
+def test_no_makefile_at_all_resolves_to_none(tmp_path: Path) -> None:
+    assert detect._resolve_makefile(tmp_path) is None
+    assert detect.profile(tmp_path).make_targets == ()
+
+
+@pytest.mark.parametrize("name", ["GNUmakefile", "makefile", "Makefile"])
+def test_each_honoured_name_is_read(tmp_path: Path, name: str) -> None:
+    """Regression for the fail-open: a repo using any name GNU Make honours
+    must yield targets, or G004's empty-guard silently disables the rule and
+    a broken `make` citation passes clean.
+    """
+    (tmp_path / name).write_text("build:\n\t@echo b\n", encoding="utf-8")
+    assert detect.profile(tmp_path).make_targets == ("build",)
+
+
+def test_gnumakefile_shadows_makefile_rather_than_merging(tmp_path: Path) -> None:
+    """Both present: GNU Make reads GNUmakefile and never opens Makefile.
+
+    Reporting the union would describe a build that does not happen -- the
+    shadowed file's targets are not runnable via `make <target>`.
+    """
+    (tmp_path / "GNUmakefile").write_text("gnu-only:\n\t@echo g\n", encoding="utf-8")
+    (tmp_path / "Makefile").write_text("makefile-only:\n\t@echo m\n", encoding="utf-8")
+    assert detect.profile(tmp_path).make_targets == ("gnu-only",)
+
+
+@pytest.mark.skipif(
+    not support.supports_case_sensitive_filenames(),
+    reason="case-insensitive filesystem: `makefile` and `Makefile` are one path",
+)
+def test_lowercase_makefile_shadows_capitalised_makefile(tmp_path: Path) -> None:
+    """`makefile` precedes `Makefile` in GNU Make's order.
+
+    Not a committed corpus shape: the two names are the same path on a
+    case-insensitive filesystem, so the fixture could not be checked out on
+    macOS at all. Generated here instead, behind a capability probe rather
+    than a sys.platform guess.
+    """
+    (tmp_path / "makefile").write_text("lower-only:\n\t@echo l\n", encoding="utf-8")
+    (tmp_path / "Makefile").write_text("upper-only:\n\t@echo u\n", encoding="utf-8")
+    assert detect.profile(tmp_path).make_targets == ("lower-only",)
+
+
+def test_an_unreadable_candidate_is_terminal_not_a_fall_through(tmp_path: Path) -> None:
+    """GNU Make parity: it aborts on an unopenable makefile, it does not skip it.
+
+    An earlier revision fell through to the next name, on the argument that
+    planlint never executes what it reads so more detection is safer. That was
+    wrong, and the adversarial review of the change package caught it: real
+    `make` here prints "GNUmakefile: Is a directory.  Stop." and runs nothing,
+    so reporting `Makefile`'s targets green-lights a citation that cannot run
+    in this repository -- a confident lie, strictly worse than silence. The
+    silence is covered: G010 raises an INFO saying the citations were not
+    checked.
+    """
+    (tmp_path / "GNUmakefile").mkdir()
+    (tmp_path / "Makefile").write_text("build:\n\t@echo b\n", encoding="utf-8")
+    assert detect.profile(tmp_path).make_targets == ()
+
+
+def test_an_empty_candidate_does_shadow(tmp_path: Path) -> None:
+    """Readable-but-empty is NOT the same as unreadable.
+
+    A zero-byte `GNUmakefile` genuinely declares no rules, so `make build`
+    would fail and reporting no targets is correct. The resolver's test must
+    therefore be ``is None``, never falsiness -- `""` is a successful read.
+    """
+    (tmp_path / "GNUmakefile").write_text("", encoding="utf-8")
+    (tmp_path / "Makefile").write_text("build:\n\t@echo b\n", encoding="utf-8")
+    assert detect.profile(tmp_path).make_targets == ()
+
+
+def test_makefile_names_are_not_duplicated_as_inline_literals() -> None:
+    """The constant must be the single source, not decoration beside literals.
+
+    Guards the regression where someone re-adds `root / "Makefile"` at a call
+    site and the other two names quietly stop being honoured again.
+    """
+    import ast
+
+    source = Path(detect.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    lowered = {n.lower() for n in detect.MAKEFILE_NAMES}
+    for func in ast.walk(tree):
+        if not isinstance(func, ast.FunctionDef):
+            continue
+        offenders = [
+            node.value
+            for node in ast.walk(func)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and node.value.lower() in lowered
+        ]
+        assert not offenders, (
+            f"{func.name}() hard-codes {offenders}; use detect.MAKEFILE_NAMES"
+        )
+
+
+@pytest.mark.skipif(not support.supports_symlinks(), reason="cannot create symlinks here")
+def test_a_dangling_symlink_candidate_is_terminal_not_absent(tmp_path: Path) -> None:
+    """`Path.exists()` follows symlinks, so a broken link reads as absent.
+
+    That made the resolver fall through to a lower-precedence name, which is
+    the same fail-open again: `make` stops with "GNUmakefile: No such file or
+    directory" and runs nothing, so reporting the `Makefile`'s targets would
+    green-light a citation that cannot run. `lstat()` asks whether the
+    directory ENTRY is there, which is the question actually being asked.
+    """
+    (tmp_path / "GNUmakefile").symlink_to(tmp_path / "nonexistent-target")
+    (tmp_path / "Makefile").write_text("build:\n\t@echo b\n", encoding="utf-8")
+    assert not (tmp_path / "GNUmakefile").exists()  # the trap, made explicit
+    assert (tmp_path / "GNUmakefile").is_symlink()
+    assert detect.profile(tmp_path).make_targets == ()
