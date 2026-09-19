@@ -160,7 +160,7 @@ runs:
           echo "sarif-path=${evidence}/findings.sarif"
         } >> "$GITHUB_OUTPUT"
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v7
       with:
         python-version: ${{ inputs.python-version }}
 
