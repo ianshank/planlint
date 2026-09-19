@@ -51,6 +51,13 @@ planlint --target /path/to/clone graph --format mermaid  # a picture, not just J
 planlint --version                           # print the installed version and exit
 ```
 
+> **Not on PyPI yet.** `v0.2.0` is the first release intended for a package
+> index and the tag has not been pushed, so `pip install planlint` 404s today.
+> Until it resolves, install from the repository —
+> `pip install git+https://github.com/ianshank/planlint@a1b686864282e27c754ec1d49ac6f931e1e140e1`
+> — or use the composite Action below, which installs the CLI from its own
+> checkout and needs no index at all. Delete this note when the tag is cut.
+
 The distribution and the command are both `planlint`, with no hyphen.
 `plan-lint` on PyPI is an unrelated project, analysing LLM agent plans; this
 one gates OpenSpec and SpecKit change packages against a repository's real
@@ -386,7 +393,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: ianshank/planlint/.github/actions/planlint@a853b72f05a0a1ecbfed52eca6791bf2bb9ffa11
+      - uses: ianshank/planlint/.github/actions/planlint@a1b686864282e27c754ec1d49ac6f931e1e140e1
         with:
           target: "."
           fail-on: ERROR
@@ -424,6 +431,33 @@ paths are step outputs, so a workflow can branch on the result without scraping
 a log. `make-targets` and `coverage-floor` report what the run had to check
 against: a target with neither gives two of the rules nothing to compare, and
 the action says so rather than letting the silence read as a pass.
+
+**Narrowing the scan.** Two optional inputs pass a single named CLI flag
+each; both default to empty, which omits the flag entirely.
+
+| Input | Passes | Empty (the default) |
+|---|---|---|
+| `change` | `--change <name>` — lint one OpenSpec change package | the whole spec tree is checked |
+| `dialect` | `--dialect <harness\|upstream\|speckit\|auto>` — override detection | the detected dialect is used |
+
+```yaml
+      - uses: ianshank/planlint/.github/actions/planlint@a1b686864282e27c754ec1d49ac6f931e1e140e1
+        with:
+          change: add-payment-retry
+          dialect: speckit
+```
+
+Scoping with `change` narrows what the gate can see: the tree-wide rules
+(`G006`, `G009`) cannot be answered from one package and report as skipped
+`INFO` lines rather than passing. A scoped run is a useful fast signal on a
+pull request, not a replacement for an unscoped gate.
+
+There is deliberately **no `extra-args` input**: a raw pass-through would make
+the whole CLI an undocumented public API. Each flag an adopter needs becomes
+its own named input. `--require-witness` is deliberately absent — the witness
+store is gitignored, so a fresh CI checkout always fails it closed. The
+`dialect` *input* overrides detection; the `dialect` *output* still reports
+what the scan actually detected.
 
 Or run the CLI directly, without the action:
 

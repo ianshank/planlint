@@ -5,6 +5,28 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed — pre-release adopter-surface drift
+
+- **The `[0.2.0]` section no longer repeats itself.** The `v0.1.0` provenance
+  note appeared twice, verbatim. The GitHub release is cut from this section,
+  so the duplicate would have shipped into the published release notes.
+- **Adopter pins name the commit that carries the current Action.** Every
+  `uses:` ref and the `.pre-commit-hooks.yaml` example pinned `a853b72`, the
+  commit *before* `change` and `dialect` existed — so the two inputs shipped
+  in `add-finding-line-hits` were unreachable from every documented pin. They
+  now name `a1b6868`, which is the convention this project already stated:
+  the pin is the SHA of the last Action implementation.
+- **`change` and `dialect` are documented.** Both shipped with no adopter-
+  facing documentation; the README's CI section covered `target` and
+  `fail-on` only. The README now carries an input table, a worked snippet,
+  and the standing reasons there is no `extra-args` and no
+  `--require-witness`.
+- **The README no longer opens with a command that 404s.** `pip install
+  planlint` is correct only after the tag is pushed. A note above it gives
+  the `git+https://` install that works today — verified in a clean
+  virtualenv — and says to delete itself when the tag is cut.
+
+
 ## [0.2.0] — 2026-09-12
 
 > `v0.1.0` was tagged in git (`cdc94ca`) under the previous distribution name
@@ -31,14 +53,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   level checks stay at line 0 on purpose.
 - **Named Action inputs `change` and `dialect`.** Empty defaults omit the
   CLI flag. No `extra-args`. No `--require-witness` on the Action.
-
-> `v0.1.0` was tagged in git (`cdc94ca`) under the previous distribution name
-> `openspec-graph`, and was never published to a package index. `v0.2.0` is the
-> first release under the `planlint` name and the first intended for PyPI;
-> publication happens when the tag is pushed and `.github/workflows/release.yml`
-> runs. This section includes every change that sat under Unreleased until the
-> tag (through PR #24): `report`, the four-way Action contract, SARIF, `delta`,
-> the labelled detect corpus, matcher precision, and the findings envelope.
 
 ### Changed — release-train honesty
 

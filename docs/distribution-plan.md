@@ -18,6 +18,38 @@ that should not delay §3.
 
 ---
 
+## 0. Release readiness, verified at `a1b6868`
+
+Every row below was **run**, not read. The engineering side of 0.2.0 is done;
+what remains is §3, and §3 is entirely outside this repository.
+
+| Gate | Command | Result |
+|---|---|---|
+| Full enterprise ladder | `make pre-pr` | exit 0 |
+| Coverage | `tools/check_coverage_floor.py`, `check_branch_coverage.py` | line 99.3% (floor 90), branch 97.6% (floor 80) |
+| Self-validation | `planlint --target . validate --fail-on ERROR` | 37 specs, 0 error / 0 warn / 0 info |
+| Types, lint | `make typecheck`, `make lint` | mypy clean over 42 files; ruff clean |
+| Live CLI, incl. ASCII console | `make e2e-live` | exit 0 |
+| Prose-matcher floors | `make matcher-accuracy` | every configured floor met |
+| Generated-artifact freshness | both `render_*.py --check` | both fresh |
+| Install from git | `pip install git+…@a1b6868` in a clean venv | prints `planlint 0.2.0` |
+
+Still unpublished, confirmed live rather than inferred: `planlint` and
+`openspec-graph` both 404 on PyPI; the only GitHub release is `v0.1.0`
+(2026-08-30, pre-rename); no `v0.2.0` tag exists on `origin`.
+
+**GitHub surface, still outstanding** — each checked against the repository
+API, not the plan's memory of it:
+
+| Field | Now | Should be |
+|---|---|---|
+| Homepage | still points at the pre-rename `OpenSpec-Graph` repository | `https://github.com/ianshank/planlint` |
+| Description | "A dependency-graph linter for OpenSpec specs…" | the README wedge sentence |
+| Topics | `developer-tools`, `linter`, `openspec`, `python`, `specification` | add `agent-skills`; `speckit` is also a shipped dialect and absent |
+| Wiki | enabled and empty | disabled, or a one-line stub pointing at the README |
+
+---
+
 ## 1. Where we are
 
 | Original plan item | Status | Evidence |
