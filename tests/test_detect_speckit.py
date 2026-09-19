@@ -4,7 +4,7 @@ StackProfile, find_speckit_spec_files()/filter_speckit_by_feature(), and the
 
 A real SpecKit repo has no openspec/ ancestor at all -- files live at
 specs/<NNN-feature>/spec.md, at the repo root. These tests construct that
-shape directly, distinct from every existing fixture in test_graft.py, which
+shape directly, distinct from every existing fixture in test_graft_detection.py, which
 all assume an openspec/ tree.
 """
 

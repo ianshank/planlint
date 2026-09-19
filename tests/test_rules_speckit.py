@@ -3,7 +3,7 @@ fix (add-speckit-dialect, Milestone 4).
 
 "A linter that never fails is a decoration" -- each rule gets a fixture that
 violates it and an assertion the rule fires on exactly that violation
-(tests/test_graft.py's own stated philosophy, mirrored here).
+(the philosophy stated in tests/test_graft_rules.py, mirrored here).
 """
 
 from __future__ import annotations

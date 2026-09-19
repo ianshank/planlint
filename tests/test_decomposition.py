@@ -303,7 +303,7 @@ def test_only_detect_imports_subprocess() -> None:
 def test_helpers_not_duplicated_inline() -> None:
     # write_spec (imported as-is or aliased _write_spec) must come from
     # tests.support, never be redeclared -- a redeclaration silently drifts
-    # from the shared version's own fixes (e.g. tests/test_graft.py's own
+    # from the shared version's own fixes (e.g. the former tests/test_graft.py's
     # copy was missing support.py's encoding="utf-8", added specifically to
     # write non-ASCII spec content safely on Windows). Scans every test
     # module, not a fixed short list, so a future new test file is covered
