@@ -148,3 +148,47 @@ def normalize_root(text: str, root: Path) -> str:
     for spelling in spellings:
         text = text.replace(spelling, "<ROOT>").replace(spelling.replace("\\", "\\\\"), "<ROOT>")
     return text
+
+
+#: Environment variables that hand a child process this run's coverage identity.
+#:
+#: ``COVERAGE_FILE`` names the data file; ``COVERAGE_PROCESS_START`` names the
+#: config a child reads on startup (``run_cli`` sets it deliberately); the
+#: ``COV_CORE_*`` family is pytest-cov's own subprocess channel. Which of these
+#: are actually present depends on the pytest-cov version and on whether the
+#: outer run was invoked with ``--cov`` at all, so the set is stripped whole
+#: rather than probed -- removing an unset name is a no-op, and the point is
+#: that a nested run must not share this repo's coverage identity by any route.
+COVERAGE_ENV_VARS: tuple[str, ...] = (
+    "COVERAGE_FILE",
+    "COVERAGE_PROCESS_START",
+    "COV_CORE_SOURCE",
+    "COV_CORE_CONFIG",
+    "COV_CORE_DATAFILE",
+    "COV_CORE_BRANCH",
+)
+
+
+def env_without_coverage(**overrides: str) -> dict[str, str]:
+    """``os.environ`` with every coverage variable removed, plus ``overrides``.
+
+    For subprocesses that run *their own* coverage session -- the nested
+    ``pytest --cov`` runs that prove pytest-cov's ``--cov-fail-under`` gate
+    fires. Those children must write their data somewhere this run will never
+    combine, because they measure a throwaway package with different settings.
+
+    Inheriting ``COVERAGE_FILE`` is the failure case, and it is not a test
+    failure but a crash: with ``[tool.coverage.run] parallel = true`` the outer
+    run combines every sibling data file at teardown, the nested run writes
+    statement-only data (no ``--cov-branch``) into that same location, and
+    ``combine`` raises ``DataError: Can't combine branch coverage data with
+    statement data`` from inside pytest's teardown -- INTERNALERROR, exit 3,
+    the whole suite gone rather than one test red.
+
+    Nothing in this repository sets ``COVERAGE_FILE``, so the trap is ambient:
+    it springs for anyone whose CI names a per-leg data file, the standard way
+    to keep a build matrix's coverage separate.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in COVERAGE_ENV_VARS}
+    env.update(overrides)
+    return env

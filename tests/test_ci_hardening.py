@@ -16,13 +16,14 @@ import subprocess
 import sys
 import textwrap
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
 from openspec_graph import detect
 from openspec_graph import graph as graph_module
 from openspec_graph.rules import RULES, rule_table
-from tests.support import load_tool
+from tests.support import env_without_coverage, load_tool
 from tests.support import write_spec as _write_spec
 
 TOOLS = Path(__file__).resolve().parent.parent / "tools"
@@ -156,7 +157,8 @@ def test_coverage_floor_fails_below_threshold_pytest(tmp_path: Path) -> None:
         [sys.executable, "-m", "pytest", str(pkg / "test_mod.py"),
          "--cov=mod", "--cov-fail-under=100", "-q"],
         cwd=pkg.parent, capture_output=True, text=True, check=False,
-        env={**os.environ, "PYTHONPATH": str(pkg)},
+        # Its own coverage session, not this repo's -- see env_without_coverage.
+        env=env_without_coverage(PYTHONPATH=str(pkg)),
     )
     assert result.returncode != 0, "below-floor coverage must fail the gate"
 
@@ -170,9 +172,64 @@ def test_coverage_floor_passes_at_threshold(tmp_path: Path) -> None:
         [sys.executable, "-m", "pytest", str(pkg / "test_mod.py"),
          "--cov=mod", "--cov-fail-under=90", "-q"],
         cwd=pkg.parent, capture_output=True, text=True, check=False,
-        env={**os.environ, "PYTHONPATH": str(pkg)},
+        env=env_without_coverage(PYTHONPATH=str(pkg)),
     )
     assert result.returncode == 0
+
+
+def test_suite_survives_an_ambient_coverage_file(tmp_path: Path) -> None:
+    """An inherited ``COVERAGE_FILE`` must not crash the run at teardown.
+
+    Naming a per-leg coverage data file is the standard way to keep a build
+    matrix's coverage separate, and nothing in this repository sets the
+    variable, so the trap is entirely ambient. Before ``env_without_coverage``
+    the two nested ``pytest --cov`` tests above inherited it and wrote
+    statement-only data into this run's data file; with ``parallel = true`` the
+    outer run combines every sibling at teardown and raises ``DataError:
+    Can't combine branch coverage data with statement data`` from inside
+    pytest's own teardown hook. That is INTERNALERROR and exit 3 -- the entire
+    suite lost, no test marked red, which is why an ordinary test of those two
+    functions could never have caught it.
+
+    Runs them in a nested pytest under the conditions that spring the trap
+    (``COVERAGE_FILE`` set, ``--cov-branch`` on the parent) and asserts the
+    outcome is a real verdict rather than a crash.
+    """
+    data_file = tmp_path / "ambient.coverage"
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest",
+         str(REPO_ROOT / "tests" / "test_ci_hardening.py"),
+         "-k", "coverage_floor_passes_at_threshold",
+         # --cov-branch is half the trap: it makes the OUTER data branch-typed,
+         # so the nested statement-only data cannot combine with it. The
+         # explicit fail-under=0 overrides pyproject's 90 for this nested run
+         # only -- it measures `tools` while running one test that touches
+         # none of it, so the real floor would fail it at 0% for reasons that
+         # have nothing to do with the crash under test, and exit 0 would stop
+         # meaning anything.
+         "--cov=tools", "--cov-branch", "--cov-fail-under=0",
+         "-p", "no:cacheprovider", "-q"],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+        env=env_without_coverage(COVERAGE_FILE=str(data_file)),
+    )
+    combined = result.stdout + result.stderr
+    assert "INTERNALERROR" not in combined, combined[-3000:]
+    # Exit 3 is pytest's internal-error code, and it is the whole subject here.
+    assert result.returncode != 3, f"INTERNALERROR at teardown:\n{combined[-3000:]}"
+    assert result.returncode == 0, combined[-3000:]
+
+
+def test_env_without_coverage_strips_every_coverage_variable() -> None:
+    """The helper removes the whole family and applies overrides on top."""
+    from tests.support import COVERAGE_ENV_VARS
+
+    planted = dict.fromkeys(COVERAGE_ENV_VARS, "planted")
+    with mock.patch.dict(os.environ, planted):
+        env = env_without_coverage(PYTHONPATH="/somewhere")
+    assert not [name for name in COVERAGE_ENV_VARS if name in env]
+    assert env["PYTHONPATH"] == "/somewhere"
+    # Not a whitelist: everything unrelated survives.
+    assert "PATH" in env
 
 
 # --- AC-CH-5 / AC-CH-6: graph-diff fails on regressions, passes on fixes ----
