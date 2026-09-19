@@ -254,23 +254,26 @@ MAKEFILE_NAMES: tuple[str, ...] = ("GNUmakefile", "makefile", "Makefile")
 def _resolve_makefile(root: Path) -> tuple[Path, str] | None:
     """The makefile GNU Make would read, with its text, or ``None``.
 
-    Returns the first *readable* candidate, not merely the first existing one,
-    and that distinction is load-bearing. A candidate that exists but cannot be
-    read -- a directory carrying the name, a permission denial, a dangling
-    symlink -- is skipped so the next name still gets its turn. Resolving to an
-    unreadable `GNUmakefile` and stopping would let it shadow a perfectly good
-    `Makefile` and report zero targets, which disables G004: the exact
-    fail-open this function exists to close, re-created one step lower.
+    GNU Make skips a candidate that does not *exist*; it does not skip one that
+    exists and cannot be opened. There it aborts -- ``make: *** GNUmakefile:
+    Is a directory.  Stop.`` -- so no target in that repository runs at all.
+    This function matches that, and the distinction is load-bearing in the
+    direction that matters.
 
-    This deliberately diverges from GNU Make, which aborts rather than falling
-    through. planlint reads untrusted foreign repositories and never executes
-    them, so the useful answer is the targets a maintainer would recognise,
-    and the conservative direction here is *more* detection, not less.
+    An earlier revision fell through to the next name instead, on the argument
+    that planlint never executes what it reads so more detection is safer.
+    That argument is wrong. Falling through reports the shadowed file's targets
+    and green-lights a citation that *cannot run in that repository* -- a
+    green check that is evidence of nothing, which is the exact failure this
+    module exists to prevent, and strictly worse than reporting nothing.
+    Silence is now covered anyway: G010 raises an INFO saying the citations
+    could not be checked, so parity plus a diagnostic beats a confident lie.
 
-    An **empty but readable** candidate is not skipped. A zero-byte
-    `GNUmakefile` genuinely declares no rules, so reporting no targets matches
-    what `make` would do -- hence the test below is ``is None``, never
-    falsiness, which would wrongly treat "" as "not found" and fall through.
+    An **empty but readable** candidate is a successful read, not a failure,
+    and does shadow: a zero-byte `GNUmakefile` genuinely declares no rules, so
+    reporting no targets is what `make` itself would do. Hence the test below
+    is ``is None`` and never falsiness, which would wrongly treat "" as
+    "unreadable" and fall through.
 
     On a case-insensitive filesystem (macOS by default) `makefile` matches a
     file written `Makefile`, so the candidate returned may differ in case from
@@ -284,10 +287,12 @@ def _resolve_makefile(root: Path) -> tuple[Path, str] | None:
             continue
         text = read_text_or_none(candidate, "make_targets")
         if text is None:
+            # Terminal, not a fall-through: `make` itself stops here.
             logger.debug(
-                "make_targets: %s exists but is unreadable; trying the next name", name
+                "make_targets: %s exists but cannot be read; make would abort here, "
+                "so no targets are reported", name
             )
-            continue
+            return None
         logger.debug("make_targets: reading %s", name)
         return candidate, text
     logger.debug("make_targets: no readable makefile under any of %s", MAKEFILE_NAMES)

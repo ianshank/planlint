@@ -142,3 +142,38 @@ a Makefile's *contents* and blind to its *name*.
 ## Affected Capabilities
 
 - `makefile-discovery`
+
+---
+
+## Revision after adversarial review
+
+`spec-adversary` reviewed this package against the shipped code and found a
+**live fail-open that this spec mandated**. Recorded here rather than silently
+corrected, because the superseded reasoning is the instructive part.
+
+- **R-MFD-6 / AC-MFD-7 / DEC-MFD-003 are superseded.** They required falling
+  through past an existing-but-unreadable candidate, on the argument that
+  planlint never executes what it reads so more detection is safer. Reproduced
+  against real `make`: a directory named `GNUmakefile` beside a valid
+  `Makefile` makes `make build` print `make: *** GNUmakefile: Is a directory.
+  Stop.` and run nothing, while planlint reported `1 found` and green-lit the
+  citation. GNU Make skips a candidate that does not *exist*; it never skips
+  one that exists and cannot be opened. The shipped code now matches that and
+  returns no targets. Falling through is a confident lie, and this package's
+  own Problem Statement rejects exactly that: "a green check that is evidence
+  of nothing is worse than no check at all." The silence that remains is
+  covered by G010 (`report-unchecked-make-citations`), which raises an INFO
+  saying the citations were not checked -- parity plus a diagnostic dominates
+  both alternatives.
+- **AC-MFD-4 now has its test**: `test_a_gnumakefile_only_repo_fails_a_bad_
+  citation_end_to_end` in `tests/test_graft.py`, plus
+  `test_an_unreadable_makefile_reports_nothing_and_says_so` for the case above.
+- **AC-MFD-5** understates the shipped guard, which walks every `ast.FunctionDef`
+  in `detect.py` rather than only `_make_target_facts`'s body.
+- **Corrections owed, not yet made:** AC-MFD-10 is a cross-host invariant that
+  no single CI leg can verify and should be split; `proposal.md` above claims
+  the `root / "Makefile"` literal and its `.exists()` pre-check were deleted,
+  and the pre-check correctly remains; the corpus shapes shipped as
+  `gnumakefile-name`, `lowercase-makefile-name` and `gnumakefile-precedence`,
+  not the names written above; Milestone 5's adopter-facing updates
+  (CHANGELOG, peer-review R1 row) have no acceptance criterion.

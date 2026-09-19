@@ -267,19 +267,21 @@ def test_lowercase_makefile_shadows_capitalised_makefile(tmp_path: Path) -> None
     assert detect.profile(tmp_path).make_targets == ("lower-only",)
 
 
-def test_an_unreadable_candidate_does_not_shadow_a_readable_one(tmp_path: Path) -> None:
-    """A directory named `GNUmakefile` must not disable G004.
+def test_an_unreadable_candidate_is_terminal_not_a_fall_through(tmp_path: Path) -> None:
+    """GNU Make parity: it aborts on an unopenable makefile, it does not skip it.
 
-    Resolving to the first *existing* candidate rather than the first
-    *readable* one re-created this change's own fail-open one step lower: the
-    unreadable higher-precedence name shadowed a perfectly good `Makefile` and
-    the repo reported zero targets. Deliberately diverges from GNU Make, which
-    aborts instead of falling through -- planlint never executes what it reads,
-    so more detection is the conservative direction here.
+    An earlier revision fell through to the next name, on the argument that
+    planlint never executes what it reads so more detection is safer. That was
+    wrong, and the adversarial review of the change package caught it: real
+    `make` here prints "GNUmakefile: Is a directory.  Stop." and runs nothing,
+    so reporting `Makefile`'s targets green-lights a citation that cannot run
+    in this repository -- a confident lie, strictly worse than silence. The
+    silence is covered: G010 raises an INFO saying the citations were not
+    checked.
     """
     (tmp_path / "GNUmakefile").mkdir()
     (tmp_path / "Makefile").write_text("build:\n\t@echo b\n", encoding="utf-8")
-    assert detect.profile(tmp_path).make_targets == ("build",)
+    assert detect.profile(tmp_path).make_targets == ()
 
 
 def test_an_empty_candidate_does_shadow(tmp_path: Path) -> None:

@@ -118,3 +118,44 @@ table.
 ## Affected Capabilities
 
 - `unchecked-make-citations`
+
+---
+
+## Revision after adversarial review
+
+- **R-UMC-1's message was not computable from the data.** It required the
+  finding to say "no Makefile was found". `Rule.check` sees only a
+  `StackProfile`, and `profile.make_targets == ()` conflates a missing
+  makefile, a present-but-empty one, one declaring only special targets, and
+  one that exists and cannot be read. Reproduced: with a **zero-byte
+  `Makefile` present**, G010 said "no makefile found in the target repo",
+  sending the author to look for a file sitting right there. The shipped
+  message states only what the data supports -- "no make targets were
+  detected".
+- **`make_refs` is a deduplicated set of target names**, so the count is
+  distinct stages, not citation occurrences. Four `` `make test` `` citations
+  report 1. The message now says "distinct `make` stage(s)" rather than
+  leaving a reader to discover a surprising number.
+- **G010 is effectively unwaivable, and this package should have said so.**
+  `rules.evaluate()` is `severity=INFO if suppressed else rule.severity`, so
+  waiving an already-INFO rule changes only the `[waived]` prefix; the finding
+  still appears and `--fail-on INFO` still exits 1. AC-UMC-12 therefore cannot
+  fail -- the engine satisfies it before any G010 code exists -- and
+  DEC-UMC-001's claim that separate ids let an adopter suppress one without
+  the other is false for G010. Dropping a waived INFO finding entirely is an
+  engine change affecting every rule and needs its own change package; it is
+  **not** done here, and the limitation stands.
+- **DEC-UMC-007's premise is incomplete.** `report.discovery_notes()` emits its
+  no-Makefile note whenever the card has no make targets, regardless of whether
+  any spec carries a citation; G010 fires only when one does. G010 is a
+  strictly narrower signal, not the one the Action "should eventually
+  project", so a future R8 deriving that output from findings would change the
+  Action's behaviour on a citation-free target. Leaving `discovery_notes()`
+  computing its own answer remains right -- for this reason as much as for the
+  coverage-floor half having no rule id.
+- **Also owed:** `tests/test_decomposition.py::_EXPECTED_HASHES["rules"]` was a
+  missed sync point (re-pinned in the implementing commit); AC-UMC-8 verifies
+  declared severities rather than that no passing repo now fails, for which
+  the byte-identical `validate`/`graph` hashes are the real evidence; AC-UMC-14
+  is verified by `make test` but a source comment is invisible to the suite;
+  and `rules_generic.py`'s own module docstring is guarded by no test.

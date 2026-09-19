@@ -2207,3 +2207,31 @@ def test_no_citation_is_reported_by_two_of_the_three_rules(repo: Path) -> None:
     (repo / "Makefile").unlink()
     ids = rule_ids(findings_for(repo, GOOD_HARNESS.replace("make regression", "make nope")))
     assert "G010" in ids and "G004" not in ids and "G011" not in ids
+
+
+def test_a_gnumakefile_only_repo_fails_a_bad_citation_end_to_end(repo: Path) -> None:
+    """AC-MFD-4: the inversion the whole makefile-discovery change exists for.
+
+    Before it, this repository reported PASS with zero findings. The corpus
+    shapes pin detection; this pins the verdict a user actually sees.
+    """
+    (repo / "Makefile").rename(repo / "GNUmakefile")
+    found = findings_for(repo, GOOD_HARNESS.replace("make regression", "make nope"))
+    assert "G004" in rule_ids(found)
+    assert [f for f in found if f.rule == "G004" and f.severity == "ERROR"]
+
+
+def test_an_unreadable_makefile_reports_nothing_and_says_so(repo: Path) -> None:
+    """GNU Make aborts here, so no citation runs -- and G010 must say so.
+
+    The pair is the point: reporting the shadowed file's targets would be a
+    lie, and reporting nothing without a diagnostic would be the silence this
+    work set out to remove.
+    """
+    (repo / "Makefile").rename(repo / "Makefile.bak")
+    (repo / "GNUmakefile").mkdir()
+    (repo / "Makefile").write_text("build:\n\t@echo b\n", encoding="utf-8")
+    found = findings_for(repo, GOOD_HARNESS.replace("make regression", "make build"))
+    assert detect.profile(repo).make_targets == ()
+    assert "G004" not in rule_ids(found)
+    assert "G010" in rule_ids(found)

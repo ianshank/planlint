@@ -188,7 +188,7 @@ quality without making the document wrong.
 | S002 | ERROR | speckit | `FR-`/`SC-` identifiers are unique |
 | S003 | WARN | speckit | Functional requirements use SHALL / MUST |
 | S004 | WARN | speckit | Acceptance scenarios name a stimulus (`WHEN`) and an outcome (`THEN`) |
-| S005 | WARN | speckit | A declared `Requirements` section yields at least one `FR-` requirement |
+| S005 | WARN | speckit | Declared `FR-` bullets reach the graph (none silently dropped by heading level) |
 | W001 | ERROR | any | Every cited stage has a fresh, exit-0 witness (only under `--require-witness`) |
 | W002 | ERROR | any | A witness's recorded coverage meets the detected floor (only under `--require-witness`) |
 

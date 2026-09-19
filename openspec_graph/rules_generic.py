@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 
-from .detect import MAKEFILE_NAMES, StackProfile
+from .detect import StackProfile
 from .parse import ParsedSpec, threshold_values
 from .rule_types import ERROR, GENERIC_STAGES, INFO, WARN, CheckHit, CheckResult, Rule
 
@@ -96,11 +96,20 @@ def _unchecked_make_citations(spec: ParsedSpec, profile: StackProfile) -> Iterab
     """
     if profile.make_targets or not spec.make_refs:
         return
-    count = len(spec.make_refs)
-    names = ", ".join(MAKEFILE_NAMES)
+    # "no make targets were detected" and not "no makefile was found": the
+    # only fact available here is `profile.make_targets == ()`, which conflates
+    # a missing makefile, a present-but-empty one, one declaring nothing but
+    # special targets, and one that exists and cannot be read. Naming the
+    # wrong cause sends the author looking for a file that is sitting right
+    # there. `detect` prints which names it looked for; this reports what it
+    # found.
+    #
+    # `make_refs` is a deduplicated set of target names (parse.parse_spec), so
+    # this counts distinct stages, not citation occurrences. Said plainly
+    # rather than left for a reader to discover from a surprising number.
     yield (
-        f"{count} `make` citation(s) not checked: no makefile found in the "
-        f"target repo (looked for {names}), so G004 could not run"
+        f"{len(spec.make_refs)} distinct `make` stage(s) not checked: no make "
+        f"targets were detected in the target repo, so G004 could not run"
     )
 
 

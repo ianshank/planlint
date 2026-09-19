@@ -517,36 +517,29 @@ def speckit_subsection_span(section_text: str, name: str) -> tuple[int, str]:
     return 0, ""
 
 
-# The heading titles that declare a SpecKit requirements section, at either
-# level. One vocabulary, shared by the parser's expectation and by S005, so
-# the rule cannot drift from what the parser actually looks for.
-#
-# Equality, never containment: "Non-Functional Requirements" declares
-# something else entirely, and matching it would fire S005 against a document
-# that never promised FR bullets -- the false positive `docs/next-steps.md`
-# item 4b refused to risk.
-SPECKIT_REQUIREMENT_HEADINGS = ("Requirements", "Functional Requirements")
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 
 
-def speckit_requirements_heading_line(text: str) -> int:
-    """1-based line of the first Requirements-shaped heading, or 0 if none.
+def blank_html_comments(text: str) -> str:
+    """Blank every HTML comment, preserving both length and line structure.
 
-    Scans H2 and H3 together and returns the earliest by document position,
-    not by which pattern was tried first -- a spec may declare either name at
-    either level, and "first" has to mean first on the page.
+    ``strip_waiver_comments`` only blanks comments ``SUPPRESS`` matched, and
+    ``SUPPRESS`` has no ``re.DOTALL`` -- so a *multi-line* waiver comment is
+    left intact and its reason text keeps reading as document structure. That
+    is the third recurrence of this class (the `ADR_REF` and `INV_REF` cases
+    are in ``strip_waiver_comments``'s own docstring), so a rule scanning raw
+    markdown needs a comment-blind view that does not depend on whether a
+    comment happened to be a well-formed waiver.
 
-    Distinguishes "the author wrote a requirements section and it yielded
-    nothing" from "this document has no requirements section", which is the
-    whole discrimination S005 rests on.
+    Newlines are preserved rather than blanked, unlike
+    ``strip_waiver_comments``'s single-line span fill: blanking them would
+    merge lines and shift every subsequent locus, breaking the 1-based line
+    contract (DEC-LH / R-LH-14). Length is preserved too, so an offset into
+    the result indexes the raw document.
     """
-    wanted = {h.lower() for h in SPECKIT_REQUIREMENT_HEADINGS}
-    offsets = [
-        m.start()
-        for pattern in (SECTION, SUBSECTION)
-        for m in pattern.finditer(text)
-        if _TRAILING_ANNOTATION.sub("", m.group(1).strip()).strip().lower() in wanted
-    ]
-    return line_of(text, min(offsets)) if offsets else 0
+    return _HTML_COMMENT.sub(
+        lambda m: "".join("\n" if ch == "\n" else " " for ch in m.group()), text
+    )
 
 
 def line_of(text: str, offset: int) -> int:

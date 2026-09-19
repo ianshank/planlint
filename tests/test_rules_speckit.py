@@ -395,7 +395,15 @@ def test_s005_does_not_match_non_functional_requirements(repo: Path) -> None:
     assert "S005" not in {f.rule for f in findings_for(repo, body)}
 
 
-def test_s005_fires_on_a_requirements_section_with_prose_but_no_bullets(repo: Path) -> None:
+def test_s005_is_silent_on_a_requirements_section_with_no_bullets(repo: Path) -> None:
+    """Non-success: the predicate is data loss, not document shape.
+
+    A section that declares no FR- bullet has not lost one. An earlier draft
+    keyed on the heading and fired here; the adversarial review showed the same
+    predicate also fires on a legitimately NFR-only spec under SpecKit's own
+    mandatory `## Requirements` wrapper, which is the false positive
+    docs/next-steps.md item 4b refused. Keying on dropped bullets removes both.
+    """
     body = textwrap.dedent(
         """\
         # Feature Specification: Demo
@@ -409,17 +417,100 @@ def test_s005_fires_on_a_requirements_section_with_prose_but_no_bullets(repo: Pa
         - **SC-001**: The thing completes in under a second.
         """
     )
+    assert "S005" not in {f.rule for f in findings_for(repo, body)}
+
+
+def test_s005_is_silent_on_a_non_functional_only_spec(repo: Path) -> None:
+    """Non-success: THE false positive the adversarial review reproduced.
+
+    SpecKit's template makes the `## Requirements` H2 wrapper mandatory, so a
+    heading-based predicate swallows every document whose requirements are
+    non-functional and tells its author things were "dropped" when none existed.
+    """
+    body = textwrap.dedent(
+        """\
+        # Feature Specification: Demo
+
+        ## Requirements *(mandatory)*
+
+        ### Non-Functional Requirements
+
+        - The system responds within one second under nominal load.
+
+        ## Success Criteria *(mandatory)*
+
+        - **SC-001**: The thing completes in under a second.
+        """
+    )
+    assert "S005" not in {f.rule for f in findings_for(repo, body)}
+
+
+def test_s005_fires_on_fr_bullets_under_a_differently_titled_subheading(repo: Path) -> None:
+    """A shape a heading-based predicate misses entirely.
+
+    `### Core Requirements` holding FR- bullets is refused by the parser
+    (AC-SK-49) and is exactly as lost as the wrong-level case.
+    """
+    body = textwrap.dedent(
+        """\
+        # Feature Specification: Demo
+
+        ## Requirements *(mandatory)*
+
+        ### Core Requirements
+
+        - **FR-001**: The system MUST do the thing.
+
+        ## Success Criteria *(mandatory)*
+
+        - **SC-001**: The thing completes in under a second.
+        """
+    )
     assert "S005" in {f.rule for f in findings_for(repo, body)}
 
 
-def test_s005_ignores_a_heading_quoted_inside_a_waiver(repo: Path) -> None:
-    """Non-success: a waiver's own reason text is not the document's structure."""
-    body = _USER_STORY_ONLY.replace(
-        "## Success Criteria *(mandatory)*",
-        "<!-- specgraph:allow S001 reason: the ## Requirements heading is discussed here -->\n\n"
-        "## Success Criteria *(mandatory)*",
+def test_s005_ignores_fr_bullets_inside_a_multiline_comment(repo: Path) -> None:
+    """Non-success: a comment's own text is not the document's content.
+
+    `strip_waiver_comments` alone is not enough here. `SUPPRESS` has no
+    `re.DOTALL`, so a MULTI-LINE waiver comment is never matched and its reason
+    text survives into the scanned document -- reproduced by the adversarial
+    review, where the waiver both failed to register and tripped the rule it
+    was trying to waive. That is the third recurrence of the class
+    `strip_waiver_comments`'s own docstring records, so S005 blanks every HTML
+    comment rather than only the well-formed waivers.
+    """
+    body = textwrap.dedent(
+        """\
+        # Feature Specification: Demo
+
+        <!-- specgraph:allow S005
+        - **FR-001**: quoted inside this waiver's reason text
+        -->
+
+        ## Success Criteria *(mandatory)*
+
+        - **SC-001**: The thing completes in under a second.
+        """
     )
     assert "S005" not in {f.rule for f in findings_for(repo, body)}
+
+
+def test_blank_html_comments_preserves_length_and_line_numbers() -> None:
+    """The locus contract (DEC-LH / R-LH-14) survives blanking.
+
+    Blanking newlines would merge lines and shift every subsequent finding's
+    line by an amount nobody can see.
+    """
+    from openspec_graph.parse_semantics import blank_html_comments
+
+    raw = "a\n<!-- one\ntwo -->\nb\n"
+    out = blank_html_comments(raw)
+    assert len(out) == len(raw)
+    assert out.count("\n") == raw.count("\n")
+    assert out.splitlines()[0] == "a"
+    assert out.splitlines()[3] == "b"
+    assert "one" not in out and "two" not in out
 
 
 def test_s005_never_evaluates_for_the_harness_dialect(repo: Path) -> None:

@@ -159,7 +159,7 @@
     "id": "S005",
     "severity": "WARN",
     "dialects": "speckit",
-    "summary": "a declared Requirements section yields at least one requirement"
+    "summary": "declared FR- bullets reach the graph"
   },
   {
     "id": "W001",

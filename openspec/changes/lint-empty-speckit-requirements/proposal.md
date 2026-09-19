@@ -148,3 +148,56 @@ it has made a claim the parser could not honour.
 ## Affected Capabilities
 
 - `speckit-empty-requirements`
+
+---
+
+## Revision after adversarial review
+
+The predicate changed. `spec-adversary` reproduced **the exact false positive
+`docs/next-steps.md` item 4b refused**, reintroduced by this package's own
+design, so the rule was rebuilt around a different fact.
+
+- **Superseded: the heading-shaped predicate** (R-SER-2/3/6, DEC-SER-002/003/004,
+  AC-SER-1..4, AC-SER-7, and `speckit_requirements_heading_line`). Firing on a
+  `Requirements`-shaped heading that yielded no requirement fires on a
+  legitimately non-functional-only spec: SpecKit's template makes the
+  `## Requirements` H2 wrapper **mandatory**, so the H2 match swallows every
+  document whose requirements are non-functional. Reproduced -- a spec with
+  `## Requirements *(mandatory)*` containing only `### Non-Functional
+  Requirements` drew `WARN S005 ... requirements declared at the wrong heading
+  level are dropped from the graph silently`, when nothing was dropped and the
+  document has no functional requirements. DEC-SER-003's protection only
+  operated when the NFR heading was the document's *only* requirements-like
+  heading, which is not the shape the template produces, so AC-SER-7 passed
+  green while the real case fired.
+- **Shipped instead: data loss, not document shape.** S005 fires when FR-shaped
+  bullets exist in the text and `spec.requirements` is empty -- bullets were
+  written and dropped. A user-story-only draft, a prose-only section and an
+  NFR-only spec are all silent, because nothing was lost. It also catches a
+  shape the heading predicate missed entirely: FR bullets under an H3 titled
+  anything else (`### Core Requirements`), which the parser refuses by design
+  and which is exactly as lost. The locus is the first dropped bullet rather
+  than the heading, because that is the token the author has to move, and the
+  message no longer asserts a cause the rule did not determine.
+- **DEC-SER-006 and AC-SER-10 were false.** `SUPPRESS` has no `re.DOTALL`, so a
+  **multi-line** waiver comment is never matched and `strip_waiver_comments`
+  leaves it intact. Reproduced: a spec whose only requirements content sat
+  inside a multi-line waiver both failed to register the waiver and tripped
+  the rule the waiver was trying to waive. S005 now blanks every HTML comment
+  via `blank_html_comments`, which preserves length *and* newlines so the
+  1-based locus contract (DEC-LH / R-LH-14) survives -- adding `re.DOTALL` to
+  `SUPPRESS` would not, since its space-fill would merge lines.
+- **A bound worth stating, not fixed here.** `detect.find_speckit_spec_files`
+  is content-gated on `is_speckit_marked`, which needs `### Functional
+  Requirements` + an FR id, or `## Success Criteria` + an SC id. Promoting the
+  heading to H2 kills the first disjunct, so a wrong-level spec with **no**
+  Success Criteria section is not discovered as SpecKit at all. That case exits
+  2 ("no openspec/ directory and no SpecKit specs/ tree") rather than passing
+  silently, so it is loud rather than a fail-open -- but S005 does not cover
+  it, and no dialect-scoped rule can. The coupling between `is_speckit_marked`
+  and the heading level is a separate change.
+- **Also owed:** AC-SER-16 and AC-SER-18 assert the absence of edits and cannot
+  fail; `rules_speckit.py`'s module docstring is guarded by no test; and this
+  package's rule-count arithmetic (26 to 27) collided with
+  `report-unchecked-make-citations` (26 to 28) because neither declared an
+  ordering dependency -- both landed, and the count is 29.

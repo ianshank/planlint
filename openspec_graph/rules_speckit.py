@@ -7,9 +7,10 @@ from collections.abc import Iterable
 from .detect import StackProfile
 from .parse import ParsedSpec, scenario_has_gwt
 from .parse_semantics import (
+    FR_DECL,
     NEEDS_CLARIFICATION,
+    blank_html_comments,
     line_of,
-    speckit_requirements_heading_line,
     strip_waiver_comments,
 )
 from .rule_types import ERROR, WARN, CheckHit, CheckResult, Rule
@@ -67,42 +68,54 @@ def _scenario_without_gwt(spec: ParsedSpec, _p: StackProfile) -> Iterable[CheckR
             )
 
 
-def _empty_requirements_section(spec: ParsedSpec, _p: StackProfile) -> Iterable[CheckResult]:
-    """S005: a Requirements section that yielded no requirement at all.
+def _dropped_requirement_bullets(spec: ParsedSpec, _p: StackProfile) -> Iterable[CheckResult]:
+    """S005: the document declares FR- bullets and none reached the graph.
 
     ``parse_speckit`` scopes its FR scan to a level-3 ``Functional
-    Requirements`` nested inside the level-2 ``Requirements`` span, which is
-    correct and closes a real over-matching bug (R-SK-30/AC-SK-49). The flip
-    side is silent data loss: a hand-edited spec that writes the heading one
-    level up yields zero requirements, and every gate agrees nothing is wrong.
-    Measured -- the same file with one heading level changed produced graph
-    nodes ``FR-001, FR-002, SC-001`` against ``SC-001`` alone, both reporting
-    ``0 error · 0 warn · 0 info`` and ``broken_links: 0``.
+    Requirements`` nested inside the level-2 ``Requirements`` span. That
+    scoping is correct and closes a real over-matching bug (R-SK-30/AC-SK-49);
+    it is not touched here. Its flip side is silent data loss: the same file
+    with the heading one level up yielded graph nodes ``FR-001, FR-002,
+    SC-001`` against ``SC-001`` alone, both reporting ``0 error · 0 warn · 0
+    info`` and ``broken_links: 0``. G001 cannot catch it, because the
+    surviving Success Criterion means the spec is not requirement-less.
 
-    G001 does not catch it: a surviving Success Criterion means the spec is not
-    requirement-less, so G001 has nothing to say.
+    The predicate is **data loss, not document shape**: FR-shaped bullets
+    exist in the text and ``spec.requirements`` is empty, so those bullets
+    were written and dropped. Keying on the bullets rather than on a
+    ``Requirements``-shaped heading is what keeps this out of the false
+    positive ``docs/next-steps.md`` item 4b refused. A heading-based predicate
+    fires on a spec whose ``## Requirements`` section holds only
+    ``### Non-Functional Requirements`` -- the canonical SpecKit wrapper is
+    mandatory, so matching it swallows every legitimately NFR-only document
+    and tells its author that requirements were "dropped" when none existed.
+    A user-story-only draft and a prose-only section are silent for the same
+    reason: nothing was lost.
 
-    The discrimination, and the reason this is not the false positive
-    ``docs/next-steps.md`` item 4b refused: a Requirements-shaped section that
-    *exists* and yields nothing is not the same document as one with no such
-    section. A user-story-only draft never declares the section and stays
-    silent; only a spec that promised requirements and delivered none is
-    flagged. Waiver comments are stripped first, so a heading quoted inside a
-    waiver's reason is not mistaken for the document's own.
+    It also catches a shape a heading predicate misses -- FR bullets under an
+    H3 titled anything else (``### Core Requirements``), which the parser
+    refuses by design and which is exactly as lost.
+
+    The locus is the first dropped bullet, not the heading, because that is
+    the token the author has to move. HTML comments are blanked first, and via
+    ``blank_html_comments`` rather than ``strip_waiver_comments``: the latter
+    only blanks comments ``SUPPRESS`` matched, and ``SUPPRESS`` has no
+    ``re.DOTALL``, so a multi-line waiver's own reason text still reads as
+    document content.
 
     WARN, so no ``--fail-on ERROR`` consumer changes verdict.
     """
     if spec.requirements:
         return
-    stripped = strip_waiver_comments(spec.raw)
-    line = speckit_requirements_heading_line(stripped)
-    if not line:
+    text = blank_html_comments(strip_waiver_comments(spec.raw))
+    match = FR_DECL.search(text)
+    if match is None:
         return
     yield CheckHit(
-        "a Requirements section is present but no FR- requirement was "
-        "extracted from it; requirements declared at the wrong heading level "
-        "are dropped from the graph silently",
-        line=line,
+        f"declares {match.group(1)} but no FR- requirement reached the graph; "
+        f"the canonical form is a level-3 `### Functional Requirements` "
+        f"heading inside the level-2 `## Requirements` section",
+        line=line_of(text, match.start()),
     )
 
 
@@ -115,7 +128,7 @@ SPECKIT_RULES: tuple[Rule, ...] = (
         "S005",
         WARN,
         ("speckit",),
-        "a declared Requirements section yields at least one requirement",
-        _empty_requirements_section,
+        "declared FR- bullets reach the graph",
+        _dropped_requirement_bullets,
     ),
 )
