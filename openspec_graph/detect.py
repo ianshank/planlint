@@ -283,7 +283,15 @@ def _resolve_makefile(root: Path) -> tuple[Path, str] | None:
     """
     for name in MAKEFILE_NAMES:
         candidate = root / name
-        if not candidate.exists():
+        try:
+            # lstat, not exists(): `exists()` follows symlinks and so reports a
+            # DANGLING link as absent, which would fall through to a
+            # lower-precedence name. `make` does not -- it stops with
+            # "GNUmakefile: No such file or directory" and runs nothing, so
+            # falling through would green-light a citation that cannot run.
+            # lstat asks whether the directory ENTRY is there, link or not.
+            candidate.lstat()
+        except OSError:
             continue
         text = read_text_or_none(candidate, "make_targets")
         if text is None:

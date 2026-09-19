@@ -158,7 +158,11 @@ unfamiliar clone.
 ## Rules
 
 Prose conventions, mechanized. `ERROR` blocks the gate; `WARN` degrades review
-quality without making the document wrong.
+quality without making the document wrong; `INFO` is an observation that never
+blocks at the default `--fail-on ERROR` — it reports what the gate *could not*
+check, so a vacuous pass is legible rather than silent. A waiver downgrades a
+finding one step toward `INFO`, which means a waived `INFO` finding still
+appears (with a `[waived]` prefix) and still counts at `--fail-on INFO`.
 
 | ID | Sev | Dialect | Checks |
 |---|---|---|---|

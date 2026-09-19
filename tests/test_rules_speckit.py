@@ -366,7 +366,14 @@ def test_s005_fires_when_a_requirements_section_yields_nothing(repo: Path) -> No
     found = [f for f in findings_for(repo, _WRONG_LEVEL) if f.rule == "S005"]
     assert len(found) == 1, found
     assert found[0].severity == "WARN"
-    assert found[0].line > 0, "the finding must point at the heading"
+    # The exact line, not merely a positive one: the contract is that the locus
+    # is the FIRST DROPPED BULLET -- the token the author has to move. A
+    # regression reporting the heading, or line 1, would satisfy `> 0`.
+    expected = next(
+        i for i, ln in enumerate(_WRONG_LEVEL.splitlines(), 1)
+        if ln.startswith("- **FR-001**")
+    )
+    assert found[0].line == expected, (found[0].line, expected)
 
 
 def test_s005_is_silent_on_the_canonical_nesting(repo: Path) -> None:

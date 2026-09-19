@@ -63,11 +63,14 @@ claim the parser could not honour.
   (`rules_speckit.py:65-70`) — at WARN severity, with
   `dialects=("speckit",)`, appended after S004 so `SPECKIT_RULES` stays
   append-ordered.
-- R-SER-2: S005 MUST emit exactly one finding for a speckit-dialect spec in
-  which a `Requirements`-shaped heading is present **and** `spec.requirements`
-  is empty. It MUST NOT emit one finding per missing bullet, per candidate
-  heading, or per section: the condition is a property of the document, and
-  one finding per document is what an author can act on.
+- R-SER-2 **(revised — see R-SER-3a for the predicate)**: S005 MUST emit
+  exactly one finding for a speckit-dialect spec that satisfies R-SER-3a. It
+  MUST NOT emit one finding per dropped bullet, per candidate heading, or per
+  section: the condition is a property of the document, and one finding per
+  document is what an author can act on. The original conditioned this on "a
+  `Requirements`-shaped heading is present and `spec.requirements` is empty",
+  which is the superseded predicate; only the one-finding-per-document part
+  survives.
 > **R-SER-3 and R-SER-4 are superseded.** The heading-shaped predicate they
 > define was reproduced firing on a legitimately non-functional-only spec:
 > SpecKit's template makes the level-2 `Requirements` wrapper **mandatory**, so
@@ -95,12 +98,22 @@ claim the parser could not honour.
   waiver and tripped the rule it was waiving.
 - R-SER-5: S005 MUST NOT emit any finding when `spec.requirements` is
   non-empty, regardless of how many headings match R-SER-3.
-- R-SER-6: S005 MUST fire, with its single unchanged message, when the
-  `Requirements`-shaped section exists and contains only prose, and when it
-  contains only bullets that are not `FR-`-shaped (a
-  `- **NFR-001**: ...` sibling, say — a shape `FR_DECL` deliberately refuses,
-  `parse_semantics.py:45-49`). These MUST NOT be split into distinct
-  severities, messages, or rule identifiers.
+> **R-SER-6 is superseded.** It required S005 to fire on a prose-only section
+> and on a section holding only non-`FR-` bullets. Under R-SER-3a neither
+> fires, and that is the point: no `FR-` bullet was written, so none was
+> dropped, and reporting "requirements were dropped" against a document that
+> declared none is the false positive item 4b refused. A `- **NFR-001**: ...`
+> sibling is a *different kind* of requirement, not a malformed one.
+>
+> What survives is its anti-fragmentation clause, kept as R-SER-6a.
+
+- R-SER-6a **(replaces R-SER-6)**: every shape that satisfies R-SER-3a MUST
+  report under one rule identifier, one severity and one message. A wrong-level
+  heading, a correctly-nested heading whose bullets are malformed, and `FR-`
+  bullets under a differently-titled subheading MUST NOT be split into distinct
+  severities, messages, or rule identifiers: the observable fact is the same in
+  each, and the message MUST state that fact rather than assert a cause the
+  rule did not determine.
 - R-SER-7: the two heading names `parse_speckit.py` looks up as bare string
   literals today MUST become shared constants in `parse_semantics.py`
   (`SPECKIT_REQUIREMENTS_HEADING`, `SPECKIT_FUNCTIONAL_REQUIREMENTS_HEADING`),

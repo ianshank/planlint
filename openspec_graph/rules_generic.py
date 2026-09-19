@@ -75,7 +75,7 @@ def _unknown_make_target(spec: ParsedSpec, profile: StackProfile) -> Iterable[Ch
 
 
 def _unchecked_make_citations(spec: ParsedSpec, profile: StackProfile) -> Iterable[CheckResult]:
-    """G010: the citations G004 could not check, because no makefile was found.
+    """G010: the citations G004 could not check, no make targets being detected.
 
     G004 returns early when ``profile.make_targets`` is empty, and that is
     correct -- a repo that does not use Make has not lied by mentioning it.

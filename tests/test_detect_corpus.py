@@ -320,3 +320,20 @@ def test_makefile_names_are_not_duplicated_as_inline_literals() -> None:
         assert not offenders, (
             f"{func.name}() hard-codes {offenders}; use detect.MAKEFILE_NAMES"
         )
+
+
+@pytest.mark.skipif(not support.supports_symlinks(), reason="cannot create symlinks here")
+def test_a_dangling_symlink_candidate_is_terminal_not_absent(tmp_path: Path) -> None:
+    """`Path.exists()` follows symlinks, so a broken link reads as absent.
+
+    That made the resolver fall through to a lower-precedence name, which is
+    the same fail-open again: `make` stops with "GNUmakefile: No such file or
+    directory" and runs nothing, so reporting the `Makefile`'s targets would
+    green-light a citation that cannot run. `lstat()` asks whether the
+    directory ENTRY is there, which is the question actually being asked.
+    """
+    (tmp_path / "GNUmakefile").symlink_to(tmp_path / "nonexistent-target")
+    (tmp_path / "Makefile").write_text("build:\n\t@echo b\n", encoding="utf-8")
+    assert not (tmp_path / "GNUmakefile").exists()  # the trap, made explicit
+    assert (tmp_path / "GNUmakefile").is_symlink()
+    assert detect.profile(tmp_path).make_targets == ()
