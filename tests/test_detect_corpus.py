@@ -209,3 +209,58 @@ def test_both_makefile_parsers_agree_on_a_bom_prefixed_file() -> None:
     text = "﻿all: build\n\t@echo a\nbuild:\n\t@echo b\n"
     assert machinery.parse_makefile(text).targets == ("all", "build")
     assert detect._legacy_make_targets(text) == ("all", "build")
+
+
+# --- makefile filename resolution (GNU Make's own search order) -------------
+
+
+def test_makefile_names_are_gnu_makes_own_search_order() -> None:
+    """The order is the contract, not an implementation detail.
+
+    GNU Make reads the first of these that exists and never opens the rest,
+    so a list in any other order would describe a different build.
+    """
+    assert detect.MAKEFILE_NAMES == ("GNUmakefile", "makefile", "Makefile")
+
+
+def test_no_makefile_at_all_resolves_to_none(tmp_path: Path) -> None:
+    assert detect._resolve_makefile(tmp_path) is None
+    assert detect.profile(tmp_path).make_targets == ()
+
+
+@pytest.mark.parametrize("name", ["GNUmakefile", "makefile", "Makefile"])
+def test_each_honoured_name_is_read(tmp_path: Path, name: str) -> None:
+    """Regression for the fail-open: a repo using any name GNU Make honours
+    must yield targets, or G004's empty-guard silently disables the rule and
+    a broken `make` citation passes clean.
+    """
+    (tmp_path / name).write_text("build:\n\t@echo b\n", encoding="utf-8")
+    assert detect.profile(tmp_path).make_targets == ("build",)
+
+
+def test_gnumakefile_shadows_makefile_rather_than_merging(tmp_path: Path) -> None:
+    """Both present: GNU Make reads GNUmakefile and never opens Makefile.
+
+    Reporting the union would describe a build that does not happen -- the
+    shadowed file's targets are not runnable via `make <target>`.
+    """
+    (tmp_path / "GNUmakefile").write_text("gnu-only:\n\t@echo g\n", encoding="utf-8")
+    (tmp_path / "Makefile").write_text("makefile-only:\n\t@echo m\n", encoding="utf-8")
+    assert detect.profile(tmp_path).make_targets == ("gnu-only",)
+
+
+def test_lowercase_makefile_shadows_capitalised_makefile(tmp_path: Path) -> None:
+    """`makefile` precedes `Makefile` in GNU Make's order.
+
+    Not a committed corpus shape: the two names are the same path on a
+    case-insensitive filesystem, so the fixture could not be checked out on
+    macOS. Generated here instead, and skipped where the filesystem cannot
+    hold both as distinct files -- probed, never inferred from sys.platform.
+    """
+    (tmp_path / "makefile").write_text("lower-only:\n\t@echo l\n", encoding="utf-8")
+    (tmp_path / "Makefile").write_text("upper-only:\n\t@echo u\n", encoding="utf-8")
+    if (tmp_path / "makefile").read_text(encoding="utf-8") == (
+        tmp_path / "Makefile"
+    ).read_text(encoding="utf-8"):
+        pytest.skip("case-insensitive filesystem: the two names are one file")
+    assert detect.profile(tmp_path).make_targets == ("lower-only",)

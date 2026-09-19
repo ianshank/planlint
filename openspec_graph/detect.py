@@ -232,9 +232,47 @@ def _legacy_make_targets(text: str) -> tuple[str, ...]:
     return tuple(sorted(set(targets)))
 
 
+# GNU Make's own search order ("What Name to Give Your Makefile"): it reads
+# the FIRST of these that exists and never opens the others, so `GNUmakefile`
+# shadows `Makefile` where both are present. Ordered, because the order *is*
+# the contract -- reporting the union of two files would describe a build
+# that never happens.
+#
+# `detect` previously looked only for `Makefile`, which meant a repository
+# using either of the other two spellings reported zero targets. That tripped
+# G004's empty-guard and silently disabled the rule: a valid repository with a
+# genuinely broken `make` citation passed clean, which is the one direction a
+# governance gate must never fail in.
+#
+# A named constant rather than an override knob on purpose. Making the list
+# configurable reopens the "should a hand-editable file change live-detected
+# behaviour?" question `fix-init-snapshot-wording` resolved against, and
+# these three names are fixed by GNU Make, not by a house style.
+MAKEFILE_NAMES: tuple[str, ...] = ("GNUmakefile", "makefile", "Makefile")
+
+
+def _resolve_makefile(root: Path) -> Path | None:
+    """The makefile GNU Make itself would read, or ``None`` if there is none.
+
+    On a case-insensitive filesystem (macOS by default) `makefile` matches a
+    file written as `Makefile`, so the candidate returned may differ in case
+    from the name on disk. That is harmless and deliberately not corrected:
+    both resolve to the same bytes, so the parsed targets -- and therefore the
+    dialect card, which carries `make_targets` and never the filename -- are
+    identical either way. The card's byte-stability contract is unaffected.
+    """
+    for name in MAKEFILE_NAMES:
+        candidate = root / name
+        if candidate.exists():
+            logger.debug("make_targets: reading %s", name)
+            return candidate
+    logger.debug("make_targets: no makefile found under any of %s", MAKEFILE_NAMES)
+    return None
+
+
 def _make_target_facts(root: Path) -> machinery.MakefileFacts:
-    makefile = root / "Makefile"
-    if not makefile.exists():
+    makefile = _resolve_makefile(root)
+    if makefile is None:
         return machinery.MakefileFacts((), False, False, 0)
     text = read_text_or_none(makefile, "make_targets")
     if text is None:

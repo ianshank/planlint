@@ -53,6 +53,9 @@ were first written; the fixes landed with them.
 | `array-of-tables-fail-under` | `threshold` = null | `[[tool.coverage.report]]` is an array of tables, never the table holding a floor. |
 | `quoted-string-fail-under` | `threshold` = null | `fail_under = "90"` is a string; coverage.py rejects it and so does planlint, rather than guessing. |
 | `shell-call-with-colon` | `make_targets` = all, build | A top-level `$(shell …)` or `$(info …)` whose argument contains a colon (a Windows drive path, `a:b`) is a function call, not a rule. The rule regex used to mint `touch` and `C` as targets; the Windows CI leg found it through the hostile shape. |
+| `gnumakefile-name` | `make_targets` = all, build, test | GNU Make reads `GNUmakefile` before any other name. `detect` looked only for `Makefile`, so this repo reported zero targets and G004's empty-guard silently disabled the rule — a valid repo with a broken `make` citation passed clean. |
+| `lowercase-makefile-name` | `make_targets` = all, build, lint | Same defect, the more common spelling: a lowercase `makefile` is honoured by GNU Make and is ordinary on case-sensitive filesystems. |
+| `gnumakefile-precedence` | `make_targets` = gnu-only | When both exist, GNU Make reads `GNUmakefile` and never opens `Makefile`. Pins the precedence, not merely the lookup: reporting the union, or the `Makefile`'s targets, would describe a build that does not happen. A `makefile`-versus-`Makefile` pair cannot be pinned this way — the two names collide on a case-insensitive filesystem and could not be checked out — so that ordering is asserted in `tests/test_detect_corpus.py` instead. |
 
 Three further cases are generated inside the test rather than committed,
 because a directory cannot be represented as a file in git and a large

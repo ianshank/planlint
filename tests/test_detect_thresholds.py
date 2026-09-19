@@ -343,3 +343,21 @@ def test_detection_is_byte_stable_across_hash_seeds() -> None:
         outputs.append(result.stdout)
     assert outputs[0] == outputs[1]
     assert json.loads(outputs[0]), "the subprocess produced no cards"
+
+
+def test_hard_coded_reads_bullets_and_table_rows_only() -> None:
+    """Pins G003's documented scope limit (docs/peer-review-2026-09.md F5).
+
+    Bullets and table rows are scanned; prose, headings and trailing
+    `_Verified by:_` lines are not. Recorded as a test so widening it later
+    is a decision with a failing assertion attached, rather than drift.
+    """
+    from openspec_graph.parse_semantics import hard_coded
+
+    assert hard_coded("- **THEN** branch coverage is at least 97%")
+    assert hard_coded("| Gate | 97% |")
+
+    # Not scanned -- the documented limit.
+    assert hard_coded("_Verified by: `make regression`, coverage floor 97%_") == ()
+    assert hard_coded("The suite must hold branch coverage at 97% or better.") == ()
+    assert hard_coded("## Coverage at 97%") == ()

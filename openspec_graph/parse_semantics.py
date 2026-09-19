@@ -524,6 +524,20 @@ def line_of(text: str, offset: int) -> int:
 def hard_coded(text: str, dialect: str = "") -> tuple[str, ...]:
     """Every hard-coded-threshold offender line, dialect-neutral by default.
 
+    **Scope: bullets and table rows only.** A line is considered only when it
+    starts with ``-`` or ``|``. A threshold written in a prose paragraph, in a
+    heading, or on a trailing ``_Verified by:_`` line is invisible to G003.
+
+    That is a deliberate limit, not an oversight. Criteria live in bullets and
+    tables, and widening the scan to running prose reintroduces exactly the
+    false-positive class ``fix-prose-matcher-precision`` was spent lowering --
+    a narrative "we raised it from 80% to 90%" is a description, not a
+    hard-coded gate. The cost is real and is recorded rather than hidden: a
+    genuine offender phrased as prose is missed, and G003 is silent about it.
+    Widening this is a matcher change and would need the labelled-corpus and
+    ``make matcher-accuracy`` treatment the prose matchers get, not a looser
+    ``startswith``. Pinned by ``test_hard_coded_reads_bullets_and_table_rows_only``.
+
     ``dialect == "speckit"`` exempts the ``Success Criteria`` section body
     from the scan (R-SK-19, mandatory fix): a conventional, purely
     positive-phrased SpecKit Success Criterion like ``SC-001: 95% of new
