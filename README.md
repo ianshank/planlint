@@ -558,5 +558,8 @@ change package.
   comparison, and the candidate change packages
 - [Distribution plan](docs/distribution-plan.md) — what remains between this
   repository and a published release, and what was deliberately cut
+- [Peer review (2026-09)](docs/peer-review-2026-09.md) — what the gate
+  actually checks when it says PASS, measured against built target
+  repositories, and the rewritten remainder that follows from it
 
 Upstream OpenSpec conventions: [Fission-AI/OpenSpec concepts](https://github.com/Fission-AI/OpenSpec/blob/main/docs/concepts.md).

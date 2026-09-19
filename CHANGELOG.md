@@ -5,6 +5,47 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — peer review of the rule surface (`docs/peer-review-2026-09.md`)
+
+- **Measured what the gate checks when it says PASS**, by building target
+  repositories and running the shipped CLI against them rather than reading
+  the rules. Seven findings, each reproduced. The wedge sentence holds in
+  the case the README demonstrates and fails open in several others.
+- **`GNUmakefile` and lowercase `makefile` are not discovered.** `detect`
+  looks only for `root/"Makefile"`, while GNU Make honours all three and
+  prefers `GNUmakefile`. A repo using either reports `0 make targets`, which
+  trips G004's empty-guard: a genuinely broken `make` citation reports PASS,
+  exit 0. The 21-shape detection corpus covers Makefile *contents*
+  exhaustively and never varies the *filename*.
+- **`GENERIC_STAGES` exempts `ci`/`test`/`validate`/`lint`/`coverage` from
+  G004** — the five most likely citations — and `planlint new` scaffolds
+  `make test` five times. The exemption is defensible; being undocumented
+  everywhere is not.
+- **A wrong-level SpecKit heading is silent data loss**, not merely a
+  missing diagnostic: `## Functional Requirements` at H2 drops every FR from
+  the graph while `validate` reports `0 error · 0 warn · 0 info` and
+  `broken_links: 0`.
+
+### Changed — planning documents corrected against measurement
+
+- **The vacuous-pass item named the wrong rule.** Three documents said "a
+  target with no Makefile and no coverage floor passes G003/G004 vacuously".
+  G003 has no empty-guard and fires normally with no floor detected; only
+  G004 fails open, and the coverage floor is irrelevant to it. The
+  mis-statement had deferred a one-guard-clause fix behind a design pass it
+  does not need.
+- **Two stale numbers in `docs/next-steps.md`.** E501 is 122 violations, not
+  100 (28 `openspec_graph`, 8 `tools`, 86 tests). Adding `--cov=tools` now
+  reports 91.41% line / 89.32% branch — **both floors pass**, so item 19's
+  stated blocker is gone; its diagnosis survives, and `tools/` alone is
+  66.5% with four scripts at 0%.
+- **`docs/eval-corpus-plan.md`'s `is_normative` row is marked fixed.** It was
+  `[Certain]` and correct when measured and went stale without a marker.
+- **The roadmap notes that v2 does not reach CI.** The witness store is
+  gitignored, so `--require-witness` always fails closed on a fresh checkout
+  — documented honestly elsewhere, but never connected to the fact that the
+  v2 claim depends on it, and v3/v4 are sequenced ahead.
+
 ### Fixed — pre-release adopter-surface drift
 
 - **The `[0.2.0]` section no longer repeats itself.** The `v0.1.0` provenance
