@@ -309,3 +309,259 @@ def test_plugin_manifests_verbose_logs_without_polluting_stdout(
     assert any("manifests:" in record.message for record in caplog.records)
     # The real invariant: stdout stays the machine-readable channel.
     assert "manifests:" not in capsys.readouterr().out
+
+
+# --- check_no_hardcoded_thresholds.py: this project's flagship rule ---------
+#
+# G003 says a threshold belongs in config, and this guard enforces it on the
+# repo's own Makefile and workflows. Its failing path had no test: main() was
+# exercised only against the repository itself, which passes, so "the guard
+# reports FAIL when a threshold is hard-coded" was assumed rather than shown.
+
+
+def _guard_tree(root: Path, makefile: str = "", workflow: str | None = None,
+                makefile_name: str = "Makefile") -> Path:
+    (root / makefile_name).write_text(makefile, encoding="utf-8")
+    workflows = root / ".github" / "workflows"
+    workflows.mkdir(parents=True, exist_ok=True)
+    (workflows / "ci.yml").write_text(workflow or "name: ci\n", encoding="utf-8")
+    return root
+
+
+def test_threshold_guard_passes_on_a_clean_tree(tmp_path: Path, capsys) -> None:
+    guard = load_tool("hct_clean", "check_no_hardcoded_thresholds.py")
+    tree = _guard_tree(tmp_path, makefile="test:\n\tpytest -q\n")
+    assert guard.main(["x"], tree) == 0
+    assert "PASS" in capsys.readouterr().out
+
+
+def test_threshold_guard_fails_on_a_hard_coded_coverage_floor(tmp_path: Path, capsys) -> None:
+    guard = load_tool("hct_makefile", "check_no_hardcoded_thresholds.py")
+    tree = _guard_tree(tmp_path, makefile="test:\n\tpytest --cov-fail-under=90\n")
+    assert guard.main(["x"], tree) == 1
+    assert "hard-coded numeric literal '90'" in capsys.readouterr().out
+
+
+def test_threshold_guard_fails_on_a_floor_pinned_in_a_workflow(tmp_path: Path, capsys) -> None:
+    guard = load_tool("hct_workflow", "check_no_hardcoded_thresholds.py")
+    tree = _guard_tree(tmp_path, workflow="jobs:\n  t:\n    run: pytest --cov-fail-under=85\n")
+    assert guard.main(["x"], tree) == 1
+    assert "pinned in workflow, not pyproject" in capsys.readouterr().out
+
+
+def test_threshold_guard_fails_on_a_pinned_tool_version(tmp_path: Path, capsys) -> None:
+    """A pinned ruff/mypy/pytest is the other half of the rule: dev extras are
+    deliberately unpinned so contributors and CI resolve the same versions."""
+    guard = load_tool("hct_pin", "check_no_hardcoded_thresholds.py")
+    tree = _guard_tree(tmp_path, workflow="jobs:\n  t:\n    run: pip install ruff==0.4.2\n")
+    assert guard.main(["x"], tree) == 1
+    assert "tool version pinned in workflow" in capsys.readouterr().out
+
+
+def test_threshold_guard_dispatches_a_gnumakefile_to_the_makefile_checker(
+    tmp_path: Path, capsys
+) -> None:
+    """Dispatch is by which list the path came from, never by basename.
+
+    A repo using GNUmakefile would otherwise be handed to the *workflow*
+    checker, which scans for entirely different shapes and would report PASS
+    on a hard-coded floor. The source says so; nothing asserted it.
+    """
+    guard = load_tool("hct_gnu", "check_no_hardcoded_thresholds.py")
+    tree = _guard_tree(
+        tmp_path, makefile="test:\n\tpytest --cov-fail-under=90\n", makefile_name="GNUmakefile"
+    )
+    assert guard.main(["x"], tree) == 1
+    assert "hard-coded numeric literal '90'" in capsys.readouterr().out
+
+
+def test_threshold_guard_scans_both_yaml_spellings(tmp_path: Path) -> None:
+    """`.yaml` is as valid to GitHub Actions as `.yml`."""
+    guard = load_tool("hct_yaml", "check_no_hardcoded_thresholds.py")
+    tree = _guard_tree(tmp_path)
+    (tree / ".github" / "workflows" / "extra.yaml").write_text(
+        "run: pytest --cov-fail-under=70\n", encoding="utf-8"
+    )
+    assert {p.name for p in guard.targets(tree)} >= {"ci.yml", "extra.yaml"}
+    assert guard.main(["x"], tree) == 1
+
+
+def test_threshold_guard_ignores_comments_and_make_expansions(tmp_path: Path) -> None:
+    """The allowlist works by token, not by vetoing whole lines.
+
+    `$(shell ...)` and a leading `@` are stripped before scanning, so a recipe
+    that echoes a number computed elsewhere is fine -- but a literal outside
+    an expansion on that same line must still be caught, which a line-level
+    veto would have missed.
+    """
+    guard = load_tool("hct_allow", "check_no_hardcoded_thresholds.py")
+    tree = _guard_tree(tmp_path, makefile=(
+        "# fail_under = 90 in a comment is documentation, not a pin\n"
+        "check:\n"
+        "\t@echo $(shell python -c 'print(90)')\n"
+    ))
+    assert guard.main(["x"], tree) == 0
+
+
+def test_threshold_guard_survives_a_makefile_that_is_not_a_regular_file(tmp_path: Path) -> None:
+    """A directory carrying the name: nothing to scan, and no fall-through to
+    a lower-precedence file -- `make` stops there too."""
+    guard = load_tool("hct_notfile", "check_no_hardcoded_thresholds.py")
+    (tmp_path / "Makefile").mkdir()
+    assert guard.check_makefile(tmp_path / "Makefile") == []
+
+
+def test_threshold_guard_survives_a_missing_workflow(tmp_path: Path) -> None:
+    guard = load_tool("hct_nowf", "check_no_hardcoded_thresholds.py")
+    assert guard.check_workflow(tmp_path / "nope.yml") == []
+
+
+# --- scoped coverage floors: the gate that guards the gate scripts ----------
+#
+# `make coverage-tools` gates tools/ against its own floors using the same two
+# checkers under `--scope`. That scoping is now gate-critical logic: get it
+# wrong and the gate silently measures the wrong tree, or nothing at all.
+
+
+def _cov_json(path: Path, files: dict[str, tuple[int, int, int, int]]) -> Path:
+    """Write a coverage.json. Values are (statements, covered, branches, covered)."""
+    payload = {
+        "files": {
+            name: {"summary": {
+                "num_statements": stm, "covered_lines": cov,
+                "num_branches": br, "covered_branches": bcov,
+            }}
+            for name, (stm, cov, br, bcov) in files.items()
+        },
+        "totals": {
+            "num_statements": sum(v[0] for v in files.values()),
+            "covered_lines": sum(v[1] for v in files.values()),
+            "num_branches": sum(v[2] for v in files.values()),
+            "covered_branches": sum(v[3] for v in files.values()),
+        },
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def _pyproject(path: Path, **keys: int) -> Path:
+    specgraph = "\n".join(f"{k} = {v}" for k, v in keys.items())
+    path.write_text(
+        f"[tool.coverage.report]\nfail_under = 90\n[tool.specgraph]\n{specgraph}\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_scoped_totals_sum_only_the_named_subtree(tmp_path: Path) -> None:
+    common = load_tool("common_scope", "_common.py")
+    cov = _cov_json(tmp_path / "c.json", {
+        "openspec_graph/cli.py": (100, 100, 40, 40),   # perfect, and irrelevant
+        "tools/a.py": (10, 5, 4, 2),
+        "tools/b.py": (10, 5, 4, 2),
+    })
+    assert common.coverage_totals(cov, "covered_lines", "num_statements", "tools") == (10, 20)
+    # Unscoped still reads the report's own totals, unchanged.
+    assert common.coverage_totals(cov, "covered_lines", "num_statements") == (110, 120)
+
+
+def test_scoped_totals_normalize_windows_separators(tmp_path: Path) -> None:
+    """coverage.py writes paths as the platform spells them.
+
+    A backslash-separated path would never match a ``tools/`` prefix, and the
+    failure mode is not a crash but a scope that matches nothing -- which on a
+    green run looks exactly like a passing gate until the next assertion below
+    turns it into exit 2.
+    """
+    common = load_tool("common_win", "_common.py")
+    cov = _cov_json(tmp_path / "c.json", {"tools\\check_docs.py": (10, 9, 2, 2)})
+    assert common.coverage_totals(cov, "covered_lines", "num_statements", "tools") == (9, 10)
+
+
+def test_scoped_totals_are_zero_for_a_subtree_nobody_measured(tmp_path: Path) -> None:
+    common = load_tool("common_none", "_common.py")
+    cov = _cov_json(tmp_path / "c.json", {"openspec_graph/cli.py": (10, 10, 2, 2)})
+    assert common.coverage_totals(cov, "covered_lines", "num_statements", "tools") == (0, 0)
+
+
+def test_a_scope_matching_nothing_fails_the_gate_rather_than_passing(tmp_path: Path) -> None:
+    """The load-bearing case. A prefix typo, a renamed directory, or a run
+    that forgot `--cov=tools` all produce 0 measured statements, and 0/0 is
+    not 100% -- it is a gate pointed at nothing. It must exit 2."""
+    _cov_json(tmp_path / "coverage.json", {"openspec_graph/cli.py": (10, 10, 2, 2)})
+    _pyproject(tmp_path / "pyproject.toml", tools_line_fail_under=90, tools_branch_fail_under=80)
+    assert run_tool_main(
+        "cf_empty", "check_coverage_floor.py", "coverage.json", "--scope", "tools", cwd=tmp_path
+    ) == 2
+    assert run_tool_main(
+        "bc_empty", "check_branch_coverage.py", "coverage.json", "--scope", "tools", cwd=tmp_path
+    ) == 2
+
+
+def test_scoped_gate_fails_below_its_own_floor_and_passes_at_it(tmp_path: Path) -> None:
+    _pyproject(tmp_path / "pyproject.toml", tools_line_fail_under=90, tools_branch_fail_under=80)
+    _cov_json(tmp_path / "coverage.json", {
+        # The package is perfect; tools/ is not. A combined number would pass.
+        "openspec_graph/cli.py": (900, 900, 200, 200),
+        "tools/thin.py": (100, 50, 20, 4),
+    })
+    assert run_tool_main(
+        "cf_below", "check_coverage_floor.py", "coverage.json", "--scope", "tools", cwd=tmp_path
+    ) == 1
+    assert run_tool_main(
+        "bc_below", "check_branch_coverage.py", "coverage.json", "--scope", "tools", cwd=tmp_path
+    ) == 1
+    # And the unscoped gate on the same file passes, which is exactly the
+    # dilution the scoped floors exist to prevent: 95% overall, 50% in tools/.
+    assert run_tool_main(
+        "cf_whole", "check_coverage_floor.py", "coverage.json", cwd=tmp_path
+    ) == 0
+
+
+def test_scoped_gate_fails_loudly_when_its_floor_is_not_configured(tmp_path: Path) -> None:
+    """A missing scoped floor is a misconfiguration, not a skip -- the same
+    rule the unscoped floors already follow."""
+    _cov_json(tmp_path / "coverage.json", {"tools/a.py": (10, 10, 2, 2)})
+    _pyproject(tmp_path / "pyproject.toml", branch_fail_under=80)  # no tools_* keys
+    assert run_tool_main(
+        "cf_nofloor", "check_coverage_floor.py", "coverage.json", "--scope", "tools", cwd=tmp_path
+    ) == 2
+    assert run_tool_main(
+        "bc_nofloor", "check_branch_coverage.py", "coverage.json", "--scope", "tools", cwd=tmp_path
+    ) == 2
+
+
+@pytest.mark.parametrize(
+    ("argv", "expected_path", "expected_scope"),
+    [
+        (["prog"], "coverage.json", None),
+        (["prog", "c.json"], "c.json", None),
+        (["prog", "--scope", "tools"], "coverage.json", "tools"),
+        (["prog", "--scope=tools"], "coverage.json", "tools"),
+        (["prog", "c.json", "--scope", "tools"], "c.json", "tools"),
+        (["prog", "--scope", "tools", "c.json"], "c.json", "tools"),
+    ],
+)
+def test_coverage_argv_parses_every_accepted_shape(
+    argv: list[str], expected_path: str, expected_scope: str | None
+) -> None:
+    common = load_tool("common_argv", "_common.py")
+    path, scope = common.parse_coverage_argv(argv)
+    assert (path.name, scope) == (expected_path, expected_scope)
+
+
+@pytest.mark.parametrize("argv", [["prog", "--scope"], ["prog", "--scope="], ["prog", "--scope", ""]])
+def test_coverage_argv_rejects_a_scope_without_a_value(argv: list[str]) -> None:
+    """`--scope` with nothing after it must not be read as scope="" , which
+    would build the prefix "/" and match every file in the report."""
+    common = load_tool("common_argv_bad", "_common.py")
+    with pytest.raises(ValueError, match="requires a directory name"):
+        common.parse_coverage_argv(argv)
+
+
+def test_scoped_gate_reports_a_usage_error_as_exit_2(tmp_path: Path, capsys) -> None:
+    _pyproject(tmp_path / "pyproject.toml", tools_line_fail_under=90)
+    assert run_tool_main(
+        "cf_usage", "check_coverage_floor.py", "--scope", cwd=tmp_path
+    ) == 2
+    assert "usage error" in capsys.readouterr().err

@@ -19,6 +19,7 @@ htmlcov
 .coverage.*
 *.cover
 coverage.json
+coverage-tools.json
 coverage.xml
 *.egg-info
 *.egg

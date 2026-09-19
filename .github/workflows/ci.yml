@@ -336,6 +336,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  coverage-tools:
+    # The gate scripts under tools/ are what every job here actually runs, so
+    # they carry their own coverage floors ([tool.specgraph] tools_*_fail_under)
+    # rather than riding on the package's number. Three of them had an
+    # untested failing path -- a gate that reports PASS on the thing it was
+    # added to catch is worse than no gate.
+    #
+    # Its own job, on one interpreter, rather than a step in `test`: it re-runs
+    # the suite under a different --cov, and folding that into a 4-way matrix
+    # would pay for it four times to learn the same thing. tools/ is
+    # stdlib-only and version-independent, so one leg is the whole answer.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: make coverage-tools
+
   docs:
     # The documentation set must exist and be linked from README (AC-EH-8).
     runs-on: ubuntu-latest

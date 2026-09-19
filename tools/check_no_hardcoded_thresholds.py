@@ -104,7 +104,7 @@ def check_workflow(path: Path) -> list[str]:
     return findings
 
 
-def targets() -> list[Path]:
+def targets(root: Path | None = None) -> list[Path]:
     """Every file this guard scans.
 
     A named function, not an inline list inside ``main``, so a test can assert
@@ -117,21 +117,29 @@ def targets() -> list[Path]:
     Both YAML spellings are included: GitHub Actions accepts ``.yml`` and
     ``.yaml``, and a guard that covers only one is the same bug one rename
     away. Sorted for a stable report order across filesystems.
+
+    ``root`` defaults through ``None`` so ``REPO_ROOT`` is read at call time
+    rather than bound into the signature at definition time -- otherwise this
+    guard could only ever be run against its own checkout, and its failing
+    path (the one that matters) would have no test that could build a
+    violating tree to point it at.
     """
-    workflows_dir = REPO_ROOT / ".github" / "workflows"
+    root = REPO_ROOT if root is None else root
+    workflows_dir = root / ".github" / "workflows"
     workflows = sorted(workflows_dir.glob("*.yml")) + sorted(workflows_dir.glob("*.yaml"))
     # By GNU Make's search order, not the literal name `Makefile`. This guard
     # had the same single-name bug `fix-makefile-discovery-names` fixed in
     # detect.py: a repo (or an adopter copying this script) using `GNUmakefile`
     # or `makefile` got a silent PASS, because the missing path returned [].
-    makefile = resolve_makefile(REPO_ROOT)
+    makefile = resolve_makefile(root)
     return ([makefile] if makefile else []) + workflows
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str], root: Path | None = None) -> int:
+    root = REPO_ROOT if root is None else root
     findings: list[str] = []
-    makefile = resolve_makefile(REPO_ROOT)
-    for target in targets():
+    makefile = resolve_makefile(root)
+    for target in targets(root):
         # Dispatch on which list the path came from, never on its basename: a
         # makefile named `GNUmakefile` would otherwise be routed to the
         # workflow checker, which scans for entirely different shapes.

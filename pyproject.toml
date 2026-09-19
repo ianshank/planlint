@@ -105,6 +105,24 @@ fail_under = 90
 # high line coverage and untested conditional branches must still fail.
 branch_fail_under = 80
 
+# Floors for the `tools/` gate scripts, enforced by the same two checkers via
+# `--scope tools` (`make coverage-tools`). Separate from the floors above
+# because they measure a different tree: `tools/` is the gate machinery, not
+# the product, and a single combined number would let a regression in either
+# hide behind the other's headroom.
+#
+# The scripts under `tools/` are what `make pre-pr` and every workflow
+# actually run, so a gate script whose failing path is untested is worse than
+# no gate: it reports PASS on the thing it was added to catch. Three of them
+# did exactly that until the tests added alongside these keys.
+#
+# Set to the same numbers as the package rather than to today's measurement.
+# Holding the gate machinery to a lower bar than the code it guards is the
+# argument this project exists to refuse, and a floor pinned at the current
+# reading is a floor at the measurement, not a bar to clear.
+tools_line_fail_under = 90
+tools_branch_fail_under = 80
+
 # Accuracy floors for the two matchers that read English prose rather than
 # structure, scored by `tools/matcher_accuracy.py` against
 # `tests/fixtures/phrasing/` and enforced by `tests/test_matcher_accuracy.py`.

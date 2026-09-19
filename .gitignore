@@ -40,6 +40,9 @@ dmypy.json
 # Logs and local CI artifacts
 *.log
 coverage.json
+# `make coverage-tools` writes its own report so the tools/ floors can be
+# gated without diluting the package's number in coverage.json.
+coverage-tools.json
 spec-graph.json
 spec-findings.json
 head.json
