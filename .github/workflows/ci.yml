@@ -332,7 +332,7 @@ jobs:
         run: python tools/check_no_hardcoded_thresholds.py
 
       - name: gitleaks (hard gate — committed secrets fail the build)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
