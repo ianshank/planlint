@@ -34,6 +34,41 @@ PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
 AGENTS_MD = REPO_ROOT / "AGENTS.md"
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 
+# Trees whose files are INPUT to planlint rather than documents of this
+# repository. A corpus target may legitimately carry an `AGENTS.md`:
+# `detect.INVARIANT_SOURCES` lists that filename, so any shape exercising
+# invariant discovery needs one, and that file is a fixture rather than
+# guidance for a contributor. Excluded by prefix, named here with the reason,
+# so a future detection shape does not fail a gate about agent guidance.
+FIXTURE_TREES = ("tests/corpus/", "tests/fixtures/")
+
+
+def nested_agents_files(root: Path = REPO_ROOT) -> list[Path]:
+    """Every `AGENTS.md` this repository ships *below* its root.
+
+    Enumerated through git rather than `rglob` + a hand-maintained blocklist.
+    The property wanted is "files this repository ships", and
+    `--cached --others --exclude-standard` is literally that: tracked files
+    plus untracked ones that are not ignored. A glob would descend into
+    `build/` and `planlint.egg-info/` and would need a blocklist that drifts
+    away from `.gitignore`; `--others` additionally means a nested file is
+    seen on the run that *creates* it, before anyone stages it, which is the
+    one run where a gate about orphaned files most needs to fire.
+    """
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=root, capture_output=True, text=True, check=False,
+    )
+    if result.returncode != 0:  # pragma: no cover -- not a git checkout
+        return []
+    return sorted(
+        root / line
+        for line in result.stdout.splitlines()
+        if line.endswith("AGENTS.md")
+        and line != "AGENTS.md"
+        and not line.startswith(FIXTURE_TREES)
+    )
+
 # A case is a directory carrying a prompt, not "any directory that is not one
 # of these". The runner writes its own output beside the cases
 # (``evals/results/<timestamp>/``, and ``mocks/`` when MCP stand-ins are
@@ -318,10 +353,21 @@ def test_context7_indexes_the_skill_and_excludes_the_evals() -> None:
 # Every index an agent reads on its own initiative, rather than because a human
 # pointed at it. A dead link here is worse than a dead link in the README: no
 # human opens these files, so nothing surfaces the breakage.
-AGENT_INDEXES = (LLMS_TXT, AGENTS_MD)
+#
+# Discovered rather than listed. As a fixed tuple this covered exactly the two
+# root files, so a nested `AGENTS.md` -- which the nearest-file-wins convention
+# makes *more* likely to be the one actually read -- would have had its links
+# checked by nothing at all. That is the same argument the docstring above
+# already makes, applied to the files it did not reach.
+AGENT_INDEXES = (LLMS_TXT, AGENTS_MD, *nested_agents_files())
 
 
-@pytest.mark.parametrize("path", AGENT_INDEXES, ids=[p.name for p in AGENT_INDEXES])
+def _index_id(path: Path) -> str:
+    """`tools/AGENTS.md` rather than three test cases all called `AGENTS.md`."""
+    return path.relative_to(REPO_ROOT).as_posix()
+
+
+@pytest.mark.parametrize("path", AGENT_INDEXES, ids=[_index_id(p) for p in AGENT_INDEXES])
 def test_agent_index_links_resolve(path: Path) -> None:
     """Every path advertised must exist, or the index sends readers nowhere."""
     links = re.findall(r"\]\(([^)]+)\)", path.read_text(encoding="utf-8"))
@@ -345,6 +391,15 @@ def test_agents_md_declares_no_invariant_ids() -> None:
     invariant rules start firing against a document that was never meant to
     declare anything. Cheaper to forbid the id here than to debug the gate
     later.
+
+    **Root-scoped, and that is a property of ``detect``, not of this test.**
+    ``_invariants()`` iterates ``root / rel`` over the fixed relative paths in
+    ``INVARIANT_SOURCES``, so a nested ``tools/AGENTS.md`` is not a candidate
+    and cannot spring this trap. ``test_nested_agents_file_declares_no_invariant_ids``
+    forbids the id there anyway, because the cost of the habit is zero and the
+    cost of relearning it is a debugging session -- and because adding a
+    nested path to ``INVARIANT_SOURCES`` would otherwise reopen the trap
+    silently.
     """
     from openspec_graph import detect
 
@@ -583,6 +638,14 @@ def test_every_root_markdown_file_is_wired_into_the_docs_gate() -> None:
     green, because nothing enumerated this directory.
 
     README.md is the target of the linking rather than a subject of it.
+
+    **Root-scoped on purpose.** ``glob`` here is deliberate, not an oversight
+    that ``rglob`` would fix: a markdown file is a front-page promise *because
+    of its position*, and `docs/`, `skills/` and `evals/` hold plenty of
+    markdown that is reached by a link rather than by being at the top. Nested
+    ``AGENTS.md`` files are the one nested kind an agent opens on its own
+    initiative, and they are held by the contract tests below instead --
+    stated here so neither gate can be read as covering the other's ground.
     """
     module = _load_tool("check_docs", "check_docs.py")
     required = set(module.REQUIRED_DOCS)
@@ -592,4 +655,110 @@ def test_every_root_markdown_file_is_wired_into_the_docs_gate() -> None:
         f"root markdown file(s) {unwired} are in no gate: add them to "
         "tools/check_docs.py REQUIRED_DOCS (and link them from README.md), or "
         "move them under docs/ where they are not a front-page promise"
+    )
+
+
+# --- nested AGENTS.md: the contract, so nine files cannot land in no gate -----
+#
+# Proposed in docs/agent-directory-wiring-plan.md, milestone 1. These land
+# BEFORE any nested file exists, because the plan's whole argument is that the
+# guards must exist first: `test_every_root_markdown_file_is_wired_into_the_docs_gate`
+# enumerates the repository root only, so without these a nested AGENTS.md is
+# held by nothing. `test_nested_agents_discovery_finds_a_planted_file` keeps
+# that from being a vacuous claim while the discovered set is still empty.
+
+
+NESTED_AGENTS = nested_agents_files()
+_NESTED_IDS = [p.relative_to(REPO_ROOT).as_posix() for p in NESTED_AGENTS]
+
+# The precedence the root file already states, which every nested file inherits
+# and extends by one level. Matched on the distinctive clause rather than the
+# whole sentence, so wording can improve without the gate arguing about prose.
+PRECEDENCE_CLAUSE = "SKILL.md` wins"
+
+# A file an agent will not finish reading is worse than no file: it displaces
+# the root pointer that would have been read instead. From the plan's §5.
+MAX_NESTED_LINES = 60
+
+
+def test_nested_agents_discovery_finds_a_planted_file(tmp_path: Path) -> None:
+    """The discovery these contracts rest on actually discovers.
+
+    Every test below is parametrized over `nested_agents_files()`, so while
+    that returns nothing they are all zero-case passes -- a green gate that
+    has never run. This one plants files in a throwaway git repository and
+    asserts what comes back, so the mechanism is proven independently of
+    whether this repository has adopted any nested file yet.
+    """
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / "AGENTS.md").write_text("root\n", encoding="utf-8")
+    for rel in ("tools/AGENTS.md", "tests/AGENTS.md",
+                "tests/corpus/targets/shape/AGENTS.md", "build/AGENTS.md"):
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x\n", encoding="utf-8")
+    (tmp_path / ".gitignore").write_text("build/\n", encoding="utf-8")
+
+    found = {p.relative_to(tmp_path).as_posix() for p in nested_agents_files(tmp_path)}
+    assert found == {"tools/AGENTS.md", "tests/AGENTS.md"}, found
+    # Untracked but not ignored: seen on the run that creates it, which is the
+    # run where a gate about orphaned files most needs to fire.
+    assert not any(
+        subprocess.run(["git", "ls-files", "tools/AGENTS.md"], cwd=tmp_path,
+                       capture_output=True, text=True, check=False).stdout.strip()
+    ), "precondition: the planted file is untracked, and was still discovered"
+
+
+@pytest.mark.parametrize("path", NESTED_AGENTS, ids=_NESTED_IDS)
+def test_nested_agents_file_states_its_precedence(path: Path) -> None:
+    """Nearest-file-wins makes a nested file the one an agent reads first.
+
+    A file that does not say what outranks it is a file that reads as the last
+    word on its directory, which is exactly backwards: `SKILL.md` outranks the
+    root `AGENTS.md`, and the root file outranks this one.
+    """
+    assert PRECEDENCE_CLAUSE in path.read_text(encoding="utf-8"), (
+        f"{_index_id(path)} does not state its precedence; every nested file "
+        f"must say that SKILL.md wins, as the root AGENTS.md does"
+    )
+
+
+@pytest.mark.parametrize("path", NESTED_AGENTS, ids=_NESTED_IDS)
+def test_nested_agents_file_declares_no_invariant_ids(path: Path) -> None:
+    """Defence in depth against the trap the root guard describes.
+
+    Not reachable today -- `detect.INVARIANT_SOURCES` iterates fixed
+    root-relative paths -- but the whole point of that guard is that the trap
+    is cheap to fall into and expensive to diagnose. Adding a nested path to
+    that tuple later must not silently re-arm it.
+    """
+    found = re.findall(r"\bINV-\d+\b", path.read_text(encoding="utf-8"))
+    assert not found, f"{_index_id(path)} declares invariant id(s) {found}"
+
+
+@pytest.mark.parametrize("path", NESTED_AGENTS, ids=_NESTED_IDS)
+def test_nested_agents_file_stays_short(path: Path) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) <= MAX_NESTED_LINES, (
+        f"{_index_id(path)} is {len(lines)} lines, over the {MAX_NESTED_LINES}-line "
+        f"budget: an agent that does not finish it is worse off than one that "
+        f"read the root pointer instead"
+    )
+
+
+@pytest.mark.parametrize("path", NESTED_AGENTS, ids=_NESTED_IDS)
+def test_nested_agents_file_has_a_balanced_mermaid_block(path: Path) -> None:
+    """Each file carries a diagram of what its directory is for, and the fence
+    closes.
+
+    An unclosed ```mermaid fence swallows the rest of the document into a code
+    block, and GitHub renders a broken diagram as a small error box that no
+    reviewer reads as a failure. This checks the fence, not the diagram's
+    semantics -- rendering is a human step recorded in the plan.
+    """
+    text = path.read_text(encoding="utf-8")
+    assert "```mermaid" in text, f"{_index_id(path)} carries no mermaid diagram"
+    assert text.count("```") % 2 == 0, (
+        f"{_index_id(path)} has an odd number of code fences: an unclosed "
+        f"```mermaid block swallows everything after it"
     )
