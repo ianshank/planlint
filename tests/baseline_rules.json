@@ -156,6 +156,12 @@
     "summary": "acceptance scenarios state a stimulus and an outcome"
   },
   {
+    "id": "S005",
+    "severity": "WARN",
+    "dialects": "speckit",
+    "summary": "a declared Requirements section yields at least one requirement"
+  },
+  {
     "id": "W001",
     "severity": "ERROR",
     "dialects": "*",

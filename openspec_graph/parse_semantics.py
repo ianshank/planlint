@@ -517,6 +517,38 @@ def speckit_subsection_span(section_text: str, name: str) -> tuple[int, str]:
     return 0, ""
 
 
+# The heading titles that declare a SpecKit requirements section, at either
+# level. One vocabulary, shared by the parser's expectation and by S005, so
+# the rule cannot drift from what the parser actually looks for.
+#
+# Equality, never containment: "Non-Functional Requirements" declares
+# something else entirely, and matching it would fire S005 against a document
+# that never promised FR bullets -- the false positive `docs/next-steps.md`
+# item 4b refused to risk.
+SPECKIT_REQUIREMENT_HEADINGS = ("Requirements", "Functional Requirements")
+
+
+def speckit_requirements_heading_line(text: str) -> int:
+    """1-based line of the first Requirements-shaped heading, or 0 if none.
+
+    Scans H2 and H3 together and returns the earliest by document position,
+    not by which pattern was tried first -- a spec may declare either name at
+    either level, and "first" has to mean first on the page.
+
+    Distinguishes "the author wrote a requirements section and it yielded
+    nothing" from "this document has no requirements section", which is the
+    whole discrimination S005 rests on.
+    """
+    wanted = {h.lower() for h in SPECKIT_REQUIREMENT_HEADINGS}
+    offsets = [
+        m.start()
+        for pattern in (SECTION, SUBSECTION)
+        for m in pattern.finditer(text)
+        if _TRAILING_ANNOTATION.sub("", m.group(1).strip()).strip().lower() in wanted
+    ]
+    return line_of(text, min(offsets)) if offsets else 0
+
+
 def line_of(text: str, offset: int) -> int:
     return text.count("\n", 0, offset) + 1
 

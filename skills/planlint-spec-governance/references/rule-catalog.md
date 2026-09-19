@@ -38,5 +38,6 @@ Dialect `any` means the rule applies to every dialect.
 | S002 | ERROR | speckit | FR-/SC- identifiers are unique |
 | S003 | WARN | speckit | functional requirements are normative |
 | S004 | WARN | speckit | acceptance scenarios state a stimulus and an outcome |
+| S005 | WARN | speckit | a declared Requirements section yields at least one requirement |
 | W001 | ERROR | any | every cited stage has a fresh, passing witness |
 | W002 | ERROR | any | a witness's recorded coverage meets the detected floor |

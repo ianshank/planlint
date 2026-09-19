@@ -1,4 +1,4 @@
-"""Tests for the speckit rule family S001-S004, and the mandatory G002/G003
+"""Tests for the speckit rule family S001-S005, and the mandatory G002/G003
 fix (add-speckit-dialect, Milestone 4).
 
 "A linter that never fails is a decoration" -- each rule gets a fixture that
@@ -291,8 +291,22 @@ def test_rules_py_registers_speckit_rules_additively() -> None:
 
 
 def test_no_orphan_requirement_rule_exists_for_speckit() -> None:
+    """C-SK-4: no *orphaned-requirement* rule may be added for speckit.
+
+    The second assertion is the load-bearing one and is unchanged. The set
+    below is a proxy that grew with `lint-empty-speckit-requirements`, which
+    added S005.
+
+    AC-SK-38 wrote "lists exactly S001-S004 as the new speckit family", which
+    was a true description of what *that* change added. It is not a standing
+    bar on the family ever growing -- read that way it would freeze the
+    dialect permanently, which C-SK-4, the actual constraint, does not say.
+    S005 flags a Requirements section that yielded no requirement; it is an
+    empty-section rule, not an orphan-requirement rule, so C-SK-4 holds
+    intact. See DEC-SER in the change package for the full argument.
+    """
     speckit_idents = {r.ident for r in rules.RULES if "speckit" in r.dialects}
-    assert speckit_idents == {"S001", "S002", "S003", "S004"}
+    assert speckit_idents == {"S001", "S002", "S003", "S004", "S005"}
     for r in rules.RULES:
         if r.ident.startswith("S"):
             assert "orphan" not in r.summary.lower()
@@ -307,3 +321,113 @@ def test_scaffold_still_only_offers_harness_and_upstream() -> None:
     assert hasattr(scaffold_templates, "spec_harness")
     assert hasattr(scaffold_templates, "spec_upstream")
     assert not hasattr(scaffold_templates, "spec_speckit")
+
+
+# --- S005: a Requirements section that yielded nothing ----------------------
+#
+# docs/peer-review-2026-09.md F4. `parse_speckit` scopes the FR scan to a
+# level-3 heading nested in the level-2 `Requirements` span; a hand-edited spec
+# writing it one level up loses every requirement from the graph while validate
+# reports 0/0/0 PASS and broken_links 0.
+
+_WRONG_LEVEL = textwrap.dedent(
+    """\
+    # Feature Specification: Demo
+
+    ## Requirements *(mandatory)*
+
+    ## Functional Requirements
+
+    - **FR-001**: The system MUST do the thing.
+    - **FR-002**: The system MUST reject a bad input.
+
+    ## Success Criteria *(mandatory)*
+
+    - **SC-001**: The thing completes in under a second.
+    """
+)
+
+_USER_STORY_ONLY = textwrap.dedent(
+    """\
+    # Feature Specification: Demo
+
+    ## User Scenarios *(mandatory)*
+
+    - As a user I want the thing so that it helps.
+
+    ## Success Criteria *(mandatory)*
+
+    - **SC-001**: The thing completes in under a second.
+    """
+)
+
+
+def test_s005_fires_when_a_requirements_section_yields_nothing(repo: Path) -> None:
+    found = [f for f in findings_for(repo, _WRONG_LEVEL) if f.rule == "S005"]
+    assert len(found) == 1, found
+    assert found[0].severity == "WARN"
+    assert found[0].line > 0, "the finding must point at the heading"
+
+
+def test_s005_is_silent_on_the_canonical_nesting(repo: Path) -> None:
+    """Non-success: the shape SpecKit's own template produces must stay quiet."""
+    body = _WRONG_LEVEL.replace("## Functional Requirements", "### Functional Requirements")
+    assert "S005" not in {f.rule for f in findings_for(repo, body)}
+
+
+def test_s005_is_silent_on_a_user_story_only_draft(repo: Path) -> None:
+    """Non-success: THE false positive docs/next-steps.md item 4b refused.
+
+    A draft that never declares a Requirements section has not lost anything;
+    the discrimination is "declared and yielded nothing", not "yielded
+    nothing".
+    """
+    assert "S005" not in {f.rule for f in findings_for(repo, _USER_STORY_ONLY)}
+
+
+def test_s005_does_not_match_non_functional_requirements(repo: Path) -> None:
+    """Non-success: equality, never containment.
+
+    `Non-Functional Requirements` declares something else and promises no FR
+    bullets; matching it by substring would fire on a correct document.
+    """
+    body = _USER_STORY_ONLY.replace("## User Scenarios *(mandatory)*", "## Non-Functional Requirements")
+    assert "S005" not in {f.rule for f in findings_for(repo, body)}
+
+
+def test_s005_fires_on_a_requirements_section_with_prose_but_no_bullets(repo: Path) -> None:
+    body = textwrap.dedent(
+        """\
+        # Feature Specification: Demo
+
+        ## Requirements *(mandatory)*
+
+        We will decide the requirements once the design settles.
+
+        ## Success Criteria *(mandatory)*
+
+        - **SC-001**: The thing completes in under a second.
+        """
+    )
+    assert "S005" in {f.rule for f in findings_for(repo, body)}
+
+
+def test_s005_ignores_a_heading_quoted_inside_a_waiver(repo: Path) -> None:
+    """Non-success: a waiver's own reason text is not the document's structure."""
+    body = _USER_STORY_ONLY.replace(
+        "## Success Criteria *(mandatory)*",
+        "<!-- specgraph:allow S001 reason: the ## Requirements heading is discussed here -->\n\n"
+        "## Success Criteria *(mandatory)*",
+    )
+    assert "S005" not in {f.rule for f in findings_for(repo, body)}
+
+
+def test_s005_never_evaluates_for_the_harness_dialect(repo: Path) -> None:
+    """Non-success: this repo's own harness specs all carry `## Requirements`
+    and zero FR- bullets. A dialect leak would light up its entire tree."""
+    from openspec_graph.rules import RULES
+
+    s005 = next(r for r in RULES if r.ident == "S005")
+    assert not s005.applies("harness")
+    assert not s005.applies("upstream")
+    assert s005.applies("speckit")

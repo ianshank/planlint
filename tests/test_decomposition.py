@@ -86,7 +86,9 @@ _EXPECTED_HASHES = {
     # above are byte-identical, which is the backwards-compatibility claim
     # made observable -- the registry grew, the verdict on a real tree did
     # not.
-    "rules": "a410b292ad3738912ed67e3bdfb952e5bf1d83e442924a882ce2bc592e36f97b",
+    # and again by `lint-empty-speckit-requirements` (S005). Same story both
+    # times: `validate` and `graph` above never moved.
+    "rules": "11a55b1ba3b35bf0b364274953113103f6611f6bbea6a113b1df28f4d40c02c1",
 }
 
 
