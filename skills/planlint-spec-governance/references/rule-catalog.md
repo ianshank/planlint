@@ -21,7 +21,7 @@ Dialect `any` means the rule applies to every dialect.
 | G007 | ERROR | any | every waiver states a reason |
 | G008 | WARN | any | cited ADRs are declared |
 | G009 | WARN | any | declared ADRs are cited by a living spec or waived |
-| G010 | INFO | any | make citations are reported when no makefile was found |
+| G010 | INFO | any | make citations are reported when no make targets were detected |
 | G011 | WARN | any | cited generic stages exist when the repo uses Make |
 | H001 | ERROR | harness | every AC is verifiable |
 | H002 | WARN | harness | every AC traces to a requirement |

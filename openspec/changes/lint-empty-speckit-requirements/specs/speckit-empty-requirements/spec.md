@@ -68,17 +68,31 @@ claim the parser could not honour.
   is empty. It MUST NOT emit one finding per missing bullet, per candidate
   heading, or per section: the condition is a property of the document, and
   one finding per document is what an author can act on.
-- R-SER-3: a `Requirements`-shaped heading MUST be defined as the first
-  level-2 or level-3 heading whose title, after the same trailing-annotation
-  normalization `speckit_section_span` already applies, is case-insensitively
-  **equal** to `Requirements` or to `Functional Requirements`. The comparison
-  MUST be equality after normalization, never a prefix, substring, or
-  contains test — a heading titled `Non-Functional Requirements` or
-  `Requirements Traceability` MUST NOT count.
-- R-SER-4: S005 MUST NOT emit any finding for a speckit-dialect spec that
-  carries no `Requirements`-shaped heading at all, whatever else it contains.
-  This is the deferral condition from item 4b, pinned as behaviour rather than
-  left to a reviewer's memory.
+> **R-SER-3 and R-SER-4 are superseded.** The heading-shaped predicate they
+> define was reproduced firing on a legitimately non-functional-only spec:
+> SpecKit's template makes the level-2 `Requirements` wrapper **mandatory**, so
+> matching it swallows every document whose requirements are non-functional and
+> tells its author that requirements were "dropped" when none existed — exactly
+> the false positive `docs/next-steps.md` item 4b refused. R-SER-3's equality
+> rule protected only the unrealistic case where the non-functional heading is
+> the document's *only* requirements-like heading. Replaced by R-SER-3a.
+
+- R-SER-3a **(replaces R-SER-3 and R-SER-4)**: S005's predicate MUST be **data
+  loss, not document shape**. It MUST fire when an `FR-`-shaped declaration
+  bullet is present in the document and `spec.requirements` is empty — the
+  bullets were written and did not reach the graph — and MUST stay silent
+  otherwise. It therefore MUST NOT fire for a user-story-only draft, a
+  prose-only requirements section, or a non-functional-only spec, none of
+  which lost anything. It MUST fire for `FR-` bullets under a subheading
+  titled anything other than `Functional Requirements`, which the parser
+  refuses by design and which are exactly as lost.
+
+  The locus MUST be the first dropped bullet rather than a heading, because
+  that is the token the author has to move. Every HTML comment MUST be blanked
+  before the scan, not only well-formed waivers: `SUPPRESS` has no
+  `re.DOTALL`, so a multi-line waiver's own reason text otherwise reads as
+  document content — reproduced as a spec that both failed to register its
+  waiver and tripped the rule it was waiving.
 - R-SER-5: S005 MUST NOT emit any finding when `spec.requirements` is
   non-empty, regardless of how many headings match R-SER-3.
 - R-SER-6: S005 MUST fire, with its single unchanged message, when the

@@ -65,10 +65,21 @@ blind to its *name*.
   exactly as GNU Make's own probe does. It MUST NOT case-fold, MUST NOT
   normalise a candidate name, and MUST NOT list the repository root
   looking for a case-variant spelling of its own accord.
-- R-MFD-6: A candidate that exists but is not a regular readable file — a
-  directory, a FIFO, a dangling symlink, a permission denial — MUST be
-  treated as absent, and resolution MUST continue to the next candidate.
-  It MUST NOT raise, MUST NOT block, and MUST NOT end the search.
+- R-MFD-6 **(revised — the original is superseded)**: A candidate that exists
+  but cannot be read — a directory, a FIFO, a dangling symlink, a permission
+  denial — MUST end the search and MUST yield no targets. It MUST NOT raise
+  and MUST NOT block.
+
+  The original required the opposite ("treated as absent, and resolution MUST
+  continue to the next candidate"). Reproduced against real `make`: with a
+  directory named `GNUmakefile` beside a valid `Makefile`, invoking make on
+  any target prints "GNUmakefile: Is a directory. Stop." and runs nothing, so
+  continuing would report the shadowed file's targets and green-light a
+  citation that cannot run — the fail-open this package exists to close. GNU
+  Make skips a candidate that does not *exist*; it never skips one that exists
+  and cannot be opened. The resulting silence is covered by G010
+  (`report-unchecked-make-citations`), which reports the citations as
+  unchecked.
 - R-MFD-7: The resolved candidate's *name* MUST NOT reach the dialect
   card, any verb's stdout, or any sort key. `dialect_card.SCHEMA_VERSION`
   MUST be unchanged by this spec, and the byte-identical CLI-output guard
@@ -217,11 +228,11 @@ blind to its *name*.
   falsy. (R-MFD-3)
   _Verified by:_ stage: `make test`
 
-- [ ] **AC-MFD-7:** a directory named `GNUmakefile` beside a real
-  `Makefile` is treated as absent and resolution continues, reporting the
-  `Makefile`'s targets with no traceback and no change of exit code.
-  (R-MFD-6)
-  _Verified by:_ stage: `make test`
+- [x] **AC-MFD-7 (revised):** a directory named `GNUmakefile` beside a real
+  `Makefile` reports **no** targets, with no traceback and no change of exit
+  code — the shadowed `Makefile`'s targets MUST NOT be reported, because
+  `make` itself would run none of them. (R-MFD-6)
+  _Verified by:_ `pytest -k test_an_unreadable_candidate_is_terminal_not_a_fall_through` · stage: `make test`
 
 - [ ] **AC-MFD-8 (non-success):** a repository carrying none of the three
   names still reports no targets and still draws no G004 — this change

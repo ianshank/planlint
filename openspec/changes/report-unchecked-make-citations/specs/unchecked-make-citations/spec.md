@@ -43,7 +43,16 @@ itself is two lines in `openspec_graph/rules_generic.py`; the exemption is one
 - R-UMC-1: When a spec carries at least one `make` citation and
   `profile.make_targets` is empty, the rule engine MUST emit an `INFO` finding
   under a rule id of its own, stating that the cited-stage check could not be
-  run because no Makefile was found in the target.
+  run because **no make targets were detected** in the target.
+
+  **Revised:** the original said "because no Makefile was found". `Rule.check`
+  sees only a `StackProfile`, and `profile.make_targets == ()` conflates a
+  missing makefile, a present-but-empty one, one declaring only special
+  targets, and one that exists and cannot be read. Naming a cause the data
+  does not establish sends an author looking for a file that is present —
+  reproduced with a zero-byte `Makefile`. The finding MUST state only what was
+  observed. It MUST also count *distinct* stages, since `spec.make_refs` is a
+  deduplicated name set.
 - R-UMC-2: That finding MUST NOT be emitted for a spec carrying no `make`
   citation. The rule reports a check that could not run, not the absence of a
   Makefile.

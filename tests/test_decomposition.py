@@ -88,7 +88,7 @@ _EXPECTED_HASHES = {
     # not.
     # and again by `lint-empty-speckit-requirements` (S005). Same story both
     # times: `validate` and `graph` above never moved.
-    "rules": "f7b80052d6c16e84780543de805db79173b968eb33dd1fe2e0fd956d4a4bc820",
+    "rules": "fb5a50a97a577863242784ed8cca83b8b9b169100ee003003f0591cbe99f1048",
 }
 
 

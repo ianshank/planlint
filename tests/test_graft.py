@@ -2235,3 +2235,49 @@ def test_an_unreadable_makefile_reports_nothing_and_says_so(repo: Path) -> None:
     assert detect.profile(repo).make_targets == ()
     assert "G004" not in rule_ids(found)
     assert "G010" in rule_ids(found)
+
+
+def test_g010_and_g011_waivers_keep_the_finding_visible(repo: Path) -> None:
+    """Waiving an already-INFO rule downgrades nothing; it only marks it.
+
+    `rules.evaluate()` is `severity=INFO if suppressed else rule.severity`, so a
+    waived G010 keeps INFO and keeps appearing -- `--fail-on INFO` still counts
+    it. G010 is therefore effectively unwaivable, which is a real limitation
+    recorded in the change package rather than a property to assert away.
+    G011 is WARN, so its waiver does what a waiver normally does.
+    """
+    waiver = "<!-- specgraph:allow G010,G011 reason: this target does not use Make -->\n"
+
+    (repo / "Makefile").unlink()
+    found = findings_for(repo, waiver + GOOD_HARNESS.replace("make regression", "make nope"))
+    g010 = [f for f in found if f.rule == "G010"]
+    assert len(g010) == 1, found
+    assert g010[0].severity == "INFO"
+    assert g010[0].message.startswith("[waived]"), g010[0].message
+
+
+def test_a_waived_g011_is_downgraded_to_info(repo: Path) -> None:
+    waiver = "<!-- specgraph:allow G011 reason: shorthand, this repo runs tox -->\n"
+    found = findings_for(repo, waiver + GOOD_HARNESS.replace("make regression", "make coverage"))
+    g011 = [f for f in found if f.rule == "G011"]
+    assert len(g011) == 1, found
+    assert g011[0].severity == "INFO", "a waived WARN drops to INFO"
+    assert g011[0].message.startswith("[waived]")
+
+
+def test_an_empty_bodied_fr_bullet_does_not_consume_the_next_one(repo: Path) -> None:
+    """Regression: `\\s*(.+?)` spanned newlines, so `- **FR-001**:` took the
+    FOLLOWING bullet as its body and that bullet left the graph entirely.
+
+    Reproduced at the *correct* heading level, so it was never an S005 story --
+    a malformed bullet silently deleted a well-formed sibling.
+    """
+    from openspec_graph.parse_semantics import FR_DECL
+
+    doc = "- **FR-001**:\n- **FR-002**: real body here\n"
+    found = [(m.group(1), m.group(2)) for m in FR_DECL.finditer(doc)]
+    assert found == [("FR-001", ""), ("FR-002", "real body here")], found
+
+    # And it must not reach across a blank line into an unrelated heading.
+    m = FR_DECL.search("- **FR-001**:\n\n## Success Criteria\n")
+    assert m is not None and m.group(2) == "", m and m.group(2)

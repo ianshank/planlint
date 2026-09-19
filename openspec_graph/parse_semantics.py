@@ -46,7 +46,17 @@ SC_ID = re.compile(r"\bSC-\d+\b")
 # like `- **NFR-001**: text` (a plausible "Non-Functional Requirements"
 # subsection) cannot match: `\*\*(FR-\d+)` requires the literal `F`
 # immediately after the opening `**`, not after an `N`.
-FR_DECL = re.compile(r"^-\s*\*\*(FR-\d+)\*\*\s*:\s*(.+?)\s*$", re.MULTILINE)
+# Body is horizontal-whitespace-scoped and may be empty. `\s*` around the
+# body matched newlines, and `.+?` then reached past a blank line to the next
+# non-blank one -- so `- **FR-001**:` with no body silently took the FOLLOWING
+# bullet as its text and that bullet vanished from the graph. Reproduced at a
+# *correct* heading level: FR-001 came back labelled `- **FR-002**: ...` and
+# FR-002 was gone. `[^\S\n]` is "whitespace but not a newline", so a
+# declaration can no longer span lines, and `(.*?)` lets an empty body be a
+# recognised-but-empty requirement rather than an unmatched line.
+FR_DECL = re.compile(
+    r"^-\s*\*\*(FR-\d+)\*\*[^\S\n]*:[^\S\n]*(.*?)[^\S\n]*$", re.MULTILINE
+)
 SC_DECL = re.compile(r"^-\s*\*\*(SC-\d+)\*\*\s*:\s*(.+?)\s*$", re.MULTILINE)
 # The bare (unannotated) heading name speckit_section_body() looks up --
 # shared by parse_speckit.py's own Success Criteria lookup and this module's

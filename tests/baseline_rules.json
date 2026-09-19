@@ -57,7 +57,7 @@
     "id": "G010",
     "severity": "INFO",
     "dialects": "*",
-    "summary": "make citations are reported when no makefile was found"
+    "summary": "make citations are reported when no make targets were detected"
   },
   {
     "id": "G011",

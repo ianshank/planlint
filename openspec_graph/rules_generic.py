@@ -239,7 +239,7 @@ GENERIC_RULES: tuple[Rule, ...] = (
         "G010",
         INFO,
         ("*",),
-        "make citations are reported when no makefile was found",
+        "make citations are reported when no make targets were detected",
         _unchecked_make_citations,
     ),
     Rule(
