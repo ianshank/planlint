@@ -34,6 +34,46 @@ PLUGIN_JSON = REPO_ROOT / ".claude-plugin" / "plugin.json"
 AGENTS_MD = REPO_ROOT / "AGENTS.md"
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 
+# Trees whose files are INPUT to planlint rather than documents of this
+# repository. A corpus target may legitimately carry an `AGENTS.md`:
+# `detect.INVARIANT_SOURCES` lists that filename, so any shape exercising
+# invariant discovery needs one, and that file is a fixture rather than
+# guidance for a contributor. Excluded by prefix, named here with the reason,
+# so a future detection shape does not fail a gate about agent guidance.
+FIXTURE_TREES = ("tests/corpus/", "tests/fixtures/")
+
+
+def nested_agents_files(root: Path = REPO_ROOT) -> list[Path]:
+    """Every `AGENTS.md` this repository ships *below* its root.
+
+    Enumerated through git rather than `rglob` + a hand-maintained blocklist.
+    The property wanted is "files this repository ships", and
+    `--cached --others --exclude-standard` is literally that: tracked files
+    plus untracked ones that are not ignored. A glob would descend into
+    `build/` and `planlint.egg-info/` and would need a blocklist that drifts
+    away from `.gitignore`; `--others` additionally means a nested file is
+    seen on the run that *creates* it, before anyone stages it, which is the
+    one run where a gate about orphaned files most needs to fire.
+    """
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=root, capture_output=True, text=True, check=False,
+    )
+    if result.returncode != 0:  # pragma: no cover -- not a git checkout
+        return []
+    return sorted(
+        root / line
+        for line in result.stdout.splitlines()
+        # Split on "/" rather than `endswith("AGENTS.md")`: that substring test
+        # also matches a path ending in the filename, so a future
+        # `docs/NOTAGENTS.md` would be held to the nested-agent contracts it
+        # was never meant to satisfy. A path segment comparison is what the
+        # docstring above claims and what the caller expects.
+        if line.rpartition("/")[2] == "AGENTS.md"
+        and line != "AGENTS.md"
+        and not line.startswith(FIXTURE_TREES)
+    )
+
 # A case is a directory carrying a prompt, not "any directory that is not one
 # of these". The runner writes its own output beside the cases
 # (``evals/results/<timestamp>/``, and ``mocks/`` when MCP stand-ins are
@@ -318,16 +358,43 @@ def test_context7_indexes_the_skill_and_excludes_the_evals() -> None:
 # Every index an agent reads on its own initiative, rather than because a human
 # pointed at it. A dead link here is worse than a dead link in the README: no
 # human opens these files, so nothing surfaces the breakage.
-AGENT_INDEXES = (LLMS_TXT, AGENTS_MD)
+#
+# Discovered rather than listed. As a fixed tuple this covered exactly the two
+# root files, so a nested `AGENTS.md` -- which the nearest-file-wins convention
+# makes *more* likely to be the one actually read -- would have had its links
+# checked by nothing at all. That is the same argument the docstring above
+# already makes, applied to the files it did not reach.
+AGENT_INDEXES = (LLMS_TXT, AGENTS_MD, *nested_agents_files())
 
 
-@pytest.mark.parametrize("path", AGENT_INDEXES, ids=[p.name for p in AGENT_INDEXES])
+def _index_id(path: Path) -> str:
+    """`tools/AGENTS.md` rather than three test cases all called `AGENTS.md`."""
+    return path.relative_to(REPO_ROOT).as_posix()
+
+
+@pytest.mark.parametrize("path", AGENT_INDEXES, ids=[_index_id(p) for p in AGENT_INDEXES])
 def test_agent_index_links_resolve(path: Path) -> None:
-    """Every path advertised must exist, or the index sends readers nowhere."""
+    """Every path advertised must exist, or the index sends readers nowhere.
+
+    Resolved against the *containing directory*, which is what every markdown
+    renderer does, GitHub included. Against ``REPO_ROOT`` this was right only
+    because both original indexes sat at the root: the first nested file would
+    have had a correct sibling link (``[x](_common.py)`` from ``tools/``)
+    reported as missing, and the way to satisfy the gate would have been to
+    write a repo-root-relative path that then breaks when a reader clicks it.
+    A gate that can only be satisfied by breaking the thing it checks is worse
+    than no gate. Verified in both directions before changing it.
+    """
     links = re.findall(r"\]\(([^)]+)\)", path.read_text(encoding="utf-8"))
     assert links, f"{path.name} advertises no documents at all"
-    missing = [ref for ref in links if not (REPO_ROOT / ref).exists()]
-    assert not missing, f"{path.name} links to missing path(s): {missing}"
+    missing = [
+        ref for ref in links
+        # An external URL is not this repository's to resolve, and a bare
+        # anchor addresses the current document.
+        if not ref.startswith(("http://", "https://", "mailto:", "#"))
+        and not (path.parent / ref.split("#", 1)[0]).exists()
+    ]
+    assert not missing, f"{_index_id(path)} links to missing path(s): {missing}"
 
 
 def test_agents_md_declares_no_invariant_ids() -> None:
@@ -345,6 +412,15 @@ def test_agents_md_declares_no_invariant_ids() -> None:
     invariant rules start firing against a document that was never meant to
     declare anything. Cheaper to forbid the id here than to debug the gate
     later.
+
+    **Root-scoped, and that is a property of ``detect``, not of this test.**
+    ``_invariants()`` iterates ``root / rel`` over the fixed relative paths in
+    ``INVARIANT_SOURCES``, so a nested ``tools/AGENTS.md`` is not a candidate
+    and cannot spring this trap. ``test_nested_agents_file_declares_no_invariant_ids``
+    forbids the id there anyway, because the cost of the habit is zero and the
+    cost of relearning it is a debugging session -- and because adding a
+    nested path to ``INVARIANT_SOURCES`` would otherwise reopen the trap
+    silently.
     """
     from openspec_graph import detect
 
@@ -583,6 +659,14 @@ def test_every_root_markdown_file_is_wired_into_the_docs_gate() -> None:
     green, because nothing enumerated this directory.
 
     README.md is the target of the linking rather than a subject of it.
+
+    **Root-scoped on purpose.** ``glob`` here is deliberate, not an oversight
+    that ``rglob`` would fix: a markdown file is a front-page promise *because
+    of its position*, and `docs/`, `skills/` and `evals/` hold plenty of
+    markdown that is reached by a link rather than by being at the top. Nested
+    ``AGENTS.md`` files are the one nested kind an agent opens on its own
+    initiative, and they are held by the contract tests below instead --
+    stated here so neither gate can be read as covering the other's ground.
     """
     module = _load_tool("check_docs", "check_docs.py")
     required = set(module.REQUIRED_DOCS)
@@ -592,4 +676,161 @@ def test_every_root_markdown_file_is_wired_into_the_docs_gate() -> None:
         f"root markdown file(s) {unwired} are in no gate: add them to "
         "tools/check_docs.py REQUIRED_DOCS (and link them from README.md), or "
         "move them under docs/ where they are not a front-page promise"
+    )
+
+
+# --- nested AGENTS.md: the contract, so nine files cannot land in no gate -----
+#
+# Proposed in docs/agent-directory-wiring-plan.md, milestone 1. These land
+# BEFORE any nested file exists, because the plan's whole argument is that the
+# guards must exist first: `test_every_root_markdown_file_is_wired_into_the_docs_gate`
+# enumerates the repository root only, so without these a nested AGENTS.md is
+# held by nothing. `test_nested_agents_discovery_finds_a_planted_file` keeps
+# that from being a vacuous claim while the discovered set is still empty.
+
+
+NESTED_AGENTS = nested_agents_files()
+_NESTED_IDS = [p.relative_to(REPO_ROOT).as_posix() for p in NESTED_AGENTS]
+
+# The precedence the root file already states, which every nested file inherits
+# and extends by one level. Matched on the distinctive clause rather than the
+# whole sentence, so wording can improve without the gate arguing about prose.
+PRECEDENCE_CLAUSE = "SKILL.md` wins"
+
+# A file an agent will not finish reading is worse than no file: it displaces
+# the root pointer that would have been read instead. From the plan's §5.
+MAX_NESTED_LINES = 60
+
+
+def test_nested_agents_discovery_finds_a_planted_file(tmp_path: Path) -> None:
+    """The discovery these contracts rest on actually discovers.
+
+    Every test below is parametrized over `nested_agents_files()`, so while
+    that returns nothing they are all zero-case passes -- a green gate that
+    has never run. This one plants files in a throwaway git repository and
+    asserts what comes back, so the mechanism is proven independently of
+    whether this repository has adopted any nested file yet.
+    """
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    (tmp_path / "AGENTS.md").write_text("root\n", encoding="utf-8")
+    for rel in ("tools/AGENTS.md", "tests/AGENTS.md",
+                "tests/corpus/targets/shape/AGENTS.md", "build/AGENTS.md",
+                # Matched by a naive endswith("AGENTS.md") and by nothing a
+                # reader would call a nested agent file.
+                "docs/NOTAGENTS.md"):
+        path = tmp_path / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x\n", encoding="utf-8")
+    (tmp_path / ".gitignore").write_text("build/\n", encoding="utf-8")
+
+    found = {p.relative_to(tmp_path).as_posix() for p in nested_agents_files(tmp_path)}
+    assert found == {"tools/AGENTS.md", "tests/AGENTS.md"}, found
+    # Untracked but not ignored: seen on the run that creates it, which is the
+    # run where a gate about orphaned files most needs to fire.
+    assert not any(
+        subprocess.run(["git", "ls-files", "tools/AGENTS.md"], cwd=tmp_path,
+                       capture_output=True, text=True, check=False).stdout.strip()
+    ), "precondition: the planted file is untracked, and was still discovered"
+
+
+@pytest.mark.parametrize("path", NESTED_AGENTS, ids=_NESTED_IDS)
+def test_nested_agents_file_states_its_precedence(path: Path) -> None:
+    """Nearest-file-wins makes a nested file the one an agent reads first.
+
+    A file that does not say what outranks it is a file that reads as the last
+    word on its directory, which is exactly backwards: `SKILL.md` outranks the
+    root `AGENTS.md`, and the root file outranks this one.
+    """
+    assert PRECEDENCE_CLAUSE in path.read_text(encoding="utf-8"), (
+        f"{_index_id(path)} does not state its precedence; every nested file "
+        f"must say that SKILL.md wins, as the root AGENTS.md does"
+    )
+
+
+@pytest.mark.parametrize("path", NESTED_AGENTS, ids=_NESTED_IDS)
+def test_nested_agents_file_declares_no_invariant_ids(path: Path) -> None:
+    """Defence in depth against the trap the root guard describes.
+
+    Not reachable today -- `detect.INVARIANT_SOURCES` iterates fixed
+    root-relative paths -- but the whole point of that guard is that the trap
+    is cheap to fall into and expensive to diagnose. Adding a nested path to
+    that tuple later must not silently re-arm it.
+    """
+    found = re.findall(r"\bINV-\d+\b", path.read_text(encoding="utf-8"))
+    assert not found, f"{_index_id(path)} declares invariant id(s) {found}"
+
+
+@pytest.mark.parametrize("path", NESTED_AGENTS, ids=_NESTED_IDS)
+def test_nested_agents_file_stays_short(path: Path) -> None:
+    lines = path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) <= MAX_NESTED_LINES, (
+        f"{_index_id(path)} is {len(lines)} lines, over the {MAX_NESTED_LINES}-line "
+        f"budget: an agent that does not finish it is worse off than one that "
+        f"read the root pointer instead"
+    )
+
+
+@pytest.mark.parametrize("path", NESTED_AGENTS, ids=_NESTED_IDS)
+def test_nested_agents_file_has_a_balanced_mermaid_block(path: Path) -> None:
+    """Each file carries a diagram of what its directory is for, and the fence
+    closes.
+
+    An unclosed ```mermaid fence swallows the rest of the document into a code
+    block, and GitHub renders a broken diagram as a small error box that no
+    reviewer reads as a failure. This checks the fence, not the diagram's
+    semantics -- rendering is a human step recorded in the plan.
+    """
+    text = path.read_text(encoding="utf-8")
+    assert "```mermaid" in text, f"{_index_id(path)} carries no mermaid diagram"
+    assert text.count("```") % 2 == 0, (
+        f"{_index_id(path)} has an odd number of code fences: an unclosed "
+        f"```mermaid block swallows everything after it"
+    )
+
+
+# --- M5: a cited command that does not exist ---------------------------------
+
+
+def test_every_make_citation_in_an_agent_index_names_a_real_target() -> None:
+    """G004, turned on this repository's own agent-facing prose.
+
+    Milestone 5 of docs/agent-directory-wiring-plan.md, and the reason it was
+    worth building after all: a nested `AGENTS.md` naming a stale command is
+    worse than no file, because an agent runs it and gets an error it cannot
+    attribute. The plan proposed reusing `resolve_makefile` and parsing
+    targets by hand; the shipped code already does both better.
+
+    `MAKE_REF` is the matcher G004 uses to find stage citations in a
+    stranger's spec, and `detect.profile().make_targets` is the target set it
+    checks them against. Pointing the pair at this repository is the same
+    check, on the same code path, with this repo as the target — so the guard
+    cannot drift from the rule, and a change to either is caught here too.
+
+    What was **dropped** rather than deferred, per the plan's instruction to
+    decide explicitly: the general "every fenced command names a real
+    executable" check. It needs a shell-command parser to survive pipelines,
+    flags and redirections, it false-positives on anything it half-parses, and
+    it would cover exactly one command today (`planlint ... validate`, whose
+    console script `test_console_script_is_declared` already pins). The
+    complexity is real and the coverage is one line.
+    """
+    from openspec_graph import detect
+    from openspec_graph.parse_semantics import MAKE_REF
+
+    targets = set(detect.profile(REPO_ROOT).make_targets)
+    assert targets, (
+        "detect found no make targets in this repository, so this guard would "
+        "pass vacuously -- the detector, not the citations, is what broke"
+    )
+
+    unknown: dict[str, list[str]] = {}
+    for path in AGENT_INDEXES:
+        cited = sorted(set(MAKE_REF.findall(path.read_text(encoding="utf-8"))))
+        missing = [stage for stage in cited if stage not in targets]
+        if missing:
+            unknown[_index_id(path)] = missing
+    assert not unknown, (
+        f"agent-facing file(s) cite `make <stage>` targets this repository does "
+        f"not declare: {unknown}. This is the same defect G004 reports in a "
+        f"stranger's spec; fix the citation or add the target."
     )

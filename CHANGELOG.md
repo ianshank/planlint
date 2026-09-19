@@ -90,6 +90,130 @@ to one — G010 is this project's first INFO-severity rule.
   with its cost stated rather than widened — widening reintroduces the
   false-positive class `fix-prose-matcher-precision` was spent lowering.
 
+### Added — per-directory `AGENTS.md`, gated
+
+Eight nested `AGENTS.md` files — `openspec_graph/`, `tools/`, `tests/`,
+`openspec/`, `docs/`, `skills/`, `evals/`, `templates/` — each carrying a
+validated Mermaid diagram of what the directory is for, the subagents and
+skills that apply to work in it, and explicit precedence (`SKILL.md`, then the
+root `AGENTS.md`, then the file). Nothing in a nested file is the only place a
+rule is written, which is the hedge against an agent that reads only the root.
+
+Sequenced gates-first, per `docs/agent-directory-wiring-plan.md`, because the
+existing guards were root-scoped: `test_every_root_markdown_file_is_wired_into_the_docs_gate`
+globs the repository root non-recursively and `AGENT_INDEXES` was a fixed
+2-tuple, so eight nested files would have landed in no gate at all.
+
+- **Discovery** is `git ls-files --cached --others --exclude-standard` rather
+  than a glob plus a blocklist: the property wanted is "files this repository
+  ships", `--others` means a nested file is seen on the run that *creates* it,
+  and the blocklist would have drifted from `.gitignore`. `tests/corpus/` and
+  `tests/fixtures/` are excluded by name, because a corpus target may
+  legitimately carry an `AGENTS.md` — `INVARIANT_SOURCES` lists that filename.
+- **Five contract gates**: precedence stated, no `INV-n`, under 60 lines, a
+  balanced mermaid fence (an unclosed one swallows the document and renders as
+  an error box nobody reads as a failure), and links that resolve.
+- **A citation gate** running G004's own `MAKE_REF` matcher and
+  `detect.profile().make_targets` against this repository's agent prose — the
+  same check the tool makes of a stranger's spec, turned on itself, so the
+  guard cannot drift from the rule.
+
+### Fixed — agent index links resolved against the wrong directory
+
+- `test_agent_index_links_resolve` resolved every link against `REPO_ROOT`,
+  which was correct only because both indexes it covered sat at the root. A
+  correct sibling link from a nested file — `[x](_common.py)` in `tools/`,
+  exactly what GitHub resolves — was reported as missing, and the only way to
+  satisfy the gate would have been a repo-root-relative path that breaks when
+  a reader clicks it. A gate that can only be satisfied by breaking the thing
+  it checks is worse than no gate. Now resolved against the containing
+  directory, with external URLs and bare anchors skipped.
+
+### Fixed — an ambient `COVERAGE_FILE` crashed the whole suite
+
+- Two tests spawn a nested `pytest --cov` to prove pytest-cov's own
+  `--cov-fail-under` gate fires, and both passed the parent environment
+  straight through. A child inheriting `COVERAGE_FILE` writes statement-only
+  data (it has no `--cov-branch`) into this run's data file, and with
+  `parallel = true` the outer run combines every sibling at teardown:
+  `DataError: Can't combine branch coverage data with statement data`, raised
+  from inside pytest's teardown hook. That is INTERNALERROR and **exit 3** —
+  the entire suite lost, not one test marked red, which is why no ordinary
+  test of those two functions could have caught it. Nothing here sets
+  `COVERAGE_FILE`, so the trap was purely ambient: it sprang for anyone whose
+  CI names a per-leg data file, the standard way to keep a build matrix's
+  coverage separate. `tests/support.env_without_coverage()` strips the whole
+  `COVERAGE_*` family rather than the one name in play, since which are set
+  varies by pytest-cov version.
+
+### Added — coverage floors for the `tools/` gate scripts
+
+The scripts under `tools/` are what `make pre-pr` and every CI job actually
+run, and nothing held them to a coverage bar. Measured honestly for the first
+time, the directory was at **66.9%**; it is now **95.2% line / 92.3% branch**,
+gated by `make coverage-tools` against `[tool.specgraph] tools_line_fail_under`
+/ `tools_branch_fail_under`.
+
+- **Four scripts read 0% while being thoroughly tested.**
+  `check_branch_coverage`, `check_coverage_floor`, `diff_spec_graph` and
+  `render_mermaid` were exercised only through `subprocess.run`, and a
+  subprocess's execution is invisible to coverage. Handing the child the
+  coverage config would not have fixed it: the two coverage gates read
+  `Path("pyproject.toml")` from the cwd, so their tests run them from a
+  throwaway directory, and coverage resolves a relative `source` entry against
+  that same cwd — `source = ["tools"]` would look for a `tools` directory
+  inside the fixture. Their behaviour moved in-process against `main(argv)`
+  (`tests/support.run_tool_main`), leaving only the `if __name__` lines
+  uncovered. One parametrized test covers the `python tools/<script>.py`
+  invocation path for all eleven at once; it asserts on load-failure markers
+  rather than the exit code, because a failed import prints a traceback, a
+  SyntaxError does not, and both exit 1 — which is also a documented code
+  meaning "the gate found a violation".
+
+- **Three scripts had never been shown to fire.** `check_docs` (29%),
+  `check_secrets` (52%) and `render_plugin_manifests` (57%) were uncovered
+  exactly where the decision is made: `main()`. The secret scanner is the
+  sharp case — `fallback_scan` was tested against one planted key, but none of
+  "gitleaks clean", "gitleaks absent, use the fallback" or "gitleaks found
+  something" had ever run. The gitleaks-absent branch is now forced rather
+  than waited for, so it is asserted on CI too, where the binary *is*
+  installed and that path would otherwise never execute. Now 95/92/97%.
+
+- **Testability came first, because it was the reason the tests did not
+  exist.** These modules bound `REPO_ROOT` into their signature defaults,
+  which Python evaluates at definition time — so a caller reassigning the
+  module constant changed nothing, and a scanner could only ever run against
+  its own checkout. Roots now resolve at call time through a `None` sentinel.
+  Callers passing no root behave exactly as before.
+
+- **Scoped floors, not a combined number.** pytest-cov's `--cov-fail-under`
+  applies to the total of everything measured, so folding `--cov=tools` into
+  `make test` would replace two honest per-tree numbers with one diluted
+  number — and the diluted one is what the gate would then enforce. A package
+  at 99% has enough headroom to absorb `tools/` falling to 60%. The two
+  existing checkers gained `--scope tools`; the floors are set to the
+  package's own 90/80 rather than to today's reading, because holding the gate
+  machinery to a lower bar than the code it guards is the argument this
+  project exists to refuse.
+
+  The scoping is itself gate-critical and tested as such. A scope matching
+  nothing — a prefix typo, a renamed directory, a run that forgot
+  `--cov=tools` — yields 0 measured statements, and 0/0 is not 100%: it is a
+  gate pointed at nothing, so it exits 2. Backslash-separated paths are
+  normalized, since coverage.py writes them as the platform spells them.
+
+### Changed — `tests/test_graft.py` split along its six subjects
+
+- 2321 lines covering detection, every rule's negative case, scaffolding, the
+  CLI contract, waivers and witness mode, now five focused modules plus
+  `tests/graft_support.py`. A pure move, verified rather than asserted: 187
+  collected test names before and after, set-identical; every function
+  compared by AST, none missing or changed; all 15 module constants
+  byte-identical. Kept flat rather than moved into `tests/graft/`, because
+  `tests/test_spec_test_citations.py` and `tests/test_decomposition.py` both
+  glob `tests/test_*.py` non-recursively and a subdirectory would have
+  silently orphaned 187 tests from two gates.
+
 ### Added — Dependabot
 
 - `.github/dependabot.yml` watches the GitHub Actions ecosystem for both the

@@ -294,6 +294,18 @@ it is not cargo-culted into the v0.1 surface.
 
 ## Skills / agents
 
+**Per-directory `AGENTS.md`** — **shipped**, all five milestones of
+[`agent-directory-wiring-plan.md`](agent-directory-wiring-plan.md). Eight
+nested files, each with a validated diagram, the subagents and skills that
+apply, and explicit precedence; five contract gates over them (precedence
+stated, no `INV-n`, under 60 lines, mermaid fence balanced, links resolve from
+the containing directory) plus a citation gate that runs G004's own matcher
+and target detection against this repository's agent prose.
+
+What remains open is the claim the plan was staged to test and could not:
+whether per-directory guidance actually reduces defects. Eight files exist and
+are gated; nothing here measures whether an agent reads them.
+
 13. **Rules as reusable skills** — the 29 rules already are the reusable
     "skills" and the evaluator is the deterministic harness (see
     `docs/agents-skills-harness.md`). The future extension point for composing

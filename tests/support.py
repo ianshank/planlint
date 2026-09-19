@@ -234,14 +234,23 @@ def run_tool_main(
     Four gate scripts read 0% that way while being thoroughly tested, which is
     a gate that cannot tell a tested script from an untested one.
 
-    ``tools/`` is split on the argv convention, so ``pass_argv0`` is explicit
-    rather than assumed: the eight hand-rolled scripts index ``argv[1]`` and
-    are called as ``main(sys.argv)``, while the two argparse ones
-    (``render_plugin_manifests``, ``render_rule_catalog``) are called as
-    ``main(sys.argv[1:])``, because argparse treats every element it is given
-    as an argument. Passing the wrong one is not a quiet mismatch in either
-    direction -- argparse rejects the stray filename as an unrecognized
-    argument, and a hand-rolled script silently drops the first real argument.
+    ``tools/`` carries **three** argv conventions, so ``pass_argv0`` is
+    explicit rather than assumed. Grouped by what ``main`` expects, which is
+    the only thing that matters here -- not by whether the script uses
+    argparse, which is what an earlier version of this note got wrong:
+
+    * ``pass_argv0=True`` (the default), for a ``main`` whose first element is
+      the program name: the seven hand-rolled scripts that index ``argv[1]``,
+      **and** ``matcher_accuracy``, which is argparse-based but strips the name
+      itself with ``parse_args(argv[1:])``.
+    * ``pass_argv0=False``, for a ``main`` whose argv is arguments only:
+      ``render_plugin_manifests`` and ``render_rule_catalog`` (called as
+      ``main(sys.argv[1:])``), and ``check_wheel_metadata``, whose ``main``
+      defaults ``argv`` to ``None`` and is called as ``main()``.
+
+    Passing the wrong one is not a quiet mismatch in either direction --
+    argparse rejects the stray filename as an unrecognized argument, and a
+    hand-rolled script silently drops the first real argument.
 
     The end-to-end `python tools/<script>.py` invocation the Makefile actually
     uses stays covered by its own subprocess test; this covers the logic.
