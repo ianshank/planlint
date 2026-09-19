@@ -778,3 +778,51 @@ def test_nested_agents_file_has_a_balanced_mermaid_block(path: Path) -> None:
         f"{_index_id(path)} has an odd number of code fences: an unclosed "
         f"```mermaid block swallows everything after it"
     )
+
+
+# --- M5: a cited command that does not exist ---------------------------------
+
+
+def test_every_make_citation_in_an_agent_index_names_a_real_target() -> None:
+    """G004, turned on this repository's own agent-facing prose.
+
+    Milestone 5 of docs/agent-directory-wiring-plan.md, and the reason it was
+    worth building after all: a nested `AGENTS.md` naming a stale command is
+    worse than no file, because an agent runs it and gets an error it cannot
+    attribute. The plan proposed reusing `resolve_makefile` and parsing
+    targets by hand; the shipped code already does both better.
+
+    `MAKE_REF` is the matcher G004 uses to find stage citations in a
+    stranger's spec, and `detect.profile().make_targets` is the target set it
+    checks them against. Pointing the pair at this repository is the same
+    check, on the same code path, with this repo as the target — so the guard
+    cannot drift from the rule, and a change to either is caught here too.
+
+    What was **dropped** rather than deferred, per the plan's instruction to
+    decide explicitly: the general "every fenced command names a real
+    executable" check. It needs a shell-command parser to survive pipelines,
+    flags and redirections, it false-positives on anything it half-parses, and
+    it would cover exactly one command today (`planlint ... validate`, whose
+    console script `test_console_script_is_declared` already pins). The
+    complexity is real and the coverage is one line.
+    """
+    from openspec_graph import detect
+    from openspec_graph.parse_semantics import MAKE_REF
+
+    targets = set(detect.profile(REPO_ROOT).make_targets)
+    assert targets, (
+        "detect found no make targets in this repository, so this guard would "
+        "pass vacuously -- the detector, not the citations, is what broke"
+    )
+
+    unknown: dict[str, list[str]] = {}
+    for path in AGENT_INDEXES:
+        cited = sorted(set(MAKE_REF.findall(path.read_text(encoding="utf-8"))))
+        missing = [stage for stage in cited if stage not in targets]
+        if missing:
+            unknown[_index_id(path)] = missing
+    assert not unknown, (
+        f"agent-facing file(s) cite `make <stage>` targets this repository does "
+        f"not declare: {unknown}. This is the same defect G004 reports in a "
+        f"stranger's spec; fix the citation or add the target."
+    )

@@ -1,6 +1,7 @@
 # Plan: per-directory `AGENTS.md`, wired to subagents and gated
 
-**Status:** proposed, not implemented. Sequenced in §6.
+**Status:** implemented. All five milestones shipped; §6 records what each one
+turned out to cost, and §9 records the two things the plan got wrong.
 **Scope:** eight source directories plus the root. No package behaviour changes.
 
 ## 1. What this proposes, and the one reason it is not obviously good
@@ -139,12 +140,22 @@ guidance is read before writing seven more.
 
 **M4 — the remaining four**, if M2 showed the pattern earns its keep.
 
-**M5 — a freshness gate.** The hard part, deliberately last: a nested file
-naming a stale command is worse than none. Candidate mechanism — extract every
-fenced command from every `AGENTS.md` and assert each names a real Make target
-or a real console script, reusing `check_no_hardcoded_thresholds.resolve_makefile`
-for target discovery. This is the one milestone that may prove not worth its
-complexity; it should be dropped explicitly rather than deferred silently.
+**M5 — a freshness gate.** *Shipped, but only half of it, and the other half
+is dropped rather than deferred.*
+
+The proposed mechanism was wrong: it would have re-parsed the Makefile by hand
+when the shipped code already does this better. `MAKE_REF` is the matcher G004
+uses to find stage citations in a stranger's spec, and
+`detect.profile().make_targets` is the set it checks them against. Pointing
+that pair at this repository is the same check, on the same code path — so the
+guard cannot drift from the rule. `test_every_make_citation_in_an_agent_index_names_a_real_target`
+covers every agent-facing file, and a planted `make prepr` fails it by name.
+
+**Dropped:** the general "every fenced command names a real executable" check.
+It needs a shell-command parser to survive pipelines, flags and redirections,
+it false-positives on anything it half-parses, and it would cover exactly one
+command today — `planlint … validate`, whose console script is already pinned
+by `test_console_script_is_declared`. Real complexity, one line of coverage.
 
 ## 7. Out of scope
 
@@ -167,3 +178,32 @@ Stated up front so it can be checked rather than argued:
   that is evidence the prose is not worth having.
 - The claim that per-directory guidance reduces defects is **untested here**.
   M2 exists to test it on two directories before paying for nine.
+
+## 9. What the plan got wrong
+
+Recorded because §8 asked for it, and a plan that cannot be graded is not a
+plan.
+
+- **M5's proposed mechanism was the wrong one.** It would have hand-parsed the
+  Makefile through `resolve_makefile` when `MAKE_REF` + `detect.profile()`
+  already do exactly this, are already tested, and cannot drift from the G004
+  rule they implement. Writing "candidate mechanism" rather than "mechanism"
+  was the only thing that made this cheap to correct.
+- **The gates found two defects the review did not**, both in the first
+  nested file rather than in the ninth — which is the evidence M2 was staged
+  to collect, arriving earlier than expected:
+  - `test_agent_index_links_resolve` resolved links against `REPO_ROOT`,
+    correct only because both original indexes sat at the root. A correct
+    sibling link from `tools/` was reported missing, and satisfying the gate
+    would have meant writing a path that breaks when clicked.
+  - `test_agent_skill_docs.py` already checked backtick path references in
+    `skills/*.md` and caught `references/rule-catalog.md`, which does not
+    resolve from `skills/`. Nobody told it about the new file.
+
+  Both are the same shape as the bug the plan was written to avoid: a guard
+  that is root-scoped or narrowly-scoped by accident rather than by statement.
+
+- **Still untested: the claim in §8 that per-directory guidance reduces
+  defects.** Eight files exist and are gated; whether an agent reads them and
+  writes better code as a result is not something this repository can measure,
+  and no milestone here claims to have shown it.

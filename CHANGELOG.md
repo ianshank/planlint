@@ -90,6 +90,45 @@ to one — G010 is this project's first INFO-severity rule.
   with its cost stated rather than widened — widening reintroduces the
   false-positive class `fix-prose-matcher-precision` was spent lowering.
 
+### Added — per-directory `AGENTS.md`, gated
+
+Eight nested `AGENTS.md` files — `openspec_graph/`, `tools/`, `tests/`,
+`openspec/`, `docs/`, `skills/`, `evals/`, `templates/` — each carrying a
+validated Mermaid diagram of what the directory is for, the subagents and
+skills that apply to work in it, and explicit precedence (`SKILL.md`, then the
+root `AGENTS.md`, then the file). Nothing in a nested file is the only place a
+rule is written, which is the hedge against an agent that reads only the root.
+
+Sequenced gates-first, per `docs/agent-directory-wiring-plan.md`, because the
+existing guards were root-scoped: `test_every_root_markdown_file_is_wired_into_the_docs_gate`
+globs the repository root non-recursively and `AGENT_INDEXES` was a fixed
+2-tuple, so eight nested files would have landed in no gate at all.
+
+- **Discovery** is `git ls-files --cached --others --exclude-standard` rather
+  than a glob plus a blocklist: the property wanted is "files this repository
+  ships", `--others` means a nested file is seen on the run that *creates* it,
+  and the blocklist would have drifted from `.gitignore`. `tests/corpus/` and
+  `tests/fixtures/` are excluded by name, because a corpus target may
+  legitimately carry an `AGENTS.md` — `INVARIANT_SOURCES` lists that filename.
+- **Five contract gates**: precedence stated, no `INV-n`, under 60 lines, a
+  balanced mermaid fence (an unclosed one swallows the document and renders as
+  an error box nobody reads as a failure), and links that resolve.
+- **A citation gate** running G004's own `MAKE_REF` matcher and
+  `detect.profile().make_targets` against this repository's agent prose — the
+  same check the tool makes of a stranger's spec, turned on itself, so the
+  guard cannot drift from the rule.
+
+### Fixed — agent index links resolved against the wrong directory
+
+- `test_agent_index_links_resolve` resolved every link against `REPO_ROOT`,
+  which was correct only because both indexes it covered sat at the root. A
+  correct sibling link from a nested file — `[x](_common.py)` in `tools/`,
+  exactly what GitHub resolves — was reported as missing, and the only way to
+  satisfy the gate would have been a repo-root-relative path that breaks when
+  a reader clicks it. A gate that can only be satisfied by breaking the thing
+  it checks is worse than no gate. Now resolved against the containing
+  directory, with external URLs and bare anchors skipped.
+
 ### Fixed — an ambient `COVERAGE_FILE` crashed the whole suite
 
 - Two tests spawn a nested `pytest --cov` to prove pytest-cov's own
