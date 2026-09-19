@@ -54,6 +54,18 @@
     "summary": "declared ADRs are cited by a living spec or waived"
   },
   {
+    "id": "G010",
+    "severity": "INFO",
+    "dialects": "*",
+    "summary": "make citations are reported when no makefile was found"
+  },
+  {
+    "id": "G011",
+    "severity": "WARN",
+    "dialects": "*",
+    "summary": "cited generic stages exist when the repo uses Make"
+  },
+  {
     "id": "H001",
     "severity": "ERROR",
     "dialects": "harness",

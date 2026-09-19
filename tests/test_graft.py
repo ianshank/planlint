@@ -2115,3 +2115,95 @@ def test_validate_require_witness_passes_once_a_matching_fresh_witness_is_record
     assert record_exit == 0
     capsys.readouterr()
     assert main(["--target", str(repo), "validate", "--require-witness"]) == 0
+
+
+# --- G010 / G011: what the make-citation check actually checked -------------
+#
+# G004 alone was silent in two directions at once (docs/peer-review-2026-09.md
+# F2 and F3): it returned early when no makefile was found, and it exempted the
+# five GENERIC_STAGES unconditionally. Both silences produced PASS with zero
+# findings on a spec citing a stage that does not exist.
+
+
+def test_g010_reports_citations_it_could_not_check(repo: Path) -> None:
+    (repo / "Makefile").unlink()
+    found = findings_for(repo, GOOD_HARNESS.replace("make regression", "make nope"))
+    g010 = [f for f in found if f.rule == "G010"]
+    assert len(g010) == 1, found
+    assert g010[0].severity == "INFO"
+    assert "not checked" in g010[0].message
+
+
+def test_g010_is_silent_when_the_spec_cites_no_make_target(repo: Path) -> None:
+    """Non-success: it reports an unrun check, never a missing makefile.
+
+    A spec with nothing to check has nothing unchecked, so a Makefile-less
+    repo full of make-free specs stays completely quiet.
+    """
+    (repo / "Makefile").unlink()
+    body = GOOD_HARNESS.replace("`make regression`", "the regression suite")
+    assert "G010" not in rule_ids(findings_for(repo, body))
+
+
+def test_g010_fires_once_per_spec_not_once_per_citation(repo: Path) -> None:
+    """The fact reported is a property of the run, not of each citation."""
+    (repo / "Makefile").unlink()
+    body = GOOD_HARNESS.replace("make regression", "make nope") + (
+        "\n\n_Also verified by:_ `make alpha`, `make beta`, `make gamma`\n"
+    )
+    assert len([f for f in findings_for(repo, body) if f.rule == "G010"]) == 1
+
+
+def test_g010_does_not_change_a_fail_on_error_verdict(repo: Path) -> None:
+    """Non-success: INFO exists so no currently-passing repo starts failing."""
+    (repo / "Makefile").unlink()
+    found = findings_for(repo, GOOD_HARNESS.replace("make regression", "make nope"))
+    assert [f for f in found if f.rule == "G010" and f.severity == "ERROR"] == []
+    assert not [f for f in found if f.severity == "ERROR"], found
+
+
+def test_g011_warns_on_a_generic_stage_the_makefile_lacks(repo: Path) -> None:
+    """`make coverage` against a Makefile that declares no `coverage` target.
+
+    G004 exempts it as a conventional name; the repo demonstrably uses Make,
+    so the citation still may not run and that is worth a WARN.
+    """
+    found = findings_for(repo, GOOD_HARNESS.replace("make regression", "make coverage"))
+    g011 = [f for f in found if f.rule == "G011"]
+    assert len(g011) == 1, found
+    assert g011[0].severity == "WARN"
+    assert not [f for f in found if f.severity == "ERROR"], found
+
+
+def test_g011_is_silent_for_a_generic_stage_that_does_exist(repo: Path) -> None:
+    """Non-success: the fixture Makefile declares `test`, so nothing is wrong."""
+    found = findings_for(repo, GOOD_HARNESS.replace("make regression", "make test"))
+    assert "G011" not in rule_ids(found)
+
+
+def test_g011_does_not_run_where_the_repo_has_no_makefile(repo: Path) -> None:
+    """Non-success: the tox/npm/just case the GENERIC_STAGES exemption exists for.
+
+    With no makefile the repo has not shown it uses Make at all, so a generic
+    stage carries no information and only G010 speaks.
+    """
+    (repo / "Makefile").unlink()
+    ids = rule_ids(findings_for(repo, GOOD_HARNESS.replace("make regression", "make coverage")))
+    assert "G011" not in ids
+    assert "G010" in ids
+
+
+def test_no_citation_is_reported_by_two_of_the_three_rules(repo: Path) -> None:
+    """Non-success: G004/G010/G011 partition the cases, never overlap."""
+    # Non-generic, absent, Makefile present -> G004 only.
+    ids = rule_ids(findings_for(repo, GOOD_HARNESS.replace("make regression", "make nope")))
+    assert "G004" in ids and "G010" not in ids and "G011" not in ids
+
+    # Generic, absent, Makefile present -> G011 only.
+    ids = rule_ids(findings_for(repo, GOOD_HARNESS.replace("make regression", "make coverage")))
+    assert "G011" in ids and "G004" not in ids and "G010" not in ids
+
+    # Makefile absent -> G010 only.
+    (repo / "Makefile").unlink()
+    ids = rule_ids(findings_for(repo, GOOD_HARNESS.replace("make regression", "make nope")))
+    assert "G010" in ids and "G004" not in ids and "G011" not in ids

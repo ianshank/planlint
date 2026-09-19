@@ -81,7 +81,12 @@ _EXPECTED_HASHES = {
     # is the last re-pin a release can cause.
     "validate": "0f3c1d7716421ca7e9436120a1f4c225cf2d91ba07f6d919d4181be305a147d4",
     "graph": "23eea4b474ff9d6d5c4f89dbb86acaac53562544a551d79bceb5c984d2015482",
-    "rules": "5dc8af2ecae022e50a145d42d5a13a2f055ec78b7df3962da593180574dcd20b",
+    # Re-pinned by `report-unchecked-make-citations`, which registered G010
+    # (INFO) and G011 (WARN). Only this hash moved: `validate` and `graph`
+    # above are byte-identical, which is the backwards-compatibility claim
+    # made observable -- the registry grew, the verdict on a real tree did
+    # not.
+    "rules": "a410b292ad3738912ed67e3bdfb952e5bf1d83e442924a882ce2bc592e36f97b",
 }
 
 
