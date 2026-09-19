@@ -369,11 +369,27 @@ def _index_id(path: Path) -> str:
 
 @pytest.mark.parametrize("path", AGENT_INDEXES, ids=[_index_id(p) for p in AGENT_INDEXES])
 def test_agent_index_links_resolve(path: Path) -> None:
-    """Every path advertised must exist, or the index sends readers nowhere."""
+    """Every path advertised must exist, or the index sends readers nowhere.
+
+    Resolved against the *containing directory*, which is what every markdown
+    renderer does, GitHub included. Against ``REPO_ROOT`` this was right only
+    because both original indexes sat at the root: the first nested file would
+    have had a correct sibling link (``[x](_common.py)`` from ``tools/``)
+    reported as missing, and the way to satisfy the gate would have been to
+    write a repo-root-relative path that then breaks when a reader clicks it.
+    A gate that can only be satisfied by breaking the thing it checks is worse
+    than no gate. Verified in both directions before changing it.
+    """
     links = re.findall(r"\]\(([^)]+)\)", path.read_text(encoding="utf-8"))
     assert links, f"{path.name} advertises no documents at all"
-    missing = [ref for ref in links if not (REPO_ROOT / ref).exists()]
-    assert not missing, f"{path.name} links to missing path(s): {missing}"
+    missing = [
+        ref for ref in links
+        # An external URL is not this repository's to resolve, and a bare
+        # anchor addresses the current document.
+        if not ref.startswith(("http://", "https://", "mailto:", "#"))
+        and not (path.parent / ref.split("#", 1)[0]).exists()
+    ]
+    assert not missing, f"{_index_id(path)} links to missing path(s): {missing}"
 
 
 def test_agents_md_declares_no_invariant_ids() -> None:
