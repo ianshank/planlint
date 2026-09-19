@@ -7,8 +7,9 @@ from collections.abc import Iterable
 from .detect import StackProfile
 from .parse import ParsedSpec, scenario_has_gwt
 from .parse_semantics import (
-    FR_DECL,
+    FR_DECL_LOOSE,
     NEEDS_CLARIFICATION,
+    blank_fenced_code,
     blank_html_comments,
     line_of,
     strip_waiver_comments,
@@ -107,8 +108,8 @@ def _dropped_requirement_bullets(spec: ParsedSpec, _p: StackProfile) -> Iterable
     """
     if spec.requirements:
         return
-    text = blank_html_comments(strip_waiver_comments(spec.raw))
-    match = FR_DECL.search(text)
+    text = blank_fenced_code(blank_html_comments(strip_waiver_comments(spec.raw)))
+    match = FR_DECL_LOOSE.search(text)
     if match is None:
         return
     yield CheckHit(

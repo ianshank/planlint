@@ -36,7 +36,22 @@ SCENARIO = re.compile(r"^(#{3,5})\s+Scenario\s*[:\u2014-]\s*(.+?)\s*$", re.MULTI
 CANONICAL_REQ_LEVEL = 3
 CANONICAL_SCEN_LEVEL = 4
 
-SUPPRESS = re.compile(r"<!--\s*specgraph:allow\s+([A-Z]\d{3}(?:\s*,\s*[A-Z]\d{3})*)\s*(.*?)-->")
+# re.DOTALL, so a waiver whose reason spans lines is matched.
+#
+# Without it `(.*?)` could not cross a newline and a multi-line waiver was
+# SILENTLY INERT: it suppressed nothing, registered in `planlint waivers` as
+# nothing, and raised no G007 -- the author got a finding they thought they
+# had waived and no signal that the comment did nothing. Silence is the one
+# answer a governance tool must not give.
+#
+# `strip_waiver_comments` below fills the span newline-preservingly for this
+# reason: the old `" " * len(...)` fill would merge a multi-line waiver into
+# one logical line and shift every subsequent finding's locus (DEC-LH /
+# R-LH-14).
+SUPPRESS = re.compile(
+    r"<!--\s*specgraph:allow\s+([A-Z]\d{3}(?:\s*,\s*[A-Z]\d{3})*)\s*(.*?)-->",
+    re.DOTALL,
+)
 
 # --- speckit dialect ---------------------------------------------------------
 FR_ID = re.compile(r"\bFR-\d+\b")
@@ -73,6 +88,18 @@ def _bullet_decl(prefix: str) -> re.Pattern[str]:
         re.MULTILINE,
     )
 
+
+# S005's probe, deliberately looser than the parser's own grammar above.
+#
+# `FR_DECL` anchors the hyphen at column 0, so an indented bullet
+# (`  - **FR-001**: ...`, a sub-item under a grouping line) is not a
+# requirement to the parser -- it is silently dropped. Detecting that loss
+# with the *same* pattern that caused it is a contradiction: the two share the
+# blind spot, so the case S005 exists for is undetectable by construction.
+# This one allows leading whitespace, and nothing else differs.
+FR_DECL_LOOSE = re.compile(
+    r"^[^\S\n]*-[^\S\n]*\*\*(FR-\d+)\*\*[^\S\n]*:", re.MULTILINE
+)
 
 FR_DECL = _bullet_decl("FR")
 SC_DECL = _bullet_decl("SC")
@@ -548,6 +575,27 @@ def speckit_subsection_span(section_text: str, name: str) -> tuple[int, str]:
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 
 
+_FENCED_BLOCK = re.compile(r"^(?P<fence>```+|~~~+).*?(?:\n(?P=fence)[^\S\n]*$|\Z)", re.MULTILINE | re.DOTALL)
+
+
+def blank_fenced_code(text: str) -> str:
+    """Blank fenced code blocks, preserving length and line structure.
+
+    A fenced block is an *illustration*, not a declaration. Without this, a
+    spec that documents the canonical requirement form -- which SpecKit
+    authors and this repository's own change packages do constantly -- was
+    told its requirements had been dropped. An unterminated fence runs to end
+    of document, matching how a reader sees it.
+
+    Same newline-preserving fill as :func:`blank_html_comments`, and for the
+    same reason: a locus reported after the block must still name the right
+    line.
+    """
+    return _FENCED_BLOCK.sub(
+        lambda m: "".join("\n" if ch == "\n" else " " for ch in m.group()), text
+    )
+
+
 def blank_html_comments(text: str) -> str:
     """Blank every HTML comment, preserving both length and line structure.
 
@@ -708,4 +756,9 @@ def strip_waiver_comments(text: str) -> str:
     ``INV_REF``/``ADR_REF``) scans this function's output, never the raw
     text directly, for exactly that reason.
     """
-    return SUPPRESS.sub(lambda m: " " * len(m.group()), text)
+    # Newlines preserved, not blanked: `SUPPRESS` is `re.DOTALL` now, so a
+    # span can cover several lines, and a flat space fill would merge them and
+    # shift every later locus by the number of lines swallowed.
+    return SUPPRESS.sub(
+        lambda m: "".join("\n" if ch == "\n" else " " for ch in m.group()), text
+    )

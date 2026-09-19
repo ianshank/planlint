@@ -2281,3 +2281,41 @@ def test_an_empty_bodied_fr_bullet_does_not_consume_the_next_one(repo: Path) -> 
     # And it must not reach across a blank line into an unrelated heading.
     m = FR_DECL.search("- **FR-001**:\n\n## Success Criteria\n")
     assert m is not None and m.group(2) == "", m and m.group(2)
+
+
+def test_a_waiver_whose_reason_spans_lines_actually_suppresses(repo: Path) -> None:
+    """A multi-line waiver used to be silently inert, for every rule.
+
+    `SUPPRESS` had no `re.DOTALL`, so `(.*?)` could not cross a newline: the
+    comment suppressed nothing, appeared in `planlint waivers` as nothing, and
+    raised no G007. The author got back the finding they believed they had
+    waived, with no signal the comment did nothing — the one answer a
+    governance tool must not give.
+    """
+    waiver = "<!-- specgraph:allow G004\nreason: this target lands in the next PR\n-->\n"
+    found = findings_for(repo, waiver + GOOD_HARNESS.replace("make regression", "make nope"))
+    g004 = [f for f in found if f.rule == "G004"]
+    assert len(g004) == 1, found
+    assert g004[0].severity == "INFO", "a waived ERROR drops to INFO"
+    assert g004[0].message.startswith("[waived]")
+
+
+def test_a_multiline_waiver_does_not_shift_later_finding_lines(repo: Path) -> None:
+    """Non-success: `re.DOTALL` must not cost the 1-based locus contract.
+
+    The old fill was `" " * len(span)`, which contains no newlines — blanking a
+    three-line waiver that way would merge those lines and move every later
+    finding up by two, silently. The fill preserves newlines (DEC-LH /
+    R-LH-14), so the only change is that the waiver now works.
+    """
+    body = GOOD_HARNESS.replace("make regression", "make nope")
+    single = findings_for(repo, "<!-- specgraph:allow G001 reason: x -->\n" + body)
+    multi = findings_for(repo, "<!-- specgraph:allow G001\nreason: x\n-->\n" + body)
+
+    def loci(found: list[rules.Finding]) -> dict[str, int]:
+        return {f.rule: f.line for f in found if f.line}
+
+    # The multi-line form occupies two extra lines, so every later locus moves
+    # by exactly two — no more, which a merging fill would not manage.
+    for rule, line in loci(single).items():
+        assert loci(multi).get(rule) == line + 2, (rule, line, loci(multi))

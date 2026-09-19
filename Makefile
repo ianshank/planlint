@@ -4,6 +4,12 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-14s %s\n", $$1, $$2}'
 
 test: ## Run the test suite; line + branch coverage floors read from pyproject.toml
+	@# Erase first: [tool.coverage.run] parallel = true means coverage COMBINES
+	@# every .coverage.* it finds, so data left by an ad-hoc run (a different
+	@# --cov= source, an interrupted run) silently merges into this one. It can
+	@# raise the number as easily as lower it, and a gate that can be talked up
+	@# by a stale file in the working tree is not a gate.
+	python -m coverage erase
 	python -m pytest tests/ --cov=openspec_graph --cov-branch \
 		--cov-report=term-missing --cov-report=json:coverage.json -q
 	python tools/check_coverage_floor.py coverage.json

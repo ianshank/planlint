@@ -531,3 +531,84 @@ def test_s005_never_evaluates_for_the_harness_dialect(repo: Path) -> None:
     assert not s005.applies("harness")
     assert not s005.applies("upstream")
     assert s005.applies("speckit")
+
+
+def test_s005_is_silent_on_fr_bullets_inside_a_fenced_code_block(repo: Path) -> None:
+    """Non-success: a fenced block illustrates, it does not declare.
+
+    S005 scans the raw document deliberately -- the whole point is to see
+    bullets the parser's scoped span missed -- which meant a spec DOCUMENTING
+    the canonical requirement form was told its requirements had been dropped.
+    SpecKit authors and this repository's own change packages write that block
+    constantly.
+    """
+    body = textwrap.dedent(
+        """\
+        # Feature Specification: Demo
+
+        ## Overview
+
+        The canonical form looks like this:
+
+        ```markdown
+        ### Functional Requirements
+
+        - **FR-001**: The system MUST do the thing.
+        ```
+
+        ## Success Criteria *(mandatory)*
+
+        - **SC-001**: The thing completes in under a second.
+        """
+    )
+    assert "S005" not in {f.rule for f in findings_for(repo, body)}
+
+
+def test_s005_fires_on_indented_fr_bullets_the_parser_drops(repo: Path) -> None:
+    """The failure mode S005 exists for, previously invisible by construction.
+
+    `FR_DECL` anchors the hyphen at column 0, so a sub-item under a grouping
+    line is dropped silently. Detecting that loss with the same pattern that
+    caused it cannot work -- the probe and the parser shared the blind spot.
+    `FR_DECL_LOOSE` allows leading whitespace and differs in nothing else, so
+    the probe is a strict superset of the grammar it audits.
+    """
+    body = textwrap.dedent(
+        """\
+        # Feature Specification: Demo
+
+        ## Requirements *(mandatory)*
+
+        ### Functional Requirements
+
+        - Group A:
+          - **FR-001**: The system MUST do the thing.
+
+        ## Success Criteria *(mandatory)*
+
+        - **SC-001**: The thing completes in under a second.
+        """
+    )
+    found = [f for f in findings_for(repo, body) if f.rule == "S005"]
+    assert len(found) == 1, found
+
+
+def test_blank_fenced_code_preserves_length_and_lines() -> None:
+    """The locus contract again: a finding after a block must name its real line."""
+    from openspec_graph.parse_semantics import blank_fenced_code
+
+    raw = "a\n```py\nx = 1\n```\nb\n"
+    out = blank_fenced_code(raw)
+    assert len(out) == len(raw)
+    assert out.count("\n") == raw.count("\n")
+    assert out.splitlines()[0] == "a"
+    assert out.splitlines()[4] == "b"
+    assert "x = 1" not in out
+
+
+def test_blank_fenced_code_handles_an_unterminated_fence() -> None:
+    """An unterminated fence runs to end of document, as a reader sees it."""
+    from openspec_graph.parse_semantics import blank_fenced_code
+
+    out = blank_fenced_code("a\n```\n- **FR-001**: x\n")
+    assert "FR-001" not in out

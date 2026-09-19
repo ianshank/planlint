@@ -14,7 +14,13 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from . import dialect_card, machinery, witness
-from .parse_semantics import is_harness_marked, is_speckit_marked, is_upstream_marked
+from .parse_semantics import (
+    ADR_REF,
+    INV_REF,
+    is_harness_marked,
+    is_speckit_marked,
+    is_upstream_marked,
+)
 from .repo_io import read_text_or_none, to_posix_relative
 from .thresholds import (
     COVERAGE_REPORT_TABLE,
@@ -91,8 +97,14 @@ ADR_SOURCES: tuple[str, ...] = (
 logger = logging.getLogger("planlint.detect")
 
 _MAKE_TARGET = re.compile(r"^([a-zA-Z][a-zA-Z0-9_-]*)\s*:(?!=)", re.MULTILINE)
-_INV_ID = re.compile(r"\bINV-\d+\b")
-_ADR_ID = re.compile(r"\bADR-\d+\b")
+# The DECLARATION side of the same grammar `parse_semantics` uses for the
+# CITATION side -- these were two byte-identical compiles of `INV-\d+` and
+# `ADR-\d+`. If they ever drifted, G005/G006/G008/G009 would stop matching
+# declarations against citations and simply find nothing, which is a fail-open:
+# a cited-but-undeclared invariant would report clean. This module already
+# imports from parse_semantics, so there was never a cycle to justify the copy.
+_INV_ID = INV_REF
+_ADR_ID = ADR_REF
 # A markdown heading line ("# Title", "## Title", ...) -- used to prefer an
 # ADR file's own title over an earlier body reference to a different ADR
 # when picking its declared id (see _adrs()).
