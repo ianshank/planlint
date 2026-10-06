@@ -140,7 +140,9 @@ re-measured it against this tree and reproduced every fact below.
   a probe that `planlint witness --help` mentions `--witness-dir`), derives
   the sha with `git rev-parse HEAD` in the target — never `GITHUB_SHA` —
   runs `planlint witness` once, and uploads the directory under `always()`.
-  An empty `exit-code` (what a skipped stage step yields) records nothing,
+  It refuses a `witness-dir` that does not resolve under `RUNNER_TEMP`
+  (`R-WCA-36`), so the write boundary `R-GA-8` describes survives the one
+  input that could move it. An empty `exit-code` (what a skipped stage step yields) records nothing,
   prints a `::notice`, and exits 0. It never runs the stage: the consumer's
   own step runs it and captures the exit code.
 - **`.github/dependabot.yml`** — a second `github-actions` entry with

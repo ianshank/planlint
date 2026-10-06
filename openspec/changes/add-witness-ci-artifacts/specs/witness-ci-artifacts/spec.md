@@ -271,6 +271,14 @@ never asks for them and no spec needs editing on their account.
   `/.github/actions/planlint` entry, so the recorder's third-party pins are
   watched (`test_every_composite_action_directory_is_watched_by_dependabot`
   requires one entry per composite action directory).
+- R-WCA-36: The recorder MUST resolve `witness-dir` — the default and a
+  supplied value alike — with symlinks followed, and MUST fail with exit 1
+  and a named `::error`, recording nothing and running no later step, when
+  the resolved directory is neither `RUNNER_TEMP` (resolved the same way)
+  nor a path beneath it. `R-WCA-21` is a guarantee about every write; an
+  input naming a path in `GITHUB_WORKSPACE`, or a symlink under `RUNNER_TEMP`
+  that points there, would otherwise defeat it through `--witness-dir` rather
+  than a shell redirection, which a line scan of the action body cannot see.
 
 ### Constraints
 
@@ -449,8 +457,11 @@ never asks for them and no spec needs editing on their account.
   CI's accident rather than CI match the specs' intent.
 - **DEC-WCA-016:** a `ladder` job runs `make ci` and `make pre-pr` by name,
   even though both re-run the suite the matrix already ran. Seven specs cite
-  `pre-pr` and five cite `ci` on Verified-by lines; under `DEC-WCA-006` no
-  inference can stand in for running them, and the release workflow already
+  `pre-pr` and six cite `ci` on Verified-by lines — two of the six are this
+  branch's own packages, AC-WCA-27 below and
+  `widen-indeterminate-unchecked-citations`; `make stage-citations`
+  regenerates both counts. Under `DEC-WCA-006` no inference can stand in for
+  running them, and the release workflow already
   runs `make pre-pr` on every tag, so this is the same gate moved earlier,
   not a new one. The cost, stated as a multiplier rather than waved at:
   `ci.yml` already runs the suite six times per pull request (four matrix
@@ -568,6 +579,18 @@ never asks for them and no spec needs editing on their account.
   re-pointed to `make test` in that package, so after this change no
   verification line names the stage and `R-WCA-30`'s derived test has
   nothing to ask for.
+- **DEC-WCA-026:** `witness-dir` is bounded to `RUNNER_TEMP`, by resolved
+  path, rather than left to the caller. The recorder's write boundary
+  (`R-WCA-21`, `C-WCA-6`) is what lets the scan action keep `R-GA-8`'s
+  promise on a runner, and it holds only if no input can move a write:
+  `witness-dir: ${{ github.workspace }}/x` would, and so would a symlink
+  planted under `RUNNER_TEMP`, which is why the comparison is between
+  resolved paths and not strings. The alternative — narrowing the guarantee
+  to "the default location" — would make the one documented override the one
+  hole in it. Refusing is preferred to silently redirecting the write under
+  `RUNNER_TEMP`: a redirected store is one the gate job would not find, and
+  exit 1 with a named error is the shape the sha failure (`R-WCA-18`)
+  already has.
 
 ---
 
@@ -796,6 +819,14 @@ never asks for them and no spec needs editing on their account.
   holds no `*.json` file, so an empty download never reaches `validate` and
   is never reported as "the specs are lying". (R-WCA-24, R-WCA-29,
   DEC-WCA-023)
+  _Verified by:_ stage: `make test`
+
+- [ ] **AC-WCA-34 (non-success):** the recorder's `paths` step, given
+  `witness-dir` set to a path under `GITHUB_WORKSPACE`, or to a symlink under
+  `RUNNER_TEMP` whose target lies outside it, exits 1 with a named `::error`
+  before the install step runs, and nothing is written anywhere; given a
+  path under `RUNNER_TEMP`, or the empty default, it proceeds. (R-WCA-36,
+  R-WCA-21, C-WCA-6, DEC-WCA-026)
   _Verified by:_ stage: `make test`
 
 ---

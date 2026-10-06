@@ -152,8 +152,10 @@
 - New `.github/actions/planlint-witness/action.yml`: inputs `stage`,
   `exit-code`, `coverage`, `target`, `witness-dir`, `upload-artifact`,
   `artifact-name`, `python-version`, `version`. Steps: `paths` (resolve
-  `witness-dir` to `${RUNNER_TEMP}/planlint-witnesses` when empty,
-  `mkdir -p`; export `EVIDENCE` as a sibling directory under `RUNNER_TEMP`
+  `witness-dir` to `${RUNNER_TEMP}/planlint-witnesses` when empty; resolve
+  it and `RUNNER_TEMP` with symlinks followed and refuse with `::error`,
+  exit 1, when the former is not under the latter — `R-WCA-36`,
+  `DEC-WCA-026`; then `mkdir -p`; export `EVIDENCE` as a sibling directory under `RUNNER_TEMP`
   so the shared install body's `${EVIDENCE}/planlint-src` resolves; when
   `exit-code` is empty, emit `::notice` "stage <stage> did not run; nothing
   recorded" and set an output that skips every later step), then
@@ -178,6 +180,7 @@
   `test_the_recorder_declares_exactly_its_inputs`,
   `test_the_recorder_needs_no_token_and_no_privileged_permission`,
   `test_the_recorder_writes_only_under_runner_temp_and_the_command_files`,
+  `test_the_recorder_refuses_a_witness_dir_outside_runner_temp`,
   `test_the_recorder_derives_the_sha_from_the_checkout_not_github_sha`,
   `test_the_recorder_never_invokes_make`,
   `test_the_recorder_uploads_under_always`,
