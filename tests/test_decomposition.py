@@ -219,25 +219,26 @@ def test_output_byte_identical() -> None:
         _build_repo(root)
         outs = _outputs(root)
     hashes = {k: hashlib.sha256(v.encode()).hexdigest() for k, v in outs.items()}
-    if hashes != _EXPECTED_HASHES:
-        # Self-diagnosing failure: the hashes alone cannot say *what* drifted,
-        # and an environment-specific divergence (this test runs on both the
-        # Ubuntu matrix and the Windows leg) is undiagnosable from hex. Dump
-        # the normalized output's shape for each drifting verb so the CI log
-        # names the exact field, not just the mismatch.
-        for verb in sorted(_EXPECTED_HASHES):
-            if hashes[verb] == _EXPECTED_HASHES[verb]:
-                continue
-            lines = outs[verb].splitlines()
-            print(f"--- {verb}: {len(lines)} lines, first/last + any path-bearing ---")
-            pathy = [ln for ln in lines if "<ROOT>" in ln or "\\\\" in ln][:5]
-            for ln in lines[:3] + pathy + lines[-3:]:
-                print(f"    {ln}")
+    # Self-diagnosing failure: the hashes alone cannot say *what* drifted,
+    # and an environment-specific divergence (this test runs on both the
+    # Ubuntu matrix and the Windows leg) is undiagnosable from hex. Carry the
+    # normalized output's shape for each drifting verb in the assertion
+    # message so the CI log names the exact field, not just the mismatch --
+    # in the message rather than printed, because `T201` holds `print` to
+    # the CLI and the gate scripts, where stdout is the product.
+    diagnostic: list[str] = []
+    for verb in sorted(_EXPECTED_HASHES):
+        if hashes[verb] == _EXPECTED_HASHES[verb]:
+            continue
+        lines = outs[verb].splitlines()
+        diagnostic.append(f"--- {verb}: {len(lines)} lines, first/last + any path-bearing ---")
+        pathy = [ln for ln in lines if "<ROOT>" in ln or "\\\\" in ln][:5]
+        diagnostic.extend(f"    {ln}" for ln in lines[:3] + pathy + lines[-3:])
     assert hashes == _EXPECTED_HASHES, (
         "CLI/graph/rules JSON drifted after decomposition.\n"
         f"expected: {_EXPECTED_HASHES}\n"
         f"actual:   {hashes}\n"
-        "(normalized per-verb output dumped above)"
+        + "\n".join(diagnostic)
     )
 
 

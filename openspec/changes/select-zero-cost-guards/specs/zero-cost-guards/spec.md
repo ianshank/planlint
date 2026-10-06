@@ -326,53 +326,53 @@ external contract.
 
 ## Acceptance Criteria
 
-- [ ] **AC-ZCG-1:** `pyproject.toml` selects `T201`, and the only
+- [x] **AC-ZCG-1:** `pyproject.toml` selects `T201`, and the only
   per-file-ignores entries naming it are `openspec_graph/cli.py` and
   `tools/*`; `make lint` exits 0 on the tree. (R-ZCG-1, R-ZCG-10)
-  _Verified by:_ stage: `make lint`
+  _Verified by:_ `pytest -k test_t201_is_selected_with_exactly_the_cli_and_tools_exempt` · stage: `make lint`
 
-- [ ] **AC-ZCG-2 (non-success):** under a copy of this repository's ruff
+- [x] **AC-ZCG-2 (non-success):** under a copy of this repository's ruff
   `per-file-ignores`, with `T201` selected, a `print` planted in a
   library-module path is reported as `T201`, while the same `print` planted
   at a `cli.py` path and under a `tools/` path is not. (R-ZCG-2, R-ZCG-11, DEC-ZCG-011)
-  _Verified by:_ stage: `make lint`
+  _Verified by:_ `pytest -k test_a_print_in_a_library_module_fails_lint` · stage: `make lint`
 
-- [ ] **AC-ZCG-3:** `[tool.mypy]` has `strict = true` and
+- [x] **AC-ZCG-3:** `[tool.mypy]` has `strict = true` and
   `warn_unreachable = true` with `python_version = "3.10"` kept, and
   `make typecheck` exits 0 on the tree. (R-ZCG-3, R-ZCG-10, DEC-ZCG-003)
-  _Verified by:_ `pytest -k test_typecheck_passes_on_clean_repo` · stage: `make typecheck`
+  _Verified by:_ `pytest -k "test_typecheck_passes_on_clean_repo or test_mypy_is_strict_and_warns_on_unreachable_code"` · stage: `make typecheck`
 
-- [ ] **AC-ZCG-4 (non-success):** under a copy of this repository's mypy
+- [x] **AC-ZCG-4 (non-success):** under a copy of this repository's mypy
   configuration, a module annotating a parameter as bare `dict` is reported
   with a `type-arg` error. (R-ZCG-4, R-ZCG-11)
-  _Verified by:_ stage: `make typecheck`
+  _Verified by:_ `pytest -k test_a_bare_generic_in_tools_fails_typecheck` · stage: `make typecheck`
 
-- [ ] **AC-ZCG-5:** `diff_spec_graph.py` reaches the same four verdicts it
+- [x] **AC-ZCG-5:** `diff_spec_graph.py` reaches the same four verdicts it
   reaches today — 0 on an unchanged graph, 1 on new broken edges, 1 on a new
   orphan, 0 when an orphan is fixed — through the argparse `main`.
   (R-ZCG-5, R-ZCG-6, R-ZCG-7)
   _Verified by:_ `pytest -k "test_graph_diff_passes_when_clean or test_graph_diff_fails_on_new_broken_edges or test_graph_diff_fails_on_new_orphan or test_graph_diff_passes_when_orphan_fixed"` · stage: `make test`
 
-- [ ] **AC-ZCG-6 (non-success):** `diff_spec_graph.py` given one argument
+- [x] **AC-ZCG-6 (non-success):** `diff_spec_graph.py` given one argument
   raises `SystemExit` with code 2, writes the usage text to stderr, and
   writes nothing to stdout. (R-ZCG-6, DEC-ZCG-007)
   _Verified by:_ `pytest -k test_graph_diff_rejects_bad_args` · stage: `make test`
 
-- [ ] **AC-ZCG-7:** `render_mermaid.py`'s stdout for a saved graph is
+- [x] **AC-ZCG-7:** `render_mermaid.py`'s stdout for a saved graph is
   byte-identical to `to_mermaid(graph)`, with nothing appended, through the
   argparse `main`. (R-ZCG-5, R-ZCG-7)
   _Verified by:_ `pytest -k test_render_mermaid_matches_to_mermaid_byte_for_byte` · stage: `make test`
 
-- [ ] **AC-ZCG-8 (non-success):** `render_mermaid.py` given no argument
+- [x] **AC-ZCG-8 (non-success):** `render_mermaid.py` given no argument
   raises `SystemExit` with code 2, writes the usage text to stderr, and
   writes nothing to stdout. (R-ZCG-6, DEC-ZCG-007)
   _Verified by:_ `pytest -k test_render_mermaid_rejects_bad_args` · stage: `make test`
 
-- [ ] **AC-ZCG-9:** `--help` on each script raises `SystemExit` with code 0
+- [x] **AC-ZCG-9:** `--help` on each script raises `SystemExit` with code 0
   and writes the usage text to stdout. (R-ZCG-6)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_graph_diff_help_exits_zero or test_render_mermaid_help_exits_zero"` · stage: `make test`
 
-- [ ] **AC-ZCG-10:** both scripts still start as `python tools/<script>.py`
+- [x] **AC-ZCG-10:** both scripts still start as `python tools/<script>.py`
   from a throwaway cwd with no arguments, emit no load-failure marker on
   stderr, and exit one of the documented codes — so the file still loads
   under script execution and reaches its own argument handling, and the
@@ -380,38 +380,38 @@ external contract.
   base.json head.json`, is intact. (R-ZCG-5, C-ZCG-3)
   _Verified by:_ `pytest -k test_gate_script_is_runnable_as_a_script` · stage: `make test`
 
-- [ ] **AC-ZCG-11:** with the `planlint.tools` logger at DEBUG, a diff run
+- [x] **AC-ZCG-11:** with the `planlint.tools` logger at DEBUG, a diff run
   records each file read and its decision, and a rendering run records the
   file read and the node and edge counts; none of those records appear on
   stdout. (R-ZCG-8, DEC-ZCG-008)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_graph_diff_logs_its_decision_without_polluting_stdout or test_render_mermaid_logs_the_node_count_without_polluting_stdout"` · stage: `make test`
 
-- [ ] **AC-ZCG-12:** `tools/_common.py` is still stdlib-only after
+- [x] **AC-ZCG-12:** `tools/_common.py` is still stdlib-only after
   `read_json` lands. (R-ZCG-9)
   _Verified by:_ `pytest -k common_module_is_stdlib_only` · stage: `make test`
 
-- [ ] **AC-ZCG-13:** the scoped coverage run still meets
+- [x] **AC-ZCG-13:** the scoped coverage run still meets
   `tools_line_fail_under` and `tools_branch_fail_under` with the argparse,
   help, error and logging paths of both scripts measured in-process.
   (R-ZCG-12)
   _Verified by:_ stage: `make coverage-tools`
 
-- [ ] **AC-ZCG-14 (non-success):** the rule inventory is unchanged — the
+- [x] **AC-ZCG-14 (non-success):** the rule inventory is unchanged — the
   live rule table still matches `tests/baseline_rules.json`. (C-ZCG-3)
   _Verified by:_ `pytest -k test_rule_set_matches_baseline` · stage: `make test`
 
-- [ ] **AC-ZCG-15:** `make lint` keeps a recipe with no escape hatch and CI
+- [x] **AC-ZCG-15:** `make lint` keeps a recipe with no escape hatch and CI
   still runs it, and `make typecheck` still exits 0 against the repository;
   neither recipe changed. (C-ZCG-3)
   _Verified by:_ `pytest -k "test_lint_is_a_hard_gate or test_typecheck_passes_on_clean_repo"` · stage: `make pre-pr`
 
-- [ ] **AC-ZCG-16 (non-success):** `test_output_byte_identical` still passes
+- [x] **AC-ZCG-16 (non-success):** `test_output_byte_identical` still passes
   with its diagnostic carried in the assertion message, and `make lint`
   passes with no `tests/*` exemption for `T201` and no `noqa: T201` in the
   tree. (C-ZCG-1, DEC-ZCG-002)
   _Verified by:_ `pytest -k test_output_byte_identical` · stage: `make ci`
 
-- [ ] **AC-ZCG-17:** `tests/support.py`'s `run_tool_main` docstring and
+- [x] **AC-ZCG-17:** `tests/support.py`'s `run_tool_main` docstring and
   `tools/AGENTS.md` name five hand-rolled scripts and four argparse scripts
   that strip the program name themselves, listing `diff_spec_graph` and
   `render_mermaid` in the second group; the `T20` comment in
@@ -419,19 +419,19 @@ external contract.
   guard asserts prose; it is read directly. (R-ZCG-13, DEC-ZCG-013)
   _Verified by:_ stage: `make pre-pr`
 
-- [ ] **AC-ZCG-18 (non-success):** `make lint` exits 0 with the new `select`
+- [x] **AC-ZCG-18 (non-success):** `make lint` exits 0 with the new `select`
   list — any selected family with outstanding violations would fail it, so a
   green lint is the proof that only zero-cost families were added.
   (C-ZCG-2, DEC-ZCG-012)
   _Verified by:_ stage: `make lint`
 
-- [ ] **AC-ZCG-19 (non-success):** `read_json` on a document whose top level
+- [x] **AC-ZCG-19 (non-success):** `read_json` on a document whose top level
   is a list raises `ValueError` naming the path, and on a missing path raises
   `FileNotFoundError` — never a `JSONDecodeError` for an absent file.
   (R-ZCG-9, DEC-ZCG-006)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_read_json_rejects_a_non_mapping_document or test_read_json_reports_a_missing_file_by_name"` · stage: `make test`
 
-- [ ] **AC-ZCG-20 (non-success):** the logging-capture precedent passes when
+- [x] **AC-ZCG-20 (non-success):** the logging-capture precedent passes when
   run in isolation, which it does not today: the helper attaches
   `caplog.handler` to the `planlint.tools` logger directly, so the records
   are seen whether or not `_common` was imported before the test began.

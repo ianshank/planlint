@@ -1,6 +1,6 @@
 # Tasks: select-zero-cost-guards
 
-## Milestone 1 — Bring the two scripts onto `_common`
+## Milestone 1 — Bring the two scripts onto `_common`  [DONE]
 
 - `tools/_common.py`: add `read_json(path: Path) -> dict[str, Any]`, reading
   `path.read_text(encoding="utf-8")` directly (not via `read_text`, so a
@@ -54,7 +54,7 @@
   runnable-as-a-script test pass unchanged (AC-ZCG-5, AC-ZCG-7, AC-ZCG-10).
 - **Gate:** `make coverage-tools`
 
-## Milestone 2 — Select `T201`
+## Milestone 2 — Select `T201`  [DONE]
 
 - `tests/test_decomposition.py`: in `test_output_byte_identical`, collect the
   per-verb diagnostic lines into a list and join them into the assertion
@@ -74,7 +74,7 @@
   findings; the only family added is at zero (C-ZCG-2, AC-ZCG-18).
 - **Gate:** `make lint`
 
-## Milestone 3 — Turn on strict
+## Milestone 3 — Turn on strict  [DONE]
 
 - `pyproject.toml` `[tool.mypy]`: `strict = true` and
   `warn_unreachable = true`; keep `python_version = "3.10"` and
@@ -89,7 +89,7 @@
   check was measured at zero before this landed (AC-ZCG-3).
 - **Gate:** `make typecheck`
 
-## Milestone 4 — Guard the configuration and update the record
+## Milestone 4 — Guard the configuration and update the record  [DONE]
 
 - `tests/test_ci_hardening.py`, in the section headed as claims about the CI
   configuration itself, beside `test_lint_is_a_hard_gate`: a module-level
@@ -129,7 +129,7 @@
   group (R-ZCG-13, DEC-ZCG-013, AC-ZCG-17).
 - **Gate:** `make test`
 
-## Milestone 5 — Confirm and record
+## Milestone 5 — Confirm and record  [DONE]
 
 - Re-run the three measurements from the proposal at the finished tree and
   confirm each reads zero: `ruff check --select T201` over
@@ -144,4 +144,15 @@
   `pytest -k` selector in the spec resolves
   (`tests/test_spec_test_citations.py`).
 - Confirm this package validates clean under the repo's own rules.
+- Recorded at implementation (Python 3.13, this tree): `ruff check --select
+  T201 openspec_graph tests tools` reports 0 findings with the two
+  exemptions in place and the two test prints folded (it reported 125 on the
+  unconfigured tree: the 123 the proposal counted in `cli.py` and `tools/`,
+  plus the two in `tests/test_decomposition.py`); `mypy openspec_graph
+  tools` under `strict = true` and `warn_unreachable = true` reports 0
+  findings in 43 source files; `make lint`, `make typecheck`, `make test`
+  and `make coverage-tools` are green, the scoped run at 96.1% line / 93.2%
+  branch for `tools/`; `Makefile` and `.github/workflows/ci.yml` show no
+  diff. The precedent logging test fails under `-k` before the helper and
+  passes after it.
 - **Gate:** `make pre-pr`

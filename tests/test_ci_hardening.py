@@ -16,6 +16,7 @@ import subprocess
 import sys
 import textwrap
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -23,7 +24,7 @@ import pytest
 from openspec_graph import detect
 from openspec_graph import graph as graph_module
 from openspec_graph.rules import RULES, rule_table
-from tests.support import env_without_coverage, load_tool, run_tool_main
+from tests.support import captured_logger, env_without_coverage, load_tool, run_tool_main
 from tests.support import write_spec as _write_spec
 
 TOOLS = Path(__file__).resolve().parent.parent / "tools"
@@ -346,8 +347,43 @@ def test_graph_diff_passes_when_orphan_fixed(repo: Path) -> None:
     assert _diff(base, head) == 0  # fixing an orphan is an improvement, not a regression
 
 
-def test_graph_diff_rejects_bad_args() -> None:
-    assert run_tool_main("diff_spec_graph", "diff_spec_graph.py", "only-one-arg") == 2
+def test_graph_diff_rejects_bad_args(capsys) -> None:
+    """One positional where two are declared is argparse's own
+    ``SystemExit(2)`` -- usage on stderr, nothing on stdout -- which the
+    ``if __name__`` guard turns into the same exit 2 the script returned
+    when it counted ``argv`` by hand (AC-ZCG-6)."""
+    with pytest.raises(SystemExit) as excinfo:
+        run_tool_main("diff_spec_graph", "diff_spec_graph.py", "only-one-arg")
+    assert excinfo.value.code == 2
+    out, err = capsys.readouterr()
+    assert "usage:" in err
+    assert out == ""
+
+
+def test_graph_diff_help_exits_zero(capsys) -> None:
+    """``--help`` is the one argument the argparse move adds (R-ZCG-5)."""
+    with pytest.raises(SystemExit) as excinfo:
+        run_tool_main("diff_spec_graph", "diff_spec_graph.py", "--help")
+    assert excinfo.value.code == 0
+    out, err = capsys.readouterr()
+    assert "usage:" in out and "base" in out and "head" in out
+    assert err == ""
+
+
+def test_graph_diff_logs_its_decision_without_polluting_stdout(repo: Path, capsys, caplog) -> None:
+    """At DEBUG the diff names each file it read and the inputs to its
+    verdict; stdout is still the one ``PASS:`` line CI greps for (R-ZCG-8)."""
+    _write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    base = _graph_json(repo)
+    head = json.loads(json.dumps(base))
+    with captured_logger(caplog, "planlint.tools"):
+        assert _diff(base, head) == 0
+    messages = [record.getMessage() for record in caplog.records]
+    assert sum("read_json:" in m for m in messages) == 2, messages
+    assert any("broken_links" in m and "orphan" in m for m in messages), messages
+    out = capsys.readouterr().out
+    assert out.startswith("PASS:") and out.count("\n") == 1, out
+    assert not any(m in out for m in messages)
 
 
 # --- render_mermaid.py: thin consumer of a saved graph.json (CP-GV) ---------
@@ -366,8 +402,45 @@ def test_render_mermaid_matches_to_mermaid_byte_for_byte(repo: Path, tmp_path: P
     assert capsys.readouterr().out == to_mermaid(graph)
 
 
-def test_render_mermaid_rejects_bad_args() -> None:
-    assert run_tool_main("render_mermaid", "render_mermaid.py") == 2
+def test_render_mermaid_rejects_bad_args(capsys) -> None:
+    """No positional where one is declared: argparse's ``SystemExit(2)``,
+    usage on stderr, nothing on stdout (AC-ZCG-8)."""
+    with pytest.raises(SystemExit) as excinfo:
+        run_tool_main("render_mermaid", "render_mermaid.py")
+    assert excinfo.value.code == 2
+    out, err = capsys.readouterr()
+    assert "usage:" in err
+    assert out == ""
+
+
+def test_render_mermaid_help_exits_zero(capsys) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        run_tool_main("render_mermaid", "render_mermaid.py", "--help")
+    assert excinfo.value.code == 0
+    out, err = capsys.readouterr()
+    assert "usage:" in out and "graph" in out
+    assert err == ""
+
+
+def test_render_mermaid_logs_the_node_count_without_polluting_stdout(
+    repo: Path, tmp_path: Path, capsys, caplog
+) -> None:
+    """With the logger at DEBUG, stdout is *still* byte-identical to
+    ``to_mermaid(graph)``: the records go to stderr through ``_common``'s
+    handler and never touch the rendering (R-ZCG-7, R-ZCG-8)."""
+    from openspec_graph.mermaid import to_mermaid
+
+    _write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    graph = _graph_json(repo)
+    graph_path = tmp_path / "graph.json"
+    graph_path.write_text(json.dumps(graph))
+    with captured_logger(caplog, "planlint.tools"):
+        assert run_tool_main("render_mermaid", "render_mermaid.py", str(graph_path)) == 0
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("read_json:" in m and graph_path.name in m for m in messages), messages
+    nodes, edges = len(graph["nodes"]), len(graph["edges"])
+    assert any(f"{nodes} node" in m and f"{edges} edge" in m for m in messages), messages
+    assert capsys.readouterr().out == to_mermaid(graph)
 
 
 # --- the executable contract, once rather than per script --------------------
@@ -454,6 +527,91 @@ def test_rule_set_matches_baseline() -> None:
 # never written -- found by tests/test_spec_test_citations.py, the guard that
 # now holds every `_Verified by:` citation to a test that exists. Asserted
 # against the real files so the criteria stop being prose.
+
+
+def _pyproject() -> dict[str, Any]:
+    """``pyproject.toml`` parsed structurally, so a guard asserts a *value*
+    rather than grepping for a line that a reformat could move.
+
+    ``tomllib`` is 3.11+; the 3.10 leg of the matrix uses the ``tomli``
+    backport the dev extra already installs for coverage's own startup hook.
+    """
+    try:
+        import tomllib as toml_reader
+    except ModuleNotFoundError:  # pragma: no cover - 3.10 leg only
+        import tomli as toml_reader  # type: ignore[import-not-found,no-redef]
+    with (REPO_ROOT / "pyproject.toml").open("rb") as handle:
+        return toml_reader.load(handle)
+
+
+def test_t201_is_selected_with_exactly_the_cli_and_tools_exempt() -> None:
+    """select-zero-cost-guards R-ZCG-1 / R-ZCG-10: `print` is held to the two
+    places stdout is the product. Nothing else about `select` is asserted --
+    a second copy of the list would be the drift this test exists to catch."""
+    lint = _pyproject()["tool"]["ruff"]["lint"]
+    assert "T201" in lint["select"], "T201 is not selected; a library-module print passes lint"
+    exempt = {path for path, rules in lint["per-file-ignores"].items() if "T201" in rules}
+    assert exempt == {"openspec_graph/cli.py", "tools/*"}, exempt
+
+
+def test_mypy_is_strict_and_warns_on_unreachable_code() -> None:
+    """select-zero-cost-guards R-ZCG-3 / R-ZCG-10: strict is the mode, with
+    `warn_unreachable` on its own because `strict` does not include it, and
+    the 3.10 floor still the version mypy checks against."""
+    mypy = _pyproject()["tool"]["mypy"]
+    assert mypy.get("strict") is True, "mypy is not strict; a bare `dict` annotation passes"
+    assert mypy.get("warn_unreachable") is True
+    assert mypy.get("python_version") == "3.10"
+
+
+def _plant_tree(tmp_path: Path, files: dict[str, str]) -> Path:
+    """A throwaway checkout carrying this repository's own tool config."""
+    (tmp_path / "pyproject.toml").write_text(
+        (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    for relative, body in files.items():
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(body, encoding="utf-8")
+    return tmp_path
+
+
+def test_a_print_in_a_library_module_fails_lint(tmp_path: Path) -> None:
+    """select-zero-cost-guards R-ZCG-2 / R-ZCG-11 (non-success): under this
+    repository's own per-file-ignores, the same `print` is a finding in a
+    library module and not at the two exempted paths -- the gate fires, and
+    fires only where it should."""
+    tree = _plant_tree(tmp_path, {
+        "openspec_graph/leak.py": 'print("x")\n',
+        "openspec_graph/cli.py": 'print("x")\n',
+        "tools/t.py": 'print("x")\n',
+    })
+    result = subprocess.run(
+        [sys.executable, "-m", "ruff", "check", "--select", "T201",
+         "--output-format", "json", "openspec_graph", "tools"],
+        cwd=tree, capture_output=True, text=True, check=False,
+        env=env_without_coverage(),
+    )
+    assert result.returncode == 1, result.stderr
+    findings = json.loads(result.stdout)
+    located = [(f["code"], Path(f["filename"]).relative_to(tree).as_posix()) for f in findings]
+    assert located == [("T201", "openspec_graph/leak.py")], located
+
+
+def test_a_bare_generic_in_tools_fails_typecheck(tmp_path: Path) -> None:
+    """select-zero-cost-guards R-ZCG-4 / R-ZCG-11 (non-success): under this
+    repository's own mypy configuration, a parameter annotated as bare `dict`
+    is a `type-arg` error -- the exact finding strict mode cleared from
+    tools/diff_spec_graph.py, shown to stay a finding."""
+    tree = _plant_tree(tmp_path, {"tools/bare.py": "def f(d: dict) -> None: ...\n"})
+    result = subprocess.run(
+        [sys.executable, "-m", "mypy", "--config-file", "pyproject.toml",
+         "--cache-dir", os.devnull, "tools/bare.py"],
+        cwd=tree, capture_output=True, text=True, check=False,
+        env=env_without_coverage(),
+    )
+    assert result.returncode != 0, result.stdout
+    assert "type-arg" in result.stdout, result.stdout
 
 
 def test_lint_is_a_hard_gate() -> None:

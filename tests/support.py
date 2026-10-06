@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib.util
+import logging
 import os
 import subprocess
 import sys
@@ -16,6 +17,8 @@ import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
+
+import pytest
 
 _PYPROJECT = Path(__file__).resolve().parent.parent / "pyproject.toml"
 
@@ -213,6 +216,36 @@ def working_directory(path: Path) -> Iterator[None]:
         os.chdir(prior)
 
 
+@contextlib.contextmanager
+def captured_logger(caplog: pytest.LogCaptureFixture, name: str) -> Iterator[None]:
+    """Capture ``name``'s records into ``caplog`` even when it does not propagate.
+
+    A bare ``caplog.at_level(level, logger=name)`` is order-dependent in this
+    suite. pytest's logging plugin installs its handler on the root logger and
+    relies on propagation to see anything, but both ``openspec_graph.log``'s
+    ``configure()`` and ``tools/_common.py`` set ``propagate = False`` on the
+    loggers they own. The plugin compensates only for loggers that are
+    *already* non-propagating when the test starts, so a test that imports
+    ``_common`` for the first time inside its own body sees
+    ``caplog.records == []`` -- and the same test passes in the full run,
+    where an earlier test did the import. The symptom is a test green under
+    ``make test`` and red under ``-k``.
+
+    So the handler is attached to the emitting logger directly, at DEBUG for
+    the block, and removed in ``finally`` so a failing assertion inside the
+    block cannot leave it on a module-level logger for the next test. This is
+    the body ``test_witness.py`` and ``test_repo_io.py`` each carried inline;
+    one copy, so a third module cannot get it subtly wrong.
+    """
+    target = logging.getLogger(name)
+    target.addHandler(caplog.handler)
+    try:
+        with caplog.at_level(logging.DEBUG, logger=name):
+            yield
+    finally:
+        target.removeHandler(caplog.handler)
+
+
 def run_tool_main(
     module_name: str,
     filename: str,
@@ -240,9 +273,10 @@ def run_tool_main(
     argparse, which is what an earlier version of this note got wrong:
 
     * ``pass_argv0=True`` (the default), for a ``main`` whose first element is
-      the program name: the seven hand-rolled scripts that index ``argv[1]``,
-      **and** ``matcher_accuracy`` and ``stage_citations``, which are
-      argparse-based but strip the name themselves with ``parse_args(argv[1:])``.
+      the program name: the five hand-rolled scripts that index ``argv[1]``,
+      **and** ``matcher_accuracy``, ``stage_citations``, ``diff_spec_graph``
+      and ``render_mermaid``, which are argparse-based but strip the name
+      themselves with ``parse_args(argv[1:])``.
     * ``pass_argv0=False``, for a ``main`` whose argv is arguments only:
       ``render_plugin_manifests`` and ``render_rule_catalog`` (called as
       ``main(sys.argv[1:])``), and ``check_wheel_metadata``, whose ``main``
