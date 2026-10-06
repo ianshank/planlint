@@ -571,5 +571,8 @@ change package.
 - [Peer review (2026-09)](docs/peer-review-2026-09.md) — what the gate
   actually checks when it says PASS, measured against built target
   repositories, and the rewritten remainder that follows from it
+- [Peer review deep dive (2026-10)](docs/peer-review-2026-10.md) — the
+  2026-09 findings re-measured at HEAD, one new parser defect, and the three
+  drafted change packages that plan R7, R8 and the fix
 
 Upstream OpenSpec conventions: [Fission-AI/OpenSpec concepts](https://github.com/Fission-AI/OpenSpec/blob/main/docs/concepts.md).

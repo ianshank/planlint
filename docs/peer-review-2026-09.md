@@ -345,8 +345,8 @@ Replaces `docs/next-steps.md` item 1 and `docs/differentiation-roadmap.md`
 | **R4** | INFO finding when a rule skips for want of machinery (D3.2) | days | **shipped** — `G010` |
 | **R5** | WARN on a generic-stage citation when Make *is* in use (D2) | days | **shipped** — `G011` |
 | **R6** | WARN when declared `FR-` bullets never reach the graph (F4) | days | **shipped** — `S005`, with the predicate revised from the heading-shaped one this review proposed |
-| **R7** | Witness artifacts as a CI upload/download, not a local store (F7) | design pass | open — before v2 is claimed anywhere |
-| **R8** | Widen `indeterminate` (D3.3) | policy | open — 1.0, as already planned |
+| **R7** | Witness artifacts as a CI upload/download, not a local store (F7) | design pass | **planned** — `add-witness-ci-artifacts`, drafted from `docs/peer-review-2026-10.md` D1/D2: a `--witness-dir`, a recorder action and a dogfood gate, not a redesign of the store |
+| **R8** | Widen `indeterminate` (D3.3) | policy | **planned** — `widen-indeterminate-unchecked-citations`, drafted from `docs/peer-review-2026-10.md` D3: keyed on an unwaived G010, never on missing machinery alone |
 
 > **R1–R6 landed together**, through three OpenSpec change packages and three
 > review rounds (`spec-adversary`, then two Copilot passes). What the reviews
