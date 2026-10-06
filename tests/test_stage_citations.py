@@ -146,6 +146,8 @@ def test_make_as_an_argument_or_label_is_not_an_invocation(line: str) -> None:
         ("run: |\n  echo 'spans\n  lines' && make test", "test"),
         ("run: |\n  make \\\n    test", "test"),
         ("run: |\n  true\n\n  make test", "test"),
+        ("run: | # a comment after the indicator\n  make test", "test"),
+        ("run: 'echo ''hi'' && make test'", "test"),
     ],
 )
 def test_make_in_command_position_is_an_invocation(line: str, stage: str) -> None:
@@ -164,6 +166,8 @@ def test_make_in_command_position_is_an_invocation(line: str, stage: str) -> Non
         "run: |\n  # make test\n  true",
         "run: |\n  echo 'open quote && make test",
         'run: ""',
+        "run: true;# && make test",
+        "run: >\n  echo folded\n  make test",
     ],
 )
 def test_separators_inside_data_are_not_shell_syntax(text: str) -> None:
@@ -190,6 +194,22 @@ def test_a_run_block_ends_where_its_indentation_does() -> None:
     )
     assert sc.run_scripts(text) == ["      make test", "make docs-check"]
     assert sc.workflow_invocations(text) == {"test", "docs-check"}
+
+
+def test_run_block_commands_are_scanned_but_yaml_fields_are_not() -> None:
+    workflow = textwrap.dedent(
+        """\
+        name: explain; make docs
+        jobs:
+          test:
+            steps:
+              - name: explain; make lint
+              - run: |
+                  echo 'make docs'
+                  make test
+        """
+    )
+    assert sc.workflow_invocations(workflow) == {"test"}
 
 
 def test_a_word_after_a_closing_subshell_is_an_argument() -> None:

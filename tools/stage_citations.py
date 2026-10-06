@@ -72,10 +72,12 @@ WORKFLOW_DIR = Path(".github") / "workflows"
 # `if:`, a `with:` argument, a comment -- anything else that happens to contain
 # `make test` -- is data, so only `run:` scalars are read: the inline form,
 # plain or YAML-quoted, and the block forms -- `|` or `>` with their chomping
-# and indentation indicators, or a bare `run:` over an indented plain scalar --
-# whose body is every following line indented past the key.
+# and indentation indicators and an optional trailing comment, or a bare
+# `run:` over an indented plain scalar -- whose body is every following line
+# indented past the key. A folded block (`>`) joins its lines with spaces, as
+# YAML does, so a `make` on its second line is the argument it would be.
 _RUN_KEY = re.compile(r"^(?P<indent>[ \t]*)(?P<marker>-[ \t]+)?run:[ \t]*(?P<rest>.*?)[ \t]*$")
-_BLOCK_INDICATOR = re.compile(r"[|>][-+0-9]*")
+_BLOCK_INDICATOR = re.compile(r"[|>][-+0-9]*(?:[ \t]+#.*)?")
 _YAML_QUOTED = re.compile(r"""^(?:"((?:[^"\\]|\\.)*)"|'((?:[^']|'')*)')[ \t]*(?:#.*)?$""")
 
 # Shell operators after which the next word is a command: `;`, `&&`, `||`,
@@ -134,7 +136,12 @@ def run_scripts(text: str) -> list[str]:
         rest = match.group("rest")
         if rest and not _BLOCK_INDICATOR.fullmatch(rest):
             quoted = _YAML_QUOTED.match(rest)
-            scripts.append(rest if quoted is None else quoted.group(1) or quoted.group(2) or "")
+            if quoted is None:
+                scripts.append(rest)
+            elif quoted.group(1) is not None:
+                scripts.append(quoted.group(1))
+            else:
+                scripts.append(quoted.group(2).replace("''", "'"))
             continue
         key_column = len(match.group("indent")) + len(match.group("marker") or "")
         body: list[str] = []
@@ -143,7 +150,8 @@ def run_scripts(text: str) -> list[str]:
         ):
             body.append(lines[index])
             index += 1
-        scripts.append("\n".join(body))
+        folded = rest.startswith(">")
+        scripts.append(" ".join(line.strip() for line in body) if folded else "\n".join(body))
     return scripts
 
 
