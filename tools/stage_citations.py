@@ -26,12 +26,16 @@ It is a **report, not a gate** -- the same shape as ``matcher_accuracy.py``
 repository mid-migration without failing it. It exits 2 when it cannot run: no
 spec tree under ``--root``, or a named ``--workflow`` that does not exist.
 
-Two limits, stated so the numbers are read correctly. A workflow is credited
-only for a *direct* ``make <stage>`` invocation in command position: ``make
-pre-pr`` runs ``test`` transitively, and that is not counted as running
-``test``; nor is ``make`` behind a wrapper such as ``sudo`` or ``env``. Text
-that only mentions ``make test`` -- printed, passed as an argument, a step's
-name, a comment -- is never credited.
+Limits, stated so the numbers are read correctly. A workflow is credited only
+for a *direct* ``make <stage>`` invocation: ``run:`` scripts are read (nothing
+else in a workflow is shell), each is lexed with quotes and comments honoured,
+and only ``make`` in command position counts. So ``make pre-pr`` running
+``test`` transitively is not counted as running ``test``; ``make`` behind a
+wrapper such as ``sudo`` or ``env`` is not; text that only mentions ``make
+test`` -- printed, quoted, passed as an argument, a step's ``name:``, a
+comment -- is never credited; and a script the lexer cannot read (a quote left
+open) credits nothing, because guessing which half of it is data is how an
+unrun stage gets credited.
 
 Like ``matcher_accuracy.py`` and the ``render_*`` generators, this imports
 ``openspec_graph`` rather than re-implementing its parser: the point is to
@@ -44,6 +48,7 @@ import argparse
 import dataclasses
 import json
 import re
+import shlex
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -63,17 +68,22 @@ SCHEMA_VERSION = 1
 
 WORKFLOW_DIR = Path(".github") / "workflows"
 
-# A shell invocation of make naming a stage, in *command position* only: at
-# the start of a line (a `run: |` block's continuation lines), straight after
-# `run:`, or after a shell separator (`;`, `&&`, `||`, `|`, `(` as in `$(...)`).
-# Text that merely contains `make test` -- `echo "make test"`, an argument, a
-# step's `name:`, an inline comment -- is not credited, because crediting a
-# workflow with a stage it never ran is the one error this report exists to
-# avoid. The stage grammar is MAKE_REF's, so a stage this matches is one a
-# spec could cite; the first-character class keeps a flag (`make -j4`) out.
-_MAKE_INVOCATION = re.compile(
-    r"(?:^|[;&|(]|\brun:)[ \t]*(?:-[ \t]+)?make[ \t]+([a-z][a-z0-9_-]*)"
-)
+# `run:` is the only workflow key whose value is shell. A step's `name:`, an
+# `if:`, a `with:` argument, a comment -- anything else that happens to contain
+# `make test` -- is data, so only `run:` scalars are read: the inline form,
+# plain or YAML-quoted, and the block forms -- `|` or `>` with their chomping
+# and indentation indicators, or a bare `run:` over an indented plain scalar --
+# whose body is every following line indented past the key.
+_RUN_KEY = re.compile(r"^(?P<indent>[ \t]*)(?P<marker>-[ \t]+)?run:[ \t]*(?P<rest>.*?)[ \t]*$")
+_BLOCK_INDICATOR = re.compile(r"[|>][-+0-9]*")
+_YAML_QUOTED = re.compile(r"""^(?:"((?:[^"\\]|\\.)*)"|'((?:[^']|'')*)')[ \t]*(?:#.*)?$""")
+
+# Shell operators after which the next word is a command: `;`, `&&`, `||`,
+# `|`, `&`, and `(` as in `$(...)`. The lexer hands a run of these over as one
+# token; a run ending in `)` closes a subshell instead, and what follows it is
+# an argument. A `VAR=value` prefix keeps the word after it in command position.
+_SHELL_SEPARATORS = ";&|()"
+_SHELL_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -111,17 +121,80 @@ def spec_files(root: Path) -> tuple[detect.StackProfile, list[Path]]:
     return prof, files
 
 
-def workflow_invocations(text: str) -> set[str]:
-    """Stages a workflow file invokes directly as ``make <stage>``.
+def run_scripts(text: str) -> list[str]:
+    """The shell text of every ``run:`` scalar in a workflow file, in order."""
+    lines = text.splitlines()
+    scripts: list[str] = []
+    index = 0
+    while index < len(lines):
+        match = _RUN_KEY.match(lines[index])
+        index += 1
+        if match is None:
+            continue
+        rest = match.group("rest")
+        if rest and not _BLOCK_INDICATOR.fullmatch(rest):
+            quoted = _YAML_QUOTED.match(rest)
+            scripts.append(rest if quoted is None else quoted.group(1) or quoted.group(2) or "")
+            continue
+        key_column = len(match.group("indent")) + len(match.group("marker") or "")
+        body: list[str] = []
+        while index < len(lines) and (
+            not lines[index].strip() or len(lines[index]) - len(lines[index].lstrip()) > key_column
+        ):
+            body.append(lines[index])
+            index += 1
+        scripts.append("\n".join(body))
+    return scripts
 
-    Full-line YAML comments are skipped: a comment explaining why a job does
-    *not* run ``make x`` must not credit it with running it.
+
+def _shell_tokens(text: str) -> list[str]:
+    lexer = shlex.shlex(text, posix=True, punctuation_chars=_SHELL_SEPARATORS)
+    lexer.whitespace_split = True
+    lexer.commenters = "#"
+    return list(lexer)
+
+
+def shell_invocations(script: str) -> set[str]:
+    """Stages a shell script invokes as ``make <stage>`` in command position.
+
+    Lexed, not pattern-matched: a quoted string is one word whatever it
+    contains, a ``#`` comment runs to the end of its line, and only the word
+    at a line start or after a separator is a command. A line is lexed on its
+    own unless a quote left open carries the string onto the next line; a
+    quote still open at the end of the script leaves that tail unread, which
+    credits nothing rather than guessing which half of it is data.
     """
     stages: set[str] = set()
-    for line in text.splitlines():
-        if line.lstrip().startswith("#"):
+    pending = ""
+    for line in script.replace("\\\n", " ").split("\n"):
+        pending = f"{pending}\n{line}" if pending else line
+        try:
+            words = _shell_tokens(pending)
+        except ValueError:
             continue
-        stages.update(_MAKE_INVOCATION.findall(line))
+        pending = ""
+        command_start = True
+        for position, word in enumerate(words):
+            if word and all(char in _SHELL_SEPARATORS for char in word):
+                command_start = not word.endswith(")")
+                continue
+            if not command_start or _SHELL_ASSIGNMENT.match(word):
+                continue
+            if word == "make" and position + 1 < len(words):
+                # MAKE_REF's own grammar decides what a stage is, so a stage
+                # credited here is one a spec could cite.
+                cited = MAKE_REF.fullmatch(f"`make {words[position + 1]}`")
+                if cited is not None:
+                    stages.add(cited.group(1))
+            command_start = False
+    return stages
+
+
+def workflow_invocations(text: str) -> set[str]:
+    """Stages a workflow file invokes directly as ``make <stage>``."""
+    stages: set[str] = set()
+    for script in run_scripts(text):
+        stages |= shell_invocations(script)
     return stages
 
 

@@ -132,14 +132,70 @@ def test_make_as_an_argument_or_label_is_not_an_invocation(line: str) -> None:
     [
         ("run: make test", "test"),
         ("      - run: make test", "test"),
-        ("          make test", "test"),
+        ("run: |\n          make test", "test"),
+        ("run: >-\n          make test", "test"),
+        ("run:\n          make test", "test"),
+        ('run: "make test"', "test"),
+        ("run: 'make test' # note", "test"),
         ("run: cd sub && make test", "test"),
         ("run: make lint; make test", "test"),
         ("run: out=$(make test)", "test"),
+        ("run: echo 'a' | make test", "test"),
+        ("run: CI=1 make test", "test"),
+        ("run: |\n  true # a comment, not a separator\n  make test", "test"),
+        ("run: |\n  echo 'spans\n  lines' && make test", "test"),
+        ("run: |\n  make \\\n    test", "test"),
+        ("run: |\n  true\n\n  make test", "test"),
     ],
 )
 def test_make_in_command_position_is_an_invocation(line: str, stage: str) -> None:
     assert stage in sc.workflow_invocations(line)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "run: true # && make test",
+        "run: echo 'x && make test'",
+        'run: echo "x; make test"',
+        "name: explain; make test",
+        "if: make test",
+        "with:\n  args: make test\n",
+        "run: |\n  # make test\n  true",
+        "run: |\n  echo 'open quote && make test",
+        'run: ""',
+    ],
+)
+def test_separators_inside_data_are_not_shell_syntax(text: str) -> None:
+    """Non-success (review round 3): a separator inside a comment or a quoted
+    string, or in a key that is not shell at all, is data. Crediting a
+    workflow with a stage it never ran is the one error this report exists to
+    avoid, so each of these yields nothing -- including the open quote, whose
+    tail is unreadable rather than guessed at."""
+    assert sc.workflow_invocations(text) == set()
+
+
+def test_a_run_block_ends_where_its_indentation_does() -> None:
+    """A sibling key after a block scalar, and the next step, are not part of
+    the script; a second run: step is read on its own."""
+    text = textwrap.dedent(
+        """\
+        steps:
+          - run: |
+              make test
+            with:
+              cmd: make lint
+          - run: make docs-check
+        """
+    )
+    assert sc.run_scripts(text) == ["      make test", "make docs-check"]
+    assert sc.workflow_invocations(text) == {"test", "docs-check"}
+
+
+def test_a_word_after_a_closing_subshell_is_an_argument() -> None:
+    """`$(make test)` runs make; the `make lint` that follows the `)` is an
+    argument to whatever that substitution produced, not a second command."""
+    assert sc.workflow_invocations("run: $(make test) make lint") == {"test"}
 
 
 def test_an_unreadable_workflow_exits_two_rather_than_a_traceback(
