@@ -19,17 +19,21 @@ the run as green. The two existing escalations are both wrong-shaped:
 unchecked citations, and a waiver of G010 changes nothing but a message
 prefix. The policy question `DEC-GA-010` deferred is now small, because the
 honest signal exists and the only decision left is whether the Action
-escalates it.
+escalates it. `docs/peer-review-2026-10.md` D3 ("What should `indeterminate`
+mean?") makes that decision and names its cost; this spec is the package that
+row files.
 
 **Evidence:** `openspec_graph/report.py::status_of` (`report.py:339-357`) is
 three lines: `fail` on `blocking > 0`, `indeterminate` on
-`specs_checked == 0`, `pass` otherwise. Reproduced against this tree: a
-target with no Makefile and no coverage floor whose one spec cites a make
-stage prints `INFO  G010 ... 1 distinct `make` stage(s) not checked: no make
-targets were detected in the target repo, so G004 could not run`, then
-`1 spec(s) checked · 0 error · 2 warn · 1 info` and `PASS`, exit 0;
-`report --format github-outputs` over that envelope prints `status=pass`.
-With `<!-- specgraph:allow G010 reason -->` in the spec the finding becomes
+`specs_checked == 0`, `pass` otherwise. Reproduced against this tree
+(`docs/peer-review-2026-10.md` N5): a target with no Makefile and no coverage
+floor whose one spec cites a make stage prints `INFO  G010 ... 1 distinct
+`make` stage(s) not checked: no make targets were detected in the target
+repo, so G004 could not run`, then `1 spec(s) checked · 0 error · 2 warn ·
+1 info` and `PASS`, exit 0; `report --format github-outputs` over that
+envelope with the target's card prints `status=pass`, `infos=1`,
+`make-targets=0`, `discovery-warnings=2`. With
+`<!-- specgraph:allow G010 reason -->` in the spec the finding becomes
 `INFO  G010 ... [waived] ...`, still INFO, still exit 1 at `--fail-on INFO` —
 pinned by `tests/test_e2e_corpus.py::test_a_waived_g010_still_fails_a_fail_on_info_run`
 and recorded in `CHANGELOG.md` as "G010 is effectively unwaivable".
@@ -38,12 +42,25 @@ none of them says whether a finding was waived; the `[waived] ` prefix that
 `rules.evaluate` (`rules.py:119`) and `rules.evaluate_tree` (`rules.py:151`,
 `rules.py:164`) prepend is the only trace. The discriminating case holds: a
 Makefile-less target whose specs cite no make stage produces no G010
-(`tests/test_graft_rules.py::test_g010_is_silent_when_the_spec_cites_no_make_target`),
-which is why `report.discovery_notes()` (`report.py:379-408`, card-shaped,
-fires with or without a citation) is the wrong input. A missing coverage
-floor is irrelevant: `rules_generic._hard_coded_threshold`
-(`rules_generic.py:45`) has no empty guard and falls back to
-`locator = "the governance policy"`.
+(`tests/test_graft_rules.py::test_g010_is_silent_when_the_spec_cites_no_make_target`;
+`peer-review-2026-10.md` Appendix H), which is why `report.discovery_notes()`
+(`report.py:379-408`, card-shaped, fires with or without a citation) is the
+wrong input. A missing coverage floor is irrelevant:
+`rules_generic._hard_coded_threshold` (`rules_generic.py:45`) has no empty
+guard and falls back to `locator = "the governance policy"`.
+
+The cost, measured rather than assumed: `parse_model.Criterion.has_stage`
+(`parse_model.py:55-56`) is a `MAKE_REF` match and H001 (ERROR,
+`rules_harness.py:21-25`) fires on every harness criterion that names no
+`make` stage; harness is the fallback dialect (`parse.py:133`); G010
+(`rules_generic.py:97-113`) has no `GENERIC_STAGES` exemption; a waiver is
+scoped to its spec file (`rules.py:103`); and `scaffold.pick_stage()`
+(`scaffold.py:61`) returns `"test"` on a Makefile-less target. A harness spec
+with its citations removed or replaced by a `tox` command is `ERROR H001 ×2`,
+`status=fail`; with a citation of `test` alone it is `INFO G010`, which this
+change makes `indeterminate`. So a harness-dialect repository that does not
+use Make cannot take the "stop citing make stages" exit; its exit is one
+reasoned G010 waiver per spec, or `continue-on-error`.
 
 ---
 
@@ -83,17 +100,20 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
 - R-IND-7: `to_step_summary` MUST print a cause-specific paragraph when the
   status is `indeterminate`: the existing "No spec was checked ..." text for
   `no-specs`, and for `unchecked-citations` a paragraph that states the specs
-  cite make stages none of which could be checked and names the three ways
-  out — declare the make targets the specs cite, waive G010 with a reason in
-  the spec, or stop citing make stages. The two paragraphs MUST be distinct.
+  cite make stages none of which could be checked and names the ways out —
+  declare the make targets the specs cite; waive G010 with a reason in each
+  spec that cites one; or, for an upstream or SpecKit spec only, stop citing
+  make stages. The paragraph MUST NOT present the third exit as available to
+  a harness-dialect spec, whose criteria H001 requires to name a stage. The
+  two paragraphs MUST be distinct.
 - R-IND-8: The Action MUST declare an `indeterminate-cause` output projected
   from the `project` step, and its gate step's `indeterminate` branch MUST
   print a message distinct per cause. The `unchecked-citations` message MUST
-  name the three ways out of R-IND-7 and `continue-on-error`. An empty or
-  unrecognised cause MUST fall to the existing `no-specs` message, so a CLI
-  installed through the `version:` input from a release that emits no cause
-  produces the pre-change message. Every property R-GA-6 states MUST still
-  hold.
+  name the ways out of R-IND-7 with the same dialect qualification, and
+  `continue-on-error`. An empty or unrecognised cause MUST fall to the
+  existing `no-specs` message, so a CLI installed through the `version:`
+  input from a release that emits no cause produces the pre-change message.
+  Every property R-GA-6 states MUST still hold.
 
 ### Waived-ness in the envelope
 
@@ -110,7 +130,11 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
   projects. It MUST refuse, with `EnvelopeError`, a `waived` that is present
   and not a boolean.
 - R-IND-12: `report.py` MUST NOT derive waived-ness from the `[waived] `
-  message prefix or from any other message text.
+  message prefix or from any other message text. That property MUST be
+  checked by an AST scan of the module's string constants in code —
+  docstrings excluded, comments not being in the AST — so that prose about
+  the prefix in a comment or docstring is permitted and a comparison against
+  it is not.
 
 ### Where the rule id lives
 
@@ -119,6 +143,17 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
   pin it to the `rules_generic.GENERIC_RULES` entry whose check is
   `_unchecked_make_citations` and whose severity is INFO. `report.py` MUST
   keep its zero-intra-package-import posture, checked mechanically.
+
+### The stated cost
+
+- R-IND-16: The `CHANGELOG.md` entry, the gate step's `unchecked-citations`
+  message and the step summary's `unchecked-citations` paragraph MUST each
+  say, in so many words, that a harness-dialect repository without a Makefile
+  needs a reasoned G010 waiver in each spec that cites a stage (or
+  `continue-on-error` on the step), and the changelog entry MUST add that
+  `planlint new`'s own output on a Makefile-less target is `indeterminate`
+  until one is added. None of the three MAY describe the third exit of
+  R-IND-7 without its dialect qualification.
 
 ### Fixtures and verification
 
@@ -143,9 +178,10 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
 - C-IND-1: This change MUST NOT alter any `validate` exit code or `blocking`
   count for any input. INFO never blocks; `rules.py`'s severity contract
   stands.
-- C-IND-2: This change MUST NOT alter G010's, G011's or G004's id, severity,
-  message, dialect set or finding shape, MUST NOT touch `RULES`, and MUST
-  leave `tests/baseline_rules.json` and the generated rule catalog unchanged.
+- C-IND-2: This change MUST NOT alter G010's, G011's, G004's or H001's id,
+  severity, message, dialect set or finding shape; MUST NOT add a
+  `GENERIC_STAGES` exemption to G010; MUST NOT touch `RULES`; and MUST leave
+  `tests/baseline_rules.json` and the generated rule catalog unchanged.
 - C-IND-3: `report.discovery_notes()` and the Action's `discovery-warnings`
   output MUST keep their current derivation and values (`DEC-UMC-007`).
 - C-IND-4: The Action MUST gain no input. `EXPECTED_INPUTS` in
@@ -158,11 +194,17 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
   fixture envelope carries at least one finding; the implementation MUST
   verify this by running the test rather than assume either outcome.
 - C-IND-7: `README.md`, `SKILL.md`, `docs/next-steps.md`,
-  `docs/peer-review-2026-09.md`, `docs/differentiation-roadmap.md`, the
-  Action's `outputs:` block and `CHANGELOG.md` MUST move in the same change,
-  and `make docs-check` MUST stay green.
+  `docs/peer-review-2026-09.md`, `docs/peer-review-2026-10.md`,
+  `docs/differentiation-roadmap.md`, the Action's `outputs:` block and
+  `CHANGELOG.md` MUST move in the same change — each against its current
+  text, where the package is already named as drafted or planned — and
+  `make docs-check` MUST stay green.
 - C-IND-8: The presence or absence of a coverage floor MUST have no bearing
   on `status` or on the cause.
+- C-IND-9: The predicate MUST NOT be narrowed by dialect, by stage name or by
+  any property of the target to reduce the harness-dialect cost; the cost is
+  paid by the per-spec waiver, and `scaffold.pick_stage()` MUST NOT change in
+  this package.
 
 ---
 
@@ -173,25 +215,40 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
   the specs claim", and G010 is the one signal keyed on that: it fires only
   when a spec carries a `make` citation and `profile.make_targets` is empty.
   The card-shaped predicate the 2026-09 review's D3 rejected — "no Makefile
-  and no coverage floor" — relabels a tox, npm or `just` repository whose
-  specs never mention Make, which has nothing unchecked; `discovery_notes()`
-  has the same shape and fires on a citation-free target, which the revision
-  of `DEC-UMC-007` recorded as the reason it must not drive status. R6/S005
-  taught the same lesson from the other direction: the shipped predicate
-  keys on data loss (FR bullets present, none extracted), not on a heading.
-  This supersedes `DEC-GA-010`'s deferral in the way that decision asked for:
-  the status now moves on account of a *finding*, which is "policy in the
-  rules", not a projection inventing a fact from a missing file.
-  `DEC-GA-005` is left intact — there is still no input to make a false
-  green available; the waiver and `continue-on-error` remain the only
-  escapes.
+  and no coverage floor" — and the deferral table's reopen trigger of the
+  same shape, which `docs/peer-review-2026-10.md` D3 rejected again, relabel
+  a tox, npm or `just` repository whose specs never mention Make and which
+  has nothing unchecked; `discovery_notes()` has the same shape and fires on
+  a citation-free target, which the revision of `DEC-UMC-007` recorded as the
+  reason it must not drive status. R6/S005 taught the same lesson from the
+  other direction: the shipped predicate keys on data loss (FR bullets
+  present, none extracted), not on a heading.
+  On `DEC-GA-010`, stated plainly: G010 is unchanged by this package, so this
+  is **not** "policy in the rules". The defensible reading is the one
+  `DEC-GA-004`/`DEC-GA-005` already established — `specs_checked == 0 →
+  indeterminate` is projection-side status policy derived from one fact in
+  the envelope, and this is the same shape with one more fact from the same
+  envelope. `DEC-GA-010`'s deferral is closed on those terms, and
+  `DEC-GA-005` is left intact: there is still no input to make a false green
+  available; the waiver and `continue-on-error` remain the only escapes.
+  Two prior decisions are engaged by name rather than passed over.
+  `DEC-UMC-004` argued that a tox repository writing a generic stage "is not
+  lying" and that G011's narrowing "costs nothing in the tox case"; both are
+  statements about rule severity, both stay true (G010 is INFO, the CLI exits
+  0, `rule_types.py:39-47` still documents the exemption), and neither is
+  about what the Action's `status` says about a run that checked no citation
+  — which is all that moves here. `DEC-UMC-008` kept `pick_stage()` emitting
+  `test` on a Makefile-less target; this package does not reopen it
+  (C-IND-9) and records the consequence in DEC-IND-013.
 - **DEC-IND-002:** a **reasoned waiver clears it**. The waiver is the
   ledgered escape this project built: it lives in the spec, `planlint
   waivers` lists it, G007 refuses it without a reason, and it stays visible
   as an INFO finding. Giving it an effect on `status` is what gives G010's
-  waiver the effect `CHANGELOG.md` says it lacks — at the Action layer. At
-  the CLI the limitation is narrowed, not removed: a waived G010 still counts
-  at `--fail-on INFO` (C-IND-1), because dropping waived INFO findings is an
+  waiver the effect `CHANGELOG.md` says it lacks — at the Action layer, which
+  `docs/peer-review-2026-10.md` N5 identifies as the one surface that can
+  distinguish "unchecked" from "unchecked, and the author said why". At the
+  CLI the limitation is narrowed, not removed: a waived G010 still counts at
+  `--fail-on INFO` (C-IND-1), because dropping waived INFO findings is an
   engine change for every rule and is still not done here.
 - **DEC-IND-003:** **not `fail-on: INFO`, not a fifth status.** `fail-on`
   cannot separate "unchecked citation" from "justified waiver" because
@@ -208,14 +265,17 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
   what `Finding.render` shows and what several suites assert — and a status
   policy keyed on it would flip gate verdicts the day someone rewords it, or
   the day a rule's own message begins with that string. The field is the
-  fact; the prefix is its rendering; `report.py` reads the fact (R-IND-12).
-  The key is additive, so `FINDINGS_SCHEMA_VERSION` stays `1` by the rule
-  `rule_types.py:35-36` already states ("additive keys do not bump it"), and
-  `test_an_unknown_finding_key_is_tolerated` already pins that a richer
-  envelope is accepted. `parse_envelope` defaults an absent `waived` to
-  `False` so an artifact produced by an older build still projects, and
-  refuses a present non-boolean for the same reason `_require_int` refuses a
-  `bool` as a count: a producer bug is worth reporting, not silently reading.
+  fact; the prefix is its rendering; `report.py` reads the fact (R-IND-12),
+  and the guard that proves it scans string constants in code only, because
+  this very decision mentions the prefix in prose and a comment beside the
+  constant is expected to. The key is additive, so `FINDINGS_SCHEMA_VERSION`
+  stays `1` by the rule `rule_types.py:35-36` already states ("additive keys
+  do not bump it"), and `test_an_unknown_finding_key_is_tolerated` already
+  pins that a richer envelope is accepted. `parse_envelope` defaults an
+  absent `waived` to `False` so an artifact produced by an older build still
+  projects, and refuses a present non-boolean for the same reason
+  `_require_int` refuses a `bool` as a count: a producer bug is worth
+  reporting, not silently reading.
 - **DEC-IND-005:** the rule id is a **module constant pinned by a test**,
   not a parameter of `status_of`. `report.py` passes `schema_version` in
   because that number's *value* is owned by `rule_types` and changes; a rule
@@ -262,7 +322,9 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
   `infos=1`, message prefixed `[waived] `): the waiver clears the status, not
   the record. A unit test on a constructed envelope cannot show that the
   engine actually sets the field, and a contract fixture nobody can turn
-  green has not demonstrated the policy's own exit.
+  green has not demonstrated the policy's own exit. Both fixtures are
+  harness-dialect, so the waived one is also the worked example of the exit
+  DEC-IND-013 says a harness repository must take.
 - **DEC-IND-010:** `no-machinery/` deliberately has **no coverage floor
   either**. Its card then yields two discovery notes while its status is
   driven by one finding, which demonstrates F2 in the fixture itself: the
@@ -290,6 +352,27 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
   severity contract every adopter's pre-commit hook relies on. The Action is
   the surface where a green check is *evidence* to a reviewer, which is why
   D3.3 located the policy question there and why this change stops there.
+- **DEC-IND-013:** the **harness-dialect cost is accepted and stated**, not
+  engineered away. H001 (ERROR) requires every harness criterion to name a
+  `make` stage, harness is the fallback dialect, and G010 has no
+  `GENERIC_STAGES` exemption, so a harness-dialect repository that does not
+  use Make is forced to write a citation, always gets G010, and under this
+  change is `indeterminate` on every spec until each spec file carries its
+  own reasoned waiver — one line per spec, each a ledgered statement visible
+  in `planlint waivers` that the citation is shorthand — or the workflow
+  uses `continue-on-error`. `planlint new` on such a target scaffolds a
+  citation of `test` (`DEC-UMC-008`), so the scaffold's own output is
+  `indeterminate` until the author adds that line. The alternatives were
+  rejected by name: exempting `GENERIC_STAGES` from G010 reopens the vacuous
+  pass G010 was written to report; narrowing the predicate by dialect makes
+  the status depend on which parser ran rather than on what went unchecked;
+  changing the scaffold changes `new`'s output and is a different package.
+  A green check over citations nobody could check is the thing this review
+  series exists to remove, so the cost is paid in the open: the changelog,
+  the gate message and the step summary each say it (R-IND-16), and the
+  scaffold question is filed in `docs/next-steps.md`'s deferral table with
+  its reopen trigger — the first harness-dialect adopter who does not use
+  Make.
 
 ---
 
@@ -304,7 +387,7 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
 - [ ] **AC-IND-2 (non-success):** A blocking finding beside a G010 finding is
   `fail`, never `indeterminate`, and the cause is `None` — blocking wins.
   (R-IND-1, R-IND-15)
-  _Verified by:_ `pytest -k test_blocking_findings_are_a_fail` · stage: `make test`
+  _Verified by:_ stage: `make test`
 
 - [ ] **AC-IND-3:** The same envelope with the G010 finding's `waived` set to
   `True` is `pass` with cause `None`, and the finding is still present in
@@ -323,19 +406,21 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
   `indeterminate`, its cause is `no-specs`, and the step summary still
   carries the "No spec was checked" paragraph. (R-IND-1, R-IND-5, R-IND-7,
   R-IND-15, DEC-IND-007)
-  _Verified by:_ `pytest -k "test_a_tree_with_nothing_to_check_is_indeterminate_not_pass or test_step_summary_names_the_indeterminate_case"` · stage: `make test`
+  _Verified by:_ stage: `make test`
 
 - [ ] **AC-IND-6:** `to_outputs` carries `indeterminate-cause` for every
   envelope — the cause when indeterminate, the empty string otherwise — as a
   single-line value; `status` is one of the four known values; and the
   discovery outputs are still omitted entirely without a card. (R-IND-4,
   R-IND-6, DEC-IND-006)
-  _Verified by:_ `pytest -k test_discovery_outputs_are_omitted_without_a_card` · stage: `make test`
+  _Verified by:_ stage: `make test`
 
 - [ ] **AC-IND-7:** For the `unchecked-citations` cause the step summary
-  names all three ways out — declaring the make targets, waiving G010 with a
-  reason, or not citing make stages — and that paragraph is not the
-  `no-specs` paragraph. (R-IND-7)
+  names the ways out — declaring the make targets, waiving G010 with a
+  reason in each citing spec, or (for upstream and SpecKit specs only) not
+  citing make stages — says in so many words that a harness-dialect
+  repository without a Makefile needs that waiver in each spec, and is not
+  the `no-specs` paragraph. (R-IND-7, R-IND-16, DEC-IND-013)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-IND-8:** `rules.evaluate` sets `waived=True` on a suppressed
@@ -343,13 +428,14 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
   waived G006 and G009; `Finding.as_dict` emits `waived` as a boolean; the
   six top-level envelope keys keep their spelling; `FINDINGS_SCHEMA_VERSION`
   is still `1`. (R-IND-9, R-IND-10, DEC-IND-004)
-  _Verified by:_ `pytest -k test_existing_keys_keep_their_spelling` · stage: `make test`
+  _Verified by:_ stage: `make test`
 
 - [ ] **AC-IND-9 (non-success):** An envelope whose findings carry no
   `waived` key parses with `waived == False` and projects normally; one whose
   `waived` is a string or an integer is refused with `EnvelopeError`, and the
-  `report` verb exits 2 with an empty stdout on it, never 1. Nothing in
-  `report.py` reads the `[waived] ` prefix. (R-IND-11, R-IND-12, R-IND-15)
+  `report` verb exits 2 with an empty stdout on it, never 1. No string
+  constant in `report.py`'s code — docstrings excluded — contains
+  `[waived]`. (R-IND-11, R-IND-12, R-IND-15)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-IND-10:** `report.py` imports no module of this package, and
@@ -364,7 +450,8 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
   with one finding (G010, INFO, `[waived] `) and projects `status=pass`,
   `indeterminate-cause=`. Through the action's extracted steps, the first
   fails the gate with a message containing a phrase absent from both other
-  red messages and the second passes it. (R-IND-8, R-IND-14, DEC-IND-008,
+  red messages and naming the per-spec waiver a harness repository needs,
+  and the second passes it. (R-IND-8, R-IND-14, R-IND-16, DEC-IND-008,
   DEC-IND-009)
   _Verified by:_ stage: `make test`
 
@@ -385,10 +472,11 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
   _Verified by:_ `pytest -k "test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict or test_a_waived_g010_still_fails_a_fail_on_info_run"` · stage: `make test`
 
 - [ ] **AC-IND-15 (non-success):** The rule registry matches the committed
-  baseline, `_EXPECTED_HASHES["graph"]` and `["rules"]` are unchanged, and
-  `["validate"]` is either unchanged or re-pinned once with its reason
-  recorded — decided by running the test, not by assertion. (C-IND-2,
-  C-IND-6, DEC-IND-011)
+  baseline — G010 in particular still has no `GENERIC_STAGES` exemption and
+  `pick_stage()` is unchanged — `_EXPECTED_HASHES["graph"]` and `["rules"]`
+  are unchanged, and `["validate"]` is either unchanged or re-pinned once
+  with its reason recorded, decided by running the test. (C-IND-2, C-IND-6,
+  C-IND-9, DEC-IND-011, DEC-IND-013)
   _Verified by:_ `pytest -k "test_rule_set_matches_baseline or test_output_byte_identical"` · stage: `make test`
 
 - [ ] **AC-IND-16:** `report --format sarif` is still byte-identical to
@@ -404,12 +492,16 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
   (C-IND-3, DEC-IND-010)
   _Verified by:_ `pytest -k "test_a_target_with_no_make_targets_is_flagged or test_a_target_with_no_coverage_floor_is_flagged"` · stage: `make test`
 
-- [ ] **AC-IND-18:** The README's honesty-gap paragraph and status table,
-  SKILL.md's four-results paragraph, the three `docs/next-steps.md` passages,
-  the R8 row and the unwaivable-G010 note in `docs/peer-review-2026-09.md`,
-  the roadmap's item 1, the Action's `outputs:` block and `CHANGELOG.md`
-  describe the widened status and its two causes; the docs gate passes.
-  (C-IND-7)
+- [ ] **AC-IND-18:** Every planning-record mention of this package reads
+  *shipped* rather than *drafted* or *planned*; the README's honesty-gap
+  paragraph and status table, SKILL.md's four-results paragraph, the
+  Action's `outputs:` block and `CHANGELOG.md` describe the widened status
+  and its two causes; the changelog says in so many words that a
+  harness-dialect repository without a Makefile needs a reasoned G010 waiver
+  in each spec and that the scaffold's output on a Makefile-less target is
+  `indeterminate` until one is added; the deferral table carries the
+  scaffold item with its reopen trigger; and the docs gate passes.
+  (C-IND-7, R-IND-16, DEC-IND-013)
   _Verified by:_ `pytest -k test_docs_check_passes` · stage: `make docs-check`
 
 - [ ] **AC-IND-19:** The hosted `action-contract` job is green on the pull
@@ -432,6 +524,14 @@ floor is irrelevant: `rules_generic._hard_coded_threshold`
 - An implementation that keys `status` on the dialect card — `make-targets`,
   `coverage-floor` or `discovery_notes()` — is rejected: it relabels the tox
   shape (DEC-IND-001, AC-IND-4).
+- An implementation that narrows the predicate by dialect or stage name, adds
+  a `GENERIC_STAGES` exemption to G010, or changes `pick_stage()` to soften
+  the harness-dialect cost is rejected: the cost is paid by the per-spec
+  waiver and stated in the open (C-IND-9, DEC-IND-013, AC-IND-15).
+- An implementation whose changelog entry, gate message or step summary
+  offers "stop citing make stages" to a harness-dialect repository, or omits
+  the per-spec waiver sentence, is rejected (R-IND-16, AC-IND-7, AC-IND-11,
+  AC-IND-18).
 - An implementation that tests `message.startswith("[waived] ")` in
   `report.py` is rejected: it couples a gate verdict to a display string
   (DEC-IND-004, AC-IND-9).
