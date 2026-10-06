@@ -20,14 +20,14 @@ about how this repository is worked on.
 
 | Signal | Measured |
 |---|---|
-| CI on `main` | run #171 at `9c4b6e9`: 17/17 jobs success |
+| CI on `main` | run #171 at `9c4b6e9`: 16 jobs success and `graph-diff` skipped (it runs on pull requests only); on this branch's pull-request runs all 17 succeed |
 | Local ladder (`make pre-pr`) | exit 0; package 99.3% line (2276/2292), 97.6% branch (744/762); `tools/` 96.0% (823/857), 93.3% (278/298) |
 | Spec gate | 44 specs, 0 error / 0 warn / 0 info |
-| Tests | 1498 collected, all passing; 43 modules, 17,850 lines |
+| Tests | 1498 collected, all passing; 43 test modules, 17,366 lines (17,850 with `support.py`, `graft_support.py` and `conftest.py`) |
 | Static | ruff (selected families) clean; mypy clean on 43 files; `mypy --strict` is **2 errors** away (`tools/diff_spec_graph.py:20,24`, both `type-arg`) |
 | Dependencies | `[project] dependencies = []`, pinned by test; dev extras unpinned by decision |
 | Security | gitleaks in CI, fallback scanner locally; ruff `S` family on; the only subprocess is `git rev-parse` with a named timeout |
-| Dead public code | 0 of 405 top-level symbols is unreferenced repository-wide |
+| Dead public code | 0 of 405 top-level symbols (functions, classes, constants) is unreferenced repository-wide; the three unreferenced symbols in §1.2 are a property and two methods, which that scan does not see |
 
 ### 1.2 Debt, measured
 
@@ -42,23 +42,23 @@ about how this repository is worked on.
 | Line length (`E501` at 100) | 37 in package + tools, 110 in tests | `next-steps.md` item 18; a third count without a rewrap |
 | `print` in library code (`T201`) | 123: 81 in `cli.py` (by design), 42 in `tools/` (scripts), **0** in any other package module | an invariant nothing enforces |
 | Loops that are appends (`PERF401`) | 12 (`delta.py` 4, `parse_model.py` 2, `check_wheel_metadata.py` 2, four singles) | |
-| Logging | 9 of 30 modules own a logger; three that do file I/O do not: `delta.py`, `ledger.py`, `scaffold.py` (the last one *writes*) | |
+| Logging | 9 of 30 modules own a logger; `scaffold.py` *writes* files without one, and the baseline-card read lives in `cli._load_card`. `ledger.py` and `delta.py` are pure — the first draft listed them because its grep matched the docstrings that say so | |
 | Unused symbols | `parse_model.Criterion.has_selector` (0 refs); `matcher_accuracy.precision_pct` / `recall_pct` (0 refs); `report.__all__` exports `STATUSES`, `STATUS_ERROR`, `FindingRecord` that nothing imports | vulture at 60% confidence agrees and adds nothing real |
 | Test-only public API | `detect.filter_speckit_by_feature`, `parse_semantics.section_body`, `speckit_section_body`, `suppressions` are called only by tests | public by accident or by intent — undecided |
 | JSON determinism | 11 `json.dumps` call sites, one with `sort_keys=True` (`witness.py`); the other ten rely on insertion order | correct today, by construction rather than by contract |
 | Tool-script drift | 2 of 12 scripts (`diff_spec_graph.py`, `render_mermaid.py`) bypass `tools/_common.py`; they also hold the two strict-mypy errors and two of the five magic values | |
-| Workflow hardening | `ci.yml`: 12 jobs, **no** top-level `permissions`, one job-level block; `timeout-minutes` on 0 jobs; no `concurrency`; every third-party action pinned to a floating major tag (`checkout@v4` ×12, `setup-python@v5` ×12, `upload-artifact@v4` ×4, `download-artifact@v4`, `gitleaks-action@v2`) and `pypa/gh-action-pypi-publish@release/v1` to a **branch** | `distribution-plan.md` deferred SHA pinning "until Dependabot" — Dependabot has been on since September. Permission facts for W1.3: `upload-artifact` authenticates with `ACTIONS_RUNTIME_TOKEN` and reads no `GITHUB_TOKEN` (its `dist/`), yet its own test workflow grants `actions: write`; the gitleaks step passes `GITHUB_TOKEN` (for pull-request comments) |
+| Workflow hardening | `ci.yml`: 10 job definitions (17 jobs at run time, with the matrices), **no** top-level `permissions`, one job-level block; `timeout-minutes` on 0 jobs; no `concurrency`; every third-party action pinned to a floating major tag (`checkout@v4` ×12, `setup-python@v5` ×12, `upload-artifact@v4` ×4, `download-artifact@v4`, `gitleaks-action@v2`) and `pypa/gh-action-pypi-publish@release/v1` to a **branch** | `docs/next-steps.md:232` defers SHA pinning until "the pins can be resolved and verified" (`dependabot.yml` and the CHANGELOG attribute the deferral to `distribution-plan.md`, which pins only the *templates*); Dependabot has been on since September, so the precondition is met. `release.yml` already carries a top-level `contents: read`. Permission facts for W1.3: `upload-artifact` authenticates with `ACTIONS_RUNTIME_TOKEN` and reads no `GITHUB_TOKEN` (its `dist/`), yet its own test workflow grants `actions: write`; the gitleaks step passes `GITHUB_TOKEN` (for pull-request comments) |
 | Configuration literals | the Python version appears 10 times in `ci.yml` (one matrix list, nine `"3.12"` singles) and once in the `Dockerfile` (`python:3.12-slim`); nothing ties them together | `make thresholds` guards thresholds and tool pins, not this |
 | Dependabot | 7 open PRs since 2026-09-19, all major bumps (`checkout` 4→7, `setup-python` 5→7, `upload-artifact` 4→7, `download-artifact` 4→8, `gitleaks-action` 2→3, two in the composite action), based on `c0540c4` — two merges behind; `mergeable_state: unknown` | the artifact pair must move together |
 | Release | `CHANGELOG.md` `[Unreleased]` has grown to ~355 lines since 0.2.0 (2026-09-12); the `specgraph` alias is deprecated with no removal date | |
-| Change packages | 43 under `openspec/changes/`, 3 of them open (DRAFT); none archived | OpenSpec's `archive/` convention is unused, and **planlint does not support it today**: `find_spec_files` globs exactly `changes/*/specs/*/spec.md` (`detect.py:553`), so an archived package's specs leave the gate silently, and `detect.py:710` counts every directory under `changes/` as a change package, so the archive directory itself would be counted as one. Gate cost is not a reason to archive: `validate` over 44 specs runs in 0.36 s here |
+| Change packages | 43 under `openspec/changes/`, three of them plans awaiting implementation (this branch's), none archived. **Spec status headers are not maintained:** 18 of 44 `spec.md` files say `DRAFT` and 26 `APPROVED`, and the DRAFT set includes shipped packages — `gate-tools-coverage` runs as a CI job while its header reads `1.0.0-draft` / `DRAFT` | OpenSpec's `archive/` convention is unused, and **planlint does not support it today**: `find_spec_files` globs exactly `changes/*/specs/*/spec.md` (`detect.py:553`), so an archived package's specs leave the gate silently, and `detect.py:710` counts every directory under `changes/` as a change package, so the archive directory itself would be counted as one. Gate cost is not a reason to archive: `validate` over 44 specs runs in 0.36 s here |
 | Python support window | classifiers and matrix 3.10–3.13; `requires-python >= 3.10` | 3.10 reaches end-of-life in October 2026 (PEP 619); 3.14 has been final since October 2025 (PEP 745) and is in neither the matrix nor the classifiers; the `tomli` dev extra exists only for 3.10 |
 | Type-checking of tests | `[tool.mypy] files = ["openspec_graph", "tools"]` — 17,850 lines of tests are not checked; `mypy tests` stops on a module-mapping error (`graft_support` seen under two names); with `--explicit-package-bases` it reports **86 errors in 37 files**, 34 of them `pytest`/`hypothesis` imports this environment cannot resolve, ~52 real (`arg-type` 18, `no-any-return` 8, `index` 7, `union-attr` 4, `str` 4) | |
 | Public docstrings | 52 public symbols without one (30 functions, 15 methods, 7 classes); the `D` family is not selected | |
 | Container | `Dockerfile` has no `USER` (runs as root), base `python:3.12-slim` by tag, not digest; `.dockerignore` present | Dependabot has no `docker` ecosystem entry |
 | Tool runtime | `planlint validate` 0.36 s, `graph --format json` 0.46 s on this repository (44 specs, this container) | a baseline, so a decomposition that slows the CLI is visible |
 | Evals | `evals/` cases run through `claude plugin eval` by design (its README); their structure is pinned by three test modules | not a CI gap; recorded so nobody re-finds it |
-| Suite shape | 13 of 43 test modules import nothing from `tests/support.py`; 21 use no `parametrize`; no pytest markers are registered; the four largest modules exceed 700 lines | |
+| Suite shape | 16 of 43 test modules import nothing from `tests/support.py` — several legitimately (`test_properties`, `test_machinery`, `test_ledger` have no CLI or spec-writing shape to route); 21 use no `parametrize`; no pytest markers are registered; the four largest modules are 859, 836, 821 and 700 lines | |
 | Suite cost | the ladder runs the full suite **twice** (`test`, `coverage-tools`); CI runs it **six** times per pull request (four matrix legs, `test-windows`, `coverage-tools`); 235 s single-process here, 66 s on four `xdist` workers | durations below |
 
 ### 1.3 Suite durations
@@ -141,9 +141,16 @@ Verification of this document's **[Likely]** markers overturned the
 mechanism behind D2 (the unscoped package floor would have read the
 diluted total) and the premise of W8.2 (archiving would have hidden specs
 from the gate and miscounted the archive). The marker did its job: it told
-the reviewer where to look. **Carry forward:** a plan states a mechanism
-only with the command that demonstrated it, which is why §1.2 now cites
-`combined.json` and `detect.py:553/710` rather than a belief.
+the reviewer where to look. An independent adversarial review then found
+what the markers had *not* flagged: two proposals reversing recorded
+decisions without saying so (W7.2 against `gate-tools-coverage`; the line
+budget against `decompose-god-files`), one byte-contract change dressed as
+hygiene (`sort_keys`), three "unchanged" claims that were false
+(`python -m`, the logger row, an owner-less optimisation) and seven errata
+in the baseline (§8). **Carry forward:** a plan states a mechanism only with
+the command that demonstrated it, and a plan that touches a shipped package
+names the requirement it changes — `planlint validate` checks citations,
+not semantics, so only a reviewer catches a silent reversal.
 
 **R6. What went right and should be kept:** every fix reproduced its defect
 first; every code change carried a test that failed without it; the gate was
@@ -194,9 +201,12 @@ literals", "Dependabot").
 2. **SHA-pin every third-party action** with the version in a trailing
    comment (`uses: actions/checkout@<sha> # v7.0.1`), and pin
    `pypa/gh-action-pypi-publish` to a tag SHA instead of `release/v1`.
-   Dependabot keeps SHAs fresh; this closes `distribution-plan.md`'s deferral
-   on its own terms. Guard: a `test_ci_hardening` test that every `uses:` is a
-   40-hex ref with a version comment.
+   Dependabot keeps SHAs fresh; this meets `next-steps.md` item 232's stated
+   precondition on its own terms. Guard: a `test_ci_hardening` test that every
+   third-party `uses:` is a 40-hex ref with a version comment — exempting the
+   repository's own `uses: ./.github/actions/planlint`, and not scanning
+   `templates/spec-gate.yml` or the skill's `assets/spec-gate.yml`, which
+   `distribution-plan.md` deliberately moves to `@v0.2.0`.
 3. **Least privilege and bounded runs.** Top-level `permissions: contents:
    read` in `ci.yml` with job-level widening only where needed. The two
    uploading jobs (`graph-diff`, `self-validate`) should need nothing more:
@@ -206,24 +216,35 @@ literals", "Dependabot").
    those two jobs if the upload is refused. The gitleaks step passes
    `GITHUB_TOKEN` for pull-request comments; either grant it
    `pull-requests: write` or set `GITLEAKS_ENABLE_COMMENTS=false` — the
-   gate's exit code is what matters. `timeout-minutes` on
-   every job (sized from the durations table: the longest job today is the
-   Windows test leg); `concurrency: { group: ci-${{ github.ref }},
-   cancel-in-progress: true }` for pull-request runs. Guard: tests for each
-   in `test_ci_hardening.py`, which already parses the workflow.
-4. **One Python version, one place.** The nine `"3.12"` singles and the
-   Dockerfile's `3.12-slim` become one value: a `PYTHON_DEFAULT` repository
-   variable read as `${{ vars.PYTHON_DEFAULT }}` with the Dockerfile `ARG`
-   defaulting to the same string, and a test that the Dockerfile's version is
-   a member of the CI matrix. (GitHub Actions has no YAML anchors; a reusable
-   workflow is heavier than this repository needs.)
+   gate's exit code is what matters. `timeout-minutes` on every job, sized
+   from run #171's own job durations (test legs 2–4 min, `test-windows`
+   ≈ 6 min, `coverage-tools` ≈ 2 min, everything else under a minute): 15 for
+   the suite jobs, 10 for the rest. `concurrency: { group: ci-${{ github.ref
+   }}, cancel-in-progress: ${{ github.event_name == 'pull_request' }} }` —
+   conditional, so a second push never cancels the `main` run M0 depends on.
+   Guard: tests for each in `test_ci_hardening.py`, which already parses the
+   workflow.
+4. **One Python version, one place — in the tree.** The eleven single
+   `"3.12"` values (`ci.yml`, `release.yml:34,52`, `action.yml:163`) become a
+   workflow-level `env: PYTHON_DEFAULT: "3.12"` referenced from each
+   `setup-python` step, with tests that every single-version job references
+   it, that it is a member of the matrix, and that the Dockerfile's tag is a
+   member of the matrix. Not a repository variable: that is configuration no
+   `grep` can see and a value an unset variable turns into an empty string.
+   (GitHub Actions has no YAML anchors; a reusable workflow is heavier than
+   this repository needs; the matrix list stays literal.)
 5. **Release 0.3.0.** Cut the ~355 `[Unreleased]` lines into a release
    section; tag; let `release.yml` publish. PEP 740 attestations need no
    change: under trusted publishing the PyPA action "generates and uploads
    them automatically by default" (PyPI's own documentation, Appendix B), so
    the release step is to *verify* them on the published files and to keep
-   the behaviour when W1.2 pins the action to a SHA. State the deprecation
-   window for `specgraph`: warns through 0.3.x, removed in 0.4.0.
+   the behaviour when W1.2 pins the action to a SHA. The version bump set
+   is wider than `__version__`: `skills/planlint-spec-governance/SKILL.md`
+   carries the version three times by hand (lines 5, 7, 8) and the
+   `.claude-plugin` manifests are regenerated by `render_plugin_manifests.py`;
+   a test pinning the SKILL.md fields to `__version__` lands with the bump if
+   none does today. State the deprecation window for `specgraph`: warns
+   through 0.3.x, removed in 0.4.0.
 
 6. **Python support window.** Add 3.14 to the matrix and the classifiers
    now (it has been final for a year); announce in the 0.3.0 notes that
@@ -246,20 +267,28 @@ fails on a root user or a tag-only base.
 *Baseline:* 1029 lines, `build_parser` 148, `cmd_validate` 119 (complexity
 14), `cmd_report` 84 (12), `cmd_delta` 66; 81 `print` calls.
 
-Shape: `openspec_graph/cli/` as a package — `__init__.py` keeps `main`,
-`main_deprecated` and every name tests import today (so `from openspec_graph
-import cli` and `python -m openspec_graph.cli` are unchanged);
-`parser.py` holds `build_parser` decomposed into one `add_<verb>_parser` per
-verb; `commands/<verb>.py` holds each `cmd_<verb>`; `output.py` holds the
-shared print/JSON helpers (which is where the ten `json.dumps` sites meet W5's
-single `dumps_stable`). `decompose-god-files` R-DG-6 and its guard
-`test_detect_and_cli_remain_unsplit` are superseded explicitly by the new
-package (the guard is replaced, not deleted, by a boundary test for the new
-layout).
+Shape: `openspec_graph/cli/` as a package — `__init__.py` re-exports every
+name tests import today (`main`, `main_deprecated`, `build_parser`,
+`_version_string`, `SEVERITY_ORDER`), and a `cli/__main__.py` is part of the
+shape from the first commit, because `python -m openspec_graph.cli` — the path
+`tests/support.run_cli`, the golden-hash test and `test_planlint_module_runs`
+all take — refuses a package without one; `parser.py` holds `build_parser`
+decomposed into one `add_<verb>_parser` per verb; `commands/<verb>.py` holds
+each `cmd_<verb>`; `output.py` holds the shared print/JSON helpers (which is
+where the ten `json.dumps` sites meet W5's single `dumps_stable`).
+`decompose-god-files` R-DG-6 is superseded explicitly; its guard keeps its
+*name* — AC-DG-8 cites `pytest -k detect_and_cli_remain_unsplit`, and
+`test_spec_test_citations` fails on an unresolved selector — and narrows its
+body to `detect.py`. Three sibling guards glob `openspec_graph/*.py`
+non-recursively (`test_only_detect_imports_subprocess`,
+`test_import_boundary_discipline`, `test_new_modules_stdlib_only`; `c4.md`
+warns of exactly this), so a `cli/commands/x.py` importing `subprocess` or
+`graph` would be invisible: all three switch to `rglob` with a path-based
+exemption. `docs/architecture/c4.md` names `cli.py` in three places.
 
 *Proof (guardrail 5):* test-name set identical; golden hashes unmoved; a new
 `test_cli_help_byte_identical` snapshot taken *before* the move and asserted
-after; `test_import_boundary_discipline` extended to the subpackage.
+after; the three guards recursive and green on the new layout.
 
 Phase three candidates, each its own package and only once W2 has landed:
 `parse_semantics.py` (764 — `hard_coded` and the SpecKit section readers are
@@ -323,10 +352,16 @@ selected (a config that silently drops a family is how debt returns).
    public (it is a discovery primitive a consumer may want); the three
    `parse_semantics` section readers become private, with the tests moved to
    the behaviour they exercise. Trim `report.__all__` to what is imported.
-3. `openspec_graph/_json.py`: one `dumps_stable(obj, *, indent)` with
-   `sort_keys=True`, used by every machine-readable output; `witness.py`'s
-   compact form stays its own (its bytes are hashed). Guard: a test that no
-   module calls `json.dumps` directly except `_json.py` and `witness.py`.
+3. `openspec_graph/_json.py`: one `dumps_stable(obj, *, indent)` — **not**
+   sorting keys. The golden-hash test re-serialises each parsed payload in
+   insertion order (`test_decomposition.py:130–137`), so `sort_keys=True`
+   would move all three hashes, lose SARIF's conventional `$schema`,
+   `version`, `runs` order and churn every adopter's envelope diff: a
+   byte-contract change, not hygiene. The helper's value is one import point
+   for `indent`/`ensure_ascii` and the guard; key order is asserted by a test,
+   not imposed. `witness.py`'s sorted compact form stays the one sorted
+   variant (its bytes are hashed). Guard: no module calls `json.dumps`
+   directly except `_json.py` and `witness.py`.
 4. `tools/diff_spec_graph.py` and `tools/render_mermaid.py` adopt
    `_common` (argparse, `repo_root`, logger); this also clears the two
    strict-mypy errors and two magic values.
@@ -343,16 +378,19 @@ selected (a config that silently drops a family is how debt returns).
 1. `[tool.mypy] strict = true` (Appendix B lists what it enables); the two
    `type-arg` errors are fixed in W5 item 4. Keep `warn_unreachable = true`
    explicitly — `--strict` does not include it.
-2. Loggers for `delta.py`, `ledger.py`, `scaffold.py` as `planlint.<module>`
-   children, DEBUG on every file read and write; `scaffold` names each file it
-   creates. Same pattern and tests as the witness logging landed in #36.
-3. A `make security` that also runs `pip-audit` against the dev extras when
-   available (report, not gate: the runtime surface has nothing to audit).
-4. Inputs: the three readers of untrusted text (`witness` store, `run:`
-   scripts, target-repo Makefiles) each already fail closed; add the
-   `hypothesis` property tests the repository already depends on for
-   `shell_invocations` and `parse_makefile` (never raises, never credits on
-   garbage).
+2. A logger for `scaffold.py` as a `planlint.scaffold` child, DEBUG for
+   every file it creates, plus one line in `cli._load_card` for the baseline
+   read. Same pattern and tests as the witness logging landed in #36.
+   (`ledger.py` and `delta.py` are pure; nothing to log.)
+3. A separate `make audit` report running `pip-audit` against the dev
+   extras — not inside `make security`, which is a pre-commit hook and a
+   `pre-pr` step and must not depend on a tool that may be absent
+   (guardrail 7). The runtime surface has nothing to audit.
+4. Inputs: `parse_makefile` already has its never-raises and determinism
+   properties (`tests/test_properties.py:88,107`). Add the same shape for
+   `shell_invocations` (a `tools/` function, loaded through
+   `support.load_tool`, measured by the tools floors) and for
+   `witness._load_one`: never raises, never credits or accepts on garbage.
 5. **Tests under mypy.** Add `tests` to `[tool.mypy] files` with
    `explicit_package_bases = true` (the module-mapping error) and a
    `[[tool.mypy.overrides]] module = "tests.*"` block that starts lenient
@@ -368,9 +406,15 @@ selected (a config that silently drops a family is how debt returns).
 
 ### W7 — Coverage and the test suite
 
-1. **Ratchet the floors** to two points under measured: package 97 / 95,
-   `tools/` 94 / 91. Floors live in `pyproject.toml` only (`make thresholds`
-   already guards that).
+1. **Ratchet the floors** — after W7.2, and against the *minimum leg*, not
+   this container. Today the tools floors run once on ubuntu/3.12; after
+   W7.2 both floors run on every leg, including Windows (where capability
+   probes skip tests) and 3.10, and floors are integers. So: one run that
+   uploads `coverage.json` from every leg, floors set two points under the
+   lowest leg (expected near package 97 / 95, `tools/` 94 / 91 — the tools
+   number already drifted a point between the 2026-10 review and today),
+   per-leg figures recorded in the package. Floors live in `pyproject.toml`
+   only (`make thresholds` already guards that).
 2. **One suite run for both trees — proven, with one precondition.** A
    single run measuring both trees into one report (`combined.json`,
    Appendix A) reproduces the two-run numbers *exactly* when summed per
@@ -392,6 +436,23 @@ selected (a config that silently drops a family is how debt returns).
    alias for the two `--scope tools` checks. Saves one full suite run per
    ladder and one CI job; the subprocess measurement through
    `COVERAGE_PROCESS_START` then covers `tools/` scripts too.
+
+   **This reverses recorded requirements, and says so.** `gate-tools-coverage`
+   (shipped; header still DRAFT) requires the opposite: R-GTC-9 ("`make
+   coverage-tools` MUST be its own coverage run"), C-GTC-4 ("`make test` MUST
+   keep measuring the package alone. No `--cov=tools` may be added to it"),
+   R-GTC-12 (its own CI job with a `docs/hooks.md` row), DEC-GTC-009 and
+   DEC-GTC-013, verified by AC-GTC-17 through
+   `test_hooks_ci_table_lists_every_ci_job`. Those were right when
+   pytest-cov's total was the only floor; the scoped checkers make them
+   unnecessary. The W7 package names the five as superseded, records the
+   reversing decision with this reason, and lists what it edits: `Makefile`
+   (`test`, `coverage-tools`), `ci.yml` (the job), `docs/hooks.md` (row and
+   paragraph), `docs/architecture/c4.md` (§2, §4b), `tests/AGENTS.md`,
+   `pyproject.toml` (the comment), the hooks-table test. One sequencing
+   constraint: `add-witness-ci-artifacts` lists `coverage-tools` as a
+   witnessed stage three times, so W7.2 lands after R7 and re-runs
+   `make stage-citations`, or amends R7's stage list in the same package.
 3. **Per-file minimum** as a report first: `check_coverage_floor.py
    --per-file-min 85` lists modules below (coverage.py's `fail_under` is a
    total, Appendix B); gate when the list is empty.
@@ -399,8 +460,9 @@ selected (a config that silently drops a family is how debt returns).
    (`test_ci_hardening` → workflow / action / makefile); register markers
    (`unit`, `integration`, `e2e`) in `pyproject.toml` and apply them, so a
    fast `-m unit` loop exists for the hook ladder without changing the
-   directory topology #35 fixed; route the 13 helper-less modules through
-   `tests/support.py` where they duplicate `run_cli`/`write_spec` shapes.
+   directory topology #35 fixed; route those of the 16 helper-less modules
+   that duplicate `run_cli`/`write_spec` shapes through `tests/support.py`
+   (several have nothing to route).
 5. **Parallelism — measured.** `pytest-xdist` with four workers on this
    four-core container runs the suite in **66 s against 235 s**
    single-process (3.6×), with every test passing — so no test-order or
@@ -412,6 +474,17 @@ selected (a config that silently drops a family is how debt returns).
    averaged away; and the hosted runners have fewer cores than this
    container, so the matrix legs should be re-measured there before the
    dev extra is added.
+6. **In-process loops.** The tests the durations table names —
+   `test_projections_are_byte_stable_across_runs`,
+   `test_an_unprojectable_file_exits_two_with_an_empty_stdout` (×3),
+   `test_sarif_returns_the_same_exit_code_as_the_text_run`,
+   `test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict` —
+   loop over `run_cli` where the property under test is the *output*. Each
+   keeps one subprocess as the entry-point check and runs the loop through
+   `cli.main` with `capsys`. Rule: where the process boundary *is* the
+   property (encoding, ambient coverage files, the real wheel, the composite
+   action), nothing changes. Target: the Appendix A durations command from
+   235 s to ≤ 200 s single-process on this container.
 
 ### W8 — Enterprise organisation
 
@@ -426,17 +499,45 @@ selected (a config that silently drops a family is how debt returns).
    only `changes/*/specs/*/spec.md`, so archived specs drop out of every
    gate silently, and `detect.py:710` would count `archive/` itself as a
    change package in `detect`'s report and the dialect card. So the
-   precondition is a feature package: discovery excludes `archive/` from
-   the package count, an `--include-archive` flag (or a scheduled job with
-   the archive as its target) keeps archived specs validated, and only then
-   are the 40 implemented packages moved, one commit, with the before/after
-   spec count asserted.
+   precondition is a feature package, and it is larger than one glob:
+   `profile()` must skip `archive/` in the package count; bare `--target
+   openspec/changes/archive` exits 2 today (`profile()` resolves
+   `root/openspec`), so validating the archive needs a flag or a synthetic
+   `openspec/changes/<pkg>` tree in a scheduled job; OpenSpec's
+   `archive/YYYY-MM-DD-<name>/` prefix would break `--change <name>`;
+   `tests/test_spec_test_citations.py` and `tools/stage_citations.py` share
+   the discovery, so archived specs would leave the citation gate and
+   DEC-WCA-016's counts; and G006/G009 are whole-tree "cited by some living
+   spec" rules that can newly fire once the citing specs move. The archive
+   criterion is evidence — tasks complete and a CHANGELOG entry — never the
+   `Status` header (§1.2: 18 headers say DRAFT, shipped packages among them).
+   Only then are the implemented packages moved, one commit, with the
+   before/after spec count and a G006/G009-clean `validate` asserted.
 3. **Policies written down, once:** versioning and deprecation
    (`schema_version` bumps, the `specgraph` window), the count-cites-a-command
    rule (R2), the one-agent-per-thread convention (R3) — in
    `docs/agents-skills-harness.md` and `openspec/AGENTS.md`.
 4. `CODEOWNERS` naming `openspec/`, `.github/`, `tools/` owners — low value
    with one maintainer, zero cost, useful the day a second arrives.
+5. **Spec status hygiene.** `make spec-status`: a report (`DEC-PM-011`)
+   listing each package's `Status` header beside its evidence (tasks
+   complete? CHANGELOG entry? CI job present?), then one commit that sets the
+   18 headers to what shipped — `openspec/AGENTS.md` already says the spec
+   has to match what shipped. Gate it when the report has been empty for a
+   quarter.
+6. **Documents.** `docs/AGENTS.md` names `*-plan.md` and `peer-review-*.md`
+   as "consumed and retired" by convention; five such plans are still in
+   `docs/` — retire each with a one-line pointer to where its content landed
+   (this document follows the `*-plan.md` naming for the same reason).
+   `docs/architecture/c4.md` §4 omits `delta.py`; add it.
+7. **Branch protection, stated.** M0's "CI green after each merge" and the
+   Dependabot order assume merges wait for required checks. That is a
+   repository setting, outside the tree; `docs/hooks.md` records which checks
+   are required (`test (3.x)`, `test-windows`, `self-validate`, `security`,
+   the coverage job or its W7.2 successor) so the assumption is visible.
+8. **SBOM — deferred, with the reason.** Attestations (W1.5) cover
+   provenance; a CycloneDX SBOM for a zero-dependency wheel lists one
+   component. Revisit the day `[project] dependencies` is non-empty.
 
 ### W9 — Harness, hooks and skills
 
@@ -458,10 +559,10 @@ selected (a config that silently drops a family is how debt returns).
 
 | Milestone | Scope | Gate to pass before the next |
 |---|---|---|
-| **M0 — Guard the green** (days) | W1.1 Dependabot batch; W1.3 permissions, timeouts, concurrency; W1.6 Python 3.14 in the matrix; W1.7 container user; W4.2 `T201` scoped; W6.1 strict mypy (+ W5.4 tools adopt `_common`) | CI green on `main` after each merge; `test_ci_hardening` covers each new guard |
+| **M0 — Guard the green** (days) | W1.1 Dependabot batch; W1.3 permissions, timeouts, conditional concurrency; W1.6 Python 3.14 in the matrix; W1.7 container user; W4.2 `T201` scoped; W6.1 strict mypy (+ W5.4 tools adopt `_common`, proven by the gate-script tests in `test_ci_hardening.py`) | CI green on `main` after each merge; `test_ci_hardening` covers each new guard |
 | **M1 — Pin and release** (days) | W1.2 SHA pins; W1.5 release 0.3.0 with attestations and the 3.10 removal notice; W8.3 policies | tag published; `pip install planlint==0.3.0` runs `validate` on this repo |
-| **M2 — Measure cheaper** (one week) | W7.2 one-run coverage (with the `_read_floor` rule); W7.1 floor ratchet; W7.3 per-file report; W5.5 dead-code report; W7.4 markers; W6.5 tests under mypy (lenient override); W6.6 `D1` ratchet config | ladder wall time down by the `coverage-tools` leg; floors hold; scoped numbers equal the two-run numbers on the first run |
-| **M3 — Split `cli.py`** (one week) | W2 with its proofs; W3 items 1 and 3 (ratchet config, `GraphBuild`) | golden hashes, `--help` snapshot and test-name set unchanged |
+| **M2 — Measure cheaper** (one week) | W7.2 one-run coverage (with the `_read_floor` rule and the GTC supersession), then W7.1 floors from the minimum leg; W7.3 per-file report; W7.6 in-process loops; W5.5 dead-code report; W8.5 spec-status report; W7.4 markers; W6.5 tests under mypy (lenient override); W6.6 `D1` ratchet config | ladder wall time down by the `coverage-tools` leg and the loop conversion; floors hold on every leg; scoped numbers equal the two-run numbers on the first run |
+| **M3 — Split `cli.py`** (one week) | W2 with its proofs (`cli/__main__.py` in the first commit; the three guards recursive; AC-DG-8's test name kept); W3 items 1 and 3 (ratchet config, `GraphBuild`) | golden hashes, `--help` snapshot and test-name set unchanged |
 | **M4 — Reduce** (two weeks, many small PRs) | W3.2 complexity; W4.1/3/5 constants, FBT, PERF; W5.1–3 dead code and `_json`; W6.2 loggers; W6.4 property tests; W4.4 rewrap ×2 | each lint family selected at its default when the last offender falls |
 | **M5 — Organise** (after M4) | W8.1 subpackages; W8.2 archive; W2 phase three (`parse_semantics`, `detect`, `report`); W9 | facades keep every public import; archive validated on a schedule |
 
@@ -481,9 +582,11 @@ W9.1 (SessionStart hook) can land any time after M0; it blocks nothing.
   them from one data file — *provided* the package floor is also read
   scoped, which needs the one `_read_floor` mapping rule in W7.2, because the
   unscoped call reads the report's totals (measured: 98.4 % against 99.3 %).
-  *Rejected:* a third floor on the combined total (the diluted number the
-  Makefile refused); a duplicate `openspec_graph_line_fail_under` key
-  (two places for one threshold is how `make thresholds` came to exist).
+  It supersedes R-GTC-9, C-GTC-4, R-GTC-12, DEC-GTC-009 and DEC-GTC-013 of
+  `gate-tools-coverage`, by name, in the W7 package. *Rejected:* a third
+  floor on the combined total (the diluted number the Makefile refused); a
+  duplicate `openspec_graph_line_fail_under` key (two places for one
+  threshold is how `make thresholds` came to exist).
 - **D3 — `cli/` is a package, with `__init__` as the facade.** *Rejected:*
   sibling `cli_*.py` modules — they are what R-DG-6's guard was written to
   forbid, for the reason that a flat family of five `cli_` files is a god
@@ -501,6 +604,16 @@ W9.1 (SessionStart hook) can land any time after M0; it blocks nothing.
   floor at the measured value fails on the first honest deletion of a tested
   branch; two points is the room a refactor needs without hiding a regression
   of real size.
+- **D9 — A line budget is a report, not a gate.** `decompose-god-files`
+  recorded as a non-success criterion that it "does not introduce a
+  line-count gate … not a brittle threshold enforced in CI". The end state's
+  "≤ 500" is therefore measured by `make module-sizes` and read in review,
+  honouring that criterion and guardrail 7; a gate would need its own
+  package reversing the criterion with a reason, and none is offered here.
+- **D10 — `dumps_stable` does not sort keys.** Key order is part of the byte
+  contract three golden hashes and every adopter diff depend on; stability
+  comes from asserting the order, not imposing a different one. *Rejected:*
+  `sort_keys=True` as hygiene (W5.3 explains the cost).
 - **D8 — Phase three waits for phase two.** Splitting `detect.py` and
   `parse_semantics.py` before `cli.py` has moved would run two pure-move
   proofs through the same facades at once; one at a time keeps every golden
@@ -512,7 +625,7 @@ W9.1 (SessionStart hook) can land any time after M0; it blocks nothing.
 
 | Measure | Now | Target |
 |---|---|---|
-| Largest module | 1029 lines | ≤ 500, with a budget test |
+| Largest module | 1029 lines | ≤ 500, reported by `make module-sizes` (a report, not a gate — D9) |
 | Functions > complexity 10 | 7 | 0, `C901` selected at 10 |
 | Functions > 60 lines | 15 | ≤ 5, each with a comment saying why |
 | `PLR2004`, `FBT001`, `PERF401`, `E501` (package + tools) | 5, 3, 12, 37 | 0, families selected |
@@ -521,10 +634,12 @@ W9.1 (SessionStart hook) can land any time after M0; it blocks nothing.
 | Coverage floors (package / tools) | 90/80 / 90/80 | 97/95 / 94/91, plus a per-file report |
 | Full-suite runs per ladder / per PR | 2 / 6 | 1 / 5 |
 | Suite wall time, single process → four workers | 235 s → 66 s (measured here) | the matrix legs run with `-n auto` once re-measured on the hosted runners |
-| Workflow jobs with timeout / least-privilege token | 0 / 1 | all / all |
+| `ci.yml` jobs with a timeout / under a least-privilege token | 0 of 10 / 1 of 10 (`release.yml` is already top-level `contents: read`) | 10 of 10 / 10 of 10 |
 | Third-party actions pinned by SHA | 0 of 6 | 6 of 6, updated by Dependabot |
 | Open Dependabot PRs older than a week | 7 | 0 |
-| I/O modules without a logger | 3 | 0 |
+| File-writing modules without a logger | 1 (`scaffold.py`) | 0 |
+| Suite wall time, single process (Appendix A command) | 235 s | ≤ 200 s after W7.6 |
+| Spec headers disagreeing with their evidence | 18 of 44 say DRAFT, shipped packages among them | 0, reported by `make spec-status` |
 | Unreferenced symbols | 3 | 0, with `make dead-code` reporting |
 | Release | 0.2.0 + 355 unreleased lines | 0.3.0 tagged, attested, `specgraph` window stated |
 | Python matrix | 3.10–3.13 | 3.11–3.14 at 0.4.0 (3.14 added now, 3.10 announced) |
@@ -534,19 +649,76 @@ W9.1 (SessionStart hook) can land any time after M0; it blocks nothing.
 
 ---
 
+## 8. Peer review of the plan
+
+Two rounds before this document was offered for merge.
+
+**Round 1 — self-verification** of every **[Likely]** marker (commands in
+Appendix A): ten claims confirmed and de-marked; two overturned and rewritten
+(D2's mechanism, W8.2's premise); five debts found missing and added (support
+window, tests under mypy, docstrings, container, tool runtime); one
+measurement replaced an assumption (xdist).
+
+**Round 2 — an independent adversarial reviewer** read the plan against the
+packages, tests and documents it touches and re-measured every baseline
+figure (all reproduced except the errata below). Its findings and their
+disposition:
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| 1 | HIGH | W7.2/D2 reverse R-GTC-9, C-GTC-4, R-GTC-12, DEC-GTC-009/013 of `gate-tools-coverage` without naming them; six documents and R7's stage list are touched | Accepted — W7.2 and D2 now name the five ids, the documents and the R7 sequencing |
+| 2 | HIGH | W5.3's `sort_keys=True` moves all three golden hashes and SARIF's key order — a byte-contract change presented as hygiene | Accepted — `dumps_stable` does not sort; D10 records why |
+| 3 | HIGH | `python -m openspec_graph.cli` breaks without `cli/__main__.py`; the re-exports tests import were unnamed | Accepted — in the shape and the proof |
+| 4 | HIGH | `ledger.py`/`delta.py` do no I/O; the grep matched docstrings | Accepted — row, W6.2 and end state corrected to `scaffold.py` |
+| 5 | HIGH | §1.3 assigned the subprocess-loop conversion to a W7.4 that had no such item | Accepted — W7.6 with tests, rule and a 235 → ≤ 200 s target |
+| 6 | HIGH | Errata: 10 job definitions not 12; run #171 was 16 + skipped; test lines 17,366; 16 helper-less modules; "reach" 700; 18 DRAFT headers; an empty heredoc in Appendix A; the pin deferral lives in `next-steps.md:232` | Accepted — each corrected; the ast script is in Appendix A |
+| 7 | MEDIUM | Floors measured on one Linux container would be enforced on five legs after W7.2 | Accepted — W7.1 sets floors from the minimum leg, after W7.2 |
+| 8 | MEDIUM | Three `test_decomposition` guards glob non-recursively; AC-DG-8 cites the unsplit test by name; `c4.md` names `cli.py` thrice | Accepted — recursive guards, name kept, c4 edits listed |
+| 9 | MEDIUM | "≤ 500 with a budget test" reverses `decompose-god-files` non-success 5 | Accepted — report, not gate (D9) |
+| 10 | MEDIUM | W6.4's `parse_makefile` property already exists; `shell_invocations` is a tool | Accepted — rewritten |
+| 11 | MEDIUM | Support window and `mypy` on `tests/` omitted | Already added in round 1 (W1.6, W6.5) |
+| 12 | MEDIUM | W4.3's "every caller by name" false at `log.py:53` | Already corrected in round 1 |
+| 13 | LOW | `vars.PYTHON_DEFAULT` is out-of-tree configuration | Accepted — workflow-level `env:` with tests |
+| 14 | LOW | Pin guard must exempt the local action and the templates; `cancel-in-progress` must be conditional; timeouts from run durations; attestations default on; `release.yml` already least-privilege | Accepted — each folded into W1 and §7 |
+| 15 | LOW | Omitted hygiene: evals wiring (`next-steps` item 16), version bump set, Dockerfile, SBOM, branch protection, performance baseline, docs sprawl, `c4.md` omits `delta.py`, the 0-vs-3 qualifier | Accepted — W1.5, W1.7, W8.6–8, §1.1/§1.2 qualifiers; the runtime baseline is in §1.2; evals' manual execution is recorded as deliberate (its README) and item 16 cited |
+| 16 | LOW | `pip-audit` inside `make security` makes a gate environment-dependent | Accepted — `make audit` |
+| 17 | LOW | A resolvable tag; "route the 13"; M0 bundles W5.4 without its tests | Accepted |
+
+Verdict received: "ready with corrections — not mergeable as written"; the
+three it insisted on (1, 2, 3+8) are applied above. Nothing was rejected: every
+finding traced to a file and line, and the two the plan had already fixed were
+confirmed independently.
+
+---
+
 ## Appendix A — Commands behind the numbers
 
 ```
 git rev-parse --short origin/main                               # 9c4b6e9
-wc -l openspec_graph/*.py tools/*.py tests/*.py
-python - <<'PY'  # functions > 60 lines, via ast over openspec_graph/ and tools/
+wc -l openspec_graph/*.py tools/*.py ; cat tests/test_*.py | wc -l
+python - <<'PY'  # functions > 60 lines (15 of 266) over openspec_graph/ and tools/
+import ast, pathlib
+rows, total = [], 0
+for d in ("openspec_graph", "tools"):
+    for p in sorted(pathlib.Path(d).glob("*.py")):
+        for node in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                total += 1
+                n = node.end_lineno - node.lineno + 1
+                if n > 60:
+                    rows.append((n, f"{p}:{node.lineno}", node.name))
+print(len(rows), "of", total)
+for row in sorted(rows, reverse=True):
+    print(*row)
 PY
+grep -l "Status:\*\* DRAFT" openspec/changes/*/specs/*/spec.md | wc -l      # 18
+awk '/^jobs:/{f=1;next} f&&/^  [a-z0-9_-]+:$/{n++} END{print n}' .github/workflows/ci.yml   # 10
 ruff check --select C901 --config "lint.mccabe.max-complexity=10" --statistics openspec_graph tools
 ruff check --select PLR0912,PLR0913,PLR0915,PLR2004,E501,T201,PERF401,FBT001,TRY003 --statistics openspec_graph tools
 ruff check --select E501 --statistics tests
 mypy --strict openspec_graph tools
 python -m vulture openspec_graph tools --min-confidence 60
-grep -L getLogger $(grep -lE "read_text|open\(|subprocess|write_text|mkdir" openspec_graph/*.py)
+grep -nE "read_text\(|open\(|write_text\(|subprocess" openspec_graph/*.py   # read the hits: ledger.py:3 and delta.py:17-18 are docstrings
 grep -c "json.dumps(" openspec_graph/*.py ; grep -c "sort_keys=True" openspec_graph/*.py
 grep -hoE "uses: [^ ]+" .github/workflows/*.yml .github/actions/planlint/action.yml | sort | uniq -c
 grep -c "timeout-minutes\|^permissions:\|^concurrency:" .github/workflows/ci.yml

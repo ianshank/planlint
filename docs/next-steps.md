@@ -50,7 +50,7 @@ later than this list. They sharpen a tool nobody has adopted yet.
 ## Near term
 
 > Consolidation items 18, 20–23 below are sequenced, with their measured
-> baselines and proofs, in [`docs/reflection-2026-10.md`](reflection-2026-10.md)
+> baselines and proofs, in [`docs/reflection-plan-2026-10.md`](reflection-plan-2026-10.md)
 > (workstreams W1–W9, milestones M0–M5). This file stays the backlog of record;
 > that one is the plan.
 
