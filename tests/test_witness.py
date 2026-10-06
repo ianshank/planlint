@@ -453,3 +453,27 @@ def test_an_oversized_untrusted_value_is_truncated_in_the_log(
     assert len(line) < 300, len(line)
     assert "\n" not in line
     assert line.endswith("... is not an integer"), line
+
+
+@pytest.mark.parametrize("error", [TypeError, ValueError])
+def test_a_record_the_dataclass_refuses_is_skipped_and_named(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    error: type[Exception],
+) -> None:
+    """Non-success: the defensive arm. JSON-decoded values cannot make today's
+    ``Witness`` raise, but a validating one (a ``__post_init__`` range check,
+    say) would, and the loader's never-raises contract (R-WM-9) must hold
+    then too -- skipped, named, never a traceback and never a pass."""
+    path = _write_raw(tmp_path, _GOOD)
+
+    def refuse(**_fields: object) -> Witness:
+        raise error("refused")
+
+    monkeypatch.setattr(witness, "Witness", refuse)
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+    assert any(
+        path.name in line and f"malformed field ({error.__name__})" in line for line in _messages(caplog)
+    ), _messages(caplog)
