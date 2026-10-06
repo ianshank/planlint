@@ -11,35 +11,45 @@ the fact.
   moved verbatim from `tests/test_ci_hardening.py::_ci_job_blocks` (line 505
   at `9c4b6e9`) with its docstring, including the DEC-AQA-005 note on why it
   is a line scan rather than PyYAML (R-HCW-16, DEC-HCW-009).
-- `tests/test_ci_hardening.py`: replace the function body with
-  `from tests.support import workflow_job_blocks` and
-  `_ci_job_blocks = workflow_job_blocks`. Nothing else in the module changes;
+- `tests/test_ci_hardening.py`: add `workflow_job_blocks` to the existing
+  `from tests.support import …` line at the top of the module (a mid-module
+  import is `E402` under the `E4` family `make lint` selects) and replace the
+  function with `_ci_job_blocks = workflow_job_blocks` where it stood.
+  Nothing else in the module changes;
   `test_ci_job_blocks_returns_empty_when_jobs_key_is_absent` and
   `test_ci_job_blocks_ignores_comments_mentioning_jobs` keep exercising the
   alias (AC-HCW-23).
 - `pyproject.toml`: under `[tool.specgraph]`, add `ci_job_timeout_minutes_min
-  = 5` and `ci_job_timeout_minutes_max = 30` with a comment recording the
-  run #171 durations they bound (`test-windows` 5m42s is the slowest job) and
+  = 5` and `ci_job_timeout_minutes_max = 45` with a comment recording the
+  run #171 durations they bound (`test-windows` 5m42s is the slowest measured
+  job; `release.yml`'s `gate` at 30 is the one unmeasured value and sits
+  under the ceiling with room) and
   why two keys rather than an inline table: `_common.read_pyproject_int`
   reads one integer per key (DEC-HCW-010).
 - `tests/test_workflow_hardening.py` (new module): module docstring naming
   this package; `REPO_ROOT`, `WORKFLOWS`, `ACTION_YML`, `DOCKERFILE`,
-  `DEPENDABOT`, `TEMPLATES` constants; a `_uses_refs(paths) -> list[(path,
-  lineno, owner_repo, ref)]` helper that skips `./` local actions; a
-  `_quoted_version_literals(path)` helper returning `(lineno, value)` for
-  every `python-version:` whose value is a quoted `\d+\.\d+` outside the
-  matrix list; `_matrix_versions(ci_text) -> (hard: set, experimental: set)`
-  reading both the list and `include:` entries; `_timeout_range()` reading
+  `DEPENDABOT`, `TEMPLATES`, `README` constants; a `_uses_refs(paths) ->
+  list[(path, lineno, owner_repo, ref)]` helper that strips comment lines
+  first and skips `./` local actions and this repository's own
+  `ianshank/planlint/` action (its SHA ref is `tests/test_adopter_urls.py`'s
+  to police); a `_quoted_version_literals(path)` helper returning
+  `(lineno, value)` for every `python-version:` on a non-comment line whose
+  value is a quoted `\d+\.\d+` outside `strategy.matrix` — the list and its
+  `include:` entries; `_matrix_versions(ci_text) -> (hard: set,
+  experimental: set)` reading both the list and `include:` entries; a
+  `_job_level_keys(block)` reader that looks only at keys at job indentation,
+  so `action-contract`'s step-level `continue-on-error: true` never trips
+  the experimental-leg guard; `_timeout_range()` reading
   the two keys through `load_tool("_common", "_common.py").read_pyproject_int`
   and failing (not skipping) when either is `None`. Every guard collects a
   list of offenders and asserts `not offenders` with the joined list as the
   message (R-HCW-15).
 - Planned test functions, named here so the spec's stage-only citations can
-  be re-pointed when they exist (AC-HCW-1, 2, 4, 5, 8, 9, 10, 11, 12, 13, 14,
-  15, 16, 18, 19, 20, 24):
+  be re-pointed when they exist (AC-HCW-1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13,
+  14, 15, 16, 18, 19, 24, 27):
   `test_every_reference_to_one_action_agrees_on_one_ref`,
   `test_a_leftover_retired_major_is_reported_with_file_and_line`,
-  `test_no_action_ref_is_a_commit_sha`,
+  `test_no_third_party_action_ref_is_a_commit_sha`,
   `test_ci_declares_read_only_permissions_at_the_top`,
   `test_no_write_permission_anywhere_in_ci`,
   `test_every_job_level_permissions_block_carries_a_comment`,
@@ -82,9 +92,15 @@ the fact.
 - `.github/actions/planlint/action.yml`: `actions/setup-python@v5` → `@v7`
   (line 163); `actions/upload-artifact@v4` → `@v7` (line 337). Nothing else in
   the file changes (C-HCW-1, AC-HCW-22).
-- `templates/spec-gate.yml`: `actions/checkout@v4` → `@v7` (line 52); copy the
-  file over `skills/planlint-spec-governance/assets/spec-gate.yml` so
+- `templates/spec-gate.yml`: `actions/checkout@v4` → `@v7` (line 52); line
+  65's `ianshank/planlint/...@a1b686…` stays; copy the file over
+  `skills/planlint-spec-governance/assets/spec-gate.yml` so
   `test_skill_asset_matches_template` stays green (DEC-HCW-012, AC-HCW-3).
+- `README.md`: the copyable workflow block's `actions/checkout@v4` (line 400)
+  → `@v7`; its `ianshank/planlint/...@a1b686…` line (403) stays, owned by
+  `test_ci_template_pins_the_floor_the_skill_enforces`. `docs/aqa.md` line
+  41's `actions/checkout@v4` example → `@v7` (prose, not scanned)
+  (DEC-HCW-012, C-HCW-3).
   `github/codeql-action/upload-sarif@v3` (line 82) is already the current
   major and is not in any Dependabot pull request; leave it.
 - Before committing, confirm each target major exists and is the one
@@ -98,27 +114,33 @@ the fact.
 
 - `.github/workflows/ci.yml`: after `on:`, add top-level
   `permissions:` with `contents: read` only, then `concurrency:` with
-  `group: ${{ github.workflow }}-${{ github.ref }}` and
-  `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`, each with
-  a two-line comment saying why (R-HCW-4, R-HCW-7, DEC-HCW-002, DEC-HCW-003).
+  `group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}`
+  and `cancel-in-progress: ${{ github.event_name == 'pull_request' }}`, each
+  with a short comment saying why — for the group, that a pending `main` run
+  would otherwise be superseded by the next push (R-HCW-4, R-HCW-7,
+  DEC-HCW-002, DEC-HCW-003).
 - `.github/workflows/ci.yml`: `timeout-minutes:` on every job, placed
   directly under `runs-on:` — `test` 15, `test-windows` 20, `coverage-tools`
   10, and 10 on `encoding-stress`, `self-validate`, `packaging`, `graph-diff`,
   `action-contract`, `security`, `docs` (R-HCW-6, DEC-HCW-010).
 - `.github/workflows/ci.yml`, `security` job: a job-level `permissions:` block
   with `contents: read` and `pull-requests: read`, preceded by the comment
-  "gitleaks-action lists a pull request's commits through the API on
-  `pull_request` events; nothing else here needs more than contents: read";
+  "gitleaks-action looks the repository owner up and, on `pull_request`
+  events, lists the pull request's commits through the API; nothing else
+  here needs more than contents: read";
   on the gitleaks step's `env:`, add `GITLEAKS_ENABLE_COMMENTS: "false"` with
   a comment that the build failing is the report and a write permission is
   not worth a comment (R-HCW-5). `GITHUB_TOKEN` stays.
 - `.github/workflows/ci.yml`, `action-contract`: leave its `permissions:`
-  block and the comment above it exactly as they are (`ci.yml` lines
-  211–216); `test_ci_workflow_has_an_action_contract_job` asserts
+  block and the comment that heads the job exactly as they are (`ci.yml`
+  lines 205–216); `test_ci_workflow_has_an_action_contract_job` asserts
   `contents: read` inside the job block (AC-HCW-6).
 - `.github/workflows/release.yml`: `timeout-minutes:` — `gate` 30, `build`
   15, `publish` 10. No `concurrency:` block. Top-level `permissions:` and
-  `publish`'s `id-token: write` untouched (AC-HCW-7).
+  `publish`'s `id-token: write` grant what they did; above `publish`'s
+  `permissions:` add the comment R-HCW-4 requires — trusted publishing mints
+  the OIDC token through `id-token: write`, and nothing else in the job
+  needs more than the top-level `contents: read` (AC-HCW-7).
 - Confirm `python tools/check_no_hardcoded_thresholds.py` still prints PASS;
   the guard's workflow scan flags only a coverage-floor literal and a tool
   pin, so nothing above should register (C-HCW-2, AC-HCW-20).
@@ -141,8 +163,11 @@ the fact.
   `(PYTHON_DEFAULT)` in place of `(3.12)`; add the posture paragraph after
   the table: top-level read-only permissions and where a job widens them,
   the per-job timeouts and the range in `pyproject.toml`, the concurrency
-  group and why a push to `main` is never cancelled, and that a new
-  single-version job reads `env.PYTHON_DEFAULT` (DEC-HCW-011).
+  group — pull requests by ref so a re-push supersedes its predecessor,
+  everything else by SHA so a `main` run is neither cancelled nor left
+  pending — that an `include:` leg marked experimental is advisory and not
+  listed in the `test` row until it is hard, and that a new single-version
+  job reads `env.PYTHON_DEFAULT` (DEC-HCW-011).
 - Confirm the `encoding-stress` job's own `env:` (`PYTHONIOENCODING`,
   `PYTHONUTF8`) does not shadow the workflow-level value — a job-level `env`
   adds keys, it does not replace the map.
@@ -156,9 +181,10 @@ the fact.
   level with a comment naming guardrail 4 — a config change never turns CI
   red — and that the flag is removed after one green run (R-HCW-10,
   DEC-HCW-005). The list stays `["3.10", "3.11", "3.12", "3.13"]` for now.
-- `docs/hooks.md`: the `test` row becomes `(3.10–3.14; 3.14 advisory until
-  Milestone 7)` so the hooks-row guard, which reads the matrix's lowest and
-  highest version, is satisfied in both phases (R-HCW-11).
+- `docs/hooks.md`: the `test` row stays `(3.10–3.13)`. The hooks-row guard
+  reads the lowest and highest *hard* legs, and an advisory leg is not a
+  promise; the posture paragraph from Milestone 4 already says so (R-HCW-11,
+  DEC-HCW-005).
 - Push, and record the run number of the first run showing the 3.14 leg in
   this file. If the leg is red, the failure is the information: fix it in a
   follow-up before Milestone 7; the job stays green either way.
@@ -185,9 +211,12 @@ the fact.
   version" sentence to say the version is `PYTHON_DEFAULT`'s and the
   agreement guard holds them equal.
 - `.github/dependabot.yml`: a third entry, `package-ecosystem: "docker"`,
-  `directory: "/"`, weekly, labels `dependencies` and `docker`,
-  `commit-message.prefix: "build"`, with a comment that a digest nobody bumps
-  is a pin that only gets staler (R-HCW-14). Update the header's "Scope is
+  `directory: "/"`, weekly, labels `dependencies` and `docker` in the shape
+  of the two existing entries, `commit-message.prefix: "build"`, with a
+  comment that a digest nobody bumps is a pin that only gets staler
+  (R-HCW-14). Dependabot ignores a label the repository has not created —
+  #28–#34 carry none of the labels the file already asks for — so the labels
+  are a request recorded for the maintainer in Milestone 8, not a guarantee. Update the header's "Scope is
   deliberately narrow: GitHub Actions only" sentence.
 - Manually: `docker build -t planlint .` then `docker run --rm -v
   "$PWD":/repo planlint --target /repo validate --fail-on ERROR`, and
@@ -210,9 +239,9 @@ the fact.
 - `CHANGELOG.md`, `[Unreleased]`: an entry for this package under `Changed`
   (actions on Node 24 majors, read-only permissions, timeouts, concurrency,
   `PYTHON_DEFAULT`, the 3.14 leg, the Dockerfile) and a `Deprecated` entry:
-  Python 3.10 support ends in 0.4.0; PEP 619 ends upstream support in October
-  2026; `requires-python` is unchanged until that release (R-HCW-12,
-  DEC-HCW-006). `CHANGELOG.md` line 1427's historical `(3.10–3.13)` is a
+  0.4.0 drops Python 3.10, moves `requires-python` to `>=3.11` and removes
+  the `tomli` extra; PEP 619 ends upstream support in October 2026; nothing
+  changes until that release (R-HCW-12, DEC-HCW-006). `CHANGELOG.md` line 1427's historical `(3.10–3.13)` is a
   dated record and stays.
 - **Gate:** `make pre-pr`
 
@@ -225,8 +254,18 @@ the fact.
   selector resolves.
 - Record in this file the run number of the first full run on the branch
   and, from its annotations, that no job carries "Node.js 20 is deprecated"
-  (AC-HCW-25); record the two consecutive pushes that showed a pull-request
-  run cancelled and a `main` run not (AC-HCW-26).
+  (AC-HCW-25), and the `security` job's result on the first push to `main`
+  as well as on the pull request (AC-HCW-25); record the two consecutive
+  pushes that showed a pull-request run cancelled and the two pushes to
+  `main` that each kept their own run (AC-HCW-26).
+- Repository settings, for the maintainer and not in this tree: create the
+  `dependencies`, `github-actions` and `docker` labels `dependabot.yml` asks
+  for — Dependabot ignores labels that do not exist, which is why #28–#34
+  carry none.
+- Record for the plan's M0 row, when `docs/reflection-plan-2026-10.md`
+  merges: the guards live in `tests/test_workflow_hardening.py`, not
+  `test_ci_hardening` (DEC-HCW-008), and gitleaks-action moved in the batch
+  rather than last and alone (DEC-HCW-001).
 - Run `make stage-citations` and confirm this package added no stage to the
   set no workflow invokes by name (DEC-HCW-013).
 - Confirm this package validates clean under the repo's own rules

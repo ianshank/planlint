@@ -42,7 +42,11 @@ it.
   `actions/upload-artifact@v4` at `ci.yml` lines 124, 196, `release.yml` line
   87 and `action.yml` line 337; `actions/download-artifact@v4` at
   `release.yml` line 101; `gitleaks/gitleaks-action@v2` at `ci.yml` line 335.
-  `templates/spec-gate.yml` line 52 ships `actions/checkout@v4` to adopters.
+  `templates/spec-gate.yml` line 52 and `README.md` line 400 ship
+  `actions/checkout@v4` to adopters; `templates/spec-gate.yml` line 65 and
+  `README.md` line 403 pin this repository's own action to a 40-hex SHA,
+  which `tests/test_adopter_urls.py::test_ci_template_pins_the_floor_the_skill_enforces`
+  requires until the first public tag exists.
   The open Dependabot pull requests #28–#34 (all created 2026-09-19T13:16Z,
   base `main@c0540c4`) propose checkout 4→7, setup-python 5→7,
   upload-artifact 4→7, download-artifact 4→8 and gitleaks-action 2→3; the
@@ -51,7 +55,8 @@ it.
   them as separate directories. gitleaks-action's v3 README: "v3 migrates the
   GitHub Actions runtime from Node 20 to Node 24. There are no changes to
   inputs, outputs, or behavior", and "September 16, 2026: Node 20 is removed
-  from GitHub-hosted runners entirely."
+  from GitHub-hosted runners entirely." Its `src/index.js` and
+  `src/gitleaks.js` are byte-identical between v2 and v3.
 - **No stated permissions in `ci.yml`.** The file has no top-level
   `permissions:` block; the only one is job-level `contents: read` on
   `action-contract` (`ci.yml` lines 215–216), and
@@ -60,14 +65,20 @@ it.
   states `contents: read` at the top (lines 20–21) and `id-token: write` on
   `publish` only (lines 98–99), pinned by
   `tests/test_agent_artifacts.py::test_release_workflow_is_gated_and_uses_trusted_publishing`.
-  Two consumers of the token are known from source: gitleaks-action on a
-  `pull_request` event calls `GET /repos/{owner}/{repo}/pulls/{pull_number}/commits`
-  with `GITHUB_TOKEN` (`src/gitleaks.js`), which needs `pull-requests: read`,
-  and posts review comments unless `GITLEAKS_ENABLE_COMMENTS` is `"false"`,
+  Three consumers of the token are known from source: gitleaks-action calls
+  `GET /users/{owner}` on every event (`src/index.js`; not a repository
+  permission, so a read-only token satisfies it, but the action exits 1 if
+  the call fails); on a `pull_request` event it calls
+  `GET /repos/{owner}/{repo}/pulls/{pull_number}/commits` with `GITHUB_TOKEN`
+  (`src/gitleaks.js`), which needs `pull-requests: read`; and it lists and
+  posts review comments unless `GITLEAKS_ENABLE_COMMENTS` is `"false"`,
   which would need `pull-requests: write`. `actions/upload-artifact`
   authenticates with the runner's `ACTIONS_RUNTIME_TOKEN`, not
-  `GITHUB_TOKEN`; its own `.github/workflows/test.yml` grants
-  `contents: read` and `actions: write`.
+  `GITHUB_TOKEN`, and run #171 already shows it: `action-contract` runs the
+  composite action's upload step under that job's `contents: read`, green on
+  all five legs. `ci.yml` line 214, immediately above `action-contract`'s
+  `permissions:`, is `runs-on:` — the job's comment is lines 205–213 — and
+  `release.yml`'s `publish` has no comment at all.
 - **No timeouts, no concurrency.** `grep -n timeout-minutes` and
   `grep -n concurrency` over `.github/workflows/*.yml` both return nothing.
   Run #171's job durations: `test (3.10)` 2m16s, `test (3.11)` 2m14s,
@@ -112,8 +123,9 @@ it.
 
 - `.github/workflows/ci.yml`: every third-party `uses:` moves to the major
   Dependabot proposes, in one batch; a top-level `permissions: contents: read`;
-  a `concurrency` group keyed on workflow and ref whose `cancel-in-progress`
-  is the expression `${{ github.event_name == 'pull_request' }}`; a
+  a `concurrency` group keyed on the workflow and, for pull requests, the
+  ref — every other event keys on its SHA — whose `cancel-in-progress` is
+  the expression `${{ github.event_name == 'pull_request' }}`; a
   `timeout-minutes` literal on every job; a workflow-level
   `env: PYTHON_DEFAULT` read by every single-version `setup-python` step; the
   `security` job gains job-level `contents: read` + `pull-requests: read` with
@@ -127,15 +139,19 @@ it.
   `upload-artifact`/`download-artifact` pair moving together), a
   `timeout-minutes` on each of `gate`, `build` and `publish`, and the same
   `env: PYTHON_DEFAULT`. Its existing top-level permissions and
-  `id-token: write` on `publish` are untouched. No `concurrency` group: a tag
+  `id-token: write` on `publish` grant exactly what they did; `publish`'s
+  block gains the comment R-HCW-4 asks of every job-level block. No
+  `concurrency` group: a tag
   push must never be cancelled, and two tags are two refs anyway.
 - `.github/actions/planlint/action.yml`: `actions/setup-python` and
   `actions/upload-artifact` move to the same majors as the workflows. Inputs,
   outputs and the `python-version` default are unchanged.
-- `templates/spec-gate.yml` and its byte-identical copy
-  `skills/planlint-spec-governance/assets/spec-gate.yml`: `actions/checkout`
-  moves with the workflows, so adopters are not handed the pin this package
-  retires.
+- `templates/spec-gate.yml`, its byte-identical copy
+  `skills/planlint-spec-governance/assets/spec-gate.yml`, and the copyable
+  workflow block in `README.md`: `actions/checkout` moves with the workflows,
+  so adopters are not handed the pin this package retires. Their
+  `ianshank/planlint/...@<sha>` ref stays: it is owned by
+  `tests/test_adopter_urls.py` and `docs/distribution-plan.md`.
 - `pyproject.toml`: `[tool.specgraph] ci_job_timeout_minutes_min` and
   `ci_job_timeout_minutes_max`, the bounded range every `timeout-minutes`
   literal must fall in, read by the guard through `_common.read_pyproject_int`;
@@ -152,9 +168,9 @@ it.
   alias so its own tests and call sites are untouched.
 - `tests/test_workflow_hardening.py` (new module): the dynamic guards — every
   reference to one action agrees on one ref across workflows, the composite
-  action and the templates; `ci.yml` has top-level read-only permissions and
-  no write permission anywhere; every job-level `permissions:` block carries
-  an adjacent comment; every job in every workflow has a `timeout-minutes`
+  action, the templates and the README snippet; `ci.yml` has top-level
+  read-only permissions and no write permission under any block; every
+  job-level `permissions:` block carries a comment within its job; every job in every workflow has a `timeout-minutes`
   inside the configured range; `ci.yml`'s `concurrency` never cancels a push;
   no single-value `python-version` literal outside `env:` and the matrix; the
   two workflow envs, the action default and the Dockerfile tag agree and name
@@ -168,19 +184,25 @@ it.
   paragraph after the CI table on permissions, timeouts, concurrency and
   where the default Python lives.
 - `docs/aqa.md`: the two prose ranges (lines 138–139, 257) when the 3.14 leg
-  flips to hard.
+  flips to hard, and the `actions/checkout@v4` example on line 41 with the
+  bumps.
 - `CHANGELOG.md` `[Unreleased]`: this change, and a `Deprecated` note that
-  Python 3.10 support ends in 0.4.0.
+  0.4.0 drops Python 3.10, moves `requires-python` to `>=3.11` and removes
+  the `tomli` extra.
 
 ## Non-Goals
 
-- **No SHA pinning of actions (W1.2).** Every ref stays a major tag;
-  `pypa/gh-action-pypi-publish@release/v1` stays a branch ref. Pinning to
+- **No SHA pinning of actions (W1.2).** Every third-party ref stays a major
+  tag; `pypa/gh-action-pypi-publish@release/v1` stays a branch ref; this
+  repository's own action ref in the templates and the README stays the SHA
+  `test_ci_template_pins_the_floor_the_skill_enforces` requires until the
+  first tag exists. Pinning to
   commit SHAs is its own package: it needs the pins resolved and verified and
   it changes how Dependabot's `groups` behave. `.github/dependabot.yml`'s
   header already records the deferral; this package does not close it.
 - **No release (W1.5).** No version bump, no tag, no `requires-python`
-  change. The 0.4.0 removal of Python 3.10 is *announced* in the CHANGELOG's
+  change. The 0.4.0 removal of Python 3.10 — with `requires-python` moving
+  to `>=3.11` and the `tomli` extra going — is *announced* in the CHANGELOG's
   `[Unreleased]` section and nothing else; `requires-python = ">=3.10"`,
   `[tool.mypy] python_version = "3.10"` and the 3.10 matrix leg are untouched.
 - **No change to any rule.** `openspec_graph/rules.py`'s `RULES` tuple,
