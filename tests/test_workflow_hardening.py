@@ -1169,3 +1169,45 @@ def test_threshold_guard_stays_quiet_on_a_sha_pinned_uses_line(tmp_path: Path) -
         planted.read_text(encoding="utf-8") + "      - run: pytest --cov-fail-under=90\n", encoding="utf-8"
     )
     assert guard.check_workflow(planted), "a planted coverage floor went unreported"
+
+
+# --- the publish step's attestations input (prepare-release-0-3-0, R-REL-10) --
+
+
+def _publisher_step_declares(release_text: str, key: str, value: str) -> bool:
+    """Whether the publish job's pypa/gh-action-pypi-publish step has ``key: value`` under ``with:``.
+
+    Read from the comment-stripped job block, so a comment that merely mentions
+    the input satisfies nothing. Says nothing about the step's ``uses:`` ref,
+    which is the pin guards' to hold (DEC-REL-011).
+    """
+    jobs = workflow_job_blocks(release_text)
+    publish = jobs.get("publish", "")
+    code = "\n".join(line for _, line in _code_lines(publish))
+    steps = re.split(r"^(?=\s*-\s+(?:uses|name):)", code, flags=re.MULTILINE)
+    publisher = [step for step in steps if "pypa/gh-action-pypi-publish" in step]
+    if len(publisher) != 1:
+        return False
+    step = publisher[0]
+    has_with = re.search(r"^\s*with:\s*$", step, re.MULTILINE) is not None
+    has_input = re.search(rf"^\s*{re.escape(key)}:\s*{re.escape(value)}\s*$", step, re.MULTILINE) is not None
+    return has_with and has_input
+
+
+def test_publish_declares_attestations_explicitly() -> None:
+    """`attestations: true` is written on the publish step, not inherited from a version's default.
+
+    The default has been `true` since v1.11.0 of the action; a SHA pin is a
+    version, and a re-pin can land on one where it is not. The explicit input
+    survives the pin and states the dependency (R-REL-10, DEC-REL-006).
+    """
+    text = RELEASE_YML.read_text(encoding="utf-8")
+    assert _publisher_step_declares(text, "attestations", "true"), (
+        "release.yml's publish step must declare `attestations: true` under `with:`"
+    )
+    # A step that only mentions the input in a comment, or carries it under
+    # another step, does not count.
+    planted = text.replace("          attestations: true", "          # attestations: true")
+    assert not _publisher_step_declares(planted, "attestations", "true"), (
+        "a commented-out input must not satisfy the guard"
+    )

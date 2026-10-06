@@ -115,3 +115,12 @@ jobs:
           path: dist/
 
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        # `attestations: true` is this action's default since v1.11.0 (the
+        # input exists since v1.10.0, where it defaulted to false). Stated
+        # explicitly so a SHA pin cannot drop it: a pin at or above v1.11.0
+        # makes this line a no-op; against a v1.10.x pin it is what turns
+        # attestations on; older than v1.10.0 the action does not know the
+        # input and GitHub raises an "Unexpected input" warning annotation on
+        # the run.
+        with:
+          attestations: true

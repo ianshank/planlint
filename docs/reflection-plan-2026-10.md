@@ -213,7 +213,7 @@ literals", "Dependabot").
    repository's own `./.github/actions/planlint` and its
    `ianshank/planlint/...@<sha>` ref in `templates/spec-gate.yml`, the skill's
    `assets/spec-gate.yml` and the README snippet, which
-   `distribution-plan.md` deliberately moves to `@v0.2.0`.
+   `distribution-plan.md` deliberately moves to `@v0.3.0`.
 3. **Least privilege and bounded runs.** Top-level `permissions: contents:
    read` in `ci.yml` with job-level widening only where needed. The two
    uploading jobs (`graph-diff`, `self-validate`) should need nothing more:

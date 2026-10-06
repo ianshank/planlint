@@ -1009,7 +1009,8 @@ def main(argv: list[str] | None = None) -> int:
 
 _DEPRECATION_WARNING = (
     "`specgraph` is deprecated; use `planlint` instead. "
-    "The `specgraph` command is a backwards-compatible alias and will be removed."
+    "The `specgraph` command is a backwards-compatible alias through 0.3.x "
+    "and will be removed in 0.4.0."
 )
 
 

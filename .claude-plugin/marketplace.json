@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Deterministic spec and plan governance for coding agents.",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "plugins": [
     {
       "name": "planlint-spec-governance",
       "source": "./",
       "description": "Validate OpenSpec or SpecKit change packages (proposal.md, spec.md, tasks.md) against a repository's real Makefile targets, coverage floor, waivers and witnesses using the deterministic planlint CLI. Use when asked to validate, lint, check or repair specs or implementation plans, before writing code from a plan, or when a spec-gate CI job fails. Read-only by default; never writes waivers or witnesses.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "category": "workflow"
     }
   ]

@@ -31,7 +31,7 @@ inputs:
   version:
     description: >-
       An exact planlint version to install from the package index, e.g.
-      "0.2.0". Left empty -- the default -- the CLI is installed from this
+      "0.3.0". Left empty -- the default -- the CLI is installed from this
       action's own checkout, so the `uses:` ref pins the tool and the adapter
       together and there is no published release to wait for.
     required: false

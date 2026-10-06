@@ -4,9 +4,9 @@ What is intentionally **not** in scope yet, and the order to consider it. Each
 item is deferred deliberately — adding it before the value is proven would be
 over-engineering.
 
-## After the first public tag (0.2.0)
+## After the first public tag (0.3.0)
 
-Do **not** start this list before `v0.2.0` is tagged and `pip install planlint`
+Do **not** start this list before `v0.3.0` is tagged and `pip install planlint`
 resolves. The in-tree remainder is not more rules; it is 1.0 credibility.
 Each item is its own OpenSpec change, spec-drafter → spec-adversary first.
 

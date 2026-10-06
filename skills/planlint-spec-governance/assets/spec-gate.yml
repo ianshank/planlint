@@ -57,10 +57,10 @@ jobs:
           persist-credentials: false
 
       # The Action installs the CLI from its own checkout, so any git ref of
-      # ianshank/planlint works. v0.2.0 is the first public tag and does not
+      # ianshank/planlint works. v0.3.0 is the first public tag and does not
       # exist until the release workflow cuts it; until then pin this SHA
       # (the last Action implementation). After the tag exists, switch to:
-      #   uses: ianshank/planlint/.github/actions/planlint@v0.2.0
+      #   uses: ianshank/planlint/.github/actions/planlint@v0.3.0
       # The third-party steps (the checkout above, the SARIF upload below) are
       # pinned to commit SHAs with the release tag in the trailing comment. In
       # your repository a `github-actions` Dependabot entry moves SHA and

@@ -63,6 +63,8 @@ Issues = "https://github.com/ianshank/planlint/issues"
 # deprecated alias: it prints a one-line warning to stderr, then delegates to
 # `main` and preserves the real exit code (so existing CI that runs
 # `specgraph validate` keeps failing on real errors, never silently passing).
+# The alias warns through every 0.3.x release and is removed in 0.4.0; the
+# general rule it instantiates is in docs/policies.md.
 planlint = "openspec_graph.cli:main"
 specgraph = "openspec_graph.cli:main_deprecated"
 

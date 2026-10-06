@@ -18,7 +18,7 @@ and does not move the fact. Milestones 1 and 2 happen in the tree and land
 in one pull request; Milestone 3 is the maintainer's, outside the tree, and
 its bullets are filled in after the fact with what was observed.
 
-## Milestone 1 — The bump set, the changelog cut, and the guards
+## Milestone 1 — The bump set, the changelog cut, and the guards [DONE]
 
 - Preconditions, checked before the first edit: `pin-actions-by-sha` and
   `write-down-policies` are both in the tree this branch starts from
@@ -27,6 +27,14 @@ its bullets are filled in after the fact with what was observed.
   — this package moves the whole `[Unreleased]` body and would strand its
   entry (DEC-REL-011). Then re-measure every line number below at the branch
   head and note any that moved beside the bullet that uses it.
+  **Recorded (at `428f6b7`, the tree after both siblings landed):** both
+  preconditions held — `grep -n 'release/v1' .github/workflows/release.yml`
+  prints nothing and `docs/policies.md` exists. Line numbers that moved:
+  the template's comment block is 59–68 (the sibling's two sentences at
+  64–68), `[0.2.0]` is at line 457 and the link definitions at 1525–1526,
+  the publisher's `uses:` is at `release.yml:117`, `SKILL.md`'s prose at
+  178–179 and `README.md`'s note at 54–59, its prose at 415–417 — every
+  fact unchanged.
 - Merge hazards to resolve on purpose if this branch is rebased over a
   sibling rather than started after it (DEC-REL-011): `release.yml`'s
   publish step — the sibling rewrote the `uses:` line, this package adds
@@ -51,6 +59,13 @@ its bullets are filled in after the fact with what was observed.
   tagged, that ref is a commit SHA; after the tag exists, switch it to
   `@v0.3.0`" (R-REL-2, DEC-REL-003). The three existing binding tests go
   red on the version bump alone and green here; watch that happen once.
+  **Recorded:** on the bump alone (`__version__` → `0.3.0`, nothing else),
+  `test_skill_metadata_version_matches_the_package`,
+  `test_ci_template_pins_the_floor_the_skill_enforces` and
+  `test_every_changelog_version_links_to_its_release_tag` failed;
+  `test_compatibility_prose_matches_the_declared_minimum` stayed green
+  because the prose and the declared minimum moved together. All green
+  after the edits below.
 - `CHANGELOG.md`: insert `## [0.3.0] — <date>` directly below the
   `[Unreleased]` heading and its blank line, the date being the day the tag
   is intended to be pushed; if the sitting slips, the date is amended in
@@ -63,6 +78,13 @@ its bullets are filled in after the fact with what was observed.
   verbatim and in order, the siblings' entries included — now sits under
   the new heading, so `## [Unreleased]` is empty above it (R-REL-4,
   R-REL-5, DEC-REL-001).
+  **Recorded:** the heading reads `## [0.3.0] — 2026-10-07`, the day the
+  tag is intended to be pushed (the branch merges on 2026-10-06 UTC
+  evening; the sitting is the next day). If the tag is pushed on another
+  day, the date is amended in the commit that gets tagged (DEC-REL-002).
+  Every `###` group that sat under `[Unreleased]` — M0's two `Changed`
+  entries, M1's `Changed` and `Added`, `Deprecated` with both lines, and
+  the older groups — now sits under the new heading, verbatim and in order.
 - `CHANGELOG.md`, the `### Deprecated` group now under `[0.3.0]`: keep the
   Python 3.10 entry as it is. Run `grep -n -i 'specgraph' CHANGELOG.md` over
   the group: if `write-down-policies` has already written the `specgraph`
@@ -75,6 +97,9 @@ its bullets are filled in after the fact with what was observed.
   syntax, the config file name and the `[tool.specgraph]` section are
   stable identifiers and are not affected. Never both (R-REL-6,
   DEC-REL-005).
+  **Recorded:** `grep -n -i specgraph CHANGELOG.md` over the group finds
+  the one line `write-down-policies` wrote (warns through every 0.3.x
+  release, removed in 0.4.0, names `docs/policies.md`); nothing added.
 - `CHANGELOG.md`, the `[0.2.0]` preamble (lines 410–416): append one
   sentence — this section's date is the day it was folded from the earlier
   `2026-09-02` heading (PR #25), not a tag date; the `v0.2.0` tag was never
@@ -148,6 +173,22 @@ its bullets are filled in after the fact with what was observed.
   offender list the first test prints here — it must equal what the grep in
   the proposal's Evidence prints at that commit — then land the edits above
   and watch them go green (R-REL-8, DEC-REL-004, AC-REL-7, AC-REL-8).
+  **Recorded (at `428f6b7` + the bump alone):** nine tokens in seven
+  files, every one `v0.2.0` — `.pre-commit-hooks.yaml:11 rev: v0.2.0`,
+  `README.md:417 @v0.2.0`, `docs/distribution-plan.md:15 @v0.2.0`, `:132
+  @v0.2.0`, `:138 ianshank/planlint/.github/actions/planlint@v0.2.0`,
+  `docs/reflection-plan-2026-10.md:216 @v0.2.0`,
+  `skills/planlint-spec-governance/SKILL.md:179 @v0.2.0`,
+  `skills/planlint-spec-governance/assets/spec-gate.yml:63` and
+  `templates/spec-gate.yml:63` (own-action tokens). Eight are the
+  proposal's eight at `ea40bc2`; the ninth is the reflection plan, which
+  merged to `main` (PR #37) after drafting and whose W1.2 text named the
+  ref the distribution plan moves to — corrected to `@v0.3.0`, which is
+  what that plan now says. Before the bump the test was green (every token
+  equalled the then-current `v0.2.0`), so the red state is the bump's.
+  The planted test was red before the bump too — its planted `@v0.2.0` was
+  not stale against `0.2.0` — and green after. No third-party ref appeared
+  in either run.
 - `tests/test_cli_surface.py`: add
   `test_deprecated_alias_names_its_removal_version` beside the three alias
   tests — call `main_deprecated` on a clean fixture tree, read `capsys`
@@ -162,21 +203,42 @@ its bullets are filled in after the fact with what was observed.
   `test_every_reference_to_one_action_agrees_on_one_ref` and the sibling's
   pin-shape guard already hold it (R-REL-10, DEC-REL-006, DEC-REL-011,
   AC-REL-11).
+  **Recorded:** red before the `with:` block ("release.yml's publish step
+  must declare `attestations: true` under `with:`"), green after; the
+  planted commented-out input inside the test is not accepted.
+  `test_deprecated_alias_names_its_removal_version` was red on the old
+  warning (it named no window) and green on the new one; its expected
+  window and removal version are derived from `__version__`.
 - Confirm every `0.2.0` left under `tests/` is one C-REL-5 lists, and that
   the diff touches none of them (AC-REL-23, DEC-REL-010).
+  **Recorded:** `git diff -- tests/ | grep 0.2.0` shows only the two
+  planted-fixture lines the new stale-tag test adds; every pre-existing
+  `0.2.0` under `tests/` is untouched.
 - Confirm the diff touches no third-party `uses:` line: `git diff --stat`
   against the branch base names `release.yml` with one hunk, and
   `git diff -U0 -- .github templates README.md | grep -E '^[-+].*uses:'`
   prints nothing (C-REL-4, AC-REL-12).
+  **Recorded:** `release.yml` is one hunk of 9 insertions (the comment and
+  the `with:` block); the only `uses:` lines in the diff over `.github`,
+  `templates` and `README.md` are the own-action example inside the
+  template's comment block (`@v0.2.0` → `@v0.3.0`, R-REL-9) — no
+  third-party `uses:` line changed, the publisher's included.
 - Confirm `planlint --version` prints `planlint 0.3.0` from the editable
   install, and `make wheel-check` builds and passes (AC-REL-15).
+  **Recorded:** after `pip install -e ".[dev]"` (the editable install's
+  metadata is written at install time, so it printed `0.2.0` until
+  refreshed) `planlint --version` prints `planlint 0.3.0`; `make
+  wheel-check` exit 0, `dist/planlint-0.3.0-py3-none-any.whl` carrying
+  `License-Expression: Apache-2.0` and one licence file; that wheel
+  installed into a fresh venv prints `planlint 0.3.0`.
 - Re-point AC-REL-6, 7, 8 and 11 in `specs/release-readiness/spec.md` from
   stage-only verification to the four tests above, now that they exist;
   run `python -m pytest tests/test_spec_test_citations.py -q` and confirm
   every selector resolves.
+  **Recorded:** re-pointed, every stage kept; the citation test passes.
 - **Gate:** `make pre-pr`
 
-## Milestone 2 — The maintainer's runbook and the recurring checklist
+## Milestone 2 — The maintainer's runbook and the recurring checklist [DONE]
 
 - `docs/distribution-plan.md` §0, as a dry run on the branch head: re-run
   every row and record the results with the branch-head SHA and the word
@@ -185,6 +247,9 @@ its bullets are filled in after the fact with what was observed.
   nothing on PyPI) and date them. The merge commit does not exist yet, so
   its SHA is not written here; Milestone 3 re-runs the rows on it and
   records that SHA (R-REL-11).
+  **Recorded:** §0 re-run as a dry run on `428f6b7` plus this package's
+  edits, before the release commit exists; the results are in the table
+  with the word "dry run" and the figures the commands printed.
 - `docs/distribution-plan.md` §3, rewritten for 0.3.0 in this order
   (R-REL-11, DEC-REL-008): (1) pre-tag checks on the release commit —
   `make pre-pr`, both generator `--check` modes, `make e2e-live`, a local
@@ -245,6 +310,8 @@ its bullets are filled in after the fact with what was observed.
   740 attestations for both files" (R-REL-12).
 - Confirm `make docs-check` prints its pass line: every required document
   present and linked (AC-REL-16).
+  **Recorded:** `docs-check: all required docs present and linked from
+  README`; `grep -n '@v0.2.0' docs/distribution-plan.md` prints nothing.
 - **Gate:** `make docs-check`
 
 ## Milestone 3 — Tag, publish, observe, record (the maintainer, outside the tree)

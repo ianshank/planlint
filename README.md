@@ -51,12 +51,15 @@ planlint --target /path/to/clone graph --format mermaid  # a picture, not just J
 planlint --version                           # print the installed version and exit
 ```
 
-> **Not on PyPI yet.** `v0.2.0` is the first release intended for a package
+> **Not on PyPI yet.** `v0.3.0` is the first release intended for a package
 > index and the tag has not been pushed, so `pip install planlint` 404s today.
 > Until it resolves, install from the repository —
 > `pip install git+https://github.com/ianshank/planlint@a1b686864282e27c754ec1d49ac6f931e1e140e1`
 > — or use the composite Action below, which installs the CLI from its own
-> checkout and needs no index at all. Delete this note when the tag is cut.
+> checkout and needs no index at all. Between the 0.3.0 version bump and the
+> tag, that git install gives 0.2.0-era code, which the skill's
+> `planlint-min-version` rejects: use the Action, or wait for the tag. Delete
+> this note when the tag is cut.
 
 The distribution and the command are both `planlint`, with no hyphen.
 `plan-lint` on PyPI is an unrelated project, analysing LLM agent plans; this
@@ -86,7 +89,9 @@ machinery.
 > (preserving the real exit code), so existing CI keeps working. The waiver
 > comment syntax (`<!-- specgraph:allow ... -->`), the config file
 > (`openspec/specgraph.json`), and the `[tool.specgraph]` pyproject section keep
-> the `specgraph` name as stable contract identifiers.
+> the `specgraph` name as stable contract identifiers. The alias warns through
+> every 0.3.x release and is removed in 0.4.0; the rule it follows is in
+> [`docs/policies.md`](docs/policies.md#versioning-and-deprecation).
 
 ## Why this and not Spec-Kit / GitHub Spec / Kiro / Cursor
 
@@ -412,9 +417,9 @@ no package index to wait for. The composite steps are bash and the documented
 runner is `ubuntu-latest`; Windows CI in this repository covers the pytest
 suite, not this action.
 
-`v0.2.0` is the first public tag and is **not on GitHub until the release
+`v0.3.0` is the first public tag and is **not on GitHub until the release
 workflow cuts it**. Pin the commit SHA above until then. After the tag
-exists, switch the ref to `@v0.2.0`. A full commit SHA remains valid either
+exists, switch the ref to `@v0.3.0`. A full commit SHA remains valid either
 way.
 
 The action runs the gate once, annotates the pull request, writes a job

@@ -5,6 +5,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-07
+
+> `v0.3.0` is the first tag pushed under the `planlint` name and the first
+> release published to PyPI. `v0.2.0` was never tagged: the section below
+> records the version that existed in the tree from 2026-09-12 and was
+> installable from git by commit. Every entry under this heading sat under
+> Unreleased until the tag — milestones M0 and M1 of the October 2026
+> reflection plan included — and the deprecation window stated under
+> `Deprecated` follows the rule in `docs/policies.md`.
+
 ### Changed — the CI workflows now hold themselves to their own gates (M0)
 
 - **`harden-ci-workflows`.** Every third-party action in `.github/workflows/`,
@@ -463,6 +473,11 @@ gated by `make coverage-tools` against `[tool.specgraph] tools_line_fail_under`
 > runs. This section includes every change that sat under Unreleased until the
 > tag (through PR #24): `report`, the four-way Action contract, SARIF, `delta`,
 > the labelled detect corpus, matcher precision, and the findings envelope.
+> This section's date is the day it was folded from the earlier `2026-09-02`
+> heading (PR #25), not a tag date: the `v0.2.0` tag was never pushed, so the
+> first public tag the release-train honesty entry below promised became
+> `v0.3.0` (the section above), and the `[0.2.0]` link definition is kept for
+> the file's one-link-per-version convention and does not resolve.
 
 ### Added — finding line hits and named Action scope (`add-finding-line-hits`)
 
@@ -1522,5 +1537,7 @@ gated by `make coverage-tools` against `[tool.specgraph] tools_line_fail_under`
 - GitHub Actions CI: test matrix (3.10–3.13), self-validate hard gate,
   graph-diff regression gate on PRs.
 
+[Unreleased]: https://github.com/ianshank/planlint/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/ianshank/planlint/releases/tag/v0.3.0
 [0.2.0]: https://github.com/ianshank/planlint/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ianshank/planlint/releases/tag/v0.1.0

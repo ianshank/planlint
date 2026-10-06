@@ -542,24 +542,24 @@ another package's verification line.
 
 ## Acceptance Criteria
 
-- [ ] **AC-REL-1:** `__version__` is `0.3.0`, `CHANGELOG.md` has a
+- [x] **AC-REL-1:** `__version__` is `0.3.0`, `CHANGELOG.md` has a
   `## [0.3.0]` heading with a release-tag link definition, and the findings
   envelope's `tool_version` carries the same string. (R-REL-1, R-REL-4)
   _Verified by:_ `pytest -k "test_every_changelog_version_links_to_its_release_tag or test_envelope_carries_the_tool_version"` · stage: `make test`
 
-- [ ] **AC-REL-2:** the three SKILL.md frontmatter fields equal
+- [x] **AC-REL-2:** the three SKILL.md frontmatter fields equal
   `__version__` — `metadata.version` directly, `planlint-min-version`
   through the template-floor test, and the `compatibility:` number through
   the declared minimum — and the minimum is not ahead of the package.
   (R-REL-2, DEC-REL-003)
   _Verified by:_ `pytest -k "test_skill_metadata_version_matches_the_package or test_ci_template_pins_the_floor_the_skill_enforces or test_compatibility_prose_matches_the_declared_minimum or test_skill_min_version_is_not_ahead_of_the_package"` · stage: `make test`
 
-- [ ] **AC-REL-3:** both `.claude-plugin/` manifests are fresh under the
+- [x] **AC-REL-3:** both `.claude-plugin/` manifests are fresh under the
   generator's `--check` mode on the committed tree, and the generator reads
   `__version__` rather than restating it. (R-REL-3)
   _Verified by:_ `pytest -k "test_generated_artifacts_are_fresh or test_plugin_manifests_check_passes_on_the_committed_repo or test_manifest_version_tracks_the_package_not_a_literal"` · stage: `make test`
 
-- [ ] **AC-REL-4:** `## [Unreleased]` is empty, every line that sat under it
+- [x] **AC-REL-4:** `## [Unreleased]` is empty, every line that sat under it
   at the release commit — both siblings' entries included — is under
   `## [0.3.0] — <date>` with its groupings intact, the `[0.3.0]` preamble
   and the appended `[0.2.0]` sentence read as R-REL-5 requires, the
@@ -570,59 +570,59 @@ another package's verification line.
   DEC-REL-005)
   _Verified by:_ stage: `make pre-pr`
 
-- [ ] **AC-REL-5:** `specgraph` still warns on stderr, still delegates with
+- [x] **AC-REL-5:** `specgraph` still warns on stderr, still delegates with
   the exit code preserved on both a clean and a failing tree, still keeps
   stdout parseable, and `planlint` itself emits no deprecation; the alias
   entry point is still declared. (R-REL-7)
   _Verified by:_ `pytest -k "test_deprecated_alias_warns_to_stderr_and_delegates or test_deprecated_alias_preserves_failure_exit_code or test_deprecated_alias_keeps_stdout_parseable or test_primary_command_emits_no_deprecation_warning or test_entry_points_wired_in_pyproject"` · stage: `make test`
 
-- [ ] **AC-REL-6:** the `specgraph` warning on stderr names `0.4.0` as the
+- [x] **AC-REL-6:** the `specgraph` warning on stderr names `0.4.0` as the
   removal version and `0.3.x` as the window, and the README alias paragraph
   and the `[project.scripts]` comment state the same window. The test is
   written with this change; until it exists the stage is the citation.
   (R-REL-6, R-REL-7, DEC-REL-005)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_deprecated_alias_names_its_removal_version` · stage: `make test`
 
-- [ ] **AC-REL-7:** every copyable tag token in the adopter corpus other
+- [x] **AC-REL-7:** every copyable tag token in the adopter corpus other
   than `CHANGELOG.md` — a free-standing `@v<semver>`, an own-action
   `ianshank/planlint…@v<semver>`, or a `rev: v<semver>` — equals
   `v{__version__}`, and the corpus contains at least one such token. The
   test is written with this change; until it exists the stage is the
   citation. (R-REL-8, DEC-REL-004)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_every_copyable_tag_ref_names_the_current_version` · stage: `make test`
 
-- [ ] **AC-REL-8 (non-success):** a planted `@v0.2.0` in a corpus file
+- [x] **AC-REL-8 (non-success):** a planted `@v0.2.0` in a corpus file
   while `__version__` is `0.3.0` fails the suite with a message naming the
   file and line; a planted corpus with no tag reference at all fails rather
   than passing; and a planted third-party `owner/repo@v7.0.1` on its own is
   not reported as a stale tag of this project. The test is written with
   this change; until it exists the stage is the citation. (R-REL-8,
   DEC-REL-004)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_a_stale_tag_ref_is_named_with_file_and_line` · stage: `make test`
 
-- [ ] **AC-REL-9:** before the tag exists, `templates/spec-gate.yml` pins
+- [x] **AC-REL-9:** before the tag exists, `templates/spec-gate.yml` pins
   the own action to a 40-hex SHA and names `@v0.3.0` as the ref to switch
   to; after the tag exists it pins `@v0.3.0`; in both states the copy under
   `skills/` is byte-identical to the template. (R-REL-9, DEC-REL-007)
   _Verified by:_ `pytest -k "test_ci_template_pins_the_floor_the_skill_enforces or test_skill_asset_matches_template"` · stage: `make test`
 
-- [ ] **AC-REL-10:** `release.yml` still chains `gate` → `build` → `publish`,
+- [x] **AC-REL-10:** `release.yml` still chains `gate` → `build` → `publish`,
   `gate` still runs the full ladder, `build` still smoke-tests the console
   script in a fresh venv, `publish` still holds `id-token: write` with no
   stored token, the workflow still has no `concurrency` group, and every job
   keeps a timeout inside the configured range. (R-REL-10, C-REL-2)
   _Verified by:_ `pytest -k "test_release_workflow_is_gated_and_uses_trusted_publishing or test_release_has_no_concurrency_group or test_every_job_in_every_workflow_has_a_timeout_inside_the_range"` · stage: `make test`
 
-- [ ] **AC-REL-11:** the `publish` job's `pypa/gh-action-pypi-publish` step
+- [x] **AC-REL-11:** the `publish` job's `pypa/gh-action-pypi-publish` step
   declares `attestations: true` under `with:`, read from the uncommented
   job block, and the comment above it names v1.11.0 as the default's origin,
   v1.10.0 as the input's, and the "Unexpected input" annotation for an
   older pin; the test asserts the input and says nothing about the step's
   `uses:` ref. The test is written with this change; until it exists the
   stage is the citation. (R-REL-10, DEC-REL-006, DEC-REL-011)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_publish_declares_attestations_explicitly` · stage: `make test`
 
-- [ ] **AC-REL-12 (non-success):** this package's diff touches no
+- [x] **AC-REL-12 (non-success):** this package's diff touches no
   third-party `uses:` line in `.github/workflows/`, `.github/actions/`,
   `templates/` or `README.md` — the publisher's `uses:` line included — and
   the only hunk in `release.yml` is the `with:` block and its comment under
@@ -631,24 +631,24 @@ another package's verification line.
   `pin-actions-by-sha` lands. (C-REL-4, DEC-REL-011)
   _Verified by:_ stage: `make pre-pr`
 
-- [ ] **AC-REL-13 (non-success):** the rule inventory is unchanged — the
+- [x] **AC-REL-13 (non-success):** the rule inventory is unchanged — the
   live rule table still matches `tests/baseline_rules.json` — and the
   golden `validate`/`graph`/`rules` hashes are unchanged, because
   `tool_version` is normalised before hashing. (C-REL-2, DEC-REL-010)
   _Verified by:_ `pytest -k "test_rule_set_matches_baseline or test_output_byte_identical"` · stage: `make test`
 
-- [ ] **AC-REL-14:** the Python support surface is untouched: the
+- [x] **AC-REL-14:** the Python support surface is untouched: the
   classifiers still equal the hard matrix legs, which still include 3.10,
   and `requires-python` still reads `>=3.10`. The second clause is read
   directly. (C-REL-1)
   _Verified by:_ `pytest -k test_classifiers_equal_the_hard_matrix_legs` · stage: `make test`
 
-- [ ] **AC-REL-15:** the local wheel builds from the release commit and
+- [x] **AC-REL-15:** the local wheel builds from the release commit and
   carries its declared licence metadata, so the `build` job's artifact gate
   has a local equivalent that passed before the tag. (R-REL-1)
   _Verified by:_ stage: `make wheel-check`
 
-- [ ] **AC-REL-16:** `docs/distribution-plan.md` §3 is the 0.3.0 runbook in
+- [x] **AC-REL-16:** `docs/distribution-plan.md` §3 is the 0.3.0 runbook in
   R-REL-11's order with M1's exit criterion and no `@v0.2.0` left in it, and
   its §0 carries the branch-head dry run; `docs/hooks.md` carries the
   package-release checklist and the attestations mention in its `release`
@@ -660,7 +660,7 @@ another package's verification line.
   DEC-REL-008)
   _Verified by:_ stage: `make docs-check`
 
-- [ ] **AC-REL-17:** every install line in the adopter corpus still names
+- [x] **AC-REL-17:** every install line in the adopter corpus still names
   the distribution this repository builds, and the corpus is still
   discovered and non-empty after the edits to the README, the templates,
   the skill, the composite action and the pre-commit example. (R-REL-13)
@@ -700,14 +700,14 @@ another package's verification line.
   R-REL-13, R-REL-14, DEC-REL-007)
   _Verified by:_ `pytest -k "test_ci_template_pins_the_floor_the_skill_enforces or test_skill_asset_matches_template"` · stage: `make pre-pr`
 
-- [ ] **AC-REL-23 (non-success):** the fixtures and historical prose
+- [x] **AC-REL-23 (non-success):** the fixtures and historical prose
   C-REL-5 lists still spell `0.2.0` after the change — the diff touches none
   of them — and no new runtime or dev dependency, `tools/` script or
   generator appears. A review property of the diff, read directly.
   (C-REL-3, C-REL-5, DEC-REL-010)
   _Verified by:_ stage: `make pre-pr`
 
-- [ ] **AC-REL-24:** `.github/actions/planlint/action.yml`'s `version`
+- [x] **AC-REL-24:** `.github/actions/planlint/action.yml`'s `version`
   input gives `"0.3.0"` as its example, and the action's input set is
   exactly the v1 set it declared before — the description changed, the
   contract did not. The example is read directly. (R-REL-13, DEC-REL-012)
