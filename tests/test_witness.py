@@ -8,9 +8,12 @@ exercises the git-dependent _current_sha() lazy wiring).
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+import logging
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -26,6 +29,9 @@ from tests import support
 _CAN_SYMLINK = support.supports_symlinks()
 
 SHA = "a" * 40
+# A filename in the shape ``write_witness`` produces, whose content will
+# never hash to it: the fixture for "well-formed name, wrong content".
+_ZERO_NAME = "0" * witness.HEX_DIGEST_LENGTH + witness.WITNESS_SUFFIX
 
 
 def _witness(**overrides: object) -> Witness:
@@ -120,7 +126,7 @@ def test_load_witnesses_skips_a_dangling_symlink_without_raising(tmp_path: Path)
     # this session (detect._adrs()'s directory branch).
     directory = tmp_path / witness.WITNESS_DIR_NAME
     directory.mkdir(parents=True)
-    (directory / ("0" * 64 + ".json")).symlink_to(directory / "does-not-exist.json")
+    (directory / _ZERO_NAME).symlink_to(directory / "does-not-exist.json")
     assert witness.load_witnesses(tmp_path) == ()
 
 
@@ -129,7 +135,7 @@ def test_load_witnesses_skips_a_file_whose_content_does_not_match_its_filename_h
     # not raise and not be treated as a pass.
     directory = tmp_path / witness.WITNESS_DIR_NAME
     directory.mkdir(parents=True)
-    (directory / ("0" * 64 + ".json")).write_bytes(witness.serialize(_witness()))
+    (directory / _ZERO_NAME).write_bytes(witness.serialize(_witness()))
     assert witness.load_witnesses(tmp_path) == ()
 
 
@@ -324,3 +330,208 @@ def test_write_witness_reraises_the_original_error_not_the_cleanup_one(
     with pytest.raises(OSError) as caught:
         witness.write_witness(tmp_path, record)
     assert "No space left on device" in str(caught.value)
+
+
+# --- debug logging: why a record was skipped ---------------------------------
+#
+# The loader fails closed by dropping a bad record. That is right for the
+# verdict and opaque for whoever is debugging a CI run that reports W001
+# "never witnessed" against a store that visibly holds files, so every skip
+# names its file and cause at DEBUG. Captured by attaching to the emitting
+# logger directly: ``log.configure()`` sets ``planlint.propagate = False``, so
+# records never reach the root handler caplog installs (see test_repo_io.py).
+
+
+@contextlib.contextmanager
+def _captured(caplog: pytest.LogCaptureFixture, name: str = "planlint.witness") -> Iterator[None]:
+    target = logging.getLogger(name)
+    target.addHandler(caplog.handler)
+    try:
+        with caplog.at_level(logging.DEBUG, logger=name):
+            yield
+    finally:
+        target.removeHandler(caplog.handler)
+
+
+def _messages(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [record.getMessage() for record in caplog.records]
+
+
+_GOOD = {
+    "schema_version": witness.WITNESS_SCHEMA_VERSION,
+    "stage": "test",
+    "exit_code": 0,
+    "coverage": 97.5,
+    "sha": SHA,
+    "recorded_at": "2026-01-01T00:00:00Z",
+}
+
+
+@pytest.mark.parametrize(
+    ("label", "record", "reason"),
+    [
+        ("wrong-schema", {**_GOOD, "schema_version": 2}, "schema_version 2 is not"),
+        ("bool-schema", {**_GOOD, "schema_version": True}, "schema_version True is not"),
+        ("nan-coverage", {**_GOOD, "coverage": float("nan")}, "coverage nan is not a finite number"),
+        ("bool-exit", {**_GOOD, "exit_code": False}, "exit_code False is not an integer"),
+        ("missing-stage", {k: v for k, v in _GOOD.items() if k != "stage"}, "missing required field 'stage'"),
+    ],
+)
+def test_each_skipped_record_logs_its_file_and_reason(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, label: str, record: dict[str, object], reason: str
+) -> None:
+    """Non-success: a dropped record is still dropped, and now says why."""
+    path = _write_raw(tmp_path, record)
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+    lines = _messages(caplog)
+    assert any(path.name in line and reason in line for line in lines), (label, lines)
+    assert any("loaded 0 of 1 record(s)" in line for line in lines), lines
+
+
+def test_a_hash_mismatch_is_logged_as_such(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    directory = tmp_path / witness.WITNESS_DIR_NAME
+    directory.mkdir(parents=True)
+    forged = directory / _ZERO_NAME
+    forged.write_bytes(witness.serialize(_witness()))
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+    assert any(
+        forged.name in line and "does not match the sha256" in line for line in _messages(caplog)
+    )
+
+
+@pytest.mark.parametrize(
+    ("payload", "reason"),
+    [(b"{not json", "not valid UTF-8 JSON"), (b"\xff\xfe\x00", "not valid UTF-8 JSON"), (b"[1, 2]", "not an object")],
+)
+def test_undecodable_and_non_object_records_are_logged(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, payload: bytes, reason: str
+) -> None:
+    directory = tmp_path / witness.WITNESS_DIR_NAME
+    directory.mkdir(parents=True)
+    (directory / f"{witness.compute_hash(payload)}.json").write_bytes(payload)
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+    assert any(reason in line for line in _messages(caplog)), _messages(caplog)
+
+
+def test_an_absent_store_and_a_loaded_record_are_both_logged(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+        recorded = witness.write_witness(tmp_path, _witness())
+        assert witness.load_witnesses(tmp_path) == (_witness(),)
+    lines = _messages(caplog)
+    assert any("no store at" in line for line in lines), lines
+    assert any("recorded stage 'test'" in line and recorded.name in line for line in lines), lines
+    assert any("loaded 1 of 1 record(s)" in line for line in lines), lines
+
+
+def test_skip_logging_is_silent_at_the_default_level(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The default run stays quiet: nothing is emitted above DEBUG."""
+    _write_raw(tmp_path, {**_GOOD, "schema_version": 2})
+    target = logging.getLogger("planlint.witness")
+    target.addHandler(caplog.handler)
+    try:
+        with caplog.at_level(logging.WARNING, logger="planlint.witness"):
+            witness.load_witnesses(tmp_path)
+    finally:
+        target.removeHandler(caplog.handler)
+    assert caplog.records == []
+
+
+def test_an_oversized_untrusted_value_is_truncated_in_the_log(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Non-success: a record's values are untrusted, so one huge field must not
+    flood a CI log, and an embedded newline must not forge a second line."""
+    path = _write_raw(tmp_path, {**_GOOD, "exit_code": "x" * 10_000 + "\n::error::forged"})
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+    line = next(m for m in _messages(caplog) if path.name in m)
+    assert len(line) < 300, len(line)
+    assert "\n" not in line
+    assert line.endswith("... is not an integer"), line
+
+
+@pytest.mark.parametrize("error", [TypeError, ValueError])
+def test_a_record_the_dataclass_refuses_is_skipped_and_named(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    error: type[Exception],
+) -> None:
+    """Non-success: the defensive arm. JSON-decoded values cannot make today's
+    ``Witness`` raise, but a validating one (a ``__post_init__`` range check,
+    say) would, and the loader's never-raises contract (R-WM-9) must hold
+    then too -- skipped, named, never a traceback and never a pass."""
+    path = _write_raw(tmp_path, _GOOD)
+
+    def refuse(**_fields: object) -> Witness:
+        raise error("refused")
+
+    monkeypatch.setattr(witness, "Witness", refuse)
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+    assert any(
+        path.name in line and f"malformed field ({error.__name__})" in line for line in _messages(caplog)
+    ), _messages(caplog)
+
+
+def _can_name_a_file_with_a_newline(directory: Path) -> bool:
+    """Capability probe: POSIX allows a newline in a filename; Windows does not."""
+    try:
+        probe = directory / "probe\nname"
+        probe.write_bytes(b"")
+        probe.unlink()
+    except OSError:
+        return False
+    return True
+
+
+def test_an_artifact_controlled_filename_cannot_forge_a_log_line(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Non-success: a store is whatever an artifact download put there, so a
+    file's *name* is as untrusted as its content. A newline in it must not
+    start a second log line (a GitHub workflow command such as ``::error::``
+    is honoured only at the start of a line), and its length is bounded."""
+    directory = tmp_path / witness.WITNESS_DIR_NAME
+    directory.mkdir(parents=True)
+    if not _can_name_a_file_with_a_newline(directory):
+        pytest.skip("this filesystem cannot hold a newline in a filename (capability probe)")
+    (directory / ("x\n::error::forged" + "y" * 200 + ".json")).write_bytes(b"{}")
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+    # A set: the capture handler is attached to the emitting logger and, via
+    # propagation, to the root, so one record can arrive twice.
+    skipped = {m for m in _messages(caplog) if "skipping" in m}
+    assert len(skipped) == 1, skipped
+    (line,) = skipped
+    assert "\n" not in line
+    assert len(line) < 200, len(line)
+    assert "content does not match the sha256" in line
+
+
+def test_an_ordinary_hash_filename_is_logged_bare(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """The escaping applies to a hostile name only: the normal content-hash
+    filename an operator greps for appears unquoted."""
+    path = _write_raw(tmp_path, {**_GOOD, "schema_version": 2})
+    with _captured(caplog):
+        witness.load_witnesses(tmp_path)
+    assert any(f"skipping {path.name}: " in m for m in _messages(caplog)), _messages(caplog)
+
+
+def test_the_filename_shape_is_derived_from_the_hash_function(tmp_path: Path) -> None:
+    """Regression guard for the writer/reader contract: the digest length the
+    loader expects in a filename is the length ``compute_hash`` produces, and
+    a file the writer just produced is one the loader logs bare (unescaped)."""
+    assert len(witness.compute_hash(b"")) == witness.HEX_DIGEST_LENGTH
+    written = witness.write_witness(tmp_path, _witness())
+    assert written.suffix == witness.WITNESS_SUFFIX
+    assert witness._HASH_NAME.fullmatch(written.name) is not None
+    assert witness._HASH_NAME.fullmatch(written.stem) is None

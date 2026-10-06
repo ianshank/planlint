@@ -24,8 +24,9 @@ Each item is its own OpenSpec change, spec-drafter → spec-adversary first.
    R1–R8 there; three of those (find `GNUmakefile`/`makefile`; document
    `GENERIC_STAGES`; document `hard_coded()`'s bullet scoping) are hours of
    work each and close cases where the gate currently says PASS on a spec
-   that is lying. Widening `indeterminate` stays a 1.0 policy question,
-   exactly as the Action-contract deferral table records.
+   that is lying. Widening `indeterminate` was the remaining 1.0 policy
+   question; `docs/peer-review-2026-10.md` D3 answers it and
+   `widen-indeterminate-unchecked-citations` is the drafted package.
 2. ~~**Finding line numbers.**~~ Shipped in `add-finding-line-hits`.
    `Rule.check` may yield `CheckHit` with a 1-based locus; `evaluate()` copies
    it onto `Finding.line` when `>= 1`. SARIF region and GitHub `line=` still
@@ -33,8 +34,10 @@ Each item is its own OpenSpec change, spec-drafter → spec-adversary first.
    (G003–G005/G008) and whole-tree G006/G009 stay at line 0 on purpose.
 3. ~~**Named Action inputs** for `--change` and `--dialect`.~~ Shipped in
    `add-finding-line-hits`. Empty defaults omit the flag. No raw
-   `extra-args`. `--require-witness` stays off the Action (the store is
-   gitignored; a fresh CI checkout always fails it closed).
+   `extra-args`. `--require-witness` stayed off the Action because the store
+   is gitignored and a fresh CI checkout always fails it closed;
+   `add-witness-ci-artifacts` (drafted, `docs/peer-review-2026-10.md` D1)
+   adds it behind a `--witness-dir` a downloaded artifact can be read from.
 4. **One real `evals/` run** (item 16 below), then **CP-8** agent-threat
    corpus + H007 with a CI-exposed catch-rate. Detect-corpus and matcher
    floors are already shipped.
@@ -150,9 +153,11 @@ later than this list. They sharpen a tool nobody has adopted yet.
      directory.
    - **`evidence-sha256` output.** Reopen if two runs of the same tree need a
      machine-checkable identity stronger than byte-identical evidence files.
-   - **Widening `indeterminate`.** Today it is "zero specs checked". Reopen if
-     "no machinery detected" (no Makefile, no coverage floor) should fail
-     closed the same way.
+   - **Widening `indeterminate`.** Today it is "zero specs checked". The
+     reopen trigger used to be "no machinery detected";
+     `docs/peer-review-2026-10.md` D3 rejects that predicate (it reds a tox
+     repository whose specs never cite Make) and plans `indeterminate` on an
+     unwaived G010 instead, as `widen-indeterminate-unchecked-citations`.
 
 6. **Coverage trend gating** — `check_coverage_floor.py` gates against an
    absolute floor. A trend gate (branch coverage must not *decrease* vs.
@@ -217,11 +222,11 @@ with the trigger that reopens it — not omitted.
 | Deferred | Reopen when |
 |---|---|
 | **Pull-request comments.** | An adopter says annotations, the job summary and the evidence artifact are not enough. The shape is already decided: an unprivileged scanner on `pull_request` uploading an artifact, and a separate `workflow_run` workflow that checks out trusted default-branch code, downloads that artifact and comments. Never a write permission on the scan job, and never `pull_request_target`. |
-| **An `extra-args` input.** | A named external adopter cannot reach a flag they need. Three real `validate` flags are currently unreachable through the action — `--change`, `--dialect`, `--require-witness` — and each should become its own named input when somebody wants it, rather than a pass-through that makes the whole CLI an undocumented public API. `--require-witness` is the one to leave alone: the witness store is gitignored, so a fresh CI checkout always fails it closed. |
+| **An `extra-args` input.** | A named external adopter cannot reach a flag they need. The policy holds — each flag becomes its own named input when somebody wants it, never a pass-through that makes the whole CLI an undocumented public API — and two of the three `validate` flags this row once listed have since shipped that way: `change` and `dialect` are named inputs (`add-finding-line-hits`, item 3 above). The third, `--require-witness`, was left off because the witness store is gitignored, so a fresh CI checkout always fails it closed. **Planned:** `add-witness-ci-artifacts` (`docs/peer-review-2026-10.md` D1) adds `require-witness` and `witness-dir` as named inputs, reading a store the consumer workflow downloads under `$RUNNER_TEMP`, so the action still writes nothing into the workspace. |
 | **A floating `v1` tag and a Marketplace listing.** | The contract is declared stable at 1.0. Both need a root `action.yml` or a moving tag, and moving a tag on every release needs `contents: write` in the release workflow, which currently holds `contents: read` plus `id-token: write` on the publish job alone. Widening that for a convenience is the wrong trade while an exact tag already pins the CLI. |
 | **SHA-pinning the third-party actions inside `action.yml`.** | The pins can be resolved and verified. `setup-python@v5` and `upload-artifact@v4` float by major tag today while the README tells adopters to pin exactly — a real inconsistency, deferred only because a wrong sha is worse than a floating tag and this pass could not verify them. |
 | **Rebasing SARIF paths for a subdirectory target.** | Someone runs the action in a monorepo. Annotations already carry the prefix (`report --path-prefix`); SARIF does not, because rebasing it would break the byte-identity with `validate --format sarif` that the projection is held to. The fix is the same flag applied to the SARIF projection, behind the same opt-in. |
-| **Widening `indeterminate` to "no machinery detected".** | The rule-semantics question gets its own spec-drafter → spec-adversary pass. A target with no Makefile and no coverage floor passes the cited-stage and hard-coded-threshold rules vacuously; the action now *reports* that through `discovery-warnings` and a warning annotation, which is projection. Changing what `status` says about it is policy, and policy belongs in the rules. |
+| **Widening `indeterminate` to "no machinery detected".** | The rule-semantics question gets its own spec-drafter → spec-adversary pass. A target with no Makefile and no coverage floor passes the cited-stage and hard-coded-threshold rules vacuously; the action now *reports* that through `discovery-warnings` and a warning annotation, which is projection. Changing what `status` says about it is policy, and policy belongs in the rules. **Planned since:** `widen-indeterminate-unchecked-citations` (`docs/peer-review-2026-10.md` D3) keys the status on an unwaived G010 — the specs cite stages the run could not check — never on missing machinery alone. |
 | **A per-rule canonical-envelope snapshot corpus.** | The rule set stops changing shape. Each rule already has passing and violating fixtures in the test suite; what does not exist is a committed golden envelope per rule, which would re-pin on every registry edit for a property the existing tests already hold. |
 
 ## Deferred / out of scope
@@ -265,13 +270,17 @@ it is not cargo-culted into the v0.1 surface.
     written; re-measured at `c304a3d` it is **122**: 28 in `openspec_graph/`,
     8 in `tools/`, 86 in tests. The debt grew 22% while being tracked here as
     a fixed number, which is the argument for doing the rewrap rather than
-    re-counting it again. The `select` list added alongside
+    re-counting it again (and at `6666444` it is **121**: 29, 5, 87 — a
+    third count, still no rewrap). The `select` list added alongside
     this note enables every family that was already at or near zero, and
     names `E501` as the one deliberate omission. The work owed is the
     rewrap, as its own change: bundling 100 reflowed lines across a dozen
     files into an unrelated branch buries whatever else that branch did.
 
-19. **`tools/` is linted and typechecked but measured by nothing** —
+19. ~~**`tools/` is linted and typechecked but measured by nothing**~~ —
+    **shipped** in `gate-tools-coverage`: `make coverage-tools` gates `tools/`
+    against `[tool.specgraph] tools_line_fail_under` / `tools_branch_fail_under`
+    (95.7% / 92.8% at the 2026-10 review). The original note follows as history:
     `[tool.coverage.run] source` is `["openspec_graph"]`, so the gate scripts
     that enforce every other gate have no coverage number of their own. Adding
     `--cov=tools` reported 88.3% line / 84.6% branch when this note was
@@ -291,6 +300,35 @@ it is not cargo-culted into the v0.1 surface.
     `check_secrets`'s gitleaks-present path) can be judged on their merits.
     Worth doing before the floor is ever raised, since today the number does
     not describe what it claims to.
+
+20. **SessionStart hook for cloud sessions** — identified by
+    `docs/peer-review-2026-10.md`'s second pass, not wired. The root
+    `AGENTS.md` tells an agent to run `planlint --target . validate` before
+    editing `openspec/`; in a fresh cloud container the first run printed
+    `planlint: command not found` (exit 127) until `pip install -e ".[dev]"`
+    ran. A SessionStart hook guarded on the remote-session environment would
+    make that instruction executable on arrival. Not wired here because it
+    installs packages when a session starts — a local contributor's session
+    must not — and the guard needs its own test in
+    `tests/test_claude_hooks.py` beside the PostToolUse ones.
+
+21. **PR babysitting is a loop, not a hook.** `add-witness-ci-artifacts`
+    expects its first hosted `witness-gate` run to name exactly the citations
+    CI does not back. Watching a pull request until it is green is a session
+    loop (`/loop`, or a PR subscription), not repository configuration; no
+    hook is planned for it.
+
+22. **Decompose `cli.py`** (`docs/peer-review-2026-10.md` N8a). 1029 lines;
+    `build_parser` is 148 lines and `cmd_validate` 119 with complexity 14.
+    Its own change package in the shape of `decompose-god-files`, with the
+    same pure-move proof (collected test names set-identical, `validate` /
+    `graph` / `rules` golden hashes unmoved). Not bundled into a planning PR.
+
+23. **Six functions above ruff's complexity limit** (N8b): `parse_makefile`
+    15, `cmd_validate` 14, `build_delta` 14, `cmd_report` 12,
+    `find_threshold` 12, `scoped_fail_under` 11. `C901` stays unselected —
+    turning it on now adds a backlog, not a gate. Reduce alongside item 22,
+    case by case, then select it.
 
 ## Skills / agents
 

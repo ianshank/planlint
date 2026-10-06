@@ -54,7 +54,7 @@ CI-uploaded witness stub (target, exit code, coverage number, commit SHA).
 This is the line competitors cannot cross without becoming CI infrastructure.
 
 > **As shipped, v2 does not yet reach CI** (`docs/peer-review-2026-09.md`
-> F7). The witness store is `.planlint/witnesses` and `.gitignore` line 52 is
+> F7). The witness store is `.planlint/witnesses` and `.gitignore` line 55 is
 > `.planlint/`, so a fresh checkout has an empty store and
 > `--require-witness` always fails W001 closed. The repository documents this
 > honestly and the Action deliberately omits the flag — neither is a defect.
@@ -64,6 +64,10 @@ This is the line competitors cannot cross without becoming CI infrastructure.
 > The wording above ("CI-uploaded witness stub") describes the design that
 > would deliver it; the implementation is a local store. Tracked as **R7**,
 > and it is sequenced *behind* v3 and v4 today, which is the wrong order.
+> **Planned** as `add-witness-ci-artifacts` (`docs/peer-review-2026-10.md`
+> D1/D2): the store is already portable; what was missing is a
+> `--witness-dir`, a recorder action, and a gate that proves it on this
+> repository's own CI before it is offered to anyone else's.
 
 ### v3 — Portfolio Nervous System
 
@@ -596,7 +600,9 @@ change package (spec-drafter → spec-adversary first):
    live fail-open cases — most importantly **`GNUmakefile` and lowercase
    `makefile` are not discovered at all**, so a repo with a valid makefile
    and a genuinely broken citation reports PASS. Widening `indeterminate`
-   remains a 1.0 policy question.
+   was the remaining policy question; `docs/peer-review-2026-10.md` D3
+   answers it and `widen-indeterminate-unchecked-citations` is the drafted
+   package.
 2. **Finding line numbers** — `Rule.check` returns strings; `Finding.line`
    stays 0; SARIF omits the region. Criteria and waivers already carry
    lines. This is a check-contract change, not a wire-up.

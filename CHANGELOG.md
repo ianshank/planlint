@@ -5,6 +5,76 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — a peer-review deep dive, and three reviewed change packages
+
+- **`docs/peer-review-2026-10.md`** re-runs every reproduction in
+  `docs/peer-review-2026-09.md` at `6666444`: F1, F3 and F4 closed as
+  measured, F5 documented, F2 stands, F7 open. It adds eight findings — a bare
+  `##` line that fabricates a requirement and a false U002 ERROR; eleven
+  stages cited on verification lines, six of which no pull-request job runs by
+  name; W001 letting a failing matrix leg be out-voted; a witness store that is
+  already portable and only lacks a path override; a G010 waiver with no
+  effect; stale planning numbers; five defects in the harness that drafted the
+  packages; and the code-shape debt, measured.
+- **Three OpenSpec change packages, `Status: DRAFT`, none implemented**, each
+  drafted by `spec-drafter`, reviewed by `spec-adversary` and revised:
+  `fix-heading-regex-newline-span` (the bare-heading defect, across all six
+  heading regexes), `widen-indeterminate-unchecked-citations` (the Action's
+  `indeterminate` on an unwaived G010, with the harness-dialect cost stated),
+  and `add-witness-ci-artifacts` (`--witness-dir`, a recorder action, and a
+  dogfood witness gate on this repository's own CI).
+
+### Added — `make stage-citations`
+
+- **`tools/stage_citations.py`** reports, per cited make stage, how many specs
+  mention it (what G004 reads), how many cite it on a verification line (what
+  W001 reads), and which workflow files invoke it directly. A report, not a
+  gate — the `make matcher-accuracy` shape (`DEC-PM-011`): exit 0 whatever it
+  finds, exit 2 when it cannot run — no spec tree, an unreadable spec or
+  workflow, or an unknown `--workflow`. Only `run:` scripts are read, each
+  lexed with quotes and comments honoured, and a stage counts as invoked only
+  where `make <stage>` stands in command position — not quoted, printed,
+  commented out, passed as an argument, or in a step's `name:`. It exists
+  because
+  the review's first count of stages witness mode would check used the wrong
+  column; `--root <checkout> --workflow ci.yml` reproduces the review's table
+  at `6666444` exactly.
+
+### Added — debug logging where witness mode is opaque
+
+- **`witness.load_witnesses` names every record it drops, and why**, and the
+  commit-sha lookup says which of its four failure modes occurred. A CI run
+  reporting W001 "never witnessed" against a store that visibly holds files
+  can now be diagnosed with `--verbose`. DEBUG only: the default run is silent,
+  stdout is untouched, and no verdict changes. The git timeout is now the
+  named constant `detect.GIT_TIMEOUT_SECONDS`.
+
+### Fixed — contributor harness
+
+- **The documented `spec.md` hook warning had never fired.** The PostToolUse
+  hook carried two `case` arms with the identical pattern; bash takes the
+  first, so the dialect-sniffing warning `docs/hooks.md` described was dead
+  code while every hook test stayed green. One merged arm now names four
+  traps, and `tests/test_claude_hooks.py` fails on any duplicated arm.
+- **The agent and skill guard skipped digit-bearing make targets.**
+  `tests/test_agent_skill_docs.py` matched targets with `[a-z-]`, so a
+  reference to `e2e-live`, or to a typo of it, was never checked. It now uses
+  the stage grammar `MAKE_REF` uses.
+
+### Changed — contributor harness
+
+- **`spec-drafter` can run the gate it is asked to run.** It had no shell, so
+  all three drafts here reported "gate not run" while the hook told them to
+  run it. It now carries `Bash` for read-only checks only, runs the gate and
+  the citation test before finishing, and its instructions name the four
+  traps. `spec-adversary` gains a check that every count a draft states is
+  re-measured and that witness claims count verification lines.
+- **New contributor skill `planlint-change-package`**: the draft → gate →
+  adversarial review → revise loop, with its traps, written down.
+- **`openspec/AGENTS.md` names a fourth trap**: the verification marker quoted
+  inside an acceptance criterion's own prose becomes its verification line,
+  so H001 fires on a criterion that does cite a stage.
+
 ### Added — three rules closing the fail-opens the peer review measured
 
 Rule count 26 -> 29. All three are additive: no repository that passes

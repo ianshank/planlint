@@ -325,7 +325,10 @@ One observation from writing the requirement-count property, not a failure:
 the upstream `REQUIREMENT` regex's `\s+` after the heading hashes can span a
 newline, so a bare `##` line followed by a plain-prose `Requirement: x` line
 would count as a heading. The generator never emits an empty heading, so it
-did not fire. Low priority; noted for the next parser change.
+did not fire. Low priority; noted for the next parser change. **Reproduced
+through the CLI at `6666444`** (`docs/peer-review-2026-10.md` N1): the bare
+line manufactures a requirement and a false U002 ERROR; the fix is planned
+as `fix-heading-regex-newline-span`, across all six heading regexes.
 
 ### C2. What was implemented from this plan
 

@@ -183,6 +183,14 @@ detector, and `test_no_negation_pattern_misfires_more_than_it_fires` fails if
 one is added. `.claude/skills/planlint-add-phrasing-case/SKILL.md` is the
 checklist for adding a sentence or a pattern.
 
+`make stage-citations` is the same kind of report for the other number a
+planning document is tempted to count by hand: per cited make stage, how many
+specs mention it (what G004 reads), how many cite it on a verification line
+(what W001 reads under `--require-witness`), and which workflow files invoke
+it directly. It exits 0 whatever it finds and 2 only when it cannot run. Its
+behaviour is pinned by `tests/test_stage_citations.py`, including an
+invariant run against this repository rather than a snapshot of its counts.
+
 ## Property-based tests
 
 `tests/test_properties.py` states five invariants over the parsers that read
