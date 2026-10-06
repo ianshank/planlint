@@ -277,7 +277,10 @@ it is not cargo-culted into the v0.1 surface.
     rewrap, as its own change: bundling 100 reflowed lines across a dozen
     files into an unrelated branch buries whatever else that branch did.
 
-19. **`tools/` is linted and typechecked but measured by nothing** —
+19. ~~**`tools/` is linted and typechecked but measured by nothing**~~ —
+    **shipped** in `gate-tools-coverage`: `make coverage-tools` gates `tools/`
+    against `[tool.specgraph] tools_line_fail_under` / `tools_branch_fail_under`
+    (95.7% / 92.8% at the 2026-10 review). The original note follows as history:
     `[tool.coverage.run] source` is `["openspec_graph"]`, so the gate scripts
     that enforce every other gate have no coverage number of their own. Adding
     `--cov=tools` reported 88.3% line / 84.6% branch when this note was
@@ -297,6 +300,35 @@ it is not cargo-culted into the v0.1 surface.
     `check_secrets`'s gitleaks-present path) can be judged on their merits.
     Worth doing before the floor is ever raised, since today the number does
     not describe what it claims to.
+
+20. **SessionStart hook for cloud sessions** — identified by
+    `docs/peer-review-2026-10.md`'s second pass, not wired. The root
+    `AGENTS.md` tells an agent to run `planlint --target . validate` before
+    editing `openspec/`; in a fresh cloud container the first run printed
+    `planlint: command not found` (exit 127) until `pip install -e ".[dev]"`
+    ran. A SessionStart hook guarded on the remote-session environment would
+    make that instruction executable on arrival. Not wired here because it
+    installs packages when a session starts — a local contributor's session
+    must not — and the guard needs its own test in
+    `tests/test_claude_hooks.py` beside the PostToolUse ones.
+
+21. **PR babysitting is a loop, not a hook.** `add-witness-ci-artifacts`
+    expects its first hosted `witness-gate` run to name exactly the citations
+    CI does not back. Watching a pull request until it is green is a session
+    loop (`/loop`, or a PR subscription), not repository configuration; no
+    hook is planned for it.
+
+22. **Decompose `cli.py`** (`docs/peer-review-2026-10.md` N8a). 1029 lines;
+    `build_parser` is 148 lines and `cmd_validate` 119 with complexity 14.
+    Its own change package in the shape of `decompose-god-files`, with the
+    same pure-move proof (collected test names set-identical, `validate` /
+    `graph` / `rules` golden hashes unmoved). Not bundled into a planning PR.
+
+23. **Six functions above ruff's complexity limit** (N8b): `parse_makefile`
+    15, `cmd_validate` 14, `build_delta` 14, `cmd_report` 12,
+    `find_threshold` 12, `scoped_fail_under` 11. `C901` stays unselected —
+    turning it on now adds a backlog, not a gate. Reduce alongside item 22,
+    case by case, then select it.
 
 ## Skills / agents
 

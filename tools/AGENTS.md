@@ -32,14 +32,14 @@ Three things this directory gets wrong if you are not watching:
 - **No third-party dependencies, ever.** Shared helpers go in
   [`_common.py`](_common.py). The seven gate scripts are additionally
   **stdlib-only** and run in a bare CI runner before anything is installed;
-  the four generators (`matcher_accuracy`, `render_mermaid`,
-  `render_plugin_manifests`, `render_rule_catalog`) import `openspec_graph`
-  deliberately, to avoid a second copy of logic that would drift, and so need
-  the package installed.
+  the five generators and reports (`matcher_accuracy`, `render_mermaid`,
+  `render_plugin_manifests`, `render_rule_catalog`, `stage_citations`) import
+  `openspec_graph` deliberately, to avoid a second copy of logic that would
+  drift, and so need the package installed.
 
 Three argv conventions, and the split is not "argparse or not" — group by
 what `main` expects. Program name first: the seven hand-rolled scripts, plus
-`matcher_accuracy`, which strips it itself. Arguments only:
+`matcher_accuracy` and `stage_citations`, which strip it themselves. Arguments only:
 `render_plugin_manifests`, `render_rule_catalog`, and `check_wheel_metadata`
 (whose `main` defaults `argv` to `None`). `run_tool_main`'s `pass_argv0` picks.
 

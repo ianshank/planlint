@@ -54,7 +54,7 @@ CI-uploaded witness stub (target, exit code, coverage number, commit SHA).
 This is the line competitors cannot cross without becoming CI infrastructure.
 
 > **As shipped, v2 does not yet reach CI** (`docs/peer-review-2026-09.md`
-> F7). The witness store is `.planlint/witnesses` and `.gitignore` line 52 is
+> F7). The witness store is `.planlint/witnesses` and `.gitignore` line 55 is
 > `.planlint/`, so a fresh checkout has an empty store and
 > `--require-witness` always fails W001 closed. The repository documents this
 > honestly and the Action deliberately omits the flag — neither is a defect.

@@ -118,12 +118,18 @@ mid-edit:
   disagreed and every gate stayed green, because nothing compared them.
 - Editing a change package's `spec.md`
   (`openspec/changes/*/specs/*/spec.md`) → reminds to run
-  `planlint validate --fail-on ERROR` before finishing. This file is the
-  exact one planlint dialect-sniffs; prose that quotes a dialect's own
-  marker strings (e.g. a heading name in backticks, while *documenting* that
-  dialect rather than writing it) can misclassify the spec as the dialect it
-  merely describes — a self-referential trap this repo has hit more than
-  once while writing specs *about* its own dialect grammar.
+  `planlint validate --fail-on ERROR` and
+  `pytest tests/test_spec_test_citations.py` before finishing, and names four
+  traps: a backticked `make <target>` in prose is read as a citation; prose
+  that quotes a dialect's own marker strings (a heading name in backticks,
+  while *documenting* that dialect) can misclassify the spec as the dialect
+  it merely describes; the verification marker written inside an acceptance
+  criterion's own prose becomes that criterion's verification line, so H001
+  fires on a criterion that does cite a stage; and every `pytest -k`
+  selector must name a real test. Until this branch the dialect warning sat
+  in a second `case` arm with the same pattern as the first, so it had never
+  fired; `test_no_case_alternative_is_shadowed_by_an_earlier_identical_one`
+  now fails on any duplicated arm.
 - Editing anything under `tests/corpus/targets/` → reminds that each
   `expected.json` is a hand-written label, never a snapshot of the detector,
   and to run `pytest tests/test_detect_corpus.py`. The
@@ -147,7 +153,11 @@ See also `.claude/agents/` (spec-drafter, spec-adversary, planlint-verifier —
 this repo's own dogfooded OpenSpec change-package workflow) and the
 contributor skills under `.claude/skills/`: `planlint-add-rule` (the checklist
 the first hook case above points at), `planlint-add-eval-case`,
-`planlint-add-detect-shape` and `planlint-add-phrasing-case`. The hook script
+`planlint-add-detect-shape`, `planlint-add-phrasing-case`, and
+`planlint-change-package` (the draft → gate → adversarial review → revise
+loop that `spec-drafter` and `spec-adversary` run inside). `spec-drafter`
+carries a shell for read-only checks so it can run the gate its own hook asks
+for; it writes only under its package. The hook script
 itself is held to its wiring by `tests/test_claude_hooks.py`: every path
 class above must produce a reason, an unrelated path must produce none, and
 `.claude/settings.json` must point at the script.

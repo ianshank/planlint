@@ -21,6 +21,11 @@
 > (R8), and `fix-heading-regex-newline-span` (a defect this deep dive found).
 > The rewritten remainder at the bottom replaces the R7/R8 rows of the
 > 2026-09 table; everything else in that document stands.
+>
+> A second pass, after the packages were drafted, reviewed the branch as a
+> whole: the harness that drafted them, and the code's shape. Its findings are
+> N7 and N8; the harness defects are fixed on this branch with tests, and the
+> code-shape debt is measured and dispositioned rather than bundled in.
 
 ## Why this review exists
 
@@ -173,6 +178,11 @@ steps to their make targets and run the aggregates somewhere a pull request
 can see. Nothing in the specs needs to change — the three names that never
 reach a verification line are not claims witness mode makes.
 
+The table is regenerated, not transcribed: `make stage-citations` prints it
+for the current tree, and `python tools/stage_citations.py --root <a checkout
+of 6666444> --workflow ci.yml` reproduces every row above, including the six
+stages in its last line.
+
 ### N3 — W001 lets a failing matrix leg be out-voted by a passing one **[Certain]**
 
 `rules_witness._missing_witness` passes a citation when *any* witness at the
@@ -258,6 +268,46 @@ why".
 | `tools/` measures 66.5% line; four scripts at 0%; the fix is a sibling helper for in-process invocation | `next-steps.md` item 19 | **Closed** by `gate-tools-coverage`: `make coverage-tools` is a hard gate with `[tool.specgraph] tools_line_fail_under` / `tools_branch_fail_under`. Re-run here: see Appendix A |
 | v2 (witness mode) sequenced ahead of v3 and v4 "which is the wrong order" | `differentiation-roadmap.md` v2 note | Still the recorded order. R7 now has a package; the roadmap's note should point at it rather than at the gap |
 | `v0.2.0` is the release that carries `report`, G010, G011, S005 | CHANGELOG `Unreleased`, distribution plan §3 | Still unreleased: `origin` carries `v0.1.0` only. Every contract change below ships in 0.2.0 or later; none needs a version bump of its own |
+
+### N7 — the harness that drafted these packages had five defects **[Certain]**
+
+The three packages were drafted by the `spec-drafter` subagent and reviewed by
+`spec-adversary`, with the PostToolUse hook in `.claude/hooks/` nudging after
+every write. Watching that harness run surfaced defects in it, each now fixed
+on this branch with a test that fails without the fix:
+
+| Defect | How it showed | Fix |
+|---|---|---|
+| The hook carried two `case` arms with the identical `spec.md` pattern; bash takes the first, so the second — the dialect-sniffing warning `docs/hooks.md` documents — had never fired | Fed the hook a `spec.md` path: the first arm's text came back, the documented warning did not | One merged arm naming every trap; a test that fails on any duplicated alternative |
+| `spec-drafter` had no shell, while the hook told it to run the gate | All three drafters reported "gate not run"; the parent's run found one H001 and two H003 in the R7 draft | `Bash` for read-only checks only; the gate and the citation test are now part of its "before finishing" |
+| The verification marker quoted inside an acceptance criterion's prose became that criterion's verification line (`VERIFIED_BY.search` takes the first) | The R7 draft's H001: a criterion that cited a stage was reported as citing none | Documented as the fourth trap in `openspec/AGENTS.md`, the drafter, the hook, and the new `planlint-change-package` skill |
+| `tests/test_agent_skill_docs.py` matched make targets with `[a-z-]`, so `e2e-live`, or a typo of it, was skipped rather than checked | Found writing the stage tool's own regression test, which tripped over the same regex | The stage grammar `MAKE_REF` uses, plus a test that a digit-bearing typo is caught |
+| The witness loader dropped a bad record, and the sha lookup folded four failures to `None`, both silently | A W001 "never witnessed" against a store that visibly holds files could not say why | DEBUG lines naming each dropped file and its cause, and which of the four sha failures occurred; the default run stays silent and the verdict is unchanged; the git timeout became a named constant |
+
+The N2 measurement itself was a scratch script, which `docs/AGENTS.md` says
+a number in this directory should not be. It is now
+`tools/stage_citations.py` behind `make stage-citations`: a report, not a
+gate, in the shape `DEC-PM-011` gives `make matcher-accuracy`.
+
+### N8 — code shape at HEAD, measured **[Certain]**
+
+The second pass also measured the package and `tools/` for the debt a review
+is expected to name. Every row is a command's output, run at this branch's
+head; none of it is a regression this branch introduced.
+
+| Measure | Result | Disposition |
+|---|---|---|
+| Largest module | `cli.py`, 1029 lines; `build_parser` 148 lines, `cmd_validate` 119 | Deferred to its own change package, as `decompose-god-files` was; not bundled into a planning PR |
+| Functions over 60 lines | 15 of 253 | Same package; most are parsers or dispatchers whose length is their case list |
+| ruff C901, complexity above 10 | 6: `parse_makefile` 15, `cmd_validate` 14, `build_delta` 14, `cmd_report` 12, `find_threshold` 12, `scoped_fail_under` 11 | C901 is not selected; turning it on now adds a backlog, not a gate. Recorded beside the decomposition |
+| ruff E501 | 121 lines | `next-steps.md` item 18: its own change |
+| ruff BLE, B006, B008, SIM, RET, PIE, UP | 0 | Clean |
+| ruff T201 / PERF401 / PTH105–108 | 121 / 12 / 2 | Not defects: a CLI prints by design; the list loops are readable as written; `os.replace` is the atomic write `DEC-WM-012` requires |
+| Modules with a logger | 8 of 29 package modules | The two silent paths witness mode depends on now log (N7); the rest are pure projections that do no I/O |
+| Hard-coded values | One magic number, the git timeout | Named (N7). `make thresholds` passes: no threshold in the Makefile or a workflow |
+| NumPy | Not a dependency | `[project] dependencies = []` stays empty, as `docs/aqa.md` records |
+| Dependabot | Both action directories watched | R7's recorder directory is planned in its package (AC-WCA-32) |
+| Coverage | package 99.2% line / 97.6% branch; `tools/` 95.7% / 92.8%; floors 90 / 80 | Holding, with the new tool and its tests included |
 
 ---
 
@@ -387,12 +437,15 @@ Everything else there stands.
 
 | Id | Work | Size | Plan |
 |---|---|---|---|
-| **N1** | A bare heading line is never a heading: `[^\S\n]+` in six `parse_semantics` regexes, tests per regex, generator extended (D4) | hours | `openspec/changes/fix-heading-regex-newline-span/` — drafted |
-| **R8** | `indeterminate` also when an unwaived G010 was reported; `indeterminate-cause` output; `waived` in the envelope's finding dict; two fixtures (D3) | days | `openspec/changes/widen-indeterminate-unchecked-citations/` — drafted |
-| **R7** | `--witness-dir` on `validate` and `witness`; W001 "one passing, none failing" (N3); `require-witness`/`witness-dir` action inputs; a recorder action; a two-job template; the dogfood ladder (N2) (D1, D2) | days, plus CI runs to prove it | `openspec/changes/add-witness-ci-artifacts/` — drafted |
+| **N1** | A bare heading line is never a heading: `[^\S\n]+` in six `parse_semantics` regexes, tests per regex, generator extended (D4) | hours | `openspec/changes/fix-heading-regex-newline-span/` — drafted, reviewed twice, revised, gate-green |
+| **R8** | `indeterminate` also when an unwaived G010 was reported; `indeterminate-cause` output; `waived` in the envelope's finding dict; two fixtures (D3) | days | `openspec/changes/widen-indeterminate-unchecked-citations/` — drafted, reviewed, revised, gate-green |
+| **R7** | `--witness-dir` on `validate` and `witness`; W001 "one passing, none failing" (N3); `require-witness`/`witness-dir` action inputs; a recorder action; a two-job template; the dogfood ladder (N2) (D1, D2) | days, plus CI runs to prove it | `openspec/changes/add-witness-ci-artifacts/` — drafted, reviewed, revised, gate-green |
 | **N2** | Three CI steps run their gate bare and two aggregates never run on a pull request, so six verification-line stages have no witness | inside R7 | the dogfood milestone of `add-witness-ci-artifacts` |
 | **N5** | A G010 waiver has no effect | inside R8 | the waiver clears the widened `indeterminate` |
 | 18 | E501 rewrap, 121 lines | hours | its own change, as item 18 already says; the number should not be re-counted a fourth time |
+| **N7** | Harness defects: a dead hook arm, a drafter without a shell, the quoted-marker trap, a digit-blind guard, two silent paths | hours | **fixed on this branch**, each with a test that fails without it |
+| **N8a** | Decompose `cli.py` (1029 lines; parser builder 148; `cmd_validate` complexity 14) | days | its own change package, in the shape of `decompose-god-files` |
+| **N8b** | Six functions above ruff's complexity limit | per function | alongside N8a, case by case; C901 stays unselected until then |
 | L1 | S005 cannot see a wrong-level spec that also lacks success criteria | recorded | exits 2, loud; not planned |
 | L2 | AC-MFD-10 is a cross-host invariant no single CI leg verifies | recorded | not re-checked; not planned |
 
@@ -435,6 +488,10 @@ no rule-pack plugins before adoption, no agent that records a witness.
   the `action-contract` job is where their fixtures will run.
 - **AC-MFD-10.** Not re-checked; the `test-windows` leg exercises a
   case-insensitive filesystem but no leg exercises both at once.
+- **Whether the drafter's new shell is used as instructed.** `spec-drafter`
+  now carries `Bash` for read-only checks; nothing mechanically stops it
+  writing outside its package. The parent still runs the gate, and the hook
+  still nudges.
 
 ## Appendix — reproductions
 
@@ -448,7 +505,7 @@ is reproducible from the description.
 |---|---|
 | `planlint --target . validate --fail-on ERROR` | 41 specs, 0/0/0, PASS, exit 0 |
 | `planlint --target . detect` | dialect `harness`, 40 change packages, 20 make targets, floor 90 from `pyproject.toml:[tool.coverage.report].fail_under` |
-| `python -m pytest tests/ -q` | all collected tests pass |
+| `python -m pytest tests/ -q` | 1412 tests collected at `6666444`, all passing; 1455 on this branch after the second pass, all passing under `make pre-pr` |
 | `python -m ruff check … --select E501` | 121: `openspec_graph` 29, `tools` 5, `tests` 87 |
 | `make coverage-tools` | `tools/` line 95.2% (657/690) against floor 90, branch 92.3% (229/248) against floor 80, exit 0 — item 19 closed, as measured not as read |
 
@@ -490,14 +547,14 @@ reported at line 5, the bare `##` line.
 
 ### G. N2 — cited stages
 
-Each `openspec/changes/*/specs/*/spec.md` parsed with
-`openspec_graph.parse.parse_spec`; the "anywhere" column counts specs whose
-`ParsedSpec.make_refs` contains the stage, the "verification line" column
-counts specs with a criterion whose `Criterion.verified_by` matches
-`MAKE_REF` for it; `make` invocations read from `.github/workflows/*.yml`.
-41 specs, every one citing at least one stage on a verification line; the
-table in N2 is the full result. The R7 drafter caught the first version of
-this appendix measuring only the first column.
+`python tools/stage_citations.py --root <checkout of 6666444> --workflow
+ci.yml`. The tool parses each spec with `openspec_graph.parse.parse_spec`;
+"mentioned" counts specs whose `ParsedSpec.make_refs` holds the stage,
+"verified" counts specs with a criterion whose `Criterion.verified_by` cites
+it, and a workflow is credited only for a direct `make <stage>` invocation.
+41 specs at that commit, every one citing at least one stage on a
+verification line. The first version of this appendix measured only the
+first column, with a scratch script; the R7 drafter caught the conflation.
 
 ### H. N5 — G010 and its waiver
 
