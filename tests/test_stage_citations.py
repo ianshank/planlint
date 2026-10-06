@@ -117,6 +117,11 @@ def test_a_comment_a_flag_and_a_lookalike_command_are_not_invocations() -> None:
         "- name: make test",
         "run: ./notify --message make test",
         "run: true # make test",
+        "run: true # && make test",
+        "run: true;# && make test",
+        "run: echo 'x && make test'",
+        'run: echo "x && make test"',
+        "name: explain; make test",
     ],
 )
 def test_make_as_an_argument_or_label_is_not_an_invocation(line: str) -> None:
@@ -131,8 +136,9 @@ def test_make_as_an_argument_or_label_is_not_an_invocation(line: str) -> None:
     ("line", "stage"),
     [
         ("run: make test", "test"),
+        ('run: "make test"', "test"),
         ("      - run: make test", "test"),
-        ("          make test", "test"),
+        ("      - run: |\n          make test", "test"),
         ("run: cd sub && make test", "test"),
         ("run: make lint; make test", "test"),
         ("run: out=$(make test)", "test"),
@@ -140,6 +146,22 @@ def test_make_as_an_argument_or_label_is_not_an_invocation(line: str) -> None:
 )
 def test_make_in_command_position_is_an_invocation(line: str, stage: str) -> None:
     assert stage in sc.workflow_invocations(line)
+
+
+def test_run_block_commands_are_scanned_but_yaml_fields_are_not() -> None:
+    workflow = textwrap.dedent(
+        """\
+        name: explain; make docs
+        jobs:
+          test:
+            steps:
+              - name: explain; make lint
+              - run: |
+                  echo 'make docs'
+                  make test
+        """
+    )
+    assert sc.workflow_invocations(workflow) == {"test"}
 
 
 def test_an_unreadable_workflow_exits_two_rather_than_a_traceback(

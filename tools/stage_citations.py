@@ -64,16 +64,21 @@ SCHEMA_VERSION = 1
 WORKFLOW_DIR = Path(".github") / "workflows"
 
 # A shell invocation of make naming a stage, in *command position* only: at
-# the start of a line (a `run: |` block's continuation lines), straight after
-# `run:`, or after a shell separator (`;`, `&&`, `||`, `|`, `(` as in `$(...)`).
+# the start of a line (a `run: |` block's continuation lines), or after a shell
+# separator (`;`, `&&`, `||`, `|`, `(` as in `$(...)`).
 # Text that merely contains `make test` -- `echo "make test"`, an argument, a
 # step's `name:`, an inline comment -- is not credited, because crediting a
 # workflow with a stage it never ran is the one error this report exists to
 # avoid. The stage grammar is MAKE_REF's, so a stage this matches is one a
 # spec could cite; the first-character class keeps a flag (`make -j4`) out.
 _MAKE_INVOCATION = re.compile(
-    r"(?:^|[;&|(]|\brun:)[ \t]*(?:-[ \t]+)?make[ \t]+([a-z][a-z0-9_-]*)"
+    r"(?:^|[;&|(])[ \t]*(?:-[ \t]+)?make[ \t]+([a-z][a-z0-9_-]*)",
+    re.MULTILINE,
 )
+_YAML_MAPPING = re.compile(
+    r"^(?P<indent>[ \t]*)(?:-[ \t]+)?(?P<key>[A-Za-z_][\w-]*)[ \t]*:[ \t]*(?P<value>.*)$"
+)
+_BLOCK_SCALAR = re.compile(r"^[|>](?:[+-][1-9]?|[1-9][+-]?)?(?:[ \t]+#.*)?$")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -114,15 +119,90 @@ def spec_files(root: Path) -> tuple[detect.StackProfile, list[Path]]:
 def workflow_invocations(text: str) -> set[str]:
     """Stages a workflow file invokes directly as ``make <stage>``.
 
-    Full-line YAML comments are skipped: a comment explaining why a job does
-    *not* run ``make x`` must not credit it with running it.
+    Only ``run`` scalar values are inspected; shell quotes and comments are
+    masked so their separators cannot make a stage look like a command.
     """
-    stages: set[str] = set()
-    for line in text.splitlines():
-        if line.lstrip().startswith("#"):
+    lines = text.splitlines()
+    run_scalars: list[str] = []
+    index = 0
+    while index < len(lines):
+        match = _YAML_MAPPING.match(lines[index])
+        if match is None:
+            index += 1
             continue
-        stages.update(_MAKE_INVOCATION.findall(line))
+        key = match["key"]
+        value = match["value"]
+        if _BLOCK_SCALAR.fullmatch(value):
+            parent_indent = len(match["indent"])
+            body: list[str] = []
+            next_index = index + 1
+            while next_index < len(lines):
+                line = lines[next_index]
+                if line.strip() and len(line) - len(line.lstrip(" \t")) <= parent_indent:
+                    break
+                body.append(line)
+                next_index += 1
+            if key == "run":
+                run_scalars.append(
+                    " ".join(line.strip() for line in body)
+                    if value.startswith(">")
+                    else "\n".join(body)
+                )
+            index = next_index
+            continue
+        if key == "run":
+            run_scalars.append(_yaml_scalar(value))
+        index += 1
+
+    stages: set[str] = set()
+    for scalar in run_scalars:
+        stages.update(_MAKE_INVOCATION.findall(_mask_shell_quotes_and_comments(scalar)))
     return stages
+
+
+def _yaml_scalar(value: str) -> str:
+    """Remove YAML's outer quotes from a single-line scalar, if present."""
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] == "'":
+        return value[1:-1].replace("''", "'")
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        return value[1:-1]
+    return value
+
+
+def _mask_shell_quotes_and_comments(text: str) -> str:
+    """Mask shell data while retaining command separators outside quotes."""
+    chars = list(text)
+    quote: str | None = None
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if quote is not None:
+            if char != "\n":
+                chars[index] = " "
+            if quote == '"' and char == "\\" and index + 1 < len(text):
+                index += 1
+                if text[index] != "\n":
+                    chars[index] = " "
+            elif char == quote:
+                quote = None
+        elif char in {"'", '"'}:
+            quote = char
+            chars[index] = " "
+        elif char == "\\" and index + 1 < len(text):
+            chars[index] = " "
+            index += 1
+            if text[index] != "\n":
+                chars[index] = " "
+        elif char == "#" and (
+            index == 0 or text[index - 1].isspace() or text[index - 1] in ";&|("
+        ):
+            while index < len(text) and text[index] != "\n":
+                chars[index] = " "
+                index += 1
+            continue
+        index += 1
+    return "".join(chars)
 
 
 def workflow_stages(root: Path, only: Sequence[str] = ()) -> dict[str, set[str]]:
