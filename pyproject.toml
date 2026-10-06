@@ -123,6 +123,19 @@ branch_fail_under = 80
 tools_line_fail_under = 90
 tools_branch_fail_under = 80
 
+# Bounds for every `timeout-minutes` literal in `.github/workflows/*.yml`,
+# enforced by tests/test_workflow_hardening.py through
+# `_common.read_pyproject_int` -- one integer per key, which is why two keys
+# rather than an inline table. Measured on CI run #171 at 9c4b6e9: the slowest
+# job, `test-windows`, took 5m42s; the `test` legs 2m14s-3m41s;
+# `coverage-tools` 2m09s; every other job under 25s. Per-job values are about
+# three times the measurement, rounded up to a multiple of five. The floor
+# catches a timeout below a measured duration (a flaky red); the ceiling
+# catches a `300` typed for `30`, and sits well above the one unmeasured value
+# (release.yml's `gate`, which has never run).
+ci_job_timeout_minutes_min = 5
+ci_job_timeout_minutes_max = 45
+
 # Accuracy floors for the two matchers that read English prose rather than
 # structure, scored by `tools/matcher_accuracy.py` against
 # `tests/fixtures/phrasing/` and enforced by `tests/test_matcher_accuracy.py`.

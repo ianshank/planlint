@@ -5,7 +5,7 @@ number below is re-checked against the tree before the milestone that uses
 it; a sibling package landing first may move a line number without moving
 the fact.
 
-## Milestone 1 — Guard scaffolding, before any workflow edit
+## Milestone 1 — Guard scaffolding, before any workflow edit  [DONE]
 
 - `tests/support.py`: add `workflow_job_blocks(text) -> dict[str, str]`,
   moved verbatim from `tests/test_ci_hardening.py::_ci_job_blocks` (line 505
@@ -76,7 +76,7 @@ the fact.
   each go green.
 - **Gate:** `make test`
 
-## Milestone 2 — The action bumps, as one batch
+## Milestone 2 — The action bumps, as one batch  [DONE]
 
 - `.github/workflows/ci.yml`: `actions/checkout@v4` → `@v7` at lines 16, 48,
   80, 100, 140, 168, 247, 318, 352, 363; `actions/setup-python@v5` → `@v7` at
@@ -105,12 +105,15 @@ the fact.
   major and is not in any Dependabot pull request; leave it.
 - Before committing, confirm each target major exists and is the one
   Dependabot proposed by reading the seven pull requests' diffs (#28–#34);
-  do not merge them. After this lands on `main`, confirm Dependabot closes
+  do not merge them. Confirmed at implementation from the pull requests'
+  titles and head branches: checkout 4→7 (#31), setup-python 5→7 (#32, #28
+  for the composite action), upload-artifact 4→7 (#34, #29), download-artifact
+  4→8 (#33), gitleaks-action 2→3 (#30). After this lands on `main`, confirm Dependabot closes
   all seven as superseded; close any it does not, with a comment naming this
   package (DEC-HCW-001).
 - **Gate:** `make test`
 
-## Milestone 3 — Permissions, timeouts, concurrency
+## Milestone 3 — Permissions, timeouts, concurrency  [DONE]
 
 - `.github/workflows/ci.yml`: after `on:`, add top-level
   `permissions:` with `contents: read` only, then `concurrency:` with
@@ -146,7 +149,7 @@ the fact.
   pin, so nothing above should register (C-HCW-2, AC-HCW-20).
 - **Gate:** `make thresholds`, then `make test`
 
-## Milestone 4 — One Python default per workflow
+## Milestone 4 — One Python default per workflow  [DONE]
 
 - `.github/workflows/ci.yml`: a workflow-level `env:` block with
   `PYTHON_DEFAULT: "3.12"` and a comment: the single-interpreter version
@@ -173,7 +176,7 @@ the fact.
   adds keys, it does not replace the map.
 - **Gate:** `make test`
 
-## Milestone 5 — Python 3.14 as an experimental leg
+## Milestone 5 — Python 3.14 as an experimental leg  [DONE]
 
 - `.github/workflows/ci.yml`, `test` job: under `strategy.matrix`, add
   `include:` with one entry `python-version: "3.14"` and `experimental:
@@ -186,11 +189,11 @@ the fact.
   promise; the posture paragraph from Milestone 4 already says so (R-HCW-11,
   DEC-HCW-005).
 - Push, and record the run number of the first run showing the 3.14 leg in
-  this file. If the leg is red, the failure is the information: fix it in a
+  this file (recorded under Milestone 8 with the rest of the run evidence). If the leg is red, the failure is the information: fix it in a
   follow-up before Milestone 7; the job stays green either way.
 - **Gate:** `make test`
 
-## Milestone 6 — Dockerfile and its update bot
+## Milestone 6 — Dockerfile and its update bot  [DONE]
 
 - `Dockerfile`: line 9 becomes `FROM python:3.12-slim@sha256:<digest>`, tag
   kept inside the reference (DEC-HCW-007). The digest resolved from the
@@ -222,6 +225,18 @@ the fact.
   "$PWD":/repo planlint --target /repo validate --fail-on ERROR`, and
   `docker run --rm --entrypoint id planlint` showing uid 10001. Record the
   result here; this is the only check the image gets (C-HCW-5).
+- Recorded at implementation (2026-10-06): the digest re-resolved from the
+  registry index for `python:3.12-slim` is unchanged from drafting,
+  `sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f`.
+  The manual build was **not run**: the implementation environment has a
+  `docker` binary but no reachable daemon. The Dockerfile's shape (digest
+  pin, tag in the reference, `USER` after the install, `COPY` set) is held
+  by the guards; the build and the uid check remain the maintainer's to run
+  once, and this bullet is updated with the result.
+- `CHANGELOG.md`, `[Unreleased]` (moved here from Milestone 7 so the entry
+  describes what this pull request ships): a `Changed` entry for this
+  package and the `Deprecated` entry R-HCW-12 requires; Milestone 7 amends
+  the 3.14 line when the leg flips.
 - **Gate:** `make test`
 
 ## Milestone 7 — Flip 3.14 to a hard leg, after one green run

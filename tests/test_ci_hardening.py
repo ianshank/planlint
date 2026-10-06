@@ -24,7 +24,13 @@ import pytest
 from openspec_graph import detect
 from openspec_graph import graph as graph_module
 from openspec_graph.rules import RULES, rule_table
-from tests.support import captured_logger, env_without_coverage, load_tool, run_tool_main
+from tests.support import (
+    captured_logger,
+    env_without_coverage,
+    load_tool,
+    run_tool_main,
+    workflow_job_blocks,
+)
 from tests.support import write_spec as _write_spec
 
 TOOLS = Path(__file__).resolve().parent.parent / "tools"
@@ -660,31 +666,10 @@ def _ci_workflow_text() -> str:
     return (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
 
-def _ci_job_blocks(text: str) -> dict[str, str]:
-    """Job name -> body, line-scanned out of the workflow's `jobs:` mapping.
-
-    Structural, not substring matching (DEC-AQA-005): PyYAML is deliberately
-    not a dependency (zero-runtime-deps contract), and `jobs:` keys sit at a
-    fixed two-space indent, so a line scan is exact -- a cosmetic reformat
-    can't false-fail and a renamed job can't false-pass.
-    """
-    lines = text.splitlines()
-    try:
-        start = lines.index("jobs:") + 1
-    except ValueError:
-        return {}
-    blocks: dict[str, list[str]] = {}
-    current: str | None = None
-    for line in lines[start:]:
-        if line and not line.startswith(" "):
-            break  # left the top-level mapping
-        match = re.match(r"^  ([A-Za-z][\w-]*):\s*$", line)
-        if match:
-            current = match.group(1)
-            blocks[current] = []
-        elif current is not None:
-            blocks[current].append(line)
-    return {name: "\n".join(body) for name, body in blocks.items()}
+# The parser lives in tests/support.py as `workflow_job_blocks` since
+# harden-ci-workflows gave it a second module; the alias keeps this module's
+# two parser tests and every call site byte-identical (R-HCW-16).
+_ci_job_blocks = workflow_job_blocks
 
 
 def test_ci_job_blocks_returns_empty_when_jobs_key_is_absent() -> None:

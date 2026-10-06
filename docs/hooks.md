@@ -50,16 +50,36 @@ a local net before the round-trip to CI.
 | Job | Trigger | Gate |
 |---|---|---|
 | `test` (3.10–3.13) | push + PR | `make lint` + `make typecheck` + `make test` |
-| `test-windows` (3.12) | push + PR | same three gates on `windows-latest` (GNU make via Chocolatey) |
+| `test-windows` (PYTHON_DEFAULT) | push + PR | same three gates on `windows-latest` (GNU make via Chocolatey) |
 | `encoding-stress` | push + PR | `make e2e-live` under `PYTHONIOENCODING=ascii` (hard) |
 | `self-validate` | push + PR | `planlint validate --fail-on ERROR` (hard) |
 | `packaging` | push + PR | wheel build + `tools/check_wheel_metadata.py` (hard) |
 | `action-contract` | push + PR | the composite action run against every labelled fixture under `tests/fixtures/action/`, under a read-only token with no secrets (hard) |
 | `graph-diff` | PR only | `tools/diff_spec_graph.py` base→head (AC-CH-5/6) |
 | `security` | push + PR | gitleaks + no-hardcoded-thresholds (hard) |
-| `coverage-tools` (3.12) | push + PR | `make coverage-tools` — the `tools/` gate scripts against their own floors, `[tool.specgraph] tools_*_fail_under` (hard) |
+| `coverage-tools` (PYTHON_DEFAULT) | push + PR | `make coverage-tools` — the `tools/` gate scripts against their own floors, `[tool.specgraph] tools_*_fail_under` (hard) |
 | `docs` | push + PR | `make docs-check` (hard) |
 | `release` (separate workflow) | `v*` tag | `make pre-pr`, then a clean-venv smoke test of the `planlint` console script, then trusted publishing to PyPI |
+
+The workflow holds itself to the posture the gates inside it enforce
+(`harden-ci-workflows`; `tests/test_workflow_hardening.py` is the guard).
+Every job runs with a read-only token: `ci.yml` declares `permissions:
+contents: read` at the top, and a job widens only in its own block, under a
+comment naming the step that needs it (`security`, for gitleaks-action's
+commit listing on a pull request). Every job carries a `timeout-minutes`
+inside the range `[tool.specgraph] ci_job_timeout_minutes_min..max` in
+`pyproject.toml`, so a hung step costs minutes rather than GitHub's six-hour
+default. A `concurrency` group cancels a pull-request run when a newer push to
+the same branch arrives; a push to `main` keys on its SHA, so it is neither
+cancelled nor left pending to be superseded. The single-interpreter Python
+version is `env: PYTHON_DEFAULT` at the top of each workflow and nowhere else
+(the `PYTHON_DEFAULT` cells above); a new single-version job reads
+`${{ env.PYTHON_DEFAULT }}` rather than pasting a literal, and the guard holds
+that value equal to the composite action's input default and the Dockerfile's
+base tag, and to one of the `test` matrix's hard legs. A matrix leg added
+through `include:` with `experimental: true` is advisory -- its result is
+visible and cannot turn the run red -- and is not listed in the `test` row
+until it is hard.
 
 `typecheck` runs as a step inside the `test` matrix (so every supported Python
 version is type-checked), not as a standalone job.

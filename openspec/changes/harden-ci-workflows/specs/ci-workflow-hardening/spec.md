@@ -338,86 +338,86 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
 
 ## Acceptance Criteria
 
-- [ ] **AC-HCW-1:** every third-party `uses:` under `.github/workflows/`,
+- [x] **AC-HCW-1:** every third-party `uses:` under `.github/workflows/`,
   `.github/actions/`, `templates/` and in `README.md`'s workflow snippet is
   on the major its Dependabot pull request proposes, and all references to one action agree on one ref.
   (R-HCW-1, R-HCW-2)
-  _Verified by:_ the action-ref consistency guard in `tests/test_workflow_hardening.py` · stage: `make test`
+  _Verified by:_ `pytest -k test_every_reference_to_one_action_agrees_on_one_ref` · stage: `make test`
 
-- [ ] **AC-HCW-2 (non-success):** a single reference left on a retired major
+- [x] **AC-HCW-2 (non-success):** a single reference left on a retired major
   — one `actions/checkout@v4` in `templates/spec-gate.yml` while the
   workflows are on a later ref — fails the suite with a message naming the
   file and line of every disagreeing reference. (R-HCW-2, R-HCW-15)
-  _Verified by:_ the same guard run against a planted tree under `tmp_path` · stage: `make test`
+  _Verified by:_ `pytest -k test_a_leftover_retired_major_is_reported_with_file_and_line` · stage: `make test`
 
-- [ ] **AC-HCW-3:** `actions/upload-artifact` and `actions/download-artifact`
+- [x] **AC-HCW-3:** `actions/upload-artifact` and `actions/download-artifact`
   are on their proposed majors in the same tree, in `ci.yml`, `release.yml`
   and the composite action — landed in one commit, a review property of the
   diff — and the template under `skills/` is byte-identical to
   `templates/spec-gate.yml` after the bump. (R-HCW-3, DEC-HCW-012)
-  _Verified by:_ the action-ref consistency guard in `tests/test_workflow_hardening.py` for the pair, and `pytest -k test_skill_asset_matches_template` for the byte copy · stage: `make test`
+  _Verified by:_ `pytest -k "test_every_reference_to_one_action_agrees_on_one_ref or test_skill_asset_matches_template"` · stage: `make test`
 
-- [ ] **AC-HCW-4:** `ci.yml` declares top-level `permissions:` with
+- [x] **AC-HCW-4:** `ci.yml` declares top-level `permissions:` with
   `contents: read` as its only entry, and no `write` appears under any
   `permissions:` in the file. (R-HCW-4)
-  _Verified by:_ the permissions guard in `tests/test_workflow_hardening.py` · stage: `make test`
+  _Verified by:_ `pytest -k "test_ci_declares_read_only_permissions_at_the_top or test_no_write_permission_anywhere_in_ci"` · stage: `make test`
 
-- [ ] **AC-HCW-5 (non-success):** a `ci.yml` with no top-level block, or with
+- [x] **AC-HCW-5 (non-success):** a `ci.yml` with no top-level block, or with
   a `pull-requests: write` under any job, fails the suite naming the job; a
   job-level `permissions:` block in a job with no comment line above it
   fails naming the job. (R-HCW-4, R-HCW-15)
-  _Verified by:_ the permissions guard against planted trees · stage: `make test`
+  _Verified by:_ `pytest -k "test_a_permissive_workflow_is_named or test_an_uncommented_job_permissions_block_is_named or test_every_job_level_permissions_block_carries_a_comment"` · stage: `make test`
 
-- [ ] **AC-HCW-6:** `security` carries `contents: read` and
+- [x] **AC-HCW-6:** `security` carries `contents: read` and
   `pull-requests: read` with the comment naming gitleaks-action's commit
   listing, and sets `GITLEAKS_ENABLE_COMMENTS: "false"`; `action-contract`
   still carries its own `contents: read` block, so the existing contract
   test is unchanged. (R-HCW-5, R-HCW-4, C-HCW-1)
-  _Verified by:_ `pytest -k test_ci_workflow_has_an_action_contract_job` · stage: `make test`
+  _Verified by:_ `pytest -k "test_security_reads_pull_requests_and_posts_no_comments or test_ci_workflow_has_an_action_contract_job"` · stage: `make test`
 
-- [ ] **AC-HCW-7:** `release.yml`'s top-level `contents: read` and `publish`'s
+- [x] **AC-HCW-7:** `release.yml`'s top-level `contents: read` and `publish`'s
   `id-token: write` grant exactly what they did before, `publish`'s block now
   carries the comment R-HCW-4 requires, and its `gate → build → publish`
   chain is unchanged. (C-HCW-1, R-HCW-4)
   _Verified by:_ `pytest -k test_release_workflow_is_gated_and_uses_trusted_publishing` · stage: `make test`
 
-- [ ] **AC-HCW-8:** every job in every workflow file has a `timeout-minutes`
+- [x] **AC-HCW-8:** every job in every workflow file has a `timeout-minutes`
   literal, and every value lies within
   `[tool.specgraph] ci_job_timeout_minutes_min..max` read from
   `pyproject.toml`. (R-HCW-6, DEC-HCW-010)
-  _Verified by:_ the timeout guard in `tests/test_workflow_hardening.py` · stage: `make test`
+  _Verified by:_ `pytest -k test_every_job_in_every_workflow_has_a_timeout_inside_the_range` · stage: `make test`
 
-- [ ] **AC-HCW-9 (non-success):** a job with no `timeout-minutes`, and a job
+- [x] **AC-HCW-9 (non-success):** a job with no `timeout-minutes`, and a job
   with one above the ceiling, each fail the suite with a message naming the
   file and the job; a `pyproject.toml` missing either key is exit-2-style
   misconfiguration — the guard fails rather than skipping. (R-HCW-6, R-HCW-15)
-  _Verified by:_ the timeout guard against planted trees · stage: `make test`
+  _Verified by:_ `pytest -k "test_a_job_without_a_timeout_is_named or test_a_timeout_above_the_ceiling_is_named or test_a_missing_timeout_range_key_fails_rather_than_skips"` · stage: `make test`
 
-- [ ] **AC-HCW-10:** `ci.yml` has a top-level `concurrency:` whose group names
+- [x] **AC-HCW-10:** `ci.yml` has a top-level `concurrency:` whose group names
   `github.workflow`, switches on `github.event_name == 'pull_request'`
   between `github.ref` and `github.sha`, and whose `cancel-in-progress` is
   the pull-request expression; a literal `cancel-in-progress: true`, or a
   group keyed on `github.ref` with no event switch, fails the suite.
   `release.yml` has no `concurrency:`. (R-HCW-7, DEC-HCW-003)
-  _Verified by:_ the concurrency guard in `tests/test_workflow_hardening.py` · stage: `make test`
+  _Verified by:_ `pytest -k "test_ci_concurrency_never_cancels_a_push or test_a_cancelling_or_missing_concurrency_group_is_named or test_release_has_no_concurrency_group"` · stage: `make test`
 
-- [ ] **AC-HCW-11:** `ci.yml` and `release.yml` each declare
+- [x] **AC-HCW-11:** `ci.yml` and `release.yml` each declare
   `env: PYTHON_DEFAULT`, every single-version `setup-python` step reads
   `${{ env.PYTHON_DEFAULT }}`, and the only quoted version literals left in
   either file are inside `strategy.matrix` — the list and the `include:`
   leg. (R-HCW-8, DEC-HCW-004)
-  _Verified by:_ the Python-literal guard in `tests/test_workflow_hardening.py` · stage: `make test`
+  _Verified by:_ `pytest -k test_no_quoted_python_version_literal_outside_env_and_matrix` · stage: `make test`
 
-- [ ] **AC-HCW-12 (non-success):** one `python-version: "3.12"` pasted into a
+- [x] **AC-HCW-12 (non-success):** one `python-version: "3.12"` pasted into a
   step outside `strategy.matrix` fails the suite naming the file and line;
   the same text on a comment line is not reported. (R-HCW-8, R-HCW-15)
-  _Verified by:_ the Python-literal guard against a planted workflow · stage: `make test`
+  _Verified by:_ `pytest -k test_a_pasted_python_literal_is_named_with_file_and_line` · stage: `make test`
 
-- [ ] **AC-HCW-13:** the two `PYTHON_DEFAULT` values, `action.yml`'s
+- [x] **AC-HCW-13:** the two `PYTHON_DEFAULT` values, `action.yml`'s
   `python-version` default and the Dockerfile's base tag agree, and the value
   is a hard leg of the matrix; a disagreement in any one of the four fails
   naming each source and its value. (R-HCW-9)
-  _Verified by:_ the Python-agreement guard in `tests/test_workflow_hardening.py` · stage: `make test`
+  _Verified by:_ `pytest -k "test_the_default_python_agrees_across_workflows_action_and_dockerfile or test_the_default_python_is_a_hard_matrix_leg or test_a_disagreeing_default_is_named"` · stage: `make test`
 
 - [ ] **AC-HCW-14:** the `test` matrix carries a 3.14 leg through `include:`
   with `experimental: true` and the job-level `continue-on-error` expression;
@@ -425,67 +425,67 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   the first CI run on the branch shows the leg's own result, under the check
   name `test (3.14, true)`, without turning the workflow run red. (R-HCW-10,
   C-HCW-4, DEC-HCW-005)
-  _Verified by:_ the experimental-leg guard in `tests/test_workflow_hardening.py`, plus the first run on the branch read in the Actions log · stage: `make test`
+  _Verified by:_ `pytest -k "test_the_experimental_leg_is_an_expression_not_a_job_literal or test_a_job_literal_continue_on_error_is_named or test_matrix_versions_split_hard_from_experimental"`, plus the first run on the branch read in the Actions log · stage: `make test`
 
 - [ ] **AC-HCW-15:** after one green run the flag is removed, 3.14 is in the
   matrix list, the `3.14` classifier is present, and the classifier set
   equals the hard-leg set; `docs/hooks.md`'s `test` row names the lowest and
   highest hard legs. (R-HCW-10, R-HCW-11)
-  _Verified by:_ the classifier and hooks-row guards in `tests/test_workflow_hardening.py` · stage: `make test`
+  _Verified by:_ `pytest -k "test_classifiers_equal_the_hard_matrix_legs or test_hooks_test_row_names_the_matrix_bounds"` · stage: `make test`
 
 - [ ] **AC-HCW-16 (non-success):** a classifier with no matrix leg, or a hard
   matrix leg with no classifier, fails the suite naming the version; a
   `docs/hooks.md` `test` row that names a range the matrix does not have
   fails naming both. (R-HCW-11, R-HCW-15)
-  _Verified by:_ the classifier and hooks-row guards against planted files · stage: `make test`
+  _Verified by:_ `pytest -k test_a_classifier_or_row_drift_is_named` · stage: `make test`
 
-- [ ] **AC-HCW-17:** `CHANGELOG.md`'s `[Unreleased]` section carries a
+- [x] **AC-HCW-17:** `CHANGELOG.md`'s `[Unreleased]` section carries a
   `Deprecated` entry announcing that 0.4.0 drops Python 3.10, moves
   `requires-python` to `>=3.11` and removes the `tomli` extra, while
   `requires-python`, `[tool.mypy] python_version` and the 3.10 leg are
   unchanged in this change. (R-HCW-12, C-HCW-4, DEC-HCW-006)
   _Verified by:_ `pytest -k test_ci_workflow_has_a_windows_job` for the unchanged job shape, and the CHANGELOG entry read directly · stage: `make test`
 
-- [ ] **AC-HCW-18:** the Dockerfile's `FROM` is `python:3.12-slim@sha256:`
+- [x] **AC-HCW-18:** the Dockerfile's `FROM` is `python:3.12-slim@sha256:`
   followed by a 64-hex digest, a non-root `USER` follows the install step,
   the `COPY` set is unchanged, and `.github/dependabot.yml` has a `docker`
   entry for `/`. The image is still built by no CI job — its header says so
   — and the manual `docker build` and uid check are recorded in `tasks.md`
   as the only exercise it gets. (R-HCW-13, R-HCW-14, C-HCW-5, DEC-HCW-007)
-  _Verified by:_ `pytest -k "test_docker_build_context_is_sufficient_for_the_dynamic_version or test_every_composite_action_directory_is_watched_by_dependabot"` for the unchanged parts, and the Dockerfile and Dependabot guards in `tests/test_workflow_hardening.py` · stage: `make test`
+  _Verified by:_ `pytest -k "test_docker_build_context_is_sufficient_for_the_dynamic_version or test_every_composite_action_directory_is_watched_by_dependabot or test_dockerfile_from_is_digest_pinned_with_the_tag_in_the_reference or test_dockerfile_switches_to_a_non_root_user_after_install or test_a_digest_pinned_base_is_watched_by_a_docker_dependabot_entry"` · stage: `make test`
 
-- [ ] **AC-HCW-19 (non-success):** a `FROM` without a digest, a Dockerfile
+- [x] **AC-HCW-19 (non-success):** a `FROM` without a digest, a Dockerfile
   with no `USER` or with `USER root`, and a digest-pinned `FROM` with no
   `docker` Dependabot entry each fail the suite with a message naming the
   line. (R-HCW-13, R-HCW-14, R-HCW-15)
-  _Verified by:_ the Dockerfile and Dependabot guards against planted files · stage: `make test`
+  _Verified by:_ `pytest -k "test_a_weak_dockerfile_is_named or test_an_unwatched_digest_is_named"` · stage: `make test`
 
-- [ ] **AC-HCW-20:** `tools/check_no_hardcoded_thresholds.py` is unedited and
+- [x] **AC-HCW-20:** `tools/check_no_hardcoded_thresholds.py` is unedited and
   reports PASS on the real tree with the new lines in place. (C-HCW-2)
   _Verified by:_ the guard's own PASS line on the finished tree, with the script absent from the diff · stage: `make thresholds`
 
-- [ ] **AC-HCW-21:** no job is renamed or removed: `docs/hooks.md`'s CI table
+- [x] **AC-HCW-21:** no job is renamed or removed: `docs/hooks.md`'s CI table
   still lists every `ci.yml` job, and the Windows, encoding-stress and
   action-contract jobs are still found by the tests that look for them.
   (C-HCW-1)
   _Verified by:_ `pytest -k "test_hooks_ci_table_lists_every_ci_job or test_ci_workflow_has_a_windows_job or test_ci_workflow_has_an_encoding_stress_job or test_every_action_fixture_has_a_contract_leg"` · stage: `make test`
 
-- [ ] **AC-HCW-22:** the composite action's inputs, outputs and defaults are
+- [x] **AC-HCW-22:** the composite action's inputs, outputs and defaults are
   unchanged and it still declares no token input and no `permissions:`; its
   only diff is two `uses:` refs. (C-HCW-1)
   _Verified by:_ `pytest -k "test_the_action_needs_no_token_and_no_privileged_permission or test_no_workflow_or_template_uses_pull_request_target"` · stage: `make test`
 
-- [ ] **AC-HCW-23:** `tests/support.py` exposes `workflow_job_blocks(text)`,
+- [x] **AC-HCW-23:** `tests/support.py` exposes `workflow_job_blocks(text)`,
   `tests/test_ci_hardening.py` keeps `_ci_job_blocks` as an alias, and its
   two parser tests pass unchanged. (R-HCW-16, DEC-HCW-009)
   _Verified by:_ `pytest -k "test_ci_job_blocks_returns_empty_when_jobs_key_is_absent or test_ci_job_blocks_ignores_comments_mentioning_jobs"` · stage: `make test`
 
-- [ ] **AC-HCW-24:** the rule set is unchanged, the Makefile is unedited, and
+- [x] **AC-HCW-24:** the rule set is unchanged, the Makefile is unedited, and
   no third-party action ref is a commit SHA — this repository's own action
   ref in the templates and the README stays the SHA `tests/test_adopter_urls.py`
   requires; `pypa/gh-action-pypi-publish@release/v1` is untouched. (C-HCW-3,
   DEC-HCW-001, DEC-HCW-012)
-  _Verified by:_ `pytest -k test_rule_set_matches_baseline`, and the no-SHA assertion inside the action-ref guard · stage: `make test`
+  _Verified by:_ `pytest -k "test_rule_set_matches_baseline or test_no_third_party_action_ref_is_a_commit_sha or test_the_own_action_ref_is_exempt_from_the_sha_check"` · stage: `make test`
 
 - [ ] **AC-HCW-25:** the first CI run on the branch carries no "Node.js 20 is
   deprecated" annotation on any job, every job finishes inside its
@@ -503,12 +503,12 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   own group. (R-HCW-7, DEC-HCW-003, DEC-HCW-013)
   _Verified by:_ two consecutive pushes on the branch, and two consecutive pushes to `main`, read in the Actions log · stage: `make pre-pr`
 
-- [ ] **AC-HCW-27 (non-success):** a planted workflow containing
+- [x] **AC-HCW-27 (non-success):** a planted workflow containing
   `timeout-minutes: 15`, `PYTHON_DEFAULT: "3.12"` and a `concurrency:` block
   yields no finding from `check_workflow`, while a planted
   `--cov-fail-under=90` in the same file still does, and every workflow file
   is in the guard's scan. (C-HCW-2, R-HCW-15)
-  _Verified by:_ `pytest -k test_every_workflow_is_scanned_by_the_threshold_guard`, and the thresholds-quiet guard in `tests/test_workflow_hardening.py` · stage: `make test`
+  _Verified by:_ `pytest -k "test_every_workflow_is_scanned_by_the_threshold_guard or test_threshold_guard_stays_quiet_on_timeouts_env_and_concurrency"` · stage: `make test`
 
 ---
 

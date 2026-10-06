@@ -37,7 +37,7 @@ coverage floor or tool-version pin is re-introduced into the Makefile or
 workflow (rule G003 / AC-EH-6).
 
 What is *not* externalized and is intentional: GitHub Action versions
-(`actions/checkout@v4`), the Python version matrix, and the Docker base image
+(`actions/checkout@v7`), the Python version matrix, and the Docker base image
 (`python:3.12-slim`) are CI/infrastructure pins, not quality thresholds — they
 are not in scope of the no-hardcoded-thresholds gate.
 

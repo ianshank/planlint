@@ -5,6 +5,48 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed — the CI workflows now hold themselves to their own gates (M0)
+
+- **`harden-ci-workflows`.** Every third-party action in `.github/workflows/`,
+  the composite action, the adopter template and the README snippet moves to
+  the Node 24 major Dependabot proposed (#28–#34, superseded as one batch):
+  `actions/checkout` 7, `actions/setup-python` 7, `actions/upload-artifact`
+  7, `actions/download-artifact` 8, `gitleaks/gitleaks-action` 3. `ci.yml`
+  declares `permissions: contents: read` at the top and widens only on the
+  `security` job (`pull-requests: read` for gitleaks-action's commit listing,
+  with review comments turned off); every job in both workflows carries a
+  `timeout-minutes` inside a range `pyproject.toml` declares; a `concurrency`
+  group cancels a superseded pull-request run and keys every push to `main`
+  by SHA, so a `main` run is never cancelled or superseded; the
+  single-interpreter Python version is `env: PYTHON_DEFAULT` once per
+  workflow, held equal to the composite action's input default and the
+  Dockerfile's base tag; Python 3.14 joins the `test` matrix as an advisory
+  `include:` leg; the Dockerfile pins its base by digest and runs as a
+  non-root user, with Dependabot watching the digest.
+  `tests/test_workflow_hardening.py` holds every one of these as a
+  consistency property read from the files, and `tests/support.py` gains
+  `workflow_job_blocks`.
+- **`select-zero-cost-guards`.** Ruff's `T201` is selected, with `print`
+  exempt only in `openspec_graph/cli.py` and `tools/*`, where stdout is the
+  product; mypy runs `strict = true` with `warn_unreachable = true`.
+  `tools/diff_spec_graph.py` and `tools/render_mermaid.py` parse their
+  arguments with argparse (`--help` is the one new argument; a usage error is
+  exit 2 as before), read their artifact through the new
+  `_common.read_json`, and log their decision at DEBUG on the
+  `planlint.tools` logger with stdout byte-for-byte unchanged.
+  `tests/support.py` gains `captured_logger`, which attaches `caplog` to a
+  non-propagating logger directly; the one test whose records depended on
+  test order now passes alone.
+
+### Deprecated
+
+- **Python 3.10 support ends in 0.4.0.** PEP 619 ends upstream support for
+  3.10 in October 2026. In 0.4.0 `requires-python` moves to `>=3.11` and the
+  `tomli` extra goes with it (`tomllib` is in the standard library from
+  3.11). Nothing changes before that release: the 3.10 leg stays in the
+  matrix, and `requires-python = ">=3.10"` and `[tool.mypy] python_version =
+  "3.10"` are unchanged.
+
 ### Added — a peer-review deep dive, and three reviewed change packages
 
 - **`docs/peer-review-2026-10.md`** re-runs every reproduction in

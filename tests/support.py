@@ -11,6 +11,7 @@ import contextlib
 import importlib.util
 import logging
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -244,6 +245,39 @@ def captured_logger(caplog: pytest.LogCaptureFixture, name: str) -> Iterator[Non
             yield
     finally:
         target.removeHandler(caplog.handler)
+
+
+def workflow_job_blocks(text: str) -> dict[str, str]:
+    """Job name -> body, line-scanned out of a workflow's ``jobs:`` mapping.
+
+    Structural, not substring matching (DEC-AQA-005): PyYAML is deliberately
+    not a dependency (zero-runtime-deps contract), and ``jobs:`` keys sit at
+    a fixed two-space indent, so a line scan is exact -- a cosmetic reformat
+    can't false-fail and a renamed job can't false-pass. The body keeps every
+    line, comments included, so a caller that needs code only strips them.
+
+    Moved here from ``tests/test_ci_hardening.py`` (which keeps
+    ``_ci_job_blocks`` as an alias) when ``tests/test_workflow_hardening.py``
+    became its second user; ``tests/test_agent_artifacts.py`` still carries
+    its own near-copy, which is W7.4's business (DEC-HCW-009).
+    """
+    lines = text.splitlines()
+    try:
+        start = lines.index("jobs:") + 1
+    except ValueError:
+        return {}
+    blocks: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in lines[start:]:
+        if line and not line.startswith(" "):
+            break  # left the top-level mapping
+        match = re.match(r"^  ([A-Za-z][\w-]*):\s*$", line)
+        if match:
+            current = match.group(1)
+            blocks[current] = []
+        elif current is not None:
+            blocks[current].append(line)
+    return {name: "\n".join(body) for name, body in blocks.items()}
 
 
 def run_tool_main(

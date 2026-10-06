@@ -1,6 +1,7 @@
 # Dependabot configuration for planlint.
 #
-# Scope is deliberately narrow: GitHub Actions only.
+# Scope is deliberately narrow: GitHub Actions, and the Docker base image's
+# digest.
 #
 # Why not `pip`: this project declares ZERO runtime dependencies
 # (`[project] dependencies = []` in pyproject.toml, load-bearing and guarded by
@@ -58,3 +59,18 @@ updates:
       - "github-actions"
     commit-message:
       prefix: "ci"
+
+  - package-ecosystem: "docker"
+    # The Dockerfile pins its base by digest (harden-ci-workflows), and a
+    # digest nobody bumps is a pin that only gets staler; Dependabot moves the
+    # tag and the digest together. Labels, as above, are a request: Dependabot
+    # ignores a label the repository has not created.
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "build"
