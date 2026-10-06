@@ -306,7 +306,7 @@ head; none of it is a regression this branch introduced.
 | Modules with a logger | 8 of 29 package modules | The two silent paths witness mode depends on now log (N7); the rest are pure projections that do no I/O |
 | Hard-coded values | One magic number, the git timeout | Named (N7). `make thresholds` passes: no threshold in the Makefile or a workflow |
 | NumPy | Not a dependency | `[project] dependencies = []` stays empty, as `docs/aqa.md` records |
-| Dependabot | Both action directories watched | R7's recorder directory is planned in its package (AC-WCA-32) |
+| Dependabot | Two `github-actions` entries: the workflow root, and the one composite action directory on disk, `.github/actions/planlint` | R7's recorder directory does not exist yet; its package adds the third entry when it lands (AC-WCA-32) |
 | Coverage | package 99.2% line / 97.6% branch; `tools/` 95.7% / 92.8%; floors 90 / 80 | Holding, with the new tool and its tests included |
 
 ---
@@ -350,8 +350,10 @@ without becoming CI infrastructure"; the Action should gain the flag and the
 README should say so.
 
 **Counter-argument.** N2: turned on here, the gate fails on its first run —
-`pre-pr` cited by 36 specs, `ci` by 11, five more stages run under other
-names or not at all. Dogfooding would hold the package hostage to this
+six of the eleven stages on a verification line are run by no pull-request
+job under that name: `pre-pr` (the verification of five specs), `ci` (four),
+and four more — `validate`, `thresholds`, `security`, `wheel-check` — run
+bare or not at all. Dogfooding would hold the package hostage to this
 repository's own CI shape, which is not what an adopter buys.
 
 **Rebuttal.** The first-run failure is not a reason to skip the dogfood; it
