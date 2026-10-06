@@ -112,8 +112,9 @@ first may move a line number without moving the fact.
   accepts that Dependabot watches neither; DEC-HCW-014's last sentence:
   "`pypa/gh-action-pypi-publish@release/v1` has no major; W1.2 moves it with
   the SHA pins." `prepare-release-0-3-0`'s spec restates the constraint as
-  C-REL-4 ("SHA pinning is W1.2's package") and its AC-REL-12 cites the same
-  `test_no_third_party_action_ref_is_a_commit_sha`.
+  C-REL-4 ("SHA pinning is W1.2's package"), and its AC-REL-12 cited the
+  same `test_no_third_party_action_ref_is_a_commit_sha` until that package's
+  own revision recast both as a diff property that names no test.
 - **The pins, resolved.** Each repository's refs advertisement, fetched over
   HTTPS on 2026-10-06 — the same data `git ls-remote --tags
   https://github.com/<owner>/<repo>` prints, and the command the
@@ -175,10 +176,10 @@ first may move a line number without moving the fact.
   resolves every `pytest -k` selector in every file matching
   `openspec/changes/*/specs/*/spec.md` by substring over the test function
   names under `tests/`, read from the AST. `test_no_third_party_action_ref_is_a_commit_sha`
-  is cited on two verification lines in that glob: `harden-ci-workflows`'
+  was cited on two verification lines in that glob: `harden-ci-workflows`'
   AC-HCW-24 (re-pointed in this stack) and `prepare-release-0-3-0`'s
-  AC-REL-12 (spec line 438), which must be re-pointed before that package
-  lands. `harden-ci-workflows/tasks.md` line 52 lists the name as a record
+  AC-REL-12, which that package's revision has since recast as a diff
+  property citing no test, so the deleting commit leaves no stale selector. `harden-ci-workflows/tasks.md` line 52 lists the name as a record
   of what shipped; `tasks.md` is outside the citation guard's glob.
 - **What the release test pins, and does not.**
   `tests/test_agent_artifacts.py::test_release_workflow_is_gated_and_uses_trusted_publishing`
@@ -295,11 +296,12 @@ first may move a line number without moving the fact.
   `test_rule_set_matches_baseline` and
   `test_the_own_action_ref_is_exempt_from_the_sha_check`.
 - `openspec/changes/prepare-release-0-3-0/specs/release-readiness/spec.md`:
-  not edited by this draft. Its AC-REL-12 cites the test this package
-  deletes, so its selector must be re-pointed — at the deleting commit, or
-  before that package lands — to the pinned-tree guard and the floor guard;
-  C-REL-4 is that package's own statement to amend. Named here so it is a
-  sequencing step, not a surprise (DEC-ASP-012).
+  not edited by this draft. Its AC-REL-12 once cited the test this package
+  deletes; that package's own revision recast AC-REL-12 and C-REL-4 as a
+  diff property ("this package's diff touches no third-party `uses:` ref",
+  read under `make pre-pr`) that names no test, so the deleting commit
+  leaves no selector behind. Named here so the dependency stays visible
+  (DEC-ASP-012).
 - `openspec/changes/pin-actions-by-sha/tasks.md`: the `git ls-remote --tags`
   output for every action, including the peeled line of each annotated tag,
   the GHCR manifest check for the publisher's image tag, and the red run of
@@ -354,7 +356,8 @@ first may move a line number without moving the fact.
   written (`gate-tools-coverage` via R-ZCG-13, `post-merge-quality-review`
   via DEC-ZCG-003) were on `main` when they were superseded.
   `prepare-release-0-3-0` is on this branch too and is not edited by this
-  draft; its AC-REL-12 re-point is a named sequencing step.
+  draft; its AC-REL-12 was recast by that package's own revision, so no
+  sequencing step remains on its account.
 - **No change to any rule, `make` target, workflow job name, or to the
   composite action's inputs, outputs and defaults.** `RULES`, the README's
   rules table and `tests/baseline_rules.json` are untouched; the Makefile is
