@@ -71,7 +71,10 @@
   `f"{keyword}{separator} {title}"` with no hashes, drawn from the same
   keyword and separator sets the `req` kind uses, and leaves `declared`
   unchanged. `empty_req` appends `f"{'#' * depth} {keyword}{separator}"`
-  with no title and increments `declared` by one. Do not add a property
+  with no title and increments `declared` by one, with `depth` drawn from
+  `st.integers(2, 4)` — the `req` kind's range, never the `bare` kind's
+  2–5, since a five-hash keyword heading is outside the requirement
+  regex's hash range under the fixed grammar too. Do not add a property
   function and do not touch `PROPERTY_SETTINGS` —
   `test_property_settings_are_derandomized_and_nothing_is_xfailed` counts
   both. The property exercises `REQUIREMENT` only; the other five regexes

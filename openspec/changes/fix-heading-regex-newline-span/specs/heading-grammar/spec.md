@@ -103,7 +103,12 @@ the hole.
   `REQ 12`-style numbering, and case-insensitive keywords where
   `re.IGNORECASE` is set today. Hash ranges, the number and order of capture
   groups, and flags MUST NOT change, and every rule that reads a real
-  heading MUST behave as it does today.
+  heading MUST behave as it does today. The match end MAY move back across
+  the heading's trailing newline run — the old trailing `\s*$` consumed it,
+  the horizontal class does not — so `Requirement.body` and the
+  section-span bodies MAY gain a leading newline that no consumer reads;
+  a test of this requirement MUST compare captured groups, not whole match
+  spans or whole `Requirement` values.
 - R-HNS-4: Heading-level drift MUST still be reported. A real level-2
   requirement heading MUST still produce U005's
   `requirements are at H2 (##), convention is H3`, a non-canonical scenario
@@ -228,6 +233,10 @@ the hole.
   defect was reproduced in; the assertion is that `\s` appears nowhere in
   the selected sources, which is simpler and stronger than checking the
   position after the hash group.
+  The selector reaches the two shapes this module uses today, `^#` and
+  `^(#`; a heading regex written another way would have to be added to
+  it, so "exactly the six" is a statement about this module now, not
+  about every heading regex forever.
 - **DEC-HNS-003:** the whole family, `DELTA_HEADER` included, not
   `REQUIREMENT` alone. The reproduced defect is the upstream false ERROR,
   but `SECTION` is the more dangerous copy: it feeds `ParsedSpec.sections`,
@@ -268,7 +277,8 @@ the hole.
   when no scenario follows, U004 when its body has no modal, U003 when its
   block has no WHEN or THEN — the same way S003 reports an empty FR bullet.
   Recognising it costs nothing a passing spec relies on, because today that
-  heading was only ever counted by stealing the next line. C-HNS-5 pins the
+  heading was counted either by stealing the next line or with a
+  whitespace-only title, never on its own terms. C-HNS-5 pins the
   boundary: this is the one shape newly recognised, and nothing else matches
   after the change that did not match before.
 - **DEC-HNS-005:** `GWT_SCENARIO` stays out. Its `re.DOTALL` is deliberate
@@ -375,6 +385,16 @@ the hole.
   read the same text but by a different route, which is one more thing a
   reviewer has to prove equivalent. The keyworded four do not need it: a
   literal keyword follows their gap, and a space is not a keyword.
+  One side effect is recorded so an implementer does not "fix" it: the old
+  trailing `\s*$` greedily consumed the heading's newline run, so `m.end()`
+  sat after it; `[^\S\n]*$` stops before it. `Requirement.body` and the
+  `section_span`/`speckit_section_span`/`speckit_subsection_span` bodies
+  therefore gain a leading newline (a heading on a file's last line goes from
+  body `""` to `"\n"`). Verified across every markdown file in the tree: no
+  finding, section name, text or line moves — loci are `origin + m.start()`,
+  `is_normative` is whitespace-insensitive, and nothing tests a body for
+  truthiness — so DEC-LH-006's offset contract holds. Groups are
+  byte-identical; match spans are not, and R-HNS-3's test compares groups.
 
 ---
 

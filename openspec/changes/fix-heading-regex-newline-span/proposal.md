@@ -220,9 +220,9 @@ Expected is not confirmed: the tasks verify it rather than assume it.
   addition.** Setext underlines, hashes with no following whitespace, and
   hash runs outside the existing ranges did not match before and do not
   match after. The one shape newly recognised is the keyworded heading with
-  an empty title, which today is either swallowed into the next line or
-  unmatched at end of file; it is recognised so that it can be reported
-  rather than so that it can pass.
+  an empty title, which today is either swallowed into the next line,
+  matched with a whitespace-only title, or unmatched at end of file; it is
+  recognised so that it can be reported rather than so that it can pass.
 - **No change to what text the heading regexes scan.** They read raw, not
   waiver-stripped, text, so a `Requirement:` heading written inside a
   multi-line waiver reason is still counted as a requirement. That is
