@@ -29,6 +29,9 @@ from tests import support
 _CAN_SYMLINK = support.supports_symlinks()
 
 SHA = "a" * 40
+# A filename in the shape ``write_witness`` produces, whose content will
+# never hash to it: the fixture for "well-formed name, wrong content".
+_ZERO_NAME = "0" * witness.HEX_DIGEST_LENGTH + witness.WITNESS_SUFFIX
 
 
 def _witness(**overrides: object) -> Witness:
@@ -123,7 +126,7 @@ def test_load_witnesses_skips_a_dangling_symlink_without_raising(tmp_path: Path)
     # this session (detect._adrs()'s directory branch).
     directory = tmp_path / witness.WITNESS_DIR_NAME
     directory.mkdir(parents=True)
-    (directory / ("0" * 64 + ".json")).symlink_to(directory / "does-not-exist.json")
+    (directory / _ZERO_NAME).symlink_to(directory / "does-not-exist.json")
     assert witness.load_witnesses(tmp_path) == ()
 
 
@@ -132,7 +135,7 @@ def test_load_witnesses_skips_a_file_whose_content_does_not_match_its_filename_h
     # not raise and not be treated as a pass.
     directory = tmp_path / witness.WITNESS_DIR_NAME
     directory.mkdir(parents=True)
-    (directory / ("0" * 64 + ".json")).write_bytes(witness.serialize(_witness()))
+    (directory / _ZERO_NAME).write_bytes(witness.serialize(_witness()))
     assert witness.load_witnesses(tmp_path) == ()
 
 
@@ -389,7 +392,7 @@ def test_each_skipped_record_logs_its_file_and_reason(
 def test_a_hash_mismatch_is_logged_as_such(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     directory = tmp_path / witness.WITNESS_DIR_NAME
     directory.mkdir(parents=True)
-    forged = directory / f"{'0' * 64}.json"
+    forged = directory / _ZERO_NAME
     forged.write_bytes(witness.serialize(_witness()))
     with _captured(caplog):
         assert witness.load_witnesses(tmp_path) == ()
@@ -521,3 +524,14 @@ def test_an_ordinary_hash_filename_is_logged_bare(tmp_path: Path, caplog: pytest
     with _captured(caplog):
         witness.load_witnesses(tmp_path)
     assert any(f"skipping {path.name}: " in m for m in _messages(caplog)), _messages(caplog)
+
+
+def test_the_filename_shape_is_derived_from_the_hash_function(tmp_path: Path) -> None:
+    """Regression guard for the writer/reader contract: the digest length the
+    loader expects in a filename is the length ``compute_hash`` produces, and
+    a file the writer just produced is one the loader logs bare (unescaped)."""
+    assert len(witness.compute_hash(b"")) == witness.HEX_DIGEST_LENGTH
+    written = witness.write_witness(tmp_path, _witness())
+    assert written.suffix == witness.WITNESS_SUFFIX
+    assert witness._HASH_NAME.fullmatch(written.name) is not None
+    assert witness._HASH_NAME.fullmatch(written.stem) is None

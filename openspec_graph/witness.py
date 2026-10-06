@@ -37,6 +37,11 @@ from pathlib import Path
 
 WITNESS_SCHEMA_VERSION = 1
 WITNESS_DIR_NAME = ".planlint/witnesses"
+WITNESS_SUFFIX = ".json"
+# ``compute_hash`` is sha256 and its hex digest is the filename stem. Derived
+# from the hash function rather than written as a number, so the filename
+# shape the reader expects cannot drift from the one the writer produces.
+HEX_DIGEST_LENGTH = hashlib.sha256().digest_size * 2
 
 # Child of ``planlint``; ``log.configure()`` owns the handler (DEC-LH-005).
 # The loader fails closed by *skipping* a bad record, which is right for the
@@ -48,8 +53,10 @@ WITNESS_DIR_NAME = ".planlint/witnesses"
 logger = logging.getLogger("planlint.witness")
 
 __all__ = [
+    "HEX_DIGEST_LENGTH",
     "WITNESS_DIR_NAME",
     "WITNESS_SCHEMA_VERSION",
+    "WITNESS_SUFFIX",
     "Witness",
     "compute_hash",
     "load_witnesses",
@@ -115,8 +122,8 @@ def write_witness(root: Path, witness: Witness) -> Path:
     directory = root / WITNESS_DIR_NAME
     directory.mkdir(parents=True, exist_ok=True)
     payload = serialize(witness)
-    target = directory / f"{compute_hash(payload)}.json"
-    fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=".tmp-", suffix=".json")
+    target = directory / f"{compute_hash(payload)}{WITNESS_SUFFIX}"
+    fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=".tmp-", suffix=WITNESS_SUFFIX)
     try:
         with os.fdopen(fd, "wb") as handle:
             handle.write(payload)
@@ -131,8 +138,8 @@ def write_witness(root: Path, witness: Witness) -> Path:
     return target
 
 
-# The filename ``write_witness`` produces: a sha256 hex digest plus ``.json``.
-_HASH_NAME = re.compile(r"[0-9a-f]{64}\.json")
+# The filename ``write_witness`` produces: a hex digest plus the suffix.
+_HASH_NAME = re.compile(rf"[0-9a-f]{{{HEX_DIGEST_LENGTH}}}{re.escape(WITNESS_SUFFIX)}")
 
 
 def _skip(path: Path, reason: str) -> None:
@@ -232,7 +239,7 @@ def load_witnesses(root: Path) -> tuple[Witness, ...]:
         logger.debug("witness: no store at %s", directory)
         return ()
     witnesses: list[Witness] = []
-    candidates = sorted(directory.glob("*.json"))
+    candidates = sorted(directory.glob(f"*{WITNESS_SUFFIX}"))
     for path in candidates:
         witness = _load_one(path)
         if witness is not None:

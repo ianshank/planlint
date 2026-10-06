@@ -505,7 +505,7 @@ is reproducible from the description.
 |---|---|
 | `planlint --target . validate --fail-on ERROR` | 41 specs, 0/0/0, PASS, exit 0 |
 | `planlint --target . detect` | dialect `harness`, 40 change packages, 20 make targets, floor 90 from `pyproject.toml:[tool.coverage.report].fail_under` |
-| `python -m pytest tests/ -q` | 1412 tests collected at `6666444`, all passing; 1457 on this branch after the second pass, all passing |
+| `python -m pytest tests/ -q` | 1412 tests collected at `6666444`, all passing; 1472 on this branch after the Copilot-review pass, all passing |
 | `python -m ruff check … --select E501` | 121: `openspec_graph` 29, `tools` 5, `tests` 87 |
 | `make coverage-tools` | `tools/` line 95.2% (657/690) against floor 90, branch 92.3% (229/248) against floor 80, exit 0 — item 19 closed, as measured not as read |
 
