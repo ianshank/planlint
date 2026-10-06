@@ -520,7 +520,7 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   (C-HCW-3, DEC-HCW-001, DEC-HCW-012)
   _Verified by:_ `pytest -k "test_rule_set_matches_baseline or test_the_own_action_ref_is_exempt_from_the_sha_check"` · stage: `make test`
 
-- [ ] **AC-HCW-25:** the first CI run on the branch carries no "Node.js 20 is
+- [x] **AC-HCW-25:** the first CI run on the branch carries no "Node.js 20 is
   deprecated" annotation on any job, every job finishes inside its
   `timeout-minutes`, the artifact uploads in `self-validate`, `graph-diff`
   and `action-contract` succeed under `contents: read`, and the `security`
@@ -530,7 +530,7 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   R-HCW-4, R-HCW-5, R-HCW-6, DEC-HCW-002, DEC-HCW-013)
   _Verified by:_ the run's annotations and job log, with the run number recorded in `tasks.md` · stage: `make pre-pr`
 
-- [ ] **AC-HCW-26:** a second push to the same pull request cancels the first
+- [x] **AC-HCW-26:** a second push to the same pull request cancels the first
   run's in-progress jobs, and a run for a push to `main` is neither cancelled
   nor left pending and superseded by a later push — each `main` push has its
   own group. (R-HCW-7, DEC-HCW-003, DEC-HCW-013)

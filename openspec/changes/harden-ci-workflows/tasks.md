@@ -288,6 +288,18 @@ the fact.
   within a minute (conclusion `cancelled` at 20:24:53Z) and started the new
   one — the pull-request half of AC-HCW-26, observed. The `main` half (each
   push to `main` keeping its own run) is recorded after merge.
+- Recorded after merge (PR #38 squash-merged to `main` as `ab49de0` at
+  2026-10-06T21:25:15Z): run #194 (`actions/runs/37533761166`, event `push`
+  on `main`, head `ab49de0`) finished `success` on all 17 jobs that ran,
+  with `graph-diff` skipped as the pull-request-only job it is; its
+  `security` job's gitleaks step passed on the push to `main` under the same
+  token that passed on the pull request — the push half of AC-HCW-25. Two
+  consecutive pushes to `main` 28 seconds apart — run #193
+  (`actions/runs/37533705891`, head `ff7d94c`, PR #37's squash, created
+  21:24:50Z) and run #194 (created 21:25:18Z) — each completed `success`;
+  neither was cancelled or left pending, so each `main` push kept its own
+  concurrency group — the `main` half of AC-HCW-26. Both criteria are now
+  observed on both halves and ticked.
 - Record in this file the run number of the first full run on the branch
   and, from its annotations, that no job carries "Node.js 20 is deprecated"
   (AC-HCW-25), and the `security` job's result on the first push to `main`
