@@ -624,6 +624,20 @@ selected (a config that silently drops a family is how debt returns).
 
 W9.1 (SessionStart hook) can land any time after M0; it blocks nothing.
 
+M1 as landed (PR #39; `pin-actions-by-sha` and `write-down-policies`, with
+`prepare-release-0-3-0` following in the same branch): the publisher is
+pinned to the v1.14.2 commit, which was also the `release/v1` head at pinning
+time, and its Docker payload still arrives through a registry tag named
+after the SHA; the guard that forbade a SHA was deleted and
+`harden-ci-workflows`' record amended in place because it was on the same
+unmerged branch; the floor table gained a row for the publisher; Dependabot's
+two action entries became one; and `github/codeql-action` has no bot-driven
+refresh path under a SHA pin, accepted in writing. The policies live in
+`docs/policies.md`, not in `docs/agents-skills-harness.md` and
+`openspec/AGENTS.md` as W8.3 names them — those two files carry one-sentence
+pointers — and the deprecation window is the one-minor minimum W1.5 and W5
+already assume, so neither needs amending.
+
 ---
 
 ## 6. Decisions

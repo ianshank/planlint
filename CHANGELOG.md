@@ -62,6 +62,28 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   records — whose row lives in `docs/next-steps.md`, not
   `docs/distribution-plan.md`.
 
+### Added — the working policies, written down once (M1)
+
+- **`docs/policies.md`** is the document of record for how this repository
+  is versioned and worked on: Semantic Versioning read for a 0.x package (a
+  minor is the only release that may remove or break; a patch never does);
+  one integer `schema_version` per machine-readable output, bumped only in a
+  release that may break and never for an additive key; the deprecation
+  window as a minimum — announced under `Deprecated` in the 0.Y.0 notes
+  naming the removal version, working and warning through 0.Y.x, removable
+  from 0.(Y+1).0 — with `specgraph`, `detect --json` and Python 3.10 as its
+  three instances; a number in a spec, decision, plan or document of record
+  names the command that regenerates it, `make stage-citations` for every
+  count of cited stages; and one agent per pull-request thread, merge over
+  force-push. Pointed at in one sentence each from `openspec/AGENTS.md`,
+  `docs/AGENTS.md` and `docs/agents-skills-harness.md`, listed in
+  `tools/check_docs.py`'s `REQUIRED_DOCS`, the README and `llms.txt`.
+  `tests/test_policies_doc.py` reads the document rather than a copy: every
+  level-two heading is indexed and every index anchor is a heading, every
+  `policies.md#<anchor>` pointer lands on a heading and resolves from its
+  own directory, and every `make` target it cites exists — with planted
+  defects showing each check fire (`write-down-policies`).
+
 ### Deprecated
 
 - **Python 3.10 support ends in 0.4.0.** PEP 619 ends upstream support for
@@ -70,6 +92,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   3.11). Nothing changes before that release: the 3.10 leg stays in the
   matrix, and `requires-python = ">=3.10"` and `[tool.mypy] python_version =
   "3.10"` are unchanged.
+- **The `specgraph` alias is removed in 0.4.0.** It warns to stderr through
+  every 0.3.x release and delegates to `planlint` with the exit code
+  preserved; in 0.4.0 the entry point goes. The waiver syntax
+  (`<!-- specgraph:allow ... -->`), the `openspec/specgraph.json` config file
+  and the `[tool.specgraph]` section are stable identifiers and are not
+  affected. The general rule — the minimum notice a deprecation gives — is in
+  `docs/policies.md`.
 
 ### Added — a peer-review deep dive, and three reviewed change packages
 

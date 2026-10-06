@@ -464,7 +464,7 @@ list.
 
 ## Acceptance Criteria
 
-- [ ] **AC-POL-1:** `docs/policies.md` exists, opens with an index, carries
+- [x] **AC-POL-1:** `docs/policies.md` exists, opens with an index, carries
   the three policy sections with plain-word headings and the wording
   DEC-POL-003 through DEC-POL-006 decide, is listed in
   `tools/check_docs.py` `REQUIRED_DOCS`, is named in `README.md`'s
@@ -473,16 +473,16 @@ list.
   registration test, which is cited here once it exists; the stage holds
   the rest until then. (R-POL-1, R-POL-2, R-POL-3, R-POL-4, R-POL-5,
   R-POL-7, DEC-POL-001, DEC-POL-008)
-  _Verified by:_ `pytest -k test_docs_check_passes` · stage: `make docs-check`
+  _Verified by:_ `pytest -k "test_docs_check_passes or test_policies_doc_is_registered_in_the_docs_gate_and_named_in_the_readme_and_llms"` · stage: `make docs-check`
 
-- [ ] **AC-POL-2 (non-success):** with `docs/policies.md` in the required
+- [x] **AC-POL-2 (non-success):** with `docs/policies.md` in the required
   set, a tree where it is missing, or present but not named in `README.md`,
   fails the docs gate with a message naming the document — the fixture is
   built from `REQUIRED_DOCS` itself, so the new entry is inside the
   property without a test edit. (R-POL-7, DEC-POL-008)
   _Verified by:_ `pytest -k "test_docs_check_reports_a_missing_doc or test_docs_check_reports_a_present_but_unlinked_doc"` · stage: `make test`
 
-- [ ] **AC-POL-3:** `docs/policies.md` has at least one level-two heading
+- [x] **AC-POL-3:** `docs/policies.md` has at least one level-two heading
   and at least one index entry, read outside fenced code blocks; every
   heading is plain words and no heading repeats; every heading has an index
   entry and every index anchor is a heading; every link to
@@ -492,9 +492,9 @@ list.
   pointer files carries at least one such link. The tests are written with
   this change; until they exist the stage is the citation. (R-POL-1,
   R-POL-6, R-POL-8, DEC-POL-002, DEC-POL-007)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_every_policy_heading_is_indexed_and_every_index_anchor_resolves or test_every_policy_pointer_resolves_to_a_heading_and_each_pointer_file_has_one"` · stage: `make test`
 
-- [ ] **AC-POL-4 (non-success):** through the same two offender functions
+- [x] **AC-POL-4 (non-success):** through the same two offender functions
   the real-tree tests call, a planted document whose index names an anchor
   with no heading yields an offender naming the anchor; a planted document
   with a heading no index entry names yields one naming the heading; a
@@ -503,9 +503,9 @@ list.
   fragment is not a heading yields an offender naming the fragment. The
   tests are written with this change; until they exist the stage is the
   citation. (R-POL-8, DEC-POL-007)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_a_dead_index_anchor_is_named or test_an_unindexed_policy_heading_is_named or test_an_empty_policy_document_is_an_offender_not_a_pass or test_a_pointer_to_a_missing_fragment_is_named"` · stage: `make test`
 
-- [ ] **AC-POL-5:** after its one-sentence pointer, `openspec/AGENTS.md` is
+- [x] **AC-POL-5:** after its one-sentence pointer, `openspec/AGENTS.md` is
   within `MAX_NESTED_LINES`, still states its precedence, still carries a
   balanced mermaid fence, declares no `INV-n`, and every link in it — the
   new `../docs/policies.md` one included — resolves from `openspec/`; the
@@ -513,29 +513,29 @@ list.
   R-POL-7, DEC-POL-002)
   _Verified by:_ `pytest -k "test_nested_agents_file_stays_short or test_nested_agents_file_states_its_precedence or test_nested_agents_file_has_a_balanced_mermaid_block or test_nested_agents_file_declares_no_invariant_ids or test_agent_index_links_resolve"` · stage: `make test`
 
-- [ ] **AC-POL-6:** every backticked `make` citation in the agent indexes
+- [x] **AC-POL-6:** every backticked `make` citation in the agent indexes
   (`openspec/AGENTS.md`, `docs/AGENTS.md`, `llms.txt`) names a target this
   repository declares, through G004's own matcher; the same check over
   `docs/policies.md` is the new module's and is cited here once it exists.
   (C-POL-4, R-POL-4, R-POL-8, DEC-POL-007)
-  _Verified by:_ `pytest -k test_every_make_citation_in_an_agent_index_names_a_real_target` · stage: `make test`
+  _Verified by:_ `pytest -k "test_every_make_citation_in_an_agent_index_names_a_real_target or test_every_make_citation_in_the_policy_doc_names_a_real_target"` · stage: `make test`
 
-- [ ] **AC-POL-7:** the `specgraph` alias behaves exactly as before — warns
+- [x] **AC-POL-7:** the `specgraph` alias behaves exactly as before — warns
   to stderr, delegates, preserves a failing exit code, keeps stdout
   parseable — and `openspec_graph/cli.py` is absent from this package's
   diff. (C-POL-1, R-POL-3, DEC-POL-004)
   _Verified by:_ `pytest -k "test_deprecated_alias_warns_to_stderr_and_delegates or test_deprecated_alias_preserves_failure_exit_code or test_deprecated_alias_keeps_stdout_parseable"` · stage: `make test`
 
-- [ ] **AC-POL-8:** the rule inventory is unchanged — the live rule table
+- [x] **AC-POL-8:** the rule inventory is unchanged — the live rule table
   still matches `tests/baseline_rules.json`. (C-POL-1)
   _Verified by:_ `pytest -k test_rule_set_matches_baseline` · stage: `make test`
 
-- [ ] **AC-POL-9:** `docs/agents-skills-harness.md`'s existing rule-count
+- [x] **AC-POL-9:** `docs/agents-skills-harness.md`'s existing rule-count
   sentence still matches the registry and no second rule-count phrase was
   added by the new section. (C-POL-3, R-POL-6)
   _Verified by:_ `pytest -k test_total_rule_count_matches_every_prose_claim` · stage: `make test`
 
-- [ ] **AC-POL-10:** `CHANGELOG.md` `[Unreleased]` — or `[0.3.0]`, if this
+- [x] **AC-POL-10:** `CHANGELOG.md` `[Unreleased]` — or `[0.3.0]`, if this
   package lands after the cut — carries this package's `Added` entry and
   the `specgraph` line under `Deprecated`, the window that line states is
   the one `docs/policies.md` states, the `Deprecated` group carries that
@@ -544,14 +544,14 @@ list.
   DEC-POL-009)
   _Verified by:_ `pytest -k test_every_changelog_version_links_to_its_release_tag` · stage: `make test`
 
-- [ ] **AC-POL-11:** the consumer behaviour the versioning section describes
+- [x] **AC-POL-11:** the consumer behaviour the versioning section describes
   is the behaviour the tree has — a dialect card whose `schema_version`
   changed is reported as its own kind of change, and a witness record with an
   unrecognized `schema_version` is skipped rather than read. (R-POL-2,
   DEC-POL-003)
   _Verified by:_ `pytest -k "test_diff_cards_reports_schema_version_changes_distinctly or test_load_witnesses_skips_a_file_with_an_unrecognized_schema_version"` · stage: `make test`
 
-- [ ] **AC-POL-12:** this spec's requirements and criteria pin no count
+- [x] **AC-POL-12:** this spec's requirements and criteria pin no count
   another package changes, and every measurement in the proposal and in
   `tasks.md` is dated with its commit and names its command — a review
   property, read directly; the gate confirms the package validates clean

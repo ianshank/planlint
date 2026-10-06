@@ -565,6 +565,9 @@ change package.
   comparison, and the candidate change packages
 - [Distribution plan](docs/distribution-plan.md) — what remains between this
   repository and a published release, and what was deliberately cut
+- [Policies](docs/policies.md) — versioning and the deprecation window,
+  `schema_version` bumps, counts that name their command, one agent per
+  review thread
 - [Security policy](SECURITY.md) — how to report a vulnerability, and the
   one guarantee this tool makes about scanning a repository you do not
   control: it parses, it never executes

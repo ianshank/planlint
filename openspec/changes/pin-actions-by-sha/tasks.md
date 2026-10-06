@@ -377,4 +377,6 @@ does at them are listed under Milestone 4.
   gained a row for the publisher; Dependabot's two action entries became one
   (DEC-ASP-009); and `github/codeql-action` has no bot-driven refresh path
   under a SHA pin, accepted in writing (DEC-ASP-013).
+  **Recorded** in `docs/reflection-plan-2026-10.md` §5, in the note under
+  the sequencing table, the plan having merged as PR #37.
 - **Gate:** `make pre-pr`

@@ -36,3 +36,4 @@ planlint evaluates plans; it does not author them. Read-only by default.
 
 - [Next steps](docs/next-steps.md): what is deliberately out of scope
 - [Differentiation roadmap](docs/differentiation-roadmap.md): the wedge and candidate changes
+- [Policies](docs/policies.md#versioning-and-deprecation): one integer `schema_version` per machine-readable output, bumped only in a release that may break

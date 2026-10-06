@@ -12,7 +12,7 @@ specs, `pre-pr` mentioned in 44 and verified by 11, `validate` mentioned in
 (R-POL-9): `pin-actions-by-sha`, then this package, then
 `prepare-release-0-3-0`.
 
-## Milestone 1 — The document of record
+## Milestone 1 — The document of record [DONE]
 
 - `docs/policies.md` (new): title `# Policies`; one opening paragraph saying
   this is the document of record for how the repository is versioned and
@@ -106,7 +106,7 @@ specs, `pre-pr` mentioned in 44 and verified by 11, `validate` mentioned in
   (DEC-POL-002, DEC-POL-011).
 - **Gate:** `make docs-check`
 
-## Milestone 2 — The pointers
+## Milestone 2 — The pointers [DONE]
 
 - `openspec/AGENTS.md`: after the four-bullet list of ways a package fails
   and before the paragraph beginning "The `spec.md` — not just the
@@ -143,7 +143,7 @@ specs, `pre-pr` mentioned in 44 and verified by 11, `validate` mentioned in
   (AC-POL-5, AC-POL-6).
 - **Gate:** `make test`
 
-## Milestone 3 — The guard
+## Milestone 3 — The guard [DONE]
 
 - `tests/test_policies_doc.py` (new module): module docstring naming this
   package and the argument — the document is the one place the policy set
@@ -207,7 +207,7 @@ specs, `pre-pr` mentioned in 44 and verified by 11, `validate` mentioned in
   lint scan; the strict mypy scope is `openspec_graph` and `tools`).
 - **Gate:** `make test`
 
-## Milestone 4 — Confirm and record
+## Milestone 4 — Confirm and record [DONE]
 
 - Re-point AC-POL-3 and AC-POL-4 from stage-only verification to the test
   names in Milestone 3, keeping the stage; add the registration test to
@@ -215,12 +215,20 @@ specs, `pre-pr` mentioned in 44 and verified by 11, `validate` mentioned in
   `test_every_make_citation_in_the_policy_doc_names_a_real_target` to
   AC-POL-6's. Run `python -m pytest tests/test_spec_test_citations.py -q`
   and confirm every selector resolves.
+  **Recorded:** re-pointed as listed, every stage kept; the citation test
+  passes with every selector in every spec resolving.
 - Run `make stage-citations` at the branch head and record the output's
   spec count and the `pre-pr`, `validate` and `ci` rows here beside the
   `ea40bc2` figures in the header; confirm this package added no stage to
   the set no workflow invokes by name — its criteria cite `test`,
   `docs-check` and `validate`, all of which were already cited on
   verification lines at `5fe043e` and at `ea40bc2`.
+  **Recorded (at `066b6d3`, `make stage-citations`):** 49 specs; `pre-pr`
+  mentioned in 44 and verified by 11; `validate` mentioned in 19 and
+  verified by 9; `ci` mentioned in 14 and verified by 7; the five stages
+  invoked by no scanned workflow are `ci`, `security`, `thresholds`,
+  `validate` and `wheel-check`, the same five as before — this package
+  added none.
 - Re-read `docs/policies.md` against the tree once more: the five
   `SCHEMA_VERSION` declarations and their values
   (`grep -rn "SCHEMA_VERSION\s*=" openspec_graph tools`), the two deprecation
@@ -230,10 +238,26 @@ specs, `pre-pr` mentioned in 44 and verified by 11, `validate` mentioned in
   exists to end. One known gap is accepted, not hidden: until
   `prepare-release-0-3-0` lands, `_DEPRECATION_WARNING` names no version
   while the CHANGELOG line does (DEC-POL-009).
+  **Recorded:** the five declarations are each `= 1` (`delta.py:40`,
+  `rule_types.py:37`, `witness.py:38`, `dialect_card.py:16`,
+  `tools/stage_citations.py:67`); `cli.py:81` says `detect --json` "will be
+  removed in 1.0"; `_DEPRECATION_WARNING` (`cli.py:1010–1013`) still names
+  no version — the accepted gap until `prepare-release-0-3-0` lands;
+  `### Deprecated` under `[Unreleased]` carries the Python 3.10 entry and
+  the `specgraph` line this package wrote, once. The document matches the
+  tree on the day it lands.
 - Confirm `openspec_graph/`, `skills/`, the `Makefile`,
   `tests/baseline_rules.json` and `README.md`'s rules table are absent from
   this package's diff, and that `tools/check_docs.py`'s diff is one list
   entry and its comment (C-POL-1, AC-POL-7, AC-POL-8).
+  **Recorded:** `git status --short` before the commit listed
+  `CHANGELOG.md`, `README.md`, `docs/AGENTS.md`,
+  `docs/agents-skills-harness.md`, `llms.txt`, `openspec/AGENTS.md`,
+  `tools/check_docs.py`, the new `docs/policies.md` and
+  `tests/test_policies_doc.py`, and this package's own spec and tasks;
+  `git diff --stat tools/check_docs.py` is 6 insertions — the entry and
+  its five-line comment; nothing under `openspec_graph/` or `skills/`, no
+  `Makefile`, `tests/baseline_rules.json` or rules-table change.
 - Cross-check with `prepare-release-0-3-0`, which lands after this package
   (R-POL-9, DEC-POL-009): its CHANGELOG cut carries this package's `Added`
   entry and `specgraph` `Deprecated` line under `[0.3.0]` and writes no
@@ -246,13 +270,22 @@ specs, `pre-pr` mentioned in 44 and verified by 11, `validate` mentioned in
   tell its author. Tell its author also that `docs/policies.md` is where the
   general rule lives, so its `[0.3.0]` preamble or `Deprecated` group can
   name it.
+  **Recorded:** that package's `tasks.md` header is dated at `ea40bc2` and
+  names `grep -n '^## ' CHANGELOG.md`; its R-REL-7 string states the window
+  this document states (warns through 0.3.x, removed in 0.4.0); its
+  Milestone 1 CHANGELOG bullet greps for the `specgraph` line before writing
+  one. Its author is this session, told.
 - Confirm this package validates clean under the repo's own rules
   (`planlint --target . validate --fail-on ERROR --change
   write-down-policies`), then the whole tree, reporting both exit codes.
+  **Recorded:** `--change write-down-policies` exit 0; whole tree exit 0
+  (49 specs, 0 error, 0 warn, 0 info).
 - Record for the plan's M1 row, when `docs/reflection-plan-2026-10.md`
   merges: the policies live in `docs/policies.md`, not in
   `docs/agents-skills-harness.md` and `openspec/AGENTS.md` as W8.3 names
   them; those two files carry one-sentence pointers (DEC-POL-001,
   DEC-POL-002); the deprecation window is the one-minor minimum W1.5 and W5
   already assume, so neither needs amending (DEC-POL-004).
+  **Recorded** in `docs/reflection-plan-2026-10.md` §5, in the note under
+  the sequencing table, the plan having merged as PR #37.
 - **Gate:** `make pre-pr`

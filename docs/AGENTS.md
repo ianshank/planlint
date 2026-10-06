@@ -9,13 +9,14 @@ flowchart TD
     gated["gated by tools/check_docs.py<br/>(exist AND linked from README)"]
     gated --> c4["architecture/c4.md<br/>context → container → component →<br/>code → test/gate topology"]
     gated --> hooks["hooks.md<br/>the gate ladder: commit, CI, pre-PR"]
-    gated --> aqa["aqa.md · next-steps.md<br/>agents-skills-harness.md"]
+    gated --> aqa["aqa.md · next-steps.md<br/>agents-skills-harness.md · policies.md"]
     plans["ungated, by convention:<br/>*-plan.md, peer-review-*.md<br/>consumed and retired"]
 ```
 
 - **A claim with no command behind it is the drift this project exists to
-  catch** in other people's repositories. Prefer "`make pre-pr` exit 0, 41
-  specs 0/0/0" to "all gates pass".
+  catch** in other people's repositories
+  ([policies.md](policies.md#count-cites-a-command)). Prefer "`make pre-pr`
+  exit 0, 41 specs 0/0/0" to "all gates pass".
 - **`architecture/c4.md` is gated on rule counts and per-family ranges.**
   `tests/test_rule_registry_docs.py` fails when they drift, so let it tell you
   what to update rather than guessing.

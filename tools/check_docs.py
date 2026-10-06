@@ -21,6 +21,12 @@ REQUIRED_DOCS = [
     "docs/hooks.md",
     "docs/agents-skills-harness.md",
     "docs/next-steps.md",
+    # The document of record for the working policies: versioning and the
+    # deprecation window, schema_version bumps, counts that name their
+    # command, one agent per thread. A policy document is permanent where a
+    # plan is retired, so it is gated here, where docs/AGENTS.md leaves a
+    # *-plan.md ungated on purpose (R-POL-7, DEC-POL-008).
+    "docs/policies.md",
     # The distributable Agent Skill's own entry point. Listed here so "the
     # README links it" is a gate rather than a hope (R-SD-11): the skill is
     # the product surface an agent reads first, and an unlinked one is
