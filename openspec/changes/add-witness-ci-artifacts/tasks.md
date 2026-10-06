@@ -10,12 +10,12 @@
   the scan action from ever downloading into the checkout; W001's `any`
   (`rules_witness.py:61`) against W002's `every` (`DEC-WM-019`).
 - Re-measure the stage set W001 enforces with the package's own extraction
-  (`parse_harness.py:55` → `_Verified by:_` line only; `rules_witness.py:31-34`),
-  not the whole-file regex the peer review used. Record both numbers: 14
-  stages by whole-file regex, 12 on `_Verified by:_` lines. `e2e-live` and
-  `skill-catalog` are prose/matrix mentions only, so no spec edit is needed
-  for them — `lint-empty-speckit-requirements/.../spec.md:132` is inside
-  `R-SER-10`, not a criterion, and W001 never reads it.
+  (`parse_harness.py:55` — the `_Verified by:_` line only;
+  `rules_witness.py:31-34`), not the whole-file regex the peer review used.
+  Record both numbers: 14 stages by whole-file regex, 12 on `_Verified by:_`
+  lines. `e2e-live` and `skill-catalog` are prose and matrix mentions only;
+  `lint-empty-speckit-requirements/.../spec.md:132` sits inside `R-SER-10`,
+  not a criterion, so W001 never reads it and that spec needs no edit.
 - Confirm `v0.2.0` is still untagged on origin, so no version moves.
 - **Gate:** `make validate`
 
@@ -94,10 +94,10 @@
   `tests/test_decomposition.py::_EXPECTED_HASHES["rules"]` do not move (the
   description is unchanged) and that `["validate"]`/`["graph"]` do not move
   (the golden fixture never passes `--require-witness`).
-- `README.md` W001 row may be reworded to say "and no failing witness at the
+- `README.md` W001 row reworded to add "and no failing witness at the
   current commit"; `rules.py`'s docstring likewise. The rule catalog is
   generated from `Rule.description`, which does not change, so
-  `make skill-catalog` produces no diff — confirm rather than assume.
+  `make skill-catalog` should produce no diff — confirm rather than assume.
 - **Gate:** `make test`
 
 ## Milestone 5 — Scan action inputs
@@ -112,8 +112,8 @@
   unchanged. The scan step's env gains `INPUT_REQUIRE_WITNESS` and
   `INPUT_WITNESS_DIR`; the argv array appends `--require-witness` when the
   value is exactly `true` and `--witness-dir "$INPUT_WITNESS_DIR"` when
-  non-empty. Header comment: "does NOT download artifacts" joins the list of
-  things it deliberately does not do.
+  non-empty. Header comment: "download artifacts" joins the list of things
+  it deliberately does not do.
 - `tests/test_action_contract.py`: `EXPECTED_INPUTS` and `ActionRun` defaults
   gain `require-witness: "false"`, `witness-dir: ""`; delete
   `test_action_does_not_pass_require_witness`; add
@@ -126,15 +126,16 @@
   `test_witness_dir_without_require_witness_is_an_input_error`,
   `test_a_populated_witness_dir_outside_the_workspace_reports_pass`,
   `test_require_witness_with_no_store_reports_fail_with_w001`. Update
-  `test_the_step_extractor_sees_the_whole_action`'s env set. Remove the
-  `--require-witness` citation from `AC-GA-29`'s test only by replacing the
-  test function it names in `add-finding-line-hits` — no: leave that spec's
-  text alone and keep the old test name resolving by making the new
-  conditional-append test carry the old name as an alias is *not* allowed
-  (one test, one name). Instead, amend
-  `openspec/changes/add-finding-line-hits/specs/github-action-contract/spec.md`'s
-  `AC-GA-29` `_Verified by:_` to the new test name in the same commit, so
-  `test_spec_test_citations.py` stays green.
+  `test_the_step_extractor_sees_the_whole_action`'s env set.
+- `openspec/changes/add-finding-line-hits/specs/github-action-contract/spec.md`:
+  `AC-GA-29` cites `test_action_does_not_pass_require_witness`, which this
+  milestone deletes. In the same commit, re-point that `_Verified by:_` at
+  `test_require_witness_flag_appears_only_inside_the_conditional_append`
+  and amend the AC's "no step passes `--require-witness`" clause to "no step
+  passes it unconditionally", so `test_spec_test_citations.py` stays green
+  and the older spec stops describing behaviour the action no longer has.
+  One test, one name: the old name must not survive as an alias for an
+  assertion it contradicts.
 - `README.md`: the Action inputs table (lines 445-448) gains the two rows;
   the "no `extra-args`" paragraph (462-467) replaces "`--require-witness` is
   deliberately absent" with the recorder/gate shape and a pointer to the
@@ -146,9 +147,9 @@
 - New `.github/actions/planlint-witness/action.yml`: inputs `stage`,
   `exit-code`, `coverage`, `target`, `witness-dir`, `upload-artifact`,
   `artifact-name`, `python-version`, `version`. Steps: `paths` (resolve
-  `witness-dir` to `${RUNNER_TEMP}/planlint-witnesses` when empty, `mkdir
-  -p`), `actions/setup-python@v5`, `install` (byte-identical body to the
-  scan action's install step), `sha` (`git -C "$INPUT_TARGET" rev-parse
+  `witness-dir` to `${RUNNER_TEMP}/planlint-witnesses` when empty,
+  `mkdir -p`), `actions/setup-python@v5`, `install` (body byte-identical to
+  the scan action's install step), `sha` (`git -C "$INPUT_TARGET" rev-parse
   HEAD`; non-zero → `::error`, exit 1, nothing recorded), `record` (one
   `planlint --target "$INPUT_TARGET" witness --stage ... --exit ...
   [--coverage ...] --witness-dir "$DIR"`), upload under
@@ -181,38 +182,40 @@
   comment (why two jobs; `pull_request` never `_target`; recorder and gate
   check out the same ref; the artifact name must vary per stage); `on:`
   `pull_request` (no `paths:` filter — the stages are the repository's real
-  gates), `push` to `main`, `workflow_dispatch`; the same `permissions` block
-  as `templates/spec-gate.yml`; `stages` job (matrix `stage:` with one
+  gates), `push` to `main`, `workflow_dispatch`; the same `permissions`
+  block as `templates/spec-gate.yml`; `stages` job (matrix `stage:` with one
   example entry and a comment "the stage names your specs cite"; checkout
-  with `persist-credentials: false`; `id: run` step with `env: STAGE: ${{
-  matrix.stage }}` and the exit-capture idiom; recorder step `if: always()`
-  with `exit-code: ${{ steps.run.outputs.exit-code }}` and
-  `artifact-name: planlint-witness-${{ matrix.stage }}`); `gate` job
+  with `persist-credentials: false`; `id: run` step with
+  `env: STAGE: ${{ matrix.stage }}` and the exit-capture idiom; recorder
+  step `if: always()` with `exit-code: ${{ steps.run.outputs.exit-code }}`
+  and `artifact-name: planlint-witness-${{ matrix.stage }}`); `gate` job
   (`needs: stages`, `if: always()`, checkout, `actions/download-artifact@v4`
   with `pattern`/`merge-multiple`/`path` under `runner.temp`, the scan action
   with `require-witness: "true"` and `witness-dir`, then the SARIF upload
   step as in the existing template). Both `uses:` refs pin the same SHA the
   existing template pins.
 - `tests/test_skill_contract.py`: `test_skill_witness_asset_matches_template`.
-- `tests/test_adopter_urls.py`: extend `test_ci_template_pins_the_floor_the_skill_enforces`
-  (or add `test_witness_template_pins_the_same_ref_on_both_actions`) to read
-  every `uses: ianshank/planlint/.github/actions/...@` ref in both templates
-  and require them equal.
-- `tests/test_action_contract.py` or the new module:
+- `tests/test_adopter_urls.py`: extend
+  `test_ci_template_pins_the_floor_the_skill_enforces` (or add
+  `test_witness_template_pins_the_same_ref_on_both_actions`) to read every
+  `uses: ianshank/planlint/.github/actions/...@` ref in both templates and
+  require them equal.
+- `tests/test_witness_action_contract.py`:
   `test_witness_template_passes_matrix_values_through_env`,
   `test_witness_template_gate_downloads_merged_artifacts_into_runner_temp`,
   `test_witness_template_grants_the_same_permissions_as_the_plain_template`.
-- `templates/spec-gate.yml` and its twin: untouched; `test_skill_asset_matches_template`
-  still green.
+- `templates/spec-gate.yml` and its twin: untouched;
+  `test_skill_asset_matches_template` still green.
 - **Gate:** `make test`
 
 ## Milestone 8 — Dogfood in `ci.yml`
 
-- `self-validate`: `make validate` replaces the bare `planlint --target .
-  validate --fail-on ERROR` step; `security`: `make thresholds` replaces the
-  bare `python tools/check_no_hardcoded_thresholds.py` step and a
-  `make security` step is added (the gitleaks action step stays);
-  `packaging`: `make wheel-check` replaces the `python -m build` +
+- `self-validate`: `make validate` replaces the bare
+  `planlint --target . validate --fail-on ERROR` step; `security`:
+  `make thresholds` replaces the bare
+  `python tools/check_no_hardcoded_thresholds.py` step and a `make security`
+  step is added (the gitleaks action step stays); `packaging`:
+  `make wheel-check` replaces the `python -m build` +
   `check_wheel_metadata.py` pair.
 - Every recording job (`test` legs, `self-validate`, `encoding-stress`,
   `coverage-tools`, `docs`, `security`, `packaging`): each stage step gets an
@@ -220,16 +223,17 @@
   `exit $code`; each is followed by a recorder step `if: always()` using
   `./.github/actions/planlint-witness` with `stage`, `exit-code`, and an
   `artifact-name` of the form `planlint-witness-<job>[-<leg>]-<stage>`.
-- New `ladder` job (3.12): `make ci`, `make matcher-accuracy`, `make pre-pr`,
-  each a recorded step as above.
+- New `ladder` job (3.12): `make ci`, `make matcher-accuracy`,
+  `make pre-pr`, each a recorded step as above.
 - New `witness-gate` job: `needs:` lists every recording job and `ladder`;
   `if: always()`; `permissions: contents: read` (add `actions: read` only if
   the download step demonstrably needs it on the first hosted run);
   checkout with `persist-credentials: false`; `actions/download-artifact@v4`
   with `pattern: planlint-witness-*`, `merge-multiple: true`,
   `path: ${{ runner.temp }}/planlint-witnesses`; `./.github/actions/planlint`
-  with `require-witness: "true"`, `witness-dir: ${{ runner.temp }}/planlint-witnesses`,
-  `fail-on: ERROR`, `artifact-name: planlint-evidence-witness-gate`.
+  with `require-witness: "true"`,
+  `witness-dir: ${{ runner.temp }}/planlint-witnesses`, `fail-on: ERROR`,
+  `artifact-name: planlint-evidence-witness-gate`.
 - `tests/test_ci_hardening.py`:
   `test_ci_workflow_has_a_witness_gate_job`,
   `test_every_recording_job_is_needed_by_the_witness_gate`,
