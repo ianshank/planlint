@@ -27,11 +27,11 @@ repository mid-migration without failing it. It exits 2 when it cannot run: no
 spec tree under ``--root``, or a named ``--workflow`` that does not exist.
 
 Two limits, stated so the numbers are read correctly. A workflow is credited
-only for a *direct* ``make <stage>`` invocation: ``make pre-pr`` runs ``test``
-transitively, and that is not counted as running ``test``. And full-line YAML
-comments are skipped, but an inline ``# make x`` after other text is not
-parsed out -- the workflows this repository writes put comments on their own
-lines.
+only for a *direct* ``make <stage>`` invocation in command position: ``make
+pre-pr`` runs ``test`` transitively, and that is not counted as running
+``test``; nor is ``make`` behind a wrapper such as ``sudo`` or ``env``. Text
+that only mentions ``make test`` -- printed, passed as an argument, a step's
+name, a comment -- is never credited.
 
 Like ``matcher_accuracy.py`` and the ``render_*`` generators, this imports
 ``openspec_graph`` rather than re-implementing its parser: the point is to
@@ -63,11 +63,17 @@ SCHEMA_VERSION = 1
 
 WORKFLOW_DIR = Path(".github") / "workflows"
 
-# A shell invocation of make naming a stage. The stage grammar is MAKE_REF's,
-# so a stage this matches is one a spec could cite. The lookbehind keeps
-# `cmake test` and `remake test` out; the first-character class keeps a flag
-# (`make -y`, as in `choco install make -y`) from reading as a stage.
-_MAKE_INVOCATION = re.compile(r"(?<![\w-])make\s+([a-z][a-z0-9_-]*)")
+# A shell invocation of make naming a stage, in *command position* only: at
+# the start of a line (a `run: |` block's continuation lines), straight after
+# `run:`, or after a shell separator (`;`, `&&`, `||`, `|`, `(` as in `$(...)`).
+# Text that merely contains `make test` -- `echo "make test"`, an argument, a
+# step's `name:`, an inline comment -- is not credited, because crediting a
+# workflow with a stage it never ran is the one error this report exists to
+# avoid. The stage grammar is MAKE_REF's, so a stage this matches is one a
+# spec could cite; the first-character class keeps a flag (`make -j4`) out.
+_MAKE_INVOCATION = re.compile(
+    r"(?:^|[;&|(]|\brun:)[ \t]*(?:-[ \t]+)?make[ \t]+([a-z][a-z0-9_-]*)"
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -138,7 +144,13 @@ def workflow_stages(root: Path, only: Sequence[str] = ()) -> dict[str, set[str]]
         found = [p for p in found if p.name in set(only)]
     result: dict[str, set[str]] = {}
     for path in found:
-        result[path.name] = workflow_invocations(path.read_text(encoding="utf-8", errors="replace"))
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            # Same contract as an unreadable spec: could-not-run is exit 2,
+            # never a traceback that exits 1.
+            raise ReportError(f"cannot read {path}: {exc}") from exc
+        result[path.name] = workflow_invocations(text)
         logger.debug("stage-citations: %s invokes %s", path.name, sorted(result[path.name]))
     return result
 

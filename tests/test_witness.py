@@ -477,3 +477,47 @@ def test_a_record_the_dataclass_refuses_is_skipped_and_named(
     assert any(
         path.name in line and f"malformed field ({error.__name__})" in line for line in _messages(caplog)
     ), _messages(caplog)
+
+
+def _can_name_a_file_with_a_newline(directory: Path) -> bool:
+    """Capability probe: POSIX allows a newline in a filename; Windows does not."""
+    try:
+        probe = directory / "probe\nname"
+        probe.write_bytes(b"")
+        probe.unlink()
+    except OSError:
+        return False
+    return True
+
+
+def test_an_artifact_controlled_filename_cannot_forge_a_log_line(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Non-success: a store is whatever an artifact download put there, so a
+    file's *name* is as untrusted as its content. A newline in it must not
+    start a second log line (a GitHub workflow command such as ``::error::``
+    is honoured only at the start of a line), and its length is bounded."""
+    directory = tmp_path / witness.WITNESS_DIR_NAME
+    directory.mkdir(parents=True)
+    if not _can_name_a_file_with_a_newline(directory):
+        pytest.skip("this filesystem cannot hold a newline in a filename (capability probe)")
+    (directory / ("x\n::error::forged" + "y" * 200 + ".json")).write_bytes(b"{}")
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+    # A set: the capture handler is attached to the emitting logger and, via
+    # propagation, to the root, so one record can arrive twice.
+    skipped = {m for m in _messages(caplog) if "skipping" in m}
+    assert len(skipped) == 1, skipped
+    (line,) = skipped
+    assert "\n" not in line
+    assert len(line) < 200, len(line)
+    assert "content does not match the sha256" in line
+
+
+def test_an_ordinary_hash_filename_is_logged_bare(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """The escaping applies to a hostile name only: the normal content-hash
+    filename an operator greps for appears unquoted."""
+    path = _write_raw(tmp_path, {**_GOOD, "schema_version": 2})
+    with _captured(caplog):
+        witness.load_witnesses(tmp_path)
+    assert any(f"skipping {path.name}: " in m for m in _messages(caplog)), _messages(caplog)

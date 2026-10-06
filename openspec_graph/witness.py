@@ -30,6 +30,7 @@ import json
 import logging
 import math
 import os
+import re
 import tempfile
 from collections.abc import Sequence
 from pathlib import Path
@@ -130,9 +131,23 @@ def write_witness(root: Path, witness: Witness) -> Path:
     return target
 
 
+# The filename ``write_witness`` produces: a sha256 hex digest plus ``.json``.
+_HASH_NAME = re.compile(r"[0-9a-f]{64}\.json")
+
+
 def _skip(path: Path, reason: str) -> None:
-    """One DEBUG line per dropped record, naming the file and the cause."""
-    logger.debug("witness: skipping %s: %s", path.name, reason)
+    """One DEBUG line per dropped record, naming the file and the cause.
+
+    The *name* is as untrusted as the content -- a store is whatever an
+    artifact download put there, and POSIX lets a filename carry a newline,
+    which would start a second log line a CI runner reads as its own (a
+    workflow command such as ``::error::`` is honoured only at the start of a
+    line). A name in the shape this module writes is logged bare, so the
+    hash an operator greps for appears as-is; anything else goes through the
+    same escaped, length-bounded ``_brief`` as a record's values.
+    """
+    name = path.name if _HASH_NAME.fullmatch(path.name) else _brief(path.name)
+    logger.debug("witness: skipping %s: %s", name, reason)
 
 
 # A record's values are untrusted: a store is whatever an artifact download

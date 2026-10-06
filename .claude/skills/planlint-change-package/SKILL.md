@@ -12,8 +12,11 @@ This skill is the loop that produced the reviewed packages in
 
 ## The loop
 
-1. **Measure before drafting.** Re-run every reproduction the package will
-   cite, at HEAD, in a scratch directory outside the repository. A planning
+1. **Gate, then measure, before drafting.** The root `AGENTS.md` requires
+   `planlint --target . validate --fail-on ERROR` and its exit code before
+   any edit under `openspec/`; a tree that already fails must be reported as
+   such before a draft lands on it. Then re-run every reproduction the
+   package will cite, at HEAD, in a scratch directory outside the repository. A planning
    document's number is a claim until it is re-measured. For anything about
    cited stages or witness mode, `make stage-citations` reports per stage how
    many specs mention it and how many cite it on a verification line.

@@ -82,11 +82,12 @@ _PATH_LIKE = re.compile(r"`([A-Za-z0-9_./-]+\.(?:py|md|toml|json|ya?ml|sh)|Makef
 # "`**Gate:** make X`" (spec-drafter.md's own instructions to *write* that
 # literal string into a future tasks.md) never matches.
 #
-# The stage grammar is MAKE_REF's own (`[a-z][a-z0-9_-]*`). It used to be
+# The grammar is MAKE_REF's own: any whitespace run after `make`, then a stage
+# matching `[a-z][a-z0-9_-]*`. The stage class used to be
 # `[a-z][a-z-]*`, which cannot match a digit, so a reference to `e2e-live` --
 # or a typo of it -- was silently skipped rather than checked: a fail-open in
 # the guard, found while writing tools/stage_citations.py.
-_MAKE_TARGET_REF = re.compile(r"`make ([a-z][a-z0-9_-]*)`")
+_MAKE_TARGET_REF = re.compile(r"`make\s+([a-z][a-z0-9_-]*)`")
 
 # Digits included for the same reason: `e2e-live` is a real target the old
 # `[a-zA-Z_-]+` could not see.
@@ -522,3 +523,7 @@ def test_make_target_guard_sees_digit_bearing_targets() -> None:
     assert "e2e-live" in _MAKEFILE_TARGETS
     assert _MAKE_TARGET_REF.findall("run `make e2e-live` then `make e2e-lve`") == ["e2e-live", "e2e-lve"]
     assert "e2e-lve" not in _MAKEFILE_TARGETS
+    # MAKE_REF accepts any whitespace run after `make`, so the guard must too:
+    # a doubled space or a tab is a citation planlint reads and must not be one
+    # this guard skips.
+    assert _MAKE_TARGET_REF.findall("`make  e2e-lve` and `make\te2e-lve`") == ["e2e-lve", "e2e-lve"]

@@ -109,6 +109,57 @@ def test_a_comment_a_flag_and_a_lookalike_command_are_not_invocations() -> None:
     assert sc.workflow_invocations("run: make -j4\n") == set()
 
 
+@pytest.mark.parametrize(
+    "line",
+    [
+        'run: echo "make test"',
+        "run: printf 'make test\\n'",
+        "- name: make test",
+        "run: ./notify --message make test",
+        "run: true # make test",
+    ],
+)
+def test_make_as_an_argument_or_label_is_not_an_invocation(line: str) -> None:
+    """Non-success: only make in command position runs a stage. Text that
+    merely contains `make test` -- printed, passed as an argument, a step's
+    name, an inline comment -- would credit a workflow with a stage it never
+    ran, which is the one error this report exists to avoid."""
+    assert sc.workflow_invocations(line) == set()
+
+
+@pytest.mark.parametrize(
+    ("line", "stage"),
+    [
+        ("run: make test", "test"),
+        ("      - run: make test", "test"),
+        ("          make test", "test"),
+        ("run: cd sub && make test", "test"),
+        ("run: make lint; make test", "test"),
+        ("run: out=$(make test)", "test"),
+    ],
+)
+def test_make_in_command_position_is_an_invocation(line: str, stage: str) -> None:
+    assert stage in sc.workflow_invocations(line)
+
+
+def test_an_unreadable_workflow_exits_two_rather_than_a_traceback(
+    labelled: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Non-success: same contract as an unreadable spec. Patched rather than
+    chmod'd: as root, chmod 000 still reads fine."""
+    original = Path.read_text
+
+    def refuse(self: Path, *args: object, **kwargs: object) -> str:
+        if self.name == "ci.yml":
+            raise PermissionError(13, "Permission denied")
+        return original(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "read_text", refuse)
+    assert run_tool_main("stage_citations", TOOL, "--root", str(labelled)) == 2
+    err = capsys.readouterr().err
+    assert "cannot read" in err and "ci.yml" in err
+
+
 def test_only_yaml_files_under_the_workflow_directory_are_scanned(labelled: Path) -> None:
     assert set(sc.workflow_stages(labelled)) == {"ci.yml", "release.yaml"}
 
@@ -162,11 +213,14 @@ def test_the_text_summary_names_the_unrun_verification_stages(
 
 
 def test_json_is_versioned_sorted_and_byte_stable(labelled: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    renders = []
     for _ in range(2):
         assert run_tool_main("stage_citations", TOOL, "--root", str(labelled), "--format", "json") == 0
-    first, second = capsys.readouterr().out.split("}\n{")
-    assert first + "}" == "{" + second[:-1] or json.loads(first + "}") == json.loads("{" + second)
-    payload = json.loads(first + "}")
+        renders.append(capsys.readouterr().out)
+    # Bytes, not parsed equality: two renders that differ only in key order or
+    # whitespace would parse equal and still break a diff-based consumer.
+    assert renders[0] == renders[1]
+    payload = json.loads(renders[0])
     assert payload["schema_version"] == sc.SCHEMA_VERSION
     assert payload["specs"] == 2
     assert payload["workflows_scanned"] == "all"

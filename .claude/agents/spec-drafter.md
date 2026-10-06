@@ -10,6 +10,7 @@ Scope: only ever write under `openspec/changes/<name>/`. Never edit `openspec_gr
 
 ## Before drafting anything
 
+0. Run the gate and report its exit code, before writing anything under `openspec/` — the root `AGENTS.md` makes this mandatory: `planlint --target . validate --fail-on ERROR`. A nonzero exit means the tree was already failing; say so first, so it is never mistaken for something your draft introduced.
 1. Read 2-3 existing change packages under `openspec/changes/` whose scope is closest to the new one (a `fix-*` package for a bug fix, an `add-*` package for a feature) — proposal.md, every file under `specs/`, and tasks.md, in full. Match their exact section structure and tone, not just the general shape.
 2. Grep the codebase for evidence backing the proposal's `**Evidence:**` line — every existing proposal cites a real file/symbol/test, never an assertion without a pointer to where it's true.
 3. Check `README.md`'s rules table and `openspec_graph/rules.py`'s `RULES` tuple for the current rule inventory, so a new rule reference (if any) is accurate.
