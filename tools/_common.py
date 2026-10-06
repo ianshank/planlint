@@ -136,7 +136,10 @@ def read_json(path: Path) -> dict[str, Any]:
         raise ValueError(
             f"{path}: expected a JSON object at the top level, got {type(data).__name__}"
         )
-    logger.debug("read_json: %s (%d bytes, %d top-level keys)", path, len(text), len(data))
+    logger.debug(
+        "read_json: %s (%d bytes, %d top-level keys)",
+        path, len(text.encode("utf-8")), len(data),
+    )
     return data
 
 

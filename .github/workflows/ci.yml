@@ -34,16 +34,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
-        # 3.14 enters as an advisory leg: its result is visible, and a red
-        # does not turn the workflow red (a config change never turns CI red).
-        # After one green run the flag goes and "3.14" moves into the list
-        # above. The guard holds continue-on-error below to this flag, never
-        # to a literal, which would soften every leg at once.
-        include:
-          - python-version: "3.14"
-            experimental: true
-    continue-on-error: ${{ matrix.experimental || false }}
+        # A new version enters through an `include:` entry carrying
+        # `experimental: true` behind a job-level
+        # `continue-on-error: ${{ matrix.experimental || false }}`, and moves
+        # into this list after one green run (3.14 did, on run #37522794352). The
+        # guard forbids a literal continue-on-error on this job, which would
+        # soften every leg at once.
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
 

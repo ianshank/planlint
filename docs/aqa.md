@@ -136,7 +136,7 @@ nothing compared prose against `pyproject.toml`.
   packaging-level breakage.
 
 CI runs the mock track on both operating systems (`test` on Ubuntu 3.10–
-3.13, `test-windows` on Windows 3.12) and the live track twice
+3.14, `test-windows` on Windows 3.12) and the live track twice
 (`self-validate`, and `encoding-stress` under an ASCII-only console). A
 job missing from `docs/hooks.md`'s CI table is a test failure
 (`test_hooks_ci_table_lists_every_ci_job`), not a doc gap.
@@ -254,7 +254,7 @@ make pre-pr          # the exact bar CI enforces
 planlint --target . validate --fail-on WARN   # warnings too, if desired
 ```
 
-CI runs the same gates across Python 3.10–3.13, plus a self-validation hard
+CI runs the same gates across Python 3.10–3.14, plus a self-validation hard
 gate (`planlint` validates its own `openspec/` tree) and a graph-diff
 regression gate on PRs.
 

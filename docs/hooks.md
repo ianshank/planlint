@@ -49,7 +49,7 @@ a local net before the round-trip to CI.
 
 | Job | Trigger | Gate |
 |---|---|---|
-| `test` (3.10–3.13) | push + PR | `make lint` + `make typecheck` + `make test` |
+| `test` (3.10–3.14) | push + PR | `make lint` + `make typecheck` + `make test` |
 | `test-windows` (PYTHON_DEFAULT) | push + PR | same three gates on `windows-latest` (GNU make via Chocolatey) |
 | `encoding-stress` | push + PR | `make e2e-live` under `PYTHONIOENCODING=ascii` (hard) |
 | `self-validate` | push + PR | `planlint validate --fail-on ERROR` (hard) |
@@ -63,6 +63,10 @@ a local net before the round-trip to CI.
 
 The workflow holds itself to the posture the gates inside it enforce
 (`harden-ci-workflows`; `tests/test_workflow_hardening.py` is the guard).
+Every third-party action sits at or above a per-action major floor in
+`pyproject.toml` (`[tool.specgraph.action_major_floors]`), a ratchet that a
+bump never edits and only a regression trips -- including every copy sliding
+back together, which an agreement check alone cannot see.
 Every job runs with a read-only token: `ci.yml` declares `permissions:
 contents: read` at the top, and a job widens only in its own block, under a
 comment naming the step that needs it (`security`, for gitleaks-action's

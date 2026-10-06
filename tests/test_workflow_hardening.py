@@ -47,6 +47,13 @@ OWN_ACTION_PREFIX = "ianshank/planlint/"
 
 TIMEOUT_SECTION = "[tool.specgraph]"
 TIMEOUT_KEYS = ("ci_job_timeout_minutes_min", "ci_job_timeout_minutes_max")
+FLOOR_TABLE = "action_major_floors"
+
+#: The CLI verbs that write into the target tree (`planlint --help`: init
+#: writes a conventions snapshot, new scaffolds a package, witness records a
+#: run). A non-root image cannot write into a host-owned bind mount, so the
+#: Dockerfile's header must hand the reader the `--user` override for these.
+WRITING_VERBS = ("init", "new", "witness")
 PULL_REQUEST_TEST = "github.event_name == 'pull_request'"
 
 
@@ -133,6 +140,45 @@ def _ref_disagreements(paths: Iterable[Path]) -> list[str]:
         if len({ref for _, _, ref in uses}) > 1:
             where = ", ".join(f"{_rel(p)}:{n} @{ref}" for p, n, ref in uses)
             offenders.append(f"{action} is referenced on more than one ref: {where}")
+    return offenders
+
+
+_MAJOR = re.compile(r"^v(\d+)(?:\.\d+)*$")
+
+
+def _major(ref: str) -> int | None:
+    """``v7`` or ``v7.0.1`` -> 7; a branch or SHA ref has no major."""
+    match = _MAJOR.match(ref)
+    return int(match.group(1)) if match else None
+
+
+def _action_major_floors(config: dict[str, Any] | None = None) -> dict[str, int]:
+    table = (config or _pyproject())["tool"]["specgraph"].get(FLOOR_TABLE)
+    assert table, f"pyproject.toml declares no [tool.specgraph.{FLOOR_TABLE}]; the floor guard cannot run"
+    return {name: int(floor) for name, floor in table.items()}
+
+
+def _floor_offenders(paths: Iterable[Path], floors: dict[str, int]) -> list[str]:
+    """Refs below their action's floor, and major-tagged actions with no floor.
+
+    The agreement guard sees only disagreement: every copy of an action
+    sliding back to a retired major together is still one ref. The floor is
+    the independent invariant that catches that, and an action the table
+    forgot is a hole in it, so it is reported too. A branch or SHA ref has no
+    major and is outside this rule (the plan's W1.2 owns those).
+    """
+    offenders = []
+    for path, number, action, ref in _uses_refs(paths):
+        major = _major(ref)
+        if major is None:
+            continue
+        floor = floors.get(action)
+        if floor is None:
+            offenders.append(
+                f"{_rel(path)}:{number} {action}@{ref} has no floor in [tool.specgraph.{FLOOR_TABLE}]"
+            )
+        elif major < floor:
+            offenders.append(f"{_rel(path)}:{number} {action}@{ref} is below its floor v{floor}")
     return offenders
 
 
@@ -389,6 +435,24 @@ def _dockerfile_offenders(text: str) -> list[str]:
     return offenders
 
 
+def _user_override_offenders(text: str) -> list[str]:
+    """A non-root image must tell the reader how to run the writing verbs."""
+    if not any(code.startswith("USER ") for _, code in _code_lines(text)):
+        return []
+    comments = "\n".join(line for line in text.splitlines() if line.lstrip().startswith("#"))
+    offenders = []
+    if "--user" not in comments or "id -u" not in comments:
+        offenders.append(
+            'Dockerfile: non-root USER, but the header documents no `--user "$(id -u):$(id -g)"` override'
+        )
+    offenders += [
+        f"Dockerfile: the header does not name `{verb}` as a verb that writes into the mounted tree"
+        for verb in WRITING_VERBS
+        if not re.search(rf"`{verb}`", comments)
+    ]
+    return offenders
+
+
 def _dependabot_entries(text: str) -> set[tuple[str, str]]:
     """``(package-ecosystem, directory)`` pairs, in order of appearance."""
     entries: set[tuple[str, str]] = set()
@@ -467,6 +531,42 @@ def test_a_leftover_retired_major_is_reported_with_file_and_line(tmp_path: Path)
     offenders = _ref_disagreements([workflow, template])
     assert len(offenders) == 1, offenders
     assert "ci.yml:4 @v7" in offenders[0] and "spec-gate.yml:5 @v4" in offenders[0], offenders
+
+
+def test_every_third_party_action_meets_its_major_floor() -> None:
+    """AC-HCW-28: the agreement guard cannot see every copy regressing
+    together; the per-action floor in pyproject.toml can (R-HCW-17)."""
+    offenders = _floor_offenders(ACTION_REF_SCAN, _action_major_floors())
+    assert not offenders, "\n".join(offenders)
+
+
+def test_a_uniformly_retired_major_is_named_with_file_and_line(tmp_path: Path) -> None:
+    """AC-HCW-29 (non-success): two files agreeing on `@v4` pass the
+    agreement guard and fail the floor guard, each named."""
+    paths = [tmp_path / "ci.yml", tmp_path / "spec-gate.yml"]
+    for path in paths:
+        path.write_text("jobs:\n  t:\n    steps:\n      - uses: actions/checkout@v4\n", encoding="utf-8")
+    assert _ref_disagreements(paths) == []
+    assert _floor_offenders(paths, {"actions/checkout": 7}) == [
+        "ci.yml:4 actions/checkout@v4 is below its floor v7",
+        "spec-gate.yml:4 actions/checkout@v4 is below its floor v7",
+    ]
+
+
+def test_an_action_without_a_floor_is_named(tmp_path: Path) -> None:
+    """AC-HCW-29 (non-success): a table that forgot an action is a hole;
+    a branch ref has no major and is not the floor's business."""
+    planted = tmp_path / "t.yml"
+    planted.write_text(
+        "jobs:\n  t:\n    steps:\n      - uses: some/action@v2\n"
+        "      - uses: pypa/gh-action-pypi-publish@release/v1\n",
+        encoding="utf-8",
+    )
+    assert _floor_offenders([planted], {"actions/checkout": 7}) == [
+        f"t.yml:4 some/action@v2 has no floor in [tool.specgraph.{FLOOR_TABLE}]"
+    ]
+    assert _major("v7") == 7 and _major("v7.0.1") == 7
+    assert _major("release/v1") is None and _major("a" * 40) is None
 
 
 def test_no_third_party_action_ref_is_a_commit_sha() -> None:
@@ -781,6 +881,23 @@ def test_dockerfile_switches_to_a_non_root_user_after_install() -> None:
     """AC-HCW-18: the CLI only reads the tree it is pointed at."""
     offenders = [o for o in _dockerfile_offenders(DOCKERFILE.read_text(encoding="utf-8")) if "USER" in o]
     assert not offenders, "\n".join(offenders)
+
+
+def test_dockerfile_documents_the_user_override_for_writing_verbs() -> None:
+    """AC-HCW-18: the CLI is not wholly read-only -- `init`, `new` and
+    `witness` write into the target -- and a non-root image cannot write into
+    a host-owned bind mount, so the header hands the reader the override."""
+    offenders = _user_override_offenders(DOCKERFILE.read_text(encoding="utf-8"))
+    assert not offenders, "\n".join(offenders)
+
+
+def test_a_non_root_dockerfile_without_the_override_is_named() -> None:
+    """AC-HCW-19 (non-success)."""
+    silent = "# Run: docker run --rm planlint validate\nFROM python:3.12-slim\nUSER app\n"
+    offenders = _user_override_offenders(silent)
+    assert offenders and "--user" in offenders[0], offenders
+    assert len(offenders) == 1 + len(WRITING_VERBS), offenders
+    assert _user_override_offenders("FROM python:3.12-slim\n") == []
 
 
 def test_a_digest_pinned_base_is_watched_by_a_docker_dependabot_entry() -> None:

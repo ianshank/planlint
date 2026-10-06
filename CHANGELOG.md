@@ -20,9 +20,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   by SHA, so a `main` run is never cancelled or superseded; the
   single-interpreter Python version is `env: PYTHON_DEFAULT` once per
   workflow, held equal to the composite action's input default and the
-  Dockerfile's base tag; Python 3.14 joins the `test` matrix as an advisory
-  `include:` leg; the Dockerfile pins its base by digest and runs as a
-  non-root user, with Dependabot watching the digest.
+  Dockerfile's base tag; Python 3.14 joins the `test` matrix as a hard leg
+  with its classifier, after one green advisory run; the Dockerfile pins its base by digest and runs as a
+  non-root user (pass `--user "$(id -u):$(id -g)"` for `init`, `new` and
+  `witness`, which write into the mounted tree), with Dependabot watching the
+  digest; every third-party action also sits at or above a per-action major
+  floor in `pyproject.toml`, so a uniform slide back to a retired major is
+  caught where an agreement check alone would not be.
   `tests/test_workflow_hardening.py` holds every one of these as a
   consistency property read from the files, and `tests/support.py` gains
   `workflow_job_blocks`.

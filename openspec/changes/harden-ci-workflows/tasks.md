@@ -239,7 +239,7 @@ the fact.
   the 3.14 line when the leg flips.
 - **Gate:** `make test`
 
-## Milestone 7 — Flip 3.14 to a hard leg, after one green run
+## Milestone 7 — Flip 3.14 to a hard leg, after one green run  [DONE]
 
 - Precondition: the run recorded in Milestone 5 shows the 3.14 leg green. If
   not, stop here; the package ships with the leg advisory and this milestone
@@ -267,6 +267,20 @@ the fact.
   verifies it, keeping the stage; run
   `python -m pytest tests/test_spec_test_citations.py -q` and confirm every
   selector resolves.
+- Recorded: the first full run on the branch with every Milestone 1–6
+  change in place is run #37522794352 (head `b658242`, a pull request). Every job
+  green; the `docs` job's full log shows `GITHUB_TOKEN Permissions:
+  Contents: read, Metadata: read`, both actions downloaded on their new
+  majors, and no "Node.js 20 is deprecated" line anywhere; `security` ran
+  gitleaks-action v3 on the pull request under `pull-requests: read`,
+  scanned six commits, found no leaks, uploaded its SARIF and logged
+  "skipping comments"; `self-validate`, `graph-diff` and all five
+  `action-contract` legs uploaded their artifacts under `contents: read`.
+  Durations, every one inside its timeout: `test` legs 1m42s–3m44s,
+  `test (3.14, true)` 2m26s (job 112472177646, success — the full suite with
+  both coverage floors met), `test-windows` 6m00s, `coverage-tools`
+  3m34s, every other job under 25s. The push-to-`main` half of AC-HCW-25
+  and the two-pushes observation of AC-HCW-26 are recorded after merge.
 - Record in this file the run number of the first full run on the branch
   and, from its annotations, that no job carries "Node.js 20 is deprecated"
   (AC-HCW-25), and the `security` job's result on the first push to `main`
@@ -287,3 +301,27 @@ the fact.
   (`planlint --target . validate --fail-on ERROR --change
   harden-ci-workflows`), then the whole tree.
 - **Gate:** `make pre-pr`
+
+## Milestone 9 — Review round 1  [DONE]
+
+Copilot's review of the first implementation (PR #38, head `b658242`) found
+three things worth fixing and one nit; all landed in one commit.
+
+- `pyproject.toml`: `[tool.specgraph.action_major_floors]`, a per-action
+  floor set to the majors this package landed plus `github/codeql-action` at
+  the template's current major; `tests/test_workflow_hardening.py` gains
+  `test_every_third_party_action_meets_its_major_floor`,
+  `test_a_uniformly_retired_major_is_named_with_file_and_line` and
+  `test_an_action_without_a_floor_is_named` (R-HCW-17, DEC-HCW-014,
+  AC-HCW-28, AC-HCW-29). The agreement guard passed a tree in which every
+  copy regressed together; the floor is the invariant it lacked.
+- `Dockerfile`: the header names `init`, `new` and `witness` as the verbs
+  that write into the mounted tree and gives the `--user "$(id -u):$(id -g)"`
+  override; the `USER` comment no longer claims the CLI only reads.
+  `test_dockerfile_documents_the_user_override_for_writing_verbs` and its
+  planted counterpart hold it (R-HCW-13, DEC-HCW-007, AC-HCW-18, AC-HCW-19).
+- The 3.14 leg was already flipped in the same push (Milestone 7).
+- `tools/_common.read_json`'s DEBUG record now measures UTF-8 bytes, not
+  code points (`select-zero-cost-guards`, recorded there).
+- **Gate:** `make pre-pr`
+

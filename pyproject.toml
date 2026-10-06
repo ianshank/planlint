@@ -48,6 +48,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Quality Assurance",
 ]
 
@@ -165,6 +166,25 @@ g002_min_precision_pct = 88
 g002_min_recall_pct = 90
 u004_min_precision_pct = 82
 u004_min_recall_pct = 90
+
+# Per-action major floors for every third-party `uses:` in the workflows, the
+# composite action, the adopter templates and the README snippet, enforced by
+# tests/test_workflow_hardening.py. A floor is a ratchet, not a pin: it is set
+# to the major this repository landed when it moved every action onto a Node
+# 24 release (harden-ci-workflows; CI run #37522794352 carried no Node 20
+# deprecation annotation), a later Dependabot bump never has to touch it, and
+# only a regression trips it -- including every copy sliding back together,
+# which the agreement guard alone cannot see. Raising a floor is a deliberate
+# act; lowering one needs a reason in the commit message.
+# `pypa/gh-action-pypi-publish` rides a branch ref (`release/v1`) and has no
+# major to floor; moving it to a tag is the plan's W1.2 with the SHA pins.
+[tool.specgraph.action_major_floors]
+"actions/checkout" = 7
+"actions/setup-python" = 7
+"actions/upload-artifact" = 7
+"actions/download-artifact" = 8
+"gitleaks/gitleaks-action" = 3
+"github/codeql-action" = 3
 
 [project.optional-dependencies]
 # tomli backports stdlib tomllib (3.11+) for coverage.process_startup()'s

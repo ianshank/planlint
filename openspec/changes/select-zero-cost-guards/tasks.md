@@ -6,7 +6,9 @@
   `path.read_text(encoding="utf-8")` directly (not via `read_text`, so a
   missing file is still a `FileNotFoundError`), parsing, raising
   `ValueError` naming the path when the top level is not a mapping, and
-  emitting one DEBUG record on `logger` naming the file and its size. The
+  emitting one DEBUG record on `logger` naming the file and its size in
+  UTF-8 bytes (`len(text.encode("utf-8"))`, not `len(text)`, which counts
+  code points — a review finding on the first implementation). The
   `isinstance` narrowing is a real branch; `tests/test_gate_scripts.py` gains
   `test_read_json_rejects_a_non_mapping_document` and
   `test_read_json_reports_a_missing_file_by_name` for it (AC-ZCG-19).

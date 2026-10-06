@@ -144,9 +144,12 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   else in this change.
 - R-HCW-13: The Dockerfile MUST switch to a non-root `USER` after its install
   step, and its `FROM` MUST pin the base by digest with the tag kept inside
-  the reference (`python:3.12-slim@sha256:…`). A `FROM` without a 64-hex
-  digest, or a Dockerfile with no `USER` or with `USER root`, MUST fail the
-  suite.
+  the reference (`python:3.12-slim@sha256:…`). Because a non-root image
+  cannot write into a host-owned bind mount and `init`, `new` and `witness`
+  write into the target tree, the header MUST document the
+  `--user "$(id -u):$(id -g)"` override for those verbs. A `FROM` without a
+  64-hex digest, a Dockerfile with no `USER` or with `USER root`, or a
+  non-root Dockerfile whose header omits the override, MUST fail the suite.
 - R-HCW-14: `.github/dependabot.yml` MUST gain a `docker` ecosystem entry for
   `/`. A digest-pinned `FROM` with no `docker` entry MUST fail the suite,
   because an unwatched digest is a pin that only gets staler.
@@ -160,6 +163,12 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   `workflow_job_blocks(text)`. `tests/test_ci_hardening.py` MUST keep
   `_ci_job_blocks` as an alias so its own parser tests and every existing
   call site are unchanged.
+- R-HCW-17: Every third-party action whose ref is a major tag MUST sit at or
+  above a per-action floor declared in `[tool.specgraph.action_major_floors]`
+  in `pyproject.toml`, set to the major this change lands and only ever
+  raised. A ref below its floor, and a major-tagged action with no floor,
+  MUST fail the suite naming the file and line. A branch ref has no major
+  and is outside this rule.
 - C-HCW-1: No job in any workflow MAY be renamed or removed, no `make` target
   MAY change what it does, and the composite action's inputs, outputs and
   defaults MUST be unchanged apart from its two `uses:` refs. Every existing
@@ -265,7 +274,12 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   updates tag and digest as a unit, which is what makes the pin maintainable.
   The non-root user is a system user with a fixed uid and no home directory,
   created after `pip install` runs as root, so the install path is unchanged
-  and only the entrypoint is unprivileged.
+  and only the entrypoint is unprivileged. The CLI is not wholly read-only:
+  `init`, `new` and `witness` write into the target, and against a
+  host-owned bind mount a fixed uid cannot — so the header names those verbs
+  and the `--user "$(id -u):$(id -g)"` override that runs them as the
+  mount's owner, while the gate verbs need nothing. (A review finding; the
+  earlier wording here, "the CLI only reads the tree", was wrong.)
 - **DEC-HCW-008:** the guards go in a new module,
   `tests/test_workflow_hardening.py`, not in `tests/test_ci_hardening.py`.
   That module is 859 lines across five change packages' concerns already,
@@ -333,6 +347,19 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   one stage a workflow (`release.yml`) invokes by name, so the citation adds
   nothing to the set of stages no workflow runs. The observation itself is
   named in the criterion and recorded in `tasks.md` with the run number.
+- **DEC-HCW-014:** a per-action major *floor*, not the pin DEC-HCW-008
+  rejects. A pin says `@v7` and the next Dependabot bump must edit the test
+  to pass; a floor says "at least 7", a bump never touches it, and it is the
+  one invariant the agreement guard lacks: every copy of an action sliding
+  back to a retired major together is still one ref, so R-HCW-2 alone would
+  pass a tree R-HCW-1 forbids (a review finding on the first implementation).
+  The floors live in `pyproject.toml` beside the other thresholds, read with
+  the same TOML parser the classifier guard uses, and are set to the majors
+  this change lands — proven Node 20-clean by the first run — plus
+  `github/codeql-action` at the template's current major, so the table covers
+  every major-tagged action in the scan set and a forgotten one is reported.
+  `pypa/gh-action-pypi-publish@release/v1` has no major; W1.2 moves it with
+  the SHA pins.
 
 ---
 
@@ -419,7 +446,7 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   naming each source and its value. (R-HCW-9)
   _Verified by:_ `pytest -k "test_the_default_python_agrees_across_workflows_action_and_dockerfile or test_the_default_python_is_a_hard_matrix_leg or test_a_disagreeing_default_is_named"` · stage: `make test`
 
-- [ ] **AC-HCW-14:** the `test` matrix carries a 3.14 leg through `include:`
+- [x] **AC-HCW-14:** the `test` matrix carries a 3.14 leg through `include:`
   with `experimental: true` and the job-level `continue-on-error` expression;
   a job-level literal `continue-on-error: true` on `test` fails the suite;
   the first CI run on the branch shows the leg's own result, under the check
@@ -427,13 +454,13 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   C-HCW-4, DEC-HCW-005)
   _Verified by:_ `pytest -k "test_the_experimental_leg_is_an_expression_not_a_job_literal or test_a_job_literal_continue_on_error_is_named or test_matrix_versions_split_hard_from_experimental"`, plus the first run on the branch read in the Actions log · stage: `make test`
 
-- [ ] **AC-HCW-15:** after one green run the flag is removed, 3.14 is in the
+- [x] **AC-HCW-15:** after one green run the flag is removed, 3.14 is in the
   matrix list, the `3.14` classifier is present, and the classifier set
   equals the hard-leg set; `docs/hooks.md`'s `test` row names the lowest and
   highest hard legs. (R-HCW-10, R-HCW-11)
   _Verified by:_ `pytest -k "test_classifiers_equal_the_hard_matrix_legs or test_hooks_test_row_names_the_matrix_bounds"` · stage: `make test`
 
-- [ ] **AC-HCW-16 (non-success):** a classifier with no matrix leg, or a hard
+- [x] **AC-HCW-16 (non-success):** a classifier with no matrix leg, or a hard
   matrix leg with no classifier, fails the suite naming the version; a
   `docs/hooks.md` `test` row that names a range the matrix does not have
   fails naming both. (R-HCW-11, R-HCW-15)
@@ -448,17 +475,18 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
 
 - [x] **AC-HCW-18:** the Dockerfile's `FROM` is `python:3.12-slim@sha256:`
   followed by a 64-hex digest, a non-root `USER` follows the install step,
-  the `COPY` set is unchanged, and `.github/dependabot.yml` has a `docker`
-  entry for `/`. The image is still built by no CI job — its header says so
+  the header documents the `--user` override for `init`, `new` and
+  `witness`, the `COPY` set is unchanged, and `.github/dependabot.yml` has a
+  `docker` entry for `/`. The image is still built by no CI job — its header says so
   — and the manual `docker build` and uid check are recorded in `tasks.md`
   as the only exercise it gets. (R-HCW-13, R-HCW-14, C-HCW-5, DEC-HCW-007)
-  _Verified by:_ `pytest -k "test_docker_build_context_is_sufficient_for_the_dynamic_version or test_every_composite_action_directory_is_watched_by_dependabot or test_dockerfile_from_is_digest_pinned_with_the_tag_in_the_reference or test_dockerfile_switches_to_a_non_root_user_after_install or test_a_digest_pinned_base_is_watched_by_a_docker_dependabot_entry"` · stage: `make test`
+  _Verified by:_ `pytest -k "test_docker_build_context_is_sufficient_for_the_dynamic_version or test_every_composite_action_directory_is_watched_by_dependabot or test_dockerfile_from_is_digest_pinned_with_the_tag_in_the_reference or test_dockerfile_switches_to_a_non_root_user_after_install or test_a_digest_pinned_base_is_watched_by_a_docker_dependabot_entry or test_dockerfile_documents_the_user_override_for_writing_verbs"` · stage: `make test`
 
 - [x] **AC-HCW-19 (non-success):** a `FROM` without a digest, a Dockerfile
   with no `USER` or with `USER root`, and a digest-pinned `FROM` with no
   `docker` Dependabot entry each fail the suite with a message naming the
   line. (R-HCW-13, R-HCW-14, R-HCW-15)
-  _Verified by:_ `pytest -k "test_a_weak_dockerfile_is_named or test_an_unwatched_digest_is_named"` · stage: `make test`
+  _Verified by:_ `pytest -k "test_a_weak_dockerfile_is_named or test_an_unwatched_digest_is_named or test_a_non_root_dockerfile_without_the_override_is_named"` · stage: `make test`
 
 - [x] **AC-HCW-20:** `tools/check_no_hardcoded_thresholds.py` is unedited and
   reports PASS on the real tree with the new lines in place. (C-HCW-2)
@@ -510,6 +538,17 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   is in the guard's scan. (C-HCW-2, R-HCW-15)
   _Verified by:_ `pytest -k "test_every_workflow_is_scanned_by_the_threshold_guard or test_threshold_guard_stays_quiet_on_timeouts_env_and_concurrency"` · stage: `make test`
 
+- [x] **AC-HCW-28:** every major-tagged third-party action in the scan set
+  is at or above its floor in `[tool.specgraph.action_major_floors]`, and
+  every such action has a floor. (R-HCW-17, DEC-HCW-014)
+  _Verified by:_ `pytest -k test_every_third_party_action_meets_its_major_floor` · stage: `make test`
+
+- [x] **AC-HCW-29 (non-success):** two files that agree on `actions/checkout@v4`
+  pass the agreement guard and fail the floor guard with both files and
+  lines named; a major-tagged action missing from the table is named; a
+  branch ref is not reported. (R-HCW-17, R-HCW-15)
+  _Verified by:_ `pytest -k "test_a_uniformly_retired_major_is_named_with_file_and_line or test_an_action_without_a_floor_is_named"` · stage: `make test`
+
 ---
 
 ## Invariants Touched
@@ -521,7 +560,7 @@ spec.
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Focused | `make test` | AC-HCW-1..19, 21..24, 27 — every new guard green on the real tree and red on its planted counter-example |
+| Focused | `make test` | AC-HCW-1..19, 21..24, 27..29 — every new guard green on the real tree and red on its planted counter-example |
 | Threshold guard | `make thresholds` | AC-HCW-20 — the guard is unedited and prints PASS on the finished tree |
 | Self-check | `make validate` | this package validates clean against the repo's own rules (Milestone 8) |
 | Full | `make pre-pr` | AC-HCW-25, 26 as the local equivalent of the observed run; full regression, lint, typecheck, security, docs, thresholds, scoped coverage |

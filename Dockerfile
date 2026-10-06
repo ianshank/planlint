@@ -7,6 +7,13 @@
 # names, for CI sandboxes that want a hermetic, dependency-free CLI invocation.
 # Build:  docker build -t planlint .
 # Run:    docker run --rm -v "$PWD":/repo planlint --target /repo validate
+#
+# The image runs as a non-root user (USER below), so against a host-owned
+# bind mount it can read the tree but not write into it. `detect`,
+# `validate`, `rules`, `graph`, `waivers`, `delta` and `report` only read;
+# `init`, `new` and `witness` write into the target, so run those as the
+# mount's owner:
+#         docker run --rm --user "$(id -u):$(id -g)" -v "$PWD":/repo planlint --target /repo witness ...
 
 # The digest is the pin; the tag stays inside the reference for readers and
 # for Dependabot's docker ecosystem, which moves tag and digest together. (A
@@ -24,9 +31,10 @@ COPY pyproject.toml README.md LICENSE ./
 COPY openspec_graph ./openspec_graph
 RUN pip install --no-cache-dir .
 
-# The CLI only reads the tree it is pointed at, so the entrypoint has no
-# reason to be root. The install above still runs as root; only what follows
-# is unprivileged -- a system user with a fixed uid and no home directory.
+# Nothing the entrypoint does needs root: the gate verbs read the tree, and
+# the three verbs that write into it run as the mount's owner via `--user`
+# (header). The install above still runs as root; only what follows is
+# unprivileged -- a system user with a fixed uid and no home directory.
 RUN useradd --system --uid 10001 --no-create-home planlint
 USER planlint
 
