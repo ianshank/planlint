@@ -39,7 +39,11 @@ workflow (rule G003 / AC-EH-6).
 What is *not* externalized and is intentional: GitHub Action versions
 (`actions/checkout@v7`), the Python version matrix, and the Docker base image
 (`python:3.12-slim`) are CI/infrastructure pins, not quality thresholds — they
-are not in scope of the no-hardcoded-thresholds gate.
+are not in scope of the no-hardcoded-thresholds gate. Two of them are held by
+tests instead: every third-party action sits at or above a per-action major
+floor in `pyproject.toml` (`[tool.specgraph.action_major_floors]`, a ratchet a
+bump never edits), and the Dockerfile's base tag must equal the workflows'
+`PYTHON_DEFAULT` — both in `tests/test_workflow_hardening.py`.
 
 A missing floor or uninstrumented source is a **misconfiguration**, not a skip:
 the coverage floor scripts exit 2 with a clear message. A missing gate is a bug.

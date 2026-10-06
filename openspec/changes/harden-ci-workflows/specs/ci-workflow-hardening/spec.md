@@ -446,11 +446,14 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   naming each source and its value. (R-HCW-9)
   _Verified by:_ `pytest -k "test_the_default_python_agrees_across_workflows_action_and_dockerfile or test_the_default_python_is_a_hard_matrix_leg or test_a_disagreeing_default_is_named"` · stage: `make test`
 
-- [x] **AC-HCW-14:** the `test` matrix carries a 3.14 leg through `include:`
-  with `experimental: true` and the job-level `continue-on-error` expression;
-  a job-level literal `continue-on-error: true` on `test` fails the suite;
-  the first CI run on the branch shows the leg's own result, under the check
-  name `test (3.14, true)`, without turning the workflow run red. (R-HCW-10,
+- [x] **AC-HCW-14:** a new Python version enters the `test` matrix through
+  an `include:` leg marked `experimental: true` behind the job-level
+  `continue-on-error` expression, never a literal — a job-level literal
+  `continue-on-error: true` on `test` fails the suite, and a planted
+  experimental leg without the expression is named. 3.14 entered that way:
+  its first run on the branch (run 37522794352) showed the leg's own result
+  under the check name `test (3.14, true)`, green, with the workflow run not
+  depending on it, and Milestone 7 then moved it into the list. (R-HCW-10,
   C-HCW-4, DEC-HCW-005)
   _Verified by:_ `pytest -k "test_the_experimental_leg_is_an_expression_not_a_job_literal or test_a_job_literal_continue_on_error_is_named or test_matrix_versions_split_hard_from_experimental"`, plus the first run on the branch read in the Actions log · stage: `make test`
 
@@ -479,7 +482,8 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   `witness`, the `COPY` set is unchanged, and `.github/dependabot.yml` has a
   `docker` entry for `/`. The image is still built by no CI job — its header says so
   — and the manual `docker build` and uid check are recorded in `tasks.md`
-  as the only exercise it gets. (R-HCW-13, R-HCW-14, C-HCW-5, DEC-HCW-007)
+  as the only exercise it gets, including, as at implementation, that they
+  were not run and are the maintainer's to run once. (R-HCW-13, R-HCW-14, C-HCW-5, DEC-HCW-007)
   _Verified by:_ `pytest -k "test_docker_build_context_is_sufficient_for_the_dynamic_version or test_every_composite_action_directory_is_watched_by_dependabot or test_dockerfile_from_is_digest_pinned_with_the_tag_in_the_reference or test_dockerfile_switches_to_a_non_root_user_after_install or test_a_digest_pinned_base_is_watched_by_a_docker_dependabot_entry or test_dockerfile_documents_the_user_override_for_writing_verbs"` · stage: `make test`
 
 - [x] **AC-HCW-19 (non-success):** a `FROM` without a digest, a Dockerfile
