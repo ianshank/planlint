@@ -69,7 +69,7 @@ re-measures it.
   `test_render_mermaid_matches_to_mermaid_byte_for_byte`,
   `test_render_mermaid_rejects_bad_args` and
   `test_gate_script_is_runnable_as_a_script`; and
-  `.github/workflows/ci.yml:194` runs
+  `.github/workflows/ci.yml`'s `graph-diff` step runs
   `python tools/diff_spec_graph.py base.json head.json` in the `graph-diff`
   job. The `Makefile`'s `graph-mermaid` target invokes the CLI's
   `--format mermaid` directly and does not call `render_mermaid.py`; nothing
@@ -157,7 +157,7 @@ re-measures it.
   `README.md`'s rules table and `tests/baseline_rules.json` are untouched.
   Nothing here is a finding about anyone's specs.
 - **No change to any `make` target, workflow step, or script invocation.**
-  `make lint` and `make typecheck` keep their recipes; `ci.yml:194` keeps
+  `make lint` and `make typecheck` keep their recipes; the `graph-diff` step keeps
   `python tools/diff_spec_graph.py base.json head.json`; both scripts keep
   their positional arguments and their 0/1/2 exit codes.
 - **No `-v` flag on either script.** `_common.logger` already reads

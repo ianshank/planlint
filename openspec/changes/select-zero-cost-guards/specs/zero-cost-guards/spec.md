@@ -75,7 +75,10 @@ external contract.
 - R-ZCG-5: `tools/diff_spec_graph.py` and `tools/render_mermaid.py` MUST
   import from `tools/_common.py` and MUST parse their arguments with
   `argparse`, declaring the same positional arguments they accept today —
-  `base.json head.json` and `graph.json` respectively — and no new ones.
+  `base.json head.json` and `graph.json` respectively — and no new positional
+  arguments. The only new accepted argument is argparse's own `-h`/`--help`;
+  a `-`-prefixed token that was a filename before now exits 2 as a usage
+  error (today it is a `FileNotFoundError` traceback).
   Each `main(argv)` MUST keep receiving `sys.argv` with the program name
   first and MUST strip it itself by parsing `argv[1:]`, as
   `matcher_accuracy.py` and `stage_citations.py` already do, so
@@ -98,7 +101,12 @@ external contract.
   at the default level, so stdout is byte-for-byte what it was.
 - R-ZCG-9: `tools/_common.py` MUST gain `read_json(path)`, returning a fully
   parameterised mapping type and emitting the file-read DEBUG record, and
-  MUST remain stdlib-only.
+  MUST remain stdlib-only. It MUST read `path.read_text(encoding="utf-8")`
+  directly — not through `read_text`, whose missing-file `""` would turn a
+  clear `FileNotFoundError` into a `JSONDecodeError` — so a missing file
+  still raises `FileNotFoundError` as today; and a document whose top level
+  is not a mapping MUST raise `ValueError` naming the path, where today the
+  caller fails later with a `TypeError` traceback.
 - R-ZCG-10: Two guard tests in `tests/test_ci_hardening.py` MUST parse
   `pyproject.toml` structurally and assert, respectively, that `T201` is
   selected with exactly the two exemptions of R-ZCG-1, and that
@@ -118,17 +126,30 @@ external contract.
 - R-ZCG-13: The argv-convention grouping in `tests/support.py`'s
   `run_tool_main` docstring and in `tools/AGENTS.md` MUST be updated to
   reflect the move — the hand-rolled group shrinks by two and the
-  argparse-strips-the-name group grows by two — and `pyproject.toml`'s
-  comment naming `T20` as unselected MUST be rewritten to state what is now
-  true.
+  argparse-strips-the-name group grows by two — as MUST
+  `_common.parse_coverage_argv`'s docstring, which already miscounts ("the
+  other eight scripts") — and `pyproject.toml`'s comment naming `T20` as
+  unselected MUST be rewritten to state what is now true.
+  (`gate-tools-coverage` R-GTC-4 carries the same stale count; it is a
+  shipped package's record and is not edited here.)
+- R-ZCG-14: Tests that assert records on the `planlint.tools` logger MUST
+  attach `caplog.handler` to that logger directly, through one helper in
+  `tests/support.py`, because `_common` sets `propagate = False` at import
+  and pytest attaches its capture handler only to loggers that are already
+  non-propagating when the test starts — a test that imports `_common` for
+  the first time inside its own body sees no records. The existing
+  `test_plugin_manifests_verbose_logs_without_polluting_stdout` MUST adopt
+  the helper, so it passes in isolation (it fails under `-k` today).
 - C-ZCG-2: This change MUST NOT select `C901`, `PLR`, `E501`, `FBT`, `PERF`,
   `D`, or any ruff family that has violations after this change's edits.
   Those are ratchets with a backlog; the two `PLR2004` findings clearing as a
   side effect does not make `PL` a zero-cost family.
 - C-ZCG-3: No `make` target, workflow step or script invocation may change.
-  `make lint` and `make typecheck` keep their recipes; `ci.yml:194` keeps its
-  command line; the `RULES` tuple, `README.md`'s rules table and
-  `tests/baseline_rules.json` are untouched.
+  `make lint` and `make typecheck` keep their recipes; the `graph-diff` job's
+  step "Diff graphs (fail on new broken edges or orphans)" keeps its command
+  line, `python tools/diff_spec_graph.py base.json head.json`; the `RULES`
+  tuple, `README.md`'s rules table and `tests/baseline_rules.json` are
+  untouched.
 
 ---
 
@@ -157,7 +178,10 @@ external contract.
   not a comment explaining why strict stays off. The explanation on record
   (DEC-PR-001: "`tools/` would require further annotation churn") was
   measured against a different tree; at the drafting commit the churn is two
-  annotations in a file this change rewrites regardless. `warn_unreachable`
+  annotations in a file this change rewrites regardless. This decision
+  **supersedes** DEC-PR-001 and `post-merge-quality-review`'s non-success
+  criterion that `mypy --strict` stays an advisory diagnostic and never a
+  hard gate — named here so the reversal is on record, not discovered. `warn_unreachable`
   is named separately because `--strict` does not imply it — checked against
   `python -m mypy --help`'s own list rather than remembered — and because the
   run with it reports nothing new, so it is zero-cost too.
@@ -190,19 +214,28 @@ external contract.
   `json.loads(path.read_text(encoding="utf-8"))` — three call sites between
   them — and R-ZCG-8's per-file-read DEBUG record would otherwise be written
   three times beside it. One helper is where the encoding, the parse and
-  the record live once, the same argument that put `read_text` there. The
-  return is a fully parameterised mapping so neither caller needs a bare
-  generic. Rejected: inlining the three reads with three log lines.
+  the record live once, the same argument that put `read_text` there — but
+  `read_json` does not call `read_text`: that helper returns `""` for a
+  missing path, which would surface as a `JSONDecodeError` where today's
+  behaviour is a `FileNotFoundError` naming the file; the direct read keeps
+  the clearer error. The return is a fully parameterised mapping so neither
+  caller needs a bare generic, and the narrowing is a real `isinstance`
+  branch — a non-mapping document raises `ValueError` naming the path — with
+  its own test, not a `cast` that would hide a list at the top level until a
+  `TypeError` deep in the caller. Rejected: inlining the three reads with
+  three log lines; building on `read_text`.
 - **DEC-ZCG-007:** a usage error is argparse's own `SystemExit(2)`,
   propagating out of `main`, rather than caught and converted to a returned
-  2. Catching it would make these two scripts behave unlike the three
-  argparse scripts already in the directory, and would convert `--help`'s
+  2. Catching it would make these two scripts behave unlike the five
+  argparse scripts already in the directory (none catches `SystemExit`), and
+  would convert `--help`'s
   exit 0 into a return 0 that the `__main__` guard re-raises as the same
   exit — more code for the same process behaviour. The process-level
   contract is unchanged in every direction: 0, 1 and 2 as before, usage on
   stderr, nothing on stdout, and `test_gate_script_is_runnable_as_a_script`
-  runs both scripts with no arguments and still sees exit 2 with no
-  load-failure marker. The in-process tests follow
+  runs both scripts with no arguments and still sees one of the documented
+  codes with no load-failure marker (it asserts 0, 1 or 2, per DEC-GTC-006).
+  The in-process tests follow
   `test_plugin_manifests_require_a_mode`'s `pytest.raises(SystemExit)` form
   and keep their names, so the citations in this spec survive the rewrite.
 - **DEC-ZCG-008:** logging goes through `_common.logger` — stderr, level from
@@ -211,20 +244,36 @@ external contract.
   by CI and by people, so the only safe channel for diagnostics is the one
   `_common` already configured and documented as never stdout. The
   environment variable already covers the CLI and every other tool; a flag
-  would be a second spelling. The records are asserted through `caplog`
-  with `at_level` on the `planlint.tools` logger, the pattern
-  `test_plugin_manifests_verbose_logs_without_polluting_stdout` records —
-  the logger does not propagate, and `capsys` cannot see what pytest's
-  logging plugin intercepts first.
+  would be a second spelling. The records are asserted by attaching
+  `caplog.handler` to `logging.getLogger("planlint.tools")` directly for the
+  duration of the test, the pattern `tests/test_witness.py`'s `_captured`
+  and `tests/test_repo_io.py` already use and explain — not `caplog.at_level`
+  alone. The mechanism: `_common.py` sets `logger.propagate = False` at
+  import, and pytest's logging plugin attaches its capture handler to the
+  root and to the loggers that are *already* non-propagating when the test
+  begins; a test whose `load_tool` call is the first import of `_common`
+  therefore sees `caplog.records == []` while the line visibly reaches the
+  captured stderr. The precedent this draft first cited,
+  `test_plugin_manifests_verbose_logs_without_polluting_stdout`, has exactly
+  that order dependence and fails under `-k` isolation today; adversarial
+  review reproduced it, so the helper lands in `tests/support.py` once and
+  that test adopts it too (R-ZCG-14). `capsys` is still the wrong tool for
+  the positive assertion for the reason the earlier precedent gave; it
+  remains the right tool for asserting stdout is untouched.
 - **DEC-ZCG-009:** `render_mermaid.py` takes the
   `sys.path.insert(0, str(repo_root()))` bootstrap its sibling generators
   carry, and `diff_spec_graph.py` does not import `repo_root` at all. The
   first imports `openspec_graph` and should run from a checkout the way
   `matcher_accuracy.py` and `stage_citations.py` do; the second reads two
   files at the paths it is given and nothing relative to any root — its
-  tests say so, passing absolute paths with no cwd. Rejected: importing
-  `repo_root` into `diff_spec_graph` for symmetry, which would be an unused
-  import that `make lint` fails on anyway.
+  tests say so, passing absolute paths with no cwd. One observable effect,
+  recorded as compatibility: with the checkout root first on `sys.path`, a
+  checkout's `openspec_graph` shadows any installed one for this script, as
+  it already does for its two siblings; `test_gate_script_is_runnable_as_a_
+  script` shows the file still loads and reaches its own argument handling,
+  not which copy resolved. Rejected: importing `repo_root` into
+  `diff_spec_graph` for symmetry, which would be an unused import that
+  `make lint` fails on anyway.
 - **DEC-ZCG-010:** the guard tests live in `tests/test_ci_hardening.py`, in
   the section headed as claims about the CI configuration itself, beside
   `test_lint_is_a_hard_gate`. That section already asserts properties of
@@ -236,7 +285,18 @@ external contract.
   a regular expression; `_common.read_pyproject_int` is deliberately
   integer-only and a list-valued key is exactly what a regex gets wrong.
   Two structural tests rather than one, so a failure names the gate that
-  regressed.
+  regressed. Two coordination notes. The sibling package on this branch,
+  `harden-ci-workflows`, decides the opposite for *its* guards (DEC-HCW-008:
+  a new `tests/test_workflow_hardening.py`, because the existing module is
+  already large); the two decisions agree on the reason and differ on the
+  facts — these guards sit beside the script tests and the lint-gate test
+  they extend, and locality wins for four short tests, while that package's
+  twenty-odd workflow guards would double the module. And the plan's W4
+  proof named `make thresholds` as the place to assert selected families;
+  that is deliberately replaced by these pytest guards: the thresholds gate
+  is a stdlib, 3.10-safe integer reader by design, a list-valued TOML key is
+  what it must not learn, and `harden-ci-workflows` C-HCW-2 forbids editing
+  it in this milestone.
 - **DEC-ZCG-011:** each gate is also shown to fire, not only configured.
   A structural test proves the table says `T201`; it cannot prove ruff reads
   the exemption the way the table intends — a glob that matched nothing
@@ -272,9 +332,9 @@ external contract.
   _Verified by:_ stage: `make lint`
 
 - [ ] **AC-ZCG-2 (non-success):** under a copy of this repository's ruff
-  configuration, a `print` planted in a library-module path is reported as
-  `T201`, while the same `print` planted at a `cli.py` path and under a
-  `tools/` path is not. (R-ZCG-2, R-ZCG-11, DEC-ZCG-011)
+  `per-file-ignores`, with `T201` selected, a `print` planted in a
+  library-module path is reported as `T201`, while the same `print` planted
+  at a `cli.py` path and under a `tools/` path is not. (R-ZCG-2, R-ZCG-11, DEC-ZCG-011)
   _Verified by:_ stage: `make lint`
 
 - [ ] **AC-ZCG-3:** `[tool.mypy]` has `strict = true` and
@@ -314,9 +374,10 @@ external contract.
 
 - [ ] **AC-ZCG-10:** both scripts still start as `python tools/<script>.py`
   from a throwaway cwd with no arguments, emit no load-failure marker on
-  stderr, and exit one of the documented codes — so the `sys.path`
-  bootstrap and the `_common` import resolve under script execution, and
-  the `ci.yml:194` invocation shape is intact. (R-ZCG-5, C-ZCG-3)
+  stderr, and exit one of the documented codes — so the file still loads
+  under script execution and reaches its own argument handling, and the
+  `graph-diff` step's invocation shape, `python tools/diff_spec_graph.py
+  base.json head.json`, is intact. (R-ZCG-5, C-ZCG-3)
   _Verified by:_ `pytest -k test_gate_script_is_runnable_as_a_script` · stage: `make test`
 
 - [ ] **AC-ZCG-11:** with the `planlint.tools` logger at DEBUG, a diff run
@@ -363,6 +424,19 @@ external contract.
   green lint is the proof that only zero-cost families were added.
   (C-ZCG-2, DEC-ZCG-012)
   _Verified by:_ stage: `make lint`
+
+- [ ] **AC-ZCG-19 (non-success):** `read_json` on a document whose top level
+  is a list raises `ValueError` naming the path, and on a missing path raises
+  `FileNotFoundError` — never a `JSONDecodeError` for an absent file.
+  (R-ZCG-9, DEC-ZCG-006)
+  _Verified by:_ stage: `make test`
+
+- [ ] **AC-ZCG-20 (non-success):** the logging-capture precedent passes when
+  run in isolation, which it does not today: the helper attaches
+  `caplog.handler` to the `planlint.tools` logger directly, so the records
+  are seen whether or not `_common` was imported before the test began.
+  (R-ZCG-14, DEC-ZCG-008)
+  _Verified by:_ `pytest -k test_plugin_manifests_verbose_logs_without_polluting_stdout` · stage: `make test`
 
 ---
 

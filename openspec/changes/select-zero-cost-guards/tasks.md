@@ -3,9 +3,13 @@
 ## Milestone 1 — Bring the two scripts onto `_common`
 
 - `tools/_common.py`: add `read_json(path: Path) -> dict[str, Any]`, reading
-  UTF-8, parsing, and emitting one DEBUG record on `logger` naming the file
-  and its size. Narrow the parsed value to a parameterised mapping rather
-  than returning `Any`, so `warn_return_any` stays quiet under strict.
+  `path.read_text(encoding="utf-8")` directly (not via `read_text`, so a
+  missing file is still a `FileNotFoundError`), parsing, raising
+  `ValueError` naming the path when the top level is not a mapping, and
+  emitting one DEBUG record on `logger` naming the file and its size. The
+  `isinstance` narrowing is a real branch; `tests/test_gate_scripts.py` gains
+  `test_read_json_rejects_a_non_mapping_document` and
+  `test_read_json_reports_a_missing_file_by_name` for it (AC-ZCG-19).
   Stdlib imports only — `test_common_module_is_stdlib_only` holds the line
   (R-ZCG-9, DEC-ZCG-006).
 - `tools/diff_spec_graph.py`: the `sys.path.insert` bootstrap and
@@ -32,13 +36,20 @@
 - `tests/test_ci_hardening.py`: add `test_graph_diff_help_exits_zero` and
   `test_render_mermaid_help_exits_zero` — `--help` raises `SystemExit` with
   code 0 and the usage text lands on stdout (AC-ZCG-9).
+- `tests/support.py`: add `captured_logger(caplog, name)`, a context manager
+  that attaches `caplog.handler` to `logging.getLogger(name)` at DEBUG and
+  detaches it in `finally` — the body of `tests/test_witness.py`'s
+  `_captured`, moved so three modules share one copy (R-ZCG-14).
+- `tests/test_gate_scripts.py`: rewrite
+  `test_plugin_manifests_verbose_logs_without_polluting_stdout` on the
+  helper (same name, so its citation survives) — reproduce first:
+  `python -m pytest tests/test_gate_scripts.py -k verbose_logs` fails today
+  with `caplog.records == []`; it passes after (AC-ZCG-20).
 - `tests/test_ci_hardening.py`: add
   `test_graph_diff_logs_its_decision_without_polluting_stdout` and
   `test_render_mermaid_logs_the_node_count_without_polluting_stdout`, using
-  `caplog.at_level("DEBUG", logger="planlint.tools")` as
-  `test_plugin_manifests_verbose_logs_without_polluting_stdout` does, and
-  asserting the records are absent from `capsys` stdout (AC-ZCG-11,
-  DEC-ZCG-008).
+  `captured_logger(caplog, "planlint.tools")` and asserting the records are
+  absent from `capsys` stdout (AC-ZCG-11, DEC-ZCG-008).
 - Confirm the four verdict tests, the byte-for-byte test and the
   runnable-as-a-script test pass unchanged (AC-ZCG-5, AC-ZCG-7, AC-ZCG-10).
 - **Gate:** `make coverage-tools`
