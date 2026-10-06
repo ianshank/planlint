@@ -574,5 +574,7 @@ change package.
 - [Peer review deep dive (2026-10)](docs/peer-review-2026-10.md) — the
   2026-09 findings re-measured at HEAD, one new parser defect, and the three
   drafted change packages that plan R7, R8 and the fix
+- [Reflection and consolidation plan (2026-10)](docs/reflection-2026-10.md) — measured
+  debt at `9c4b6e9` and the ordered workstreams (W1–W9, M0–M5) that retire it.
 
 Upstream OpenSpec conventions: [Fission-AI/OpenSpec concepts](https://github.com/Fission-AI/OpenSpec/blob/main/docs/concepts.md).

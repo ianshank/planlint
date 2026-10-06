@@ -49,6 +49,11 @@ later than this list. They sharpen a tool nobody has adopted yet.
 
 ## Near term
 
+> Consolidation items 18, 20–23 below are sequenced, with their measured
+> baselines and proofs, in [`docs/reflection-2026-10.md`](reflection-2026-10.md)
+> (workstreams W1–W9, milestones M0–M5). This file stays the backlog of record;
+> that one is the plan.
+
 1. ~~**Waiver audit report**~~ — shipped in CP-4 (`add-waiver-ledger-and-inv-lints`)
    as `planlint waivers --format json`: a stable-ordered ledger of every
    waived rule across the tree, with file, line, reason, and owning change.
