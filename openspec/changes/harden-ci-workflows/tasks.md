@@ -281,6 +281,13 @@ the fact.
   both coverage floors met), `test-windows` 6m00s, `coverage-tools`
   3m34s, every other job under 25s. The push-to-`main` half of AC-HCW-25
   and the two-pushes observation of AC-HCW-26 are recorded after merge.
+- Recorded: after the 3.14 flip and the review-round fixes, run
+  #37526162132 (head `50ac12a`, the final head of the pull request) is
+  green on every job, with `test (3.14)` a hard leg. Pushing `50ac12a` while
+  run #37525890760 (head `109ca5b`) was in progress cancelled that run
+  within a minute (conclusion `cancelled` at 20:24:53Z) and started the new
+  one — the pull-request half of AC-HCW-26, observed. The `main` half (each
+  push to `main` keeping its own run) is recorded after merge.
 - Record in this file the run number of the first full run on the branch
   and, from its annotations, that no job carries "Node.js 20 is deprecated"
   (AC-HCW-25), and the `security` job's result on the first push to `main`
