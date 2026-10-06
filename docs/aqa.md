@@ -37,9 +37,13 @@ coverage floor or tool-version pin is re-introduced into the Makefile or
 workflow (rule G003 / AC-EH-6).
 
 What is *not* externalized and is intentional: GitHub Action versions
-(`actions/checkout@v4`), the Python version matrix, and the Docker base image
+(`actions/checkout@v7`), the Python version matrix, and the Docker base image
 (`python:3.12-slim`) are CI/infrastructure pins, not quality thresholds — they
-are not in scope of the no-hardcoded-thresholds gate.
+are not in scope of the no-hardcoded-thresholds gate. Two of them are held by
+tests instead: every third-party action sits at or above a per-action major
+floor in `pyproject.toml` (`[tool.specgraph.action_major_floors]`, a ratchet a
+bump never edits), and the Dockerfile's base tag must equal the workflows'
+`PYTHON_DEFAULT` — both in `tests/test_workflow_hardening.py`.
 
 A missing floor or uninstrumented source is a **misconfiguration**, not a skip:
 the coverage floor scripts exit 2 with a clear message. A missing gate is a bug.
@@ -136,7 +140,7 @@ nothing compared prose against `pyproject.toml`.
   packaging-level breakage.
 
 CI runs the mock track on both operating systems (`test` on Ubuntu 3.10–
-3.13, `test-windows` on Windows 3.12) and the live track twice
+3.14, `test-windows` on Windows 3.12) and the live track twice
 (`self-validate`, and `encoding-stress` under an ASCII-only console). A
 job missing from `docs/hooks.md`'s CI table is a test failure
 (`test_hooks_ci_table_lists_every_ci_job`), not a doc gap.
@@ -254,7 +258,7 @@ make pre-pr          # the exact bar CI enforces
 planlint --target . validate --fail-on WARN   # warnings too, if desired
 ```
 
-CI runs the same gates across Python 3.10–3.13, plus a self-validation hard
+CI runs the same gates across Python 3.10–3.14, plus a self-validation hard
 gate (`planlint` validates its own `openspec/` tree) and a graph-diff
 regression gate on PRs.
 

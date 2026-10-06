@@ -8,12 +8,10 @@ exercises the git-dependent _current_sha() lazy wiring).
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
 import logging
 import os
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -337,20 +335,11 @@ def test_write_witness_reraises_the_original_error_not_the_cleanup_one(
 # The loader fails closed by dropping a bad record. That is right for the
 # verdict and opaque for whoever is debugging a CI run that reports W001
 # "never witnessed" against a store that visibly holds files, so every skip
-# names its file and cause at DEBUG. Captured by attaching to the emitting
-# logger directly: ``log.configure()`` sets ``planlint.propagate = False``, so
-# records never reach the root handler caplog installs (see test_repo_io.py).
-
-
-@contextlib.contextmanager
-def _captured(caplog: pytest.LogCaptureFixture, name: str = "planlint.witness") -> Iterator[None]:
-    target = logging.getLogger(name)
-    target.addHandler(caplog.handler)
-    try:
-        with caplog.at_level(logging.DEBUG, logger=name):
-            yield
-    finally:
-        target.removeHandler(caplog.handler)
+# names its file and cause at DEBUG. Captured with ``support.captured_logger``,
+# which attaches to the emitting logger directly: ``log.configure()`` sets
+# ``planlint.propagate = False``, so records never reach the root handler
+# caplog installs. The helper used to live here; test_repo_io.py and the
+# gate-script tests needed the same body, so it moved.
 
 
 def _messages(caplog: pytest.LogCaptureFixture) -> list[str]:
@@ -382,7 +371,7 @@ def test_each_skipped_record_logs_its_file_and_reason(
 ) -> None:
     """Non-success: a dropped record is still dropped, and now says why."""
     path = _write_raw(tmp_path, record)
-    with _captured(caplog):
+    with support.captured_logger(caplog, "planlint.witness"):
         assert witness.load_witnesses(tmp_path) == ()
     lines = _messages(caplog)
     assert any(path.name in line and reason in line for line in lines), (label, lines)
@@ -394,7 +383,7 @@ def test_a_hash_mismatch_is_logged_as_such(tmp_path: Path, caplog: pytest.LogCap
     directory.mkdir(parents=True)
     forged = directory / _ZERO_NAME
     forged.write_bytes(witness.serialize(_witness()))
-    with _captured(caplog):
+    with support.captured_logger(caplog, "planlint.witness"):
         assert witness.load_witnesses(tmp_path) == ()
     assert any(
         forged.name in line and "does not match the sha256" in line for line in _messages(caplog)
@@ -411,7 +400,7 @@ def test_undecodable_and_non_object_records_are_logged(
     directory = tmp_path / witness.WITNESS_DIR_NAME
     directory.mkdir(parents=True)
     (directory / f"{witness.compute_hash(payload)}.json").write_bytes(payload)
-    with _captured(caplog):
+    with support.captured_logger(caplog, "planlint.witness"):
         assert witness.load_witnesses(tmp_path) == ()
     assert any(reason in line for line in _messages(caplog)), _messages(caplog)
 
@@ -419,7 +408,7 @@ def test_undecodable_and_non_object_records_are_logged(
 def test_an_absent_store_and_a_loaded_record_are_both_logged(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    with _captured(caplog):
+    with support.captured_logger(caplog, "planlint.witness"):
         assert witness.load_witnesses(tmp_path) == ()
         recorded = witness.write_witness(tmp_path, _witness())
         assert witness.load_witnesses(tmp_path) == (_witness(),)
@@ -450,7 +439,7 @@ def test_an_oversized_untrusted_value_is_truncated_in_the_log(
     """Non-success: a record's values are untrusted, so one huge field must not
     flood a CI log, and an embedded newline must not forge a second line."""
     path = _write_raw(tmp_path, {**_GOOD, "exit_code": "x" * 10_000 + "\n::error::forged"})
-    with _captured(caplog):
+    with support.captured_logger(caplog, "planlint.witness"):
         assert witness.load_witnesses(tmp_path) == ()
     line = next(m for m in _messages(caplog) if path.name in m)
     assert len(line) < 300, len(line)
@@ -475,7 +464,7 @@ def test_a_record_the_dataclass_refuses_is_skipped_and_named(
         raise error("refused")
 
     monkeypatch.setattr(witness, "Witness", refuse)
-    with _captured(caplog):
+    with support.captured_logger(caplog, "planlint.witness"):
         assert witness.load_witnesses(tmp_path) == ()
     assert any(
         path.name in line and f"malformed field ({error.__name__})" in line for line in _messages(caplog)
@@ -505,7 +494,7 @@ def test_an_artifact_controlled_filename_cannot_forge_a_log_line(
     if not _can_name_a_file_with_a_newline(directory):
         pytest.skip("this filesystem cannot hold a newline in a filename (capability probe)")
     (directory / ("x\n::error::forged" + "y" * 200 + ".json")).write_bytes(b"{}")
-    with _captured(caplog):
+    with support.captured_logger(caplog, "planlint.witness"):
         assert witness.load_witnesses(tmp_path) == ()
     # A set: the capture handler is attached to the emitting logger and, via
     # propagation, to the root, so one record can arrive twice.
@@ -521,7 +510,7 @@ def test_an_ordinary_hash_filename_is_logged_bare(tmp_path: Path, caplog: pytest
     """The escaping applies to a hostile name only: the normal content-hash
     filename an operator greps for appears unquoted."""
     path = _write_raw(tmp_path, {**_GOOD, "schema_version": 2})
-    with _captured(caplog):
+    with support.captured_logger(caplog, "planlint.witness"):
         witness.load_witnesses(tmp_path)
     assert any(f"skipping {path.name}: " in m for m in _messages(caplog)), _messages(caplog)
 

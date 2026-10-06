@@ -15,12 +15,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from tests.support import load_tool, run_tool_main
+from tests.support import captured_logger, load_tool, run_tool_main
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TOOLS = REPO_ROOT / "tools"
@@ -300,11 +301,19 @@ def test_plugin_manifests_verbose_logs_without_polluting_stdout(
     fails even when the message does reach stderr in a real run. Verified by
     running it both ways -- the capsys form reported ``err=''`` while
     pytest's own "Captured stderr call" section showed the line present.
+
+    And captured through ``captured_logger`` rather than a bare
+    ``caplog.at_level``: ``_common`` sets ``propagate = False`` on
+    ``planlint.tools`` at import, and pytest attaches its handler only to
+    loggers that are already non-propagating when the test starts. With
+    ``_common`` first loaded *inside* this test, the records never reached
+    ``caplog`` -- red under ``-k``, green in the full run, where an earlier
+    test had done the import. Order dependence hiding behind a green suite.
     """
     rpm = load_tool("rpm_verbose", "render_plugin_manifests.py")
     monkeypatch.setattr(rpm, "PLUGIN_PATH", tmp_path / "p.json")
     monkeypatch.setattr(rpm, "MARKETPLACE_PATH", tmp_path / "m.json")
-    with caplog.at_level("DEBUG", logger="planlint.tools"):
+    with captured_logger(caplog, "planlint.tools"):
         rpm.main(["--write", "-v"])
     assert any("manifests:" in record.message for record in caplog.records)
     # The real invariant: stdout stays the machine-readable channel.
@@ -565,3 +574,26 @@ def test_scoped_gate_reports_a_usage_error_as_exit_2(tmp_path: Path, capsys) -> 
         "cf_usage", "check_coverage_floor.py", "--scope", cwd=tmp_path
     ) == 2
     assert "usage error" in capsys.readouterr().err
+
+
+# --- _common.read_json: the typed reader the artifact consumers share --------
+
+
+def test_read_json_rejects_a_non_mapping_document(tmp_path: Path) -> None:
+    """A top-level list is refused here, naming the file, rather than
+    surfacing later as a ``TypeError`` from the first ``graph["nodes"]``."""
+    common = load_tool("common_read_json_list", "_common.py")
+    doc = tmp_path / "graph.json"
+    doc.write_text("[1, 2, 3]", encoding="utf-8")
+    with pytest.raises(ValueError, match=re.escape(str(doc))):
+        common.read_json(doc)
+
+
+def test_read_json_reports_a_missing_file_by_name(tmp_path: Path) -> None:
+    """Read directly, not through ``read_text``: its missing-file ``""`` would
+    turn an absent artifact into a ``JSONDecodeError`` with no path in it."""
+    common = load_tool("common_read_json_missing", "_common.py")
+    missing = tmp_path / "absent.json"
+    with pytest.raises(FileNotFoundError) as excinfo:
+        common.read_json(missing)
+    assert missing.name in str(excinfo.value)

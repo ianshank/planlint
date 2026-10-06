@@ -5,17 +5,46 @@ on:
     branches: [main, master]
   pull_request:
 
+# Every job runs with a read-only token unless its own block says otherwise;
+# a widening is declared on the job, under a comment naming the step that
+# needs it. tests/test_workflow_hardening.py holds both halves.
+permissions:
+  contents: read
+
+# A re-push to a pull request supersedes the run it replaces, so pull
+# requests group by ref and cancel in progress. Everything else -- a push to
+# main above all -- groups by SHA: in a shared group GitHub keeps the
+# in-progress run but drops a *pending* one when the next push queues, and a
+# merge commit could end with no run at all.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# The single-interpreter Python version lives here and nowhere else in this
+# file; every non-matrix setup-python step reads it. The matrix list below is
+# the one other place a version is written, on purpose, and the guard holds
+# this default to one of that matrix's hard legs.
+env:
+  PYTHON_DEFAULT: "3.12"
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        # A new version enters through an `include:` entry carrying
+        # `experimental: true` behind a job-level
+        # `continue-on-error: ${{ matrix.experimental || false }}`, and moves
+        # into this list after one green run (3.14 did, on run #37522794352). The
+        # guard forbids a literal continue-on-error on this job, which would
+        # soften every leg at once.
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -41,15 +70,16 @@ jobs:
     # third (tests/test_findings_envelope.py's two-checkout normalization)
     # was caught only by a manual Windows run.
     runs-on: windows-latest
+    timeout-minutes: 20
     defaults:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_DEFAULT }}
 
       - name: Install make (not preinstalled on the Windows runner image)
         run: choco install make -y
@@ -73,15 +103,16 @@ jobs:
     # fix-stdout-encoding-crash change: a console that cannot encode
     # non-ASCII. Runs the no-mocks live track end to end under it.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       PYTHONIOENCODING: ascii
       PYTHONUTF8: "0"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_DEFAULT }}
 
       - name: Install
         run: |
@@ -96,12 +127,13 @@ jobs:
     # Hard gate: if any change package in openspec/ fails a rule, the build
     # fails — no skip, no soft pass.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_DEFAULT }}
 
       - name: Install
         run: |
@@ -121,7 +153,7 @@ jobs:
         if: always()
         run: planlint --target . validate --fail-on WARN --json > spec-findings.json || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: spec-artifacts
@@ -136,12 +168,13 @@ jobs:
     # index whose versions are immutable. This runs the same check on every
     # pull request instead.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_DEFAULT }}
 
       - name: Install build frontend
         run: |
@@ -162,17 +195,18 @@ jobs:
     # sibling PR merged after this one branched off.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       # Checkout the PR head SHA (NOT the default synthetic merge commit) so
       # merge-base resolves to the true branch point (DEC-CH-001 resolution).
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_DEFAULT }}
 
       - name: Install
         run: |
@@ -193,7 +227,7 @@ jobs:
       - name: Diff graphs (fail on new broken edges or orphans)
         run: python tools/diff_spec_graph.py base.json head.json
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: spec-graph-diff
@@ -212,6 +246,7 @@ jobs:
     # repository content, so it must work with a read-only token and no
     # secrets -- the posture a fork pull request gets.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
     strategy:
@@ -244,7 +279,7 @@ jobs:
             status: pass
             exit_code: "0"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -314,14 +349,21 @@ jobs:
     # is the real scanner; the no-hardcoded check is a Python script that reads
     # the Makefile and this workflow and fails on a pinned number or tool version.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # gitleaks-action looks the repository owner up and, on pull_request
+    # events, lists the pull request's commits through the API; nothing else
+    # here needs more than contents: read.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # gitleaks scans history
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_DEFAULT }}
 
       - name: Install
         run: |
@@ -332,9 +374,12 @@ jobs:
         run: python tools/check_no_hardcoded_thresholds.py
 
       - name: gitleaks (hard gate — committed secrets fail the build)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The build failing is the report; a review comment would need a
+          # write permission this job does not have.
+          GITLEAKS_ENABLE_COMMENTS: "false"
 
   coverage-tools:
     # The gate scripts under tools/ are what every job here actually runs, so
@@ -348,21 +393,23 @@ jobs:
     # would pay for it four times to learn the same thing. tools/ is
     # stdlib-only and version-independent, so one leg is the whole answer.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_DEFAULT }}
       - run: pip install -e ".[dev]"
       - run: make coverage-tools
 
   docs:
     # The documentation set must exist and be linked from README (AC-EH-8).
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: ${{ env.PYTHON_DEFAULT }}
       - run: pip install -e ".[dev]"
       - run: make docs-check

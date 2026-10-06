@@ -38,10 +38,12 @@ Three things this directory gets wrong if you are not watching:
   drift, and so need the package installed.
 
 Three argv conventions, and the split is not "argparse or not" — group by
-what `main` expects. Program name first: the seven hand-rolled scripts, plus
-`matcher_accuracy` and `stage_citations`, which strip it themselves. Arguments only:
-`render_plugin_manifests`, `render_rule_catalog`, and `check_wheel_metadata`
-(whose `main` defaults `argv` to `None`). `run_tool_main`'s `pass_argv0` picks.
+what `main` expects. Program name first: the five hand-rolled `check_*`
+coverage/docs/thresholds/secrets scripts, plus `matcher_accuracy`,
+`stage_citations`, `diff_spec_graph` and `render_mermaid`, which strip it
+themselves with `parse_args(argv[1:])`. Arguments only: `render_plugin_manifests`,
+`render_rule_catalog`, and `check_wheel_metadata` (whose `main` defaults `argv`
+to `None`). `run_tool_main`'s `pass_argv0` picks.
 
 Test behaviour in-process against `main(argv)` — a subprocess is invisible to
 coverage. The `python tools/<script>.py` path is covered once for the whole

@@ -13,6 +13,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 # Debug logging for the gate scripts, under the CLI's own "planlint" logger
 # namespace so one env var covers both.
@@ -110,6 +111,36 @@ def read_text(path: Path) -> str:
     so encoding is never left to the platform default.
     """
     return path.read_text(encoding="utf-8") if path.exists() else ""
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    """Parse a JSON file whose top level is an object, fully typed.
+
+    Read directly rather than through :func:`read_text`, on purpose: that
+    helper's missing-file ``""`` would turn an absent artifact into a
+    ``JSONDecodeError`` with no path in it, where the consumers of this
+    function -- ``diff_spec_graph`` and ``render_mermaid``, which read a
+    saved ``planlint graph --format json`` -- need a missing file to stay the
+    ``FileNotFoundError`` it is. A document whose top level is not an object
+    (a list, a string, ``null``) is refused here with the path in the
+    message; every caller indexes the result by key, and letting it through
+    would surface later as a ``TypeError`` that names nothing.
+
+    One DEBUG record names the file and its size, so a run under
+    ``PLANLINT_LOG_LEVEL=DEBUG`` shows which artifact was read before the
+    verdict is printed.
+    """
+    text = path.read_text(encoding="utf-8")
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"{path}: expected a JSON object at the top level, got {type(data).__name__}"
+        )
+    logger.debug(
+        "read_json: %s (%d bytes, %d top-level keys)",
+        path, len(text.encode("utf-8")), len(data),
+    )
+    return data
 
 
 def read_pyproject_int(pyproject: Path, section: str, key: str) -> int | None:
@@ -242,9 +273,11 @@ def coverage_totals(
 def parse_coverage_argv(argv: list[str]) -> tuple[Path, str | None]:
     """``(coverage.json path, scope)`` from a gate script's argv.
 
-    Hand-rolled rather than argparse to match the other eight scripts in this
-    directory, which index ``argv`` directly -- and because the accepted shape
-    is exactly two optional things. ``--scope`` may be given as
+    Hand-rolled rather than argparse to match the hand-rolled scripts in this
+    directory -- the five that index ``argv`` directly, two of which call
+    this -- and because the accepted shape is exactly two optional things.
+    The other scripts here are argparse-based; see ``tools/AGENTS.md`` for
+    the grouping. ``--scope`` may be given as
     ``--scope NAME`` or ``--scope=NAME``.
     """
     cov_path = Path("coverage.json")

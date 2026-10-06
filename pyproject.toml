@@ -48,6 +48,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Quality Assurance",
 ]
 
@@ -123,6 +124,19 @@ branch_fail_under = 80
 tools_line_fail_under = 90
 tools_branch_fail_under = 80
 
+# Bounds for every `timeout-minutes` literal in `.github/workflows/*.yml`,
+# enforced by tests/test_workflow_hardening.py through
+# `_common.read_pyproject_int` -- one integer per key, which is why two keys
+# rather than an inline table. Measured on CI run #171 at 9c4b6e9: the slowest
+# job, `test-windows`, took 5m42s; the `test` legs 2m14s-3m41s;
+# `coverage-tools` 2m09s; every other job under 25s. Per-job values are about
+# three times the measurement, rounded up to a multiple of five. The floor
+# catches a timeout below a measured duration (a flaky red); the ceiling
+# catches a `300` typed for `30`, and sits well above the one unmeasured value
+# (release.yml's `gate`, which has never run).
+ci_job_timeout_minutes_min = 5
+ci_job_timeout_minutes_max = 45
+
 # Accuracy floors for the two matchers that read English prose rather than
 # structure, scored by `tools/matcher_accuracy.py` against
 # `tests/fixtures/phrasing/` and enforced by `tests/test_matcher_accuracy.py`.
@@ -152,6 +166,25 @@ g002_min_precision_pct = 88
 g002_min_recall_pct = 90
 u004_min_precision_pct = 82
 u004_min_recall_pct = 90
+
+# Per-action major floors for every third-party `uses:` in the workflows, the
+# composite action, the adopter templates and the README snippet, enforced by
+# tests/test_workflow_hardening.py. A floor is a ratchet, not a pin: it is set
+# to the major this repository landed when it moved every action onto a Node
+# 24 release (harden-ci-workflows; CI run #37522794352 carried no Node 20
+# deprecation annotation), a later Dependabot bump never has to touch it, and
+# only a regression trips it -- including every copy sliding back together,
+# which the agreement guard alone cannot see. Raising a floor is a deliberate
+# act; lowering one needs a reason in the commit message.
+# `pypa/gh-action-pypi-publish` rides a branch ref (`release/v1`) and has no
+# major to floor; moving it to a tag is the plan's W1.2 with the SHA pins.
+[tool.specgraph.action_major_floors]
+"actions/checkout" = 7
+"actions/setup-python" = 7
+"actions/upload-artifact" = 7
+"actions/download-artifact" = 8
+"gitleaks/gitleaks-action" = 3
+"github/codeql-action" = 3
 
 [project.optional-dependencies]
 # tomli backports stdlib tomllib (3.11+) for coverage.process_startup()'s
@@ -199,6 +232,7 @@ select = [
     "DTZ",  # naive datetimes -- witness records carry timestamps
     "N",    # PEP 8 naming
     "RUF",  # ruff's own checks, incl. unused-noqa
+    "T201", # `print` outside the two places stdout is the product (below)
 ]
 # Deliberately NOT selected, each for a stated reason rather than by omission:
 #   E501  -- the line-length limit above is real but currently unmet in ~100
@@ -207,23 +241,36 @@ select = [
 #            something to bundle into an unrelated change.
 #   ERA   -- flags prose comments that quote markdown headings as dead code;
 #            the false-positive rate here is most of the hits.
-#   T20   -- this is a CLI. `print` is the product.
+#   T203  -- `pprint`; nothing here uses it and T201 is the rule that matters.
+#            T201 itself IS selected: `print` is the product in
+#            `openspec_graph/cli.py` and in the `tools/` gate scripts, whose
+#            stdout `make` and CI parse, and those two paths are exempted
+#            below. Everywhere else a `print` is a debugging leftover, and a
+#            library module that prints would corrupt the CLI's `--json`
+#            output -- so the rule keeps `print` where it belongs.
 #   ANN/D -- annotation and docstring coverage in tests; large, low-yield.
 #   PL    -- Pylint refactor heuristics; opinions, not defects.
 
 [tool.ruff.lint.per-file-ignores]
 # tests use assert and subprocess intentionally; tools are scripts, not a package.
+# `T201` is exempted in exactly two places -- the CLI and the gate scripts --
+# because their stdout is the product; `tests/*` is deliberately not one of
+# them (a test that needs to say something puts it in the assertion message).
+"openspec_graph/cli.py" = ["T201"]
 "tests/*" = ["S101", "S603", "S607"]
-"tools/*" = ["S603", "S607", "INP001"]
+"tools/*" = ["S603", "S607", "INP001", "T201"]
 
 [tool.mypy]
-# Pragmatic strictness: the package uses dataclasses, regex parsing, and
-# dict-based graph nodes. Full strict mode would demand large annotation
-# surface for little safety gain; this config catches real type errors.
+# `strict` subsumes the flags this table used to list one by one
+# (check_untyped_defs, warn_unused_ignores, warn_redundant_casts,
+# warn_return_any, no_implicit_optional) and adds the rest of the strict
+# set, chiefly `disallow_any_generics`: a bare `dict` or `list` annotation
+# is now an error rather than an unchecked `Any`. Turned on when the tree
+# had exactly two such annotations left, both in tools/diff_spec_graph.py,
+# so it locks in a property the code already has rather than opening a
+# cleanup backlog. `warn_unreachable` is not part of `strict` and is listed
+# on its own; it was measured at zero findings before being enabled.
 python_version = "3.10"
-check_untyped_defs = true
-warn_unused_ignores = true
-warn_redundant_casts = true
-warn_return_any = true
-no_implicit_optional = true
+strict = true
+warn_unreachable = true
 files = ["openspec_graph", "tools"]

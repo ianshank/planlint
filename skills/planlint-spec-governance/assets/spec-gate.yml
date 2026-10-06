@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # The scan needs no credentials, so it should not be handed any: an
           # unused token left in the checkout's git config is reachable by
