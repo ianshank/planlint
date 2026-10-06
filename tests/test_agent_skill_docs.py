@@ -81,10 +81,17 @@ _PATH_LIKE = re.compile(r"`([A-Za-z0-9_./-]+\.(?:py|md|toml|json|ya?ml|sh)|Makef
 # anchored to start with "make " so a template placeholder like
 # "`**Gate:** make X`" (spec-drafter.md's own instructions to *write* that
 # literal string into a future tasks.md) never matches.
-_MAKE_TARGET_REF = re.compile(r"`make ([a-z][a-z-]*)`")
+#
+# The stage grammar is MAKE_REF's own (`[a-z][a-z0-9_-]*`). It used to be
+# `[a-z][a-z-]*`, which cannot match a digit, so a reference to `e2e-live` --
+# or a typo of it -- was silently skipped rather than checked: a fail-open in
+# the guard, found while writing tools/stage_citations.py.
+_MAKE_TARGET_REF = re.compile(r"`make ([a-z][a-z0-9_-]*)`")
 
+# Digits included for the same reason: `e2e-live` is a real target the old
+# `[a-zA-Z_-]+` could not see.
 _MAKEFILE_TARGETS = set(
-    re.findall(r"^([a-zA-Z_-]+):", (REPO_ROOT / "Makefile").read_text(encoding="utf-8"), re.MULTILINE)
+    re.findall(r"^([a-zA-Z0-9_-]+):", (REPO_ROOT / "Makefile").read_text(encoding="utf-8"), re.MULTILINE)
 )
 
 def _repo_controlled_basenames(root: Path) -> set[str]:
@@ -506,3 +513,12 @@ def test_rule_ids_cited_by_skills_exist_in_the_registry() -> None:
         assert not unknown, (
             f"{path.relative_to(REPO_ROOT)} cites rule id(s) not in the registry: {unknown}"
         )
+
+
+def test_make_target_guard_sees_digit_bearing_targets() -> None:
+    """Non-success criterion for the guard itself: a digit-bearing target is
+    both recognised as real and checked when cited, so a typo of one is caught
+    rather than skipped."""
+    assert "e2e-live" in _MAKEFILE_TARGETS
+    assert _MAKE_TARGET_REF.findall("run `make e2e-live` then `make e2e-lve`") == ["e2e-live", "e2e-lve"]
+    assert "e2e-lve" not in _MAKEFILE_TARGETS

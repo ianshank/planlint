@@ -32,7 +32,11 @@ case "/$FILE_NORM" in
     exit 0
     ;;
   */openspec/changes/*/specs/*/spec.md)
-    printf '{"decision": "block", "reason": "You just edited a change package spec -- the NORMATIVE half. Run `make validate` (the spec is subject to the same rules it describes; MAKE_REF scans the whole document, so a backticked `make <target>` in explanatory prose reads as a real citation). Then check the spec against what the code actually does: twice in review, a revision note went into proposal.md while spec.md kept requiring the superseded behaviour, leaving the package contradicting its own implementation. A proposal.md note is not a spec change."}'
+    # ONE arm for this path. A second arm with the same pattern used to sit
+    # further down carrying the dialect-sniffing warning; bash takes the first
+    # match, so it never fired. tests/test_claude_hooks.py now fails on any
+    # duplicated alternative.
+    printf '{"decision": "block", "reason": "You just edited a change package spec -- the NORMATIVE half, and the exact file planlint dialect-sniffs. Before finishing: run `planlint --target . validate --fail-on ERROR` (or `make validate`) and `pytest tests/test_spec_test_citations.py`, and report both exit codes. Four traps the gate catches only after the fact: (1) MAKE_REF scans the whole document, so a backticked `make <target>` in explanatory prose reads as a real citation; (2) quoting a dialect marker as prose (a heading name in backticks) can misclassify this spec as the dialect it merely describes; (3) the verification marker written inside an acceptance criterion body is taken as that criterion verification line, because the first marker in the block wins, so H001 fires on a criterion that does cite a stage -- say verification line in prose instead; (4) every pytest -k selector must name an existing test function. Then check the spec against what the code actually does: a revision note in proposal.md is not a spec change."}'
     exit 0
     ;;
   */.github/dependabot.yml|*/.github/actions/*/action.yml)
@@ -61,10 +65,6 @@ case "/$FILE_NORM" in
     ;;
   */tests/fixtures/phrasing/*|*/openspec_graph/parse_semantics.py|*/openspec_graph/parse_model.py)
     printf '{"decision": "block", "reason": "You just edited a prose matcher or its labelled corpus. G002 and U004 are held to measured accuracy floors in pyproject.toml [tool.specgraph]; a pattern change is a change to a number. Before finishing: run `make matcher-accuracy` (per-pattern misfires are the review), then `make validate` -- a tightened pattern must not strip the last non-success criterion from any of this repo own change packages (see the planlint-add-phrasing-case skill)."}'
-    exit 0
-    ;;
-  */openspec/changes/*/specs/*/spec.md)
-    printf '{"decision": "block", "reason": "You just edited a change-package spec.md -- the exact file planlint dialect-sniffs. Quoting a dialect marker as prose (e.g. a heading name in backticks) can misclassify this spec as the dialect it merely describes, the self-referential trap this repo has hit twice. Before finishing: run `planlint --target . validate --fail-on ERROR` (or `make validate`) and confirm the dialect/finding count is what you expect."}'
     exit 0
     ;;
 esac

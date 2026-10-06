@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -142,3 +143,47 @@ def test_docs_list_every_hook_case_the_script_implements() -> None:
     doc = HOOKS_DOC.read_text(encoding="utf-8")
     for remedy in sorted(set(NUDGED.values())):
         assert remedy in doc, f"docs/hooks.md does not mention the {remedy!r} nudge"
+
+
+# The `case` arm patterns of the hook script, one alternative per entry, in
+# source order. A bash `case` takes the FIRST arm that matches, so an
+# alternative that appears twice makes every arm after the first unreachable
+# -- silently: the script still exits 0 and still emits *a* reason, so the
+# per-path tests above stay green while a documented nudge never fires.
+_CASE_ARM = re.compile(r"^\s+(\*/[^)]*)\)\s*$", re.MULTILINE)
+
+
+def _case_alternatives() -> list[str]:
+    script = HOOK.read_text(encoding="utf-8")
+    return [alt for arm in _CASE_ARM.findall(script) for alt in arm.split("|")]
+
+
+def test_the_case_arm_scanner_sees_the_whole_script() -> None:
+    """Guard the guard: a scanner that matched nothing would pass vacuously."""
+    alternatives = _case_alternatives()
+    assert len(alternatives) >= len(NUDGED), alternatives
+    assert "*/openspec/changes/*/specs/*/spec.md" in alternatives
+
+
+def test_no_case_alternative_is_shadowed_by_an_earlier_identical_one() -> None:
+    """Non-success criterion: no hook arm may be dead code.
+
+    The script once carried two arms for a change package's ``spec.md``; the
+    second -- the dialect-sniffing warning ``docs/hooks.md`` documented -- had
+    never fired, because the first arm always won.
+    """
+    alternatives = _case_alternatives()
+    duplicated = sorted({alt for alt in alternatives if alternatives.count(alt) > 1})
+    assert not duplicated, f"unreachable hook arm(s), shadowed by an earlier copy: {duplicated}"
+
+
+@needs_bash
+def test_the_spec_nudge_carries_every_trap_it_documents() -> None:
+    """The one ``spec.md`` arm names each trap ``docs/hooks.md`` says it does:
+    the gate, the dialect-marker misclassification, the verification marker
+    quoted in prose, and the test-citation guard."""
+    reason = json.loads(_run(str(REPO_ROOT / "openspec/changes/add-witness-mode/specs/witness-mode/spec.md")))[
+        "reason"
+    ]
+    for token in ("validate", "dialect", "verification line", "tests/test_spec_test_citations.py"):
+        assert token in reason, f"spec.md nudge does not mention {token!r}: {reason}"
