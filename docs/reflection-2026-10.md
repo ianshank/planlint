@@ -35,10 +35,10 @@ about how this repository is worked on.
 |---|---|---|
 | Largest modules | `cli.py` 1029, `parse_semantics.py` 764, `detect.py` 758, `report.py` 590, `graph.py` 355, `thresholds.py` 305 (of 30 modules, 6,956 lines) | `decompose-god-files` split `parse.py`/`rules.py` and left `detect.py`/`cli.py` intact by decision (R-DG-6, pinned by `test_detect_and_cli_remain_unsplit`) |
 | Functions > 60 lines | 15 of 266: `build_parser` 148, `cmd_validate` 119, `build_delta` 107, `build_graph` 102, `to_sarif` 84, `cmd_report` 84, `parse_spec` 83, `find_threshold` 71, `parse_speckit` 71, `parse_makefile` 71, `scoped_fail_under` 68, `to_step_summary` 68, `hard_coded` 66, `cmd_delta` 66, `profile` 64 | |
-| Complexity (`C901` > 10) | 7: `parse_makefile` 15, `cmd_validate` 14, `build_delta` 14, `cmd_report` 12, `find_threshold` 12, `scoped_fail_under` 11, `witness._load_one` 11 | `_load_one` is new since N8b counted six; the per-reason logging added a branch per skip |
+| Complexity (`C901` > 10) | 7: `parse_makefile` 15, `cmd_validate` 14, `build_delta` 14, `cmd_report` 12, `find_threshold` 12, `scoped_fail_under` 11, `witness._load_one` 11 | `_load_one` is new since N8b counted six; the per-reason logging added a branch per skip. Ratchet maxima for W3: complexity 15, branches 15 (three functions at 13/14/15 against ruff's 12), statements 57 (one against 50), arguments 6 |
 | Wide signatures (`PLR0913` > 5 args) | 3, all in `graph.py` (`:99`, `:132`, `:151`, 6 args each) | same six parameters threaded three times |
 | Magic values (`PLR2004`) | 5: `cli.py:809` `100.0`; `detect.py:606` `3`, `:633` `5` (path-depth arithmetic); `tools/diff_spec_graph.py:38` `3` and `tools/render_mermaid.py:26` `2` (argv lengths) | |
-| Boolean positional parameters (`FBT001`) | 3: `log.py:28`, `log.py:46`, `scaffold.py:154` | |
+| Boolean positional parameters (`FBT001`) | 3: `log.py:28` `level_from`, `log.py:46` `configure`, `scaffold.py:154` `apply` | every external caller already passes by keyword (`cli.py:1006` `configure_logging(verbose=…)`, `cli.py:267/291` `apply(plans, force=…)`, tests likewise); the one positional call is internal (`log.py:53`) — keyword-only is a one-line change |
 | Line length (`E501` at 100) | 37 in package + tools, 110 in tests | `next-steps.md` item 18; a third count without a rewrap |
 | `print` in library code (`T201`) | 123: 81 in `cli.py` (by design), 42 in `tools/` (scripts), **0** in any other package module | an invariant nothing enforces |
 | Loops that are appends (`PERF401`) | 12 (`delta.py` 4, `parse_model.py` 2, `check_wheel_metadata.py` 2, four singles) | |
@@ -47,11 +47,17 @@ about how this repository is worked on.
 | Test-only public API | `detect.filter_speckit_by_feature`, `parse_semantics.section_body`, `speckit_section_body`, `suppressions` are called only by tests | public by accident or by intent — undecided |
 | JSON determinism | 11 `json.dumps` call sites, one with `sort_keys=True` (`witness.py`); the other ten rely on insertion order | correct today, by construction rather than by contract |
 | Tool-script drift | 2 of 12 scripts (`diff_spec_graph.py`, `render_mermaid.py`) bypass `tools/_common.py`; they also hold the two strict-mypy errors and two of the five magic values | |
-| Workflow hardening | `ci.yml`: 12 jobs, **no** top-level `permissions`, one job-level block; `timeout-minutes` on 0 jobs; no `concurrency`; every third-party action pinned to a floating major tag (`checkout@v4` ×12, `setup-python@v5` ×12, `upload-artifact@v4` ×4, `download-artifact@v4`, `gitleaks-action@v2`) and `pypa/gh-action-pypi-publish@release/v1` to a **branch** | `distribution-plan.md` deferred SHA pinning "until Dependabot" — Dependabot has been on since September |
+| Workflow hardening | `ci.yml`: 12 jobs, **no** top-level `permissions`, one job-level block; `timeout-minutes` on 0 jobs; no `concurrency`; every third-party action pinned to a floating major tag (`checkout@v4` ×12, `setup-python@v5` ×12, `upload-artifact@v4` ×4, `download-artifact@v4`, `gitleaks-action@v2`) and `pypa/gh-action-pypi-publish@release/v1` to a **branch** | `distribution-plan.md` deferred SHA pinning "until Dependabot" — Dependabot has been on since September. Permission facts for W1.3: `upload-artifact` authenticates with `ACTIONS_RUNTIME_TOKEN` and reads no `GITHUB_TOKEN` (its `dist/`), yet its own test workflow grants `actions: write`; the gitleaks step passes `GITHUB_TOKEN` (for pull-request comments) |
 | Configuration literals | the Python version appears 10 times in `ci.yml` (one matrix list, nine `"3.12"` singles) and once in the `Dockerfile` (`python:3.12-slim`); nothing ties them together | `make thresholds` guards thresholds and tool pins, not this |
 | Dependabot | 7 open PRs since 2026-09-19, all major bumps (`checkout` 4→7, `setup-python` 5→7, `upload-artifact` 4→7, `download-artifact` 4→8, `gitleaks-action` 2→3, two in the composite action), based on `c0540c4` — two merges behind; `mergeable_state: unknown` | the artifact pair must move together |
 | Release | `CHANGELOG.md` `[Unreleased]` has grown to ~355 lines since 0.2.0 (2026-09-12); the `specgraph` alias is deprecated with no removal date | |
-| Change packages | 43 under `openspec/changes/`, none archived; the gate reads all 44 specs on every run | OpenSpec's `archive/` convention is unused **[Likely: supported by discovery, to be verified by the package]** |
+| Change packages | 43 under `openspec/changes/`, 3 of them open (DRAFT); none archived | OpenSpec's `archive/` convention is unused, and **planlint does not support it today**: `find_spec_files` globs exactly `changes/*/specs/*/spec.md` (`detect.py:553`), so an archived package's specs leave the gate silently, and `detect.py:710` counts every directory under `changes/` as a change package, so the archive directory itself would be counted as one. Gate cost is not a reason to archive: `validate` over 44 specs runs in 0.36 s here |
+| Python support window | classifiers and matrix 3.10–3.13; `requires-python >= 3.10` | 3.10 reaches end-of-life in October 2026 (PEP 619); 3.14 has been final since October 2025 (PEP 745) and is in neither the matrix nor the classifiers; the `tomli` dev extra exists only for 3.10 |
+| Type-checking of tests | `[tool.mypy] files = ["openspec_graph", "tools"]` — 17,850 lines of tests are not checked; `mypy tests` stops on a module-mapping error (`graft_support` seen under two names); with `--explicit-package-bases` it reports **86 errors in 37 files**, 34 of them `pytest`/`hypothesis` imports this environment cannot resolve, ~52 real (`arg-type` 18, `no-any-return` 8, `index` 7, `union-attr` 4, `str` 4) | |
+| Public docstrings | 52 public symbols without one (30 functions, 15 methods, 7 classes); the `D` family is not selected | |
+| Container | `Dockerfile` has no `USER` (runs as root), base `python:3.12-slim` by tag, not digest; `.dockerignore` present | Dependabot has no `docker` ecosystem entry |
+| Tool runtime | `planlint validate` 0.36 s, `graph --format json` 0.46 s on this repository (44 specs, this container) | a baseline, so a decomposition that slows the CLI is visible |
+| Evals | `evals/` cases run through `claude plugin eval` by design (its README); their structure is pinned by three test modules | not a CI gap; recorded so nobody re-finds it |
 | Suite shape | 13 of 43 test modules import nothing from `tests/support.py`; 21 use no `parametrize`; no pytest markers are registered; the four largest modules exceed 700 lines | |
 | Suite cost | the ladder runs the full suite **twice** (`test`, `coverage-tools`); CI runs it **six** times per pull request (four matrix legs, `test-windows`, `coverage-tools`) | durations below |
 
@@ -68,12 +74,12 @@ Full suite, no coverage, this container: **1498 tests in 235 s** (`pytest -p no:
 | `test_common_verbs_do_not_crash_under_ascii_stdout_encoding` (test_cli_surface) | 2.8 | `run_cli` under an ASCII `PYTHONIOENCODING` — the subprocess *is* the property |
 | `test_the_real_wheel_passes_the_gate` (test_wheel_metadata) | 2.8 | `subprocess.run` of `python -m build`, then the checker's `main` in-process |
 | `test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict` (test_e2e_corpus) | 2.6 | `run_cli` in a loop over corpus targets |
-| `test_the_action_reports_each_fixtures_labelled_status[passing]` (test_action_contract) | 2.6 | the composite action through a module helper **[Likely: a shell subprocess]** |
+| `test_the_action_reports_each_fixtures_labelled_status[passing]` (test_action_contract) | 2.6 | the composite action run under GitHub's bash via `subprocess` (`_github_bash()`, `test_action_contract.py:54–82`) |
 | `test_an_unprojectable_file_exits_two_with_an_empty_stdout[an-array]` (test_report) | 2.4 | `run_cli`: one `report` subprocess per parametrised bad input |
 | `test_an_unprojectable_file_exits_two_with_an_empty_stdout[not-json]` (test_report) | 2.3 | same |
 
-The ten slowest account for ~39 s of 235, and nine of them cross a process
-boundary on purpose: `tests/support.run_cli` is the *subprocess* path, kept
+The ten slowest account for ~39 s of 235, and every one of them crosses a
+process boundary on purpose: `tests/support.run_cli` is the *subprocess* path, kept
 because it injects `COVERAGE_PROCESS_START` so a CLI run is measured
 (`fix-subprocess-coverage-blind-spot`), while `run_tool_main` and a direct
 `cli.main(...)` call are the in-process paths. The optimisation surface is
@@ -130,6 +136,15 @@ the repository already owns a scoped floor checker (`check_coverage_floor.py
 --scope`) that reads per-file data from `coverage.json`. One run, one data
 file, two scoped checks keeps both honest numbers and halves the cost (W7).
 
+**R7. The plan's own first draft was wrong in two load-bearing places.**
+Verification of this document's **[Likely]** markers overturned the
+mechanism behind D2 (the unscoped package floor would have read the
+diluted total) and the premise of W8.2 (archiving would have hidden specs
+from the gate and miscounted the archive). The marker did its job: it told
+the reviewer where to look. **Carry forward:** a plan states a mechanism
+only with the command that demonstrated it, which is why §1.2 now cites
+`combined.json` and `detect.py:553/710` rather than a belief.
+
 **R6. What went right and should be kept:** every fix reproduced its defect
 first; every code change carried a test that failed without it; the gate was
 run before every `openspec/` edit and its exit code reported; nothing was
@@ -183,9 +198,15 @@ literals", "Dependabot").
    on its own terms. Guard: a `test_ci_hardening` test that every `uses:` is a
    40-hex ref with a version comment.
 3. **Least privilege and bounded runs.** Top-level `permissions: contents:
-   read` in `ci.yml` with job-level widening only where needed (`graph-diff`
-   and `self-validate` upload artifacts — `actions: none` suffices for
-   `upload-artifact`; **[Likely]**, the package checks); `timeout-minutes` on
+   read` in `ci.yml` with job-level widening only where needed. The two
+   uploading jobs (`graph-diff`, `self-validate`) should need nothing more:
+   `upload-artifact` authenticates with the runner's `ACTIONS_RUNTIME_TOKEN`
+   and never reads `GITHUB_TOKEN`, though its own test workflow grants
+   `actions: write`, so the package proves it on the first run and widens
+   those two jobs if the upload is refused. The gitleaks step passes
+   `GITHUB_TOKEN` for pull-request comments; either grant it
+   `pull-requests: write` or set `GITLEAKS_ENABLE_COMMENTS=false` — the
+   gate's exit code is what matters. `timeout-minutes` on
    every job (sized from the durations table: the longest job today is the
    Windows test leg); `concurrency: { group: ci-${{ github.ref }},
    cancel-in-progress: true }` for pull-request runs. Guard: tests for each
@@ -197,14 +218,28 @@ literals", "Dependabot").
    a member of the CI matrix. (GitHub Actions has no YAML anchors; a reusable
    workflow is heavier than this repository needs.)
 5. **Release 0.3.0.** Cut the ~355 `[Unreleased]` lines into a release
-   section; tag; let `release.yml` publish; add PyPI attestations
-   (`attestations: true` on the publish step **[Likely: supported by
-   `release/v1`; verify]**). State the deprecation window for `specgraph`:
-   warns through 0.3.x, removed in 0.4.0.
+   section; tag; let `release.yml` publish. PEP 740 attestations need no
+   change: under trusted publishing the PyPA action "generates and uploads
+   them automatically by default" (PyPI's own documentation, Appendix B), so
+   the release step is to *verify* them on the published files and to keep
+   the behaviour when W1.2 pins the action to a SHA. State the deprecation
+   window for `specgraph`: warns through 0.3.x, removed in 0.4.0.
+
+6. **Python support window.** Add 3.14 to the matrix and the classifiers
+   now (it has been final for a year); announce in the 0.3.0 notes that
+   0.4.0 raises `requires-python` to `>= 3.11`, drops the `tomli` extra and
+   lets `UP` modernise the syntax 3.10 held back. 3.10 is end-of-life this
+   month; a linter that reads other repositories' CI should not test on an
+   interpreter that no longer receives security fixes.
+7. **Container hardening.** A non-root `USER` in the `Dockerfile`, the base
+   image pinned by digest with a `docker` ecosystem entry in
+   `dependabot.yml` keeping it fresh, and the base version tied to the same
+   single source as item 4.
 
 *Proof:* CI green on every merge; `make thresholds` still passes; the new
 `test_ci_hardening` tests fail on an unpinned `uses:` or a job without a
-timeout.
+timeout; `test_dockerfile` (new, beside the existing Docker tests if any)
+fails on a root user or a tag-only base.
 
 ### W2 — God-file reduction, phase two: `cli.py`
 
@@ -268,8 +303,8 @@ output path); `make matcher-accuracy` unchanged; coverage floors hold.
    already at zero elsewhere, so the rule costs nothing and prevents a print
    from entering a library module.
 3. Select `FBT001`/`FBT002` after making the three boolean parameters
-   keyword-only (additive: every current caller already passes them by name
-   **[Likely; the package verifies by grep]**).
+   keyword-only — additive, verified: every caller outside `log.py` already
+   passes them by name (§1.2), and the one positional call is internal.
 4. The E501 rewrap (`next-steps.md` item 18), in two PRs: package + tools
    (37 lines), then tests (110). Select `E501` after the second.
 5. `PERF401`: the twelve append-loops become comprehensions; select `PERF`.
@@ -318,19 +353,45 @@ selected (a config that silently drops a family is how debt returns).
    `hypothesis` property tests the repository already depends on for
    `shell_invocations` and `parse_makefile` (never raises, never credits on
    garbage).
+5. **Tests under mypy.** Add `tests` to `[tool.mypy] files` with
+   `explicit_package_bases = true` (the module-mapping error) and a
+   `[[tool.mypy.overrides]] module = "tests.*"` block that starts lenient
+   (`disallow_untyped_defs = false`, `check_untyped_defs = true`) and is
+   tightened as the ~52 real errors are fixed — the ratchet again. The 34
+   unresolved `pytest`/`hypothesis` imports are this container's stub path,
+   not the code; CI's `[dev]` install resolves them. Until this lands, a
+   typo in a test helper's signature is found by the test run, not before.
+6. **Public docstrings by ratchet.** Select `D100`–`D103` with the 52
+   current offenders listed in `per-file-ignores`, and shrink the list in
+   the W2/W3 PRs that already touch those files; the `D` convention is
+   whatever the existing docstrings already follow (they are consistent).
 
 ### W7 — Coverage and the test suite
 
 1. **Ratchet the floors** to two points under measured: package 97 / 95,
    `tools/` 94 / 91. Floors live in `pyproject.toml` only (`make thresholds`
    already guards that).
-2. **One suite run for both trees.** `make test` measures `--cov=openspec_graph
-   --cov=tools` into one `coverage.json`; `check_coverage_floor.py --scope`
-   and `check_branch_coverage.py --scope` read the two trees from it; the
-   `coverage-tools` target becomes an alias of those two checks. The
-   Makefile's objection — a diluted combined total — never arises because
-   pytest-cov's `--cov-fail-under` is set to 0 and the scoped checkers hold the
-   floors. Saves one full suite run per ladder and one CI job.
+2. **One suite run for both trees — proven, with one precondition.** A
+   single run measuring both trees into one report (`combined.json`,
+   Appendix A) reproduces the two-run numbers *exactly* when summed per
+   scope: `openspec_graph/` 2276/2292 lines and 744/762 branches,
+   `tools/` 823/857 and 278/298. Its unscoped `totals` are the diluted
+   figure the Makefile warned about, 3099/3149 = 98.4 % — and today's
+   checkers behave accordingly: `--scope tools` passes against the combined
+   report unchanged; the *unscoped* call (which is how `make test` checks the
+   package floor) reads the combined totals; `--scope openspec_graph` exits 2,
+   "no line floor set … `openspec_graph_line_fail_under`", because no scoped
+   key exists for the package. So the design is: `[tool.coverage.run]
+   source = ["openspec_graph", "tools"]` and a bare `--cov` (pytest-cov
+   overrides `source` when `--cov=x` is given, Appendix B), pytest-cov's own
+   `--cov-fail-under` — a *total*, Appendix B — set to `$(NO_FLOOR)`, and one
+   mapping rule in `_common._read_floor`: a scope that names an entry of
+   `[tool.coverage.run] source` falls back to `[tool.coverage.report]
+   fail_under` / `[tool.specgraph] branch_fail_under`, so the thresholds stay
+   in one place and both floors are read scoped. `coverage-tools` becomes an
+   alias for the two `--scope tools` checks. Saves one full suite run per
+   ladder and one CI job; the subprocess measurement through
+   `COVERAGE_PROCESS_START` then covers `tools/` scripts too.
 3. **Per-file minimum** as a report first: `check_coverage_floor.py
    --per-file-min 85` lists modules below (coverage.py's `fail_under` is a
    total, Appendix B); gate when the list is empty.
@@ -351,12 +412,18 @@ selected (a config that silently drops a family is how debt returns).
    rules, detect, output, cli}` subpackages with the flat module names kept as
    facades for one minor version — exactly the pattern `parse.py` and
    `rules.py` already follow.
-2. **Archive implemented change packages** under `openspec/changes/archive/`
-   per OpenSpec convention, so `openspec/changes/` lists the open work (3
-   DRAFT packages today) and the gate reads the active set; the archive stays
-   validated by `--target` in a scheduled job. Precondition: a package proving
-   `detect`/`find_spec_files` handles the archive directory the way the
-   convention expects.
+2. **Archive implemented change packages — after planlint learns to.**
+   The motivation is navigability: 43 packages in one directory, three of
+   them open. It is not gate cost (`validate` takes 0.36 s). And today the
+   OpenSpec `archive/` convention would do harm: `find_spec_files` reads
+   only `changes/*/specs/*/spec.md`, so archived specs drop out of every
+   gate silently, and `detect.py:710` would count `archive/` itself as a
+   change package in `detect`'s report and the dialect card. So the
+   precondition is a feature package: discovery excludes `archive/` from
+   the package count, an `--include-archive` flag (or a scheduled job with
+   the archive as its target) keeps archived specs validated, and only then
+   are the 40 implemented packages moved, one commit, with the before/after
+   spec count asserted.
 3. **Policies written down, once:** versioning and deprecation
    (`schema_version` bumps, the `specgraph` window), the count-cites-a-command
    rule (R2), the one-agent-per-thread convention (R3) — in
@@ -384,9 +451,9 @@ selected (a config that silently drops a family is how debt returns).
 
 | Milestone | Scope | Gate to pass before the next |
 |---|---|---|
-| **M0 — Guard the green** (days) | W1.1 Dependabot batch; W1.3 permissions, timeouts, concurrency; W4.2 `T201` scoped; W6.1 strict mypy (+ W5.4 tools adopt `_common`) | CI green on `main` after each merge; `test_ci_hardening` covers each new guard |
-| **M1 — Pin and release** (days) | W1.2 SHA pins; W1.5 release 0.3.0 with attestations; W8.3 policies | tag published; `pip install planlint==0.3.0` runs `validate` on this repo |
-| **M2 — Measure cheaper** (one week) | W7.2 one-run coverage; W7.1 floor ratchet; W7.3 per-file report; W5.5 dead-code report; W7.4 markers | ladder wall time down by the `coverage-tools` leg; floors hold |
+| **M0 — Guard the green** (days) | W1.1 Dependabot batch; W1.3 permissions, timeouts, concurrency; W1.6 Python 3.14 in the matrix; W1.7 container user; W4.2 `T201` scoped; W6.1 strict mypy (+ W5.4 tools adopt `_common`) | CI green on `main` after each merge; `test_ci_hardening` covers each new guard |
+| **M1 — Pin and release** (days) | W1.2 SHA pins; W1.5 release 0.3.0 with attestations and the 3.10 removal notice; W8.3 policies | tag published; `pip install planlint==0.3.0` runs `validate` on this repo |
+| **M2 — Measure cheaper** (one week) | W7.2 one-run coverage (with the `_read_floor` rule); W7.1 floor ratchet; W7.3 per-file report; W5.5 dead-code report; W7.4 markers; W6.5 tests under mypy (lenient override); W6.6 `D1` ratchet config | ladder wall time down by the `coverage-tools` leg; floors hold; scoped numbers equal the two-run numbers on the first run |
 | **M3 — Split `cli.py`** (one week) | W2 with its proofs; W3 items 1 and 3 (ratchet config, `GraphBuild`) | golden hashes, `--help` snapshot and test-name set unchanged |
 | **M4 — Reduce** (two weeks, many small PRs) | W3.2 complexity; W4.1/3/5 constants, FBT, PERF; W5.1–3 dead code and `_json`; W6.2 loggers; W6.4 property tests; W4.4 rewrap ×2 | each lint family selected at its default when the last offender falls |
 | **M5 — Organise** (after M4) | W8.1 subpackages; W8.2 archive; W2 phase three (`parse_semantics`, `detect`, `report`); W9 | facades keep every public import; archive validated on a schedule |
@@ -401,11 +468,15 @@ W9.1 (SessionStart hook) can land any time after M0; it blocks nothing.
   maxima and lowered as code improves. *Alternative rejected:* select at
   defaults and carry a `# noqa` per offender — that turns the backlog into
   annotations nobody is asked to remove.
-- **D2 — One coverage run, two scoped checks.** The Makefile's two-run design
-  protected two honest numbers from one diluted total; the scoped checkers
-  this repository already owns protect them from one data file. *Rejected:*
-  a third floor on the combined total (the diluted number the Makefile
-  refused).
+- **D2 — One coverage run, two scoped checks, both floors read scoped.**
+  The Makefile's two-run design protected two honest numbers from one
+  diluted total; the scoped checkers this repository already owns protect
+  them from one data file — *provided* the package floor is also read
+  scoped, which needs the one `_read_floor` mapping rule in W7.2, because the
+  unscoped call reads the report's totals (measured: 98.4 % against 99.3 %).
+  *Rejected:* a third floor on the combined total (the diluted number the
+  Makefile refused); a duplicate `openspec_graph_line_fail_under` key
+  (two places for one threshold is how `make thresholds` came to exist).
 - **D3 — `cli/` is a package, with `__init__` as the facade.** *Rejected:*
   sibling `cli_*.py` modules — they are what R-DG-6's guard was written to
   forbid, for the reason that a flat family of five `cli_` files is a god
@@ -448,6 +519,10 @@ W9.1 (SessionStart hook) can land any time after M0; it blocks nothing.
 | I/O modules without a logger | 3 | 0 |
 | Unreferenced symbols | 3 | 0, with `make dead-code` reporting |
 | Release | 0.2.0 + 355 unreleased lines | 0.3.0 tagged, attested, `specgraph` window stated |
+| Python matrix | 3.10–3.13 | 3.11–3.14 at 0.4.0 (3.14 added now, 3.10 announced) |
+| Tests under mypy | not checked (86 errors, ~52 real) | checked, overrides tightened to strict |
+| Public symbols without a docstring | 52 | 0, `D100`–`D103` selected |
+| Container | root user, tag-pinned base | non-root, digest-pinned, Dependabot-maintained |
 
 ---
 
@@ -469,6 +544,16 @@ grep -hoE "uses: [^ ]+" .github/workflows/*.yml .github/actions/planlint/action.
 grep -c "timeout-minutes\|^permissions:\|^concurrency:" .github/workflows/ci.yml
 make pre-pr                                                      # floors and measured coverage
 python -m pytest tests/ -p no:cacheprovider -q --durations=12 -o addopts=""
+# verification pass (§1.2 rows added in review)
+python -m pytest tests/ --cov=openspec_graph --cov=tools --cov-branch --cov-fail-under=0 \
+    --cov-report=json:combined.json -q           # then sum per-file summaries by prefix
+python tools/check_coverage_floor.py combined.json --scope tools        # exit 0, 96.0%
+python tools/check_coverage_floor.py combined.json                      # exit 0, 98.4% (combined)
+python tools/check_coverage_floor.py combined.json --scope openspec_graph   # exit 2, no key
+mypy --explicit-package-bases tests
+ruff check --select D100,D101,D102,D103 --statistics openspec_graph
+TIMEFORMAT='%R s'; time planlint --target . validate --fail-on ERROR
+grep -n "def find_spec_files" -A 1 openspec_graph/detect.py ; sed -n 700,715p openspec_graph/detect.py
 ```
 
 ## Appendix B — References consulted (Context7, documentation only)
@@ -492,3 +577,20 @@ python -m pytest tests/ -p no:cacheprovider -q --durations=12 -o addopts=""
   `disallow_untyped_defs`, `no_implicit_reexport`, `warn_return_any`,
   `extra_checks`; it does **not** enable `warn_unreachable`, hence W6.1's
   explicit line. Per-module overrides use `[[tool.mypy.overrides]]`.
+- **pytest-cov** (`docs/config.rst`): `--cov-fail-under MIN` fails "if the
+  *total* coverage is less than MIN"; giving `--cov=something` overrides
+  coverage's `source` option, and with several sources it is "easier to set
+  those in the config and always use `--cov` without a value" — the shape
+  W7.2 adopts.
+- **PyPI attestations** (`docs.pypi.org/attestations/producing-attestations`,
+  `trusted-publishers/using-a-publisher`): "for users of the official PyPA
+  GitHub Action, attestations are generated and uploaded automatically by
+  default without requiring additional configuration"; trusted publishing
+  requires `id-token: write` on the publishing job, which `release.yml:99`
+  already grants.
+- **actions/upload-artifact** (`dist/upload/index.js`, `.github/workflows/
+  test.yml`): the action's only credential is `ACTIONS_RUNTIME_TOKEN`
+  (`getRuntimeToken()`), with no `GITHUB_TOKEN` in its auth path; its own
+  test workflow nonetheless runs with `permissions: contents: read,
+  actions: write`, which is why W1.3 proves the narrower grant on the first
+  run rather than asserting it.
