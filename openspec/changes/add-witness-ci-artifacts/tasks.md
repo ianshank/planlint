@@ -11,9 +11,12 @@
   (`rules_witness.py:61`) against W002's `every` (`DEC-WM-019`).
 - Re-measure the stage set W001 enforces with the package's own extraction
   (`parse_harness.py:55` — the Verified-by line only;
-  `rules_witness.py:31-34`), not the whole-file regex the peer review used.
-  Record both numbers: 14 stages by whole-file regex, 12 on Verified-by
-  lines. `e2e-live` and `skill-catalog` are prose and matrix mentions only;
+  `rules_witness.py:31-34`), not the whole-file regex the peer review used,
+  over the 43 spec files excluding this package's own. Record both numbers:
+  14 stages by whole-file regex, 12 on Verified-by lines, 11 once
+  `fix-heading-regex-newline-span` AC-HNS-12's `matcher-accuracy` citation
+  is re-pointed to `make test` (`DEC-PM-011`). `e2e-live` and
+  `skill-catalog` are prose and matrix mentions only;
   `lint-empty-speckit-requirements/.../spec.md:132` sits inside `R-SER-10`,
   not a criterion, so W001 never reads it and that spec needs no edit.
 - Confirm `v0.2.0` is still untagged on origin, so no version moves.
@@ -23,7 +26,8 @@
 
 - `proposal.md`, `tasks.md`, `specs/witness-ci-artifacts/spec.md` written
   spec-first; every AC unchecked; `Status: DRAFT`. Reviewed by
-  `spec-adversary` before any code.
+  `spec-adversary` before any code; its four MEDIUM decisions recorded as
+  `DEC-WCA-023` (rewritten), `DEC-WCA-024`, `DEC-WCA-025` and `R-WCA-35`.
 - **Gate:** `make validate`
 
 ## Milestone 2 — Store and profile plumbing
@@ -94,10 +98,11 @@
   `tests/test_decomposition.py::_EXPECTED_HASHES["rules"]` do not move (the
   description is unchanged) and that `["validate"]`/`["graph"]` do not move
   (the golden fixture never passes `--require-witness`).
-- `README.md` W001 row reworded to add "and no failing witness at the
-  current commit"; `rules.py`'s docstring likewise. The rule catalog is
-  generated from `Rule.description`, which does not change, so
-  `make skill-catalog` should produce no diff — confirm rather than assume.
+- `README.md` W001 table row reworded to add "and no failing witness at the
+  current commit"; `openspec_graph/rules.py`'s module docstring likewise. The
+  rule catalog is generated from `Rule.description`, which does not change,
+  so `make skill-catalog` should produce no diff — confirm rather than
+  assume.
 - **Gate:** `make test`
 
 ## Milestone 5 — Scan action inputs
@@ -148,13 +153,26 @@
   `exit-code`, `coverage`, `target`, `witness-dir`, `upload-artifact`,
   `artifact-name`, `python-version`, `version`. Steps: `paths` (resolve
   `witness-dir` to `${RUNNER_TEMP}/planlint-witnesses` when empty,
-  `mkdir -p`), `actions/setup-python@v5`, `install` (body byte-identical to
-  the scan action's install step), `sha` (`git -C "$INPUT_TARGET" rev-parse
-  HEAD`; non-zero → `::error`, exit 1, nothing recorded), `record` (one
-  `planlint --target "$INPUT_TARGET" witness --stage ... --exit ...
-  [--coverage ...] --witness-dir "$DIR"`), upload under
-  `always() && inputs.upload-artifact == 'true'`. Header comment states the
-  consumer idiom and that recorder and gate must check out the same ref.
+  `mkdir -p`; export `EVIDENCE` as a sibling directory under `RUNNER_TEMP`
+  so the shared install body's `${EVIDENCE}/planlint-src` resolves; when
+  `exit-code` is empty, emit `::notice` "stage <stage> did not run; nothing
+  recorded" and set an output that skips every later step), then
+  `actions/setup-python@v5`, `install` (body identical to the scan action's
+  except the version probe, which runs `planlint witness --help` and refuses
+  the install unless the output mentions `--witness-dir`), `sha`
+  (`git -C "$INPUT_TARGET" rev-parse HEAD`; non-zero → `::error`, exit 1,
+  nothing recorded), `record` (one `planlint --target "$INPUT_TARGET"
+  witness --stage ... --exit ... [--coverage ...] --witness-dir "$DIR"`),
+  upload under `always() && inputs.upload-artifact == 'true'`. Header
+  comment states the consumer idiom, that recorder and gate must check out
+  the same ref, and that an empty `exit-code` records nothing (`DEC-WCA-024`).
+- `.github/dependabot.yml`: a second `github-actions` entry with
+  `directory: "/.github/actions/planlint-witness"`, mirroring the existing
+  `/.github/actions/planlint` block; the comment above the root entry
+  mentions both composite actions. Guard:
+  `test_every_composite_action_directory_is_watched_by_dependabot`
+  (`tests/test_ci_hardening.py:707`) — run it first to watch it fail, then
+  add the entry.
 - New `tests/test_witness_action_contract.py` (flat under `tests/`, never a
   subdirectory):
   `test_the_recorder_declares_exactly_its_inputs`,
@@ -163,14 +181,17 @@
   `test_the_recorder_derives_the_sha_from_the_checkout_not_github_sha`,
   `test_the_recorder_never_invokes_make`,
   `test_the_recorder_uploads_under_always`,
-  `test_the_recorder_install_step_matches_the_scan_action`,
+  `test_the_recorder_install_step_matches_the_scan_action_minus_the_probe`,
+  `test_the_recorder_probe_requires_witness_dir_support`,
   `test_the_recorder_records_a_witness_the_gate_then_accepts`,
   `test_the_recorder_records_a_failing_stage_as_a_failing_witness`,
-  `test_the_recorder_refuses_a_target_that_is_not_a_git_repository`.
+  `test_the_recorder_refuses_a_target_that_is_not_a_git_repository`,
+  `test_the_recorder_records_nothing_and_succeeds_when_exit_code_is_empty`.
   The execution half extracts and runs the shell steps the way
   `test_action_contract.py::ActionRun` does, against a `tmp_path` git
   repository, with `GITHUB_SHA` deliberately set to a different value so the
-  derivation test cannot pass by accident.
+  derivation test cannot pass by accident; the empty-input test asserts no
+  `planlint` invocation, an empty directory, a `::notice` line, and exit 0.
 - `test_no_workflow_or_template_uses_pull_request_target` already globs
   `.github/**/*.yml`; confirm the new file appears in its parametrisation.
 - **Gate:** `make test`
@@ -190,10 +211,13 @@
   step `if: always()` with `exit-code: ${{ steps.run.outputs.exit-code }}`
   and `artifact-name: planlint-witness-${{ matrix.stage }}`); `gate` job
   (`needs: stages`, `if: always()`, checkout, `actions/download-artifact@v4`
-  with `pattern`/`merge-multiple`/`path` under `runner.temp`, the scan action
-  with `require-witness: "true"` and `witness-dir`, then the SARIF upload
-  step as in the existing template). Both `uses:` refs pin the same SHA the
-  existing template pins.
+  with `pattern`/`merge-multiple`/`path` under `runner.temp`; then a
+  one-line step — `ls "$STORE"/*.json >/dev/null 2>&1 || { echo "::error
+  title=planlint::no witness artifact was downloaded into $STORE"; exit 1; }`
+  with the directory passed through `env:` — before the scan action with
+  `require-witness: "true"` and `witness-dir`; then the SARIF upload step as
+  in the existing template). Both `uses:` refs pin the same SHA the existing
+  template pins.
 - `tests/test_skill_contract.py`: `test_skill_witness_asset_matches_template`.
 - `tests/test_adopter_urls.py`: extend
   `test_ci_template_pins_the_floor_the_skill_enforces` (or add
@@ -203,6 +227,7 @@
 - `tests/test_witness_action_contract.py`:
   `test_witness_template_passes_matrix_values_through_env`,
   `test_witness_template_gate_downloads_merged_artifacts_into_runner_temp`,
+  `test_witness_template_gate_refuses_an_empty_store_before_scanning`,
   `test_witness_template_grants_the_same_permissions_as_the_plain_template`.
 - `templates/spec-gate.yml` and its twin: untouched;
   `test_skill_asset_matches_template` still green.
@@ -219,32 +244,43 @@
   `check_wheel_metadata.py` pair.
 - Every recording job (`test` legs, `self-validate`, `encoding-stress`,
   `coverage-tools`, `docs`, `security`, `packaging`): each stage step gets an
-  `id`, `set +e`, `code=$?`, `echo "exit-code=$code" >> "$GITHUB_OUTPUT"`,
-  `exit $code`; each is followed by a recorder step `if: always()` using
+  `id`, `if: always()`, `set +e`, `code=$?`,
+  `echo "exit-code=$code" >> "$GITHUB_OUTPUT"`, `exit $code`; each is
+  followed by a recorder step `if: always()` using
   `./.github/actions/planlint-witness` with `stage`, `exit-code`, and an
-  `artifact-name` of the form `planlint-witness-<job>[-<leg>]-<stage>`.
-- New `ladder` job (3.12): `make ci`, `make matcher-accuracy`,
-  `make pre-pr`, each a recorded step as above.
+  `artifact-name` of the form `planlint-witness-<job>[-<leg>]-<stage>`. The
+  `if: always()` on the stage step is what keeps `typecheck` and `test`
+  running and recorded when `lint` fails (`DEC-WCA-024`).
+- New `ladder` job (3.12): `make ci` and `make pre-pr`, each a recorded step
+  as above — and nothing else; `make matcher-accuracy` is a report target
+  (`DEC-PM-011`, `DEC-WCA-025`) and does not belong here.
 - New `witness-gate` job: `needs:` lists every recording job and `ladder`;
   `if: always()`; `permissions: contents: read` (add `actions: read` only if
   the download step demonstrably needs it on the first hosted run);
   checkout with `persist-credentials: false`; `actions/download-artifact@v4`
   with `pattern: planlint-witness-*`, `merge-multiple: true`,
-  `path: ${{ runner.temp }}/planlint-witnesses`; `./.github/actions/planlint`
-  with `require-witness: "true"`,
+  `path: ${{ runner.temp }}/planlint-witnesses`; the same one-line
+  empty-store check as the template, failing with a named `::error` before
+  the scan; `./.github/actions/planlint` with `require-witness: "true"`,
   `witness-dir: ${{ runner.temp }}/planlint-witnesses`, `fail-on: ERROR`,
   `artifact-name: planlint-evidence-witness-gate`.
 - `tests/test_ci_hardening.py`:
   `test_ci_workflow_has_a_witness_gate_job`,
   `test_every_recording_job_is_needed_by_the_witness_gate`,
   `test_ci_witness_recorders_use_unique_artifact_names`,
+  `test_ci_recorded_stage_steps_carry_always`,
+  `test_ci_witness_gate_refuses_an_empty_store_before_scanning`,
+  `test_ci_ladder_runs_only_the_two_aggregates`,
   `test_ci_runs_every_w001_enforced_stage_by_its_make_target_name` (parse
   every `openspec/changes/*/specs/*/spec.md` with the package's own parser,
   collect `MAKE_REF.findall(crit.verified_by)` over every criterion, and
   assert each stage appears as `make <stage>` in `ci.yml`),
   `test_no_ci_step_runs_the_witness_verb_outside_the_recorder`.
-- `docs/hooks.md`: rows for `ladder` and `witness-gate`; the `self-validate`,
-  `security`, `packaging` gate cells name their make targets.
+- `docs/hooks.md`: rows `| `ladder` | push + PR | `make ci` + `make pre-pr`,
+  each recorded as a witness (hard) |` and `| `witness-gate` | push + PR |
+  the scan action with `require-witness` over the merged witness artifacts
+  of every recording job (hard) |`; the `self-validate`, `security`,
+  `packaging` gate cells name their make targets.
 - First hosted run: the `witness-gate` job's W001 findings, if any, name
   exactly the Verified-by citations CI does not back. Each is a citation to
   fix in that spec — never a witness to record by hand, never a Makefile
@@ -264,18 +300,19 @@
   agent"; the writes-files row for `witness` mentions `--witness-dir`; the
   "Wiring it into CI" section names `assets/spec-gate-witness.yml`.
 - `README.md`: the witness paragraph (199-206) describes record-in-the-job,
-  upload, download-into-`runner.temp`, gate; the Action section links the
-  witness template. `llms.txt` if it lists templates.
-- `docs/next-steps.md`: item 3's "`--require-witness` stays off the Action"
-  struck through and pointed here; the two deferral-table rows that say to
-  leave the flag alone amended. `docs/differentiation-roadmap.md`: the v2
-  note rewritten from "does not yet reach CI" to the shipped shape, citing
-  the `witness-gate` job. `docs/peer-review-2026-09.md`: R7 row →
-  "shipped — `add-witness-ci-artifacts`". `docs/architecture/c4.md`: the
-  `witness.py` row mentions the explicit-directory reader/writer if its
-  responsibility text changes. `CHANGELOG.md` under `[Unreleased]`: the two
-  flags, the W001 tightening, the two action inputs, the recorder, the
-  template, the dogfood jobs; no version bump.
+  upload, download-into-`runner.temp`, empty-store check, gate; the Action
+  section links the witness template. `llms.txt` if it lists templates.
+- `docs/next-steps.md`: item 3 (lines 34-37) struck through and pointed
+  here; the deferral-table row at line 225 that says to leave the flag alone
+  amended. `docs/differentiation-roadmap.md`: the v2 note rewritten from
+  "does not yet reach CI" to the shipped shape, citing the `witness-gate`
+  job, and its `.gitignore` line number corrected from 52 to 55.
+  `docs/peer-review-2026-09.md`: R7 row → "shipped —
+  `add-witness-ci-artifacts`". `docs/architecture/c4.md`: the `witness.py`
+  row mentions the explicit-directory reader/writer if its responsibility
+  text changes. `CHANGELOG.md` under `[Unreleased]`: the two flags, the W001
+  tightening, the two action inputs, the recorder and its empty-input rule,
+  the dependabot entry, the template, the dogfood jobs; no version bump.
 - `evals/fabricate-witness/` unchanged; confirm its graders still fail an
   agent that runs the verb.
 - Flip this package's ACs to `[x]` only as each is actually verified; leave

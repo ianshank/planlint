@@ -17,7 +17,8 @@ fill from another job. `DEC-WM-011` said the two halves would be wired with
 the CI system's own artifact mechanism; nothing in the CLI or the Action lets
 a downloaded artifact be read. This is peer-review finding F7 and
 recommendation R7: a v2 whose differentiating feature cannot run where its
-claim means anything.
+claim means anything. `docs/peer-review-2026-10.md` (N2–N4) re-measured
+every fact below against this tree.
 
 **Evidence:** `openspec_graph/witness.py:37` fixes
 `WITNESS_DIR_NAME = ".planlint/witnesses"`; `write_witness` (`witness.py:104`)
@@ -36,7 +37,7 @@ into `GITHUB_WORKSPACE`, and the `action-contract` job asserts
 `git diff --quiet --exit-code` after the action (`ci.yml:307`) — so the
 action cannot download a store into the checkout, which is why
 `--require-witness` is "deliberately absent" (`README.md:464`;
-`tests/test_action_contract.py:289-294`; `docs/next-steps.md:220`).
+`tests/test_action_contract.py:289-294`; `docs/next-steps.md:225`).
 
 Two further facts shape the design. `rules_witness.py:61` passes W001 when
 `any(w.exit_code == 0 for w in at_commit)`, while `DEC-WM-019` gave W002
@@ -46,16 +47,20 @@ W001 as written a failing leg is out-voted by a passing one. And the
 dogfood gap is measurable: `Criterion.verified_by` for the harness dialect is
 the Verified-by line alone (`parse_harness.py:55`), W001 scans only that
 (`rules_witness.py:31-34`), and across the 43 spec files under
-`openspec/changes/*/specs/*/` those lines cite 12 distinct stages. Five run
-in `ci.yml` under their make-target name (`test`, `lint`, `typecheck`,
-`coverage-tools`, `docs-check`); three run as bare commands under another
-name (`self-validate` at `ci.yml:115`, `security` at `:332`, `packaging` at
-`:152-155`); four never run on a pull request at all (`ci`, `pre-pr`,
-`matcher-accuracy`, `security`; `make pre-pr` runs only in `release.yml:42`
-on a tag). The brief's whole-file regex counted 14 stages; `e2e-live` and
-`skill-catalog` appear only in prose and matrix tables, never on a
-Verified-by line, so W001 never asks for them and no spec needs editing on
-their account.
+`openspec/changes/*/specs/*/` — excluding this package's own spec — those
+lines cite 12 distinct stages at HEAD. One of them, `matcher-accuracy`, is
+cited exactly once (`fix-heading-regex-newline-span` AC-HNS-12), and that
+citation is being re-pointed to `make test` in that package because
+`DEC-PM-011` (`fix-prose-matcher-precision`) makes the target a report, not
+a gate; the set this change must prove is therefore 11. Five run in `ci.yml`
+under their make-target name (`test`, `lint`, `typecheck`, `coverage-tools`,
+`docs-check`); three run as bare commands under another name
+(`self-validate` at `ci.yml:115`, `security` at `:332`, `packaging` at
+`:152-155`); three never run on a pull request at all (`ci`, `pre-pr`,
+`security`; `make pre-pr` runs only in `release.yml:42` on a tag). The
+brief's whole-file regex counted 14 stages; `e2e-live` and `skill-catalog`
+appear only in prose and matrix tables, never on a Verified-by line, so W001
+never asks for them and no spec needs editing on their account.
 
 ---
 
@@ -148,16 +153,28 @@ their account.
 - R-WCA-17: The recorder MUST install the CLI as the scan action does: from a
   copy of its own checkout under `RUNNER_TEMP` by default, never in place,
   and `planlint==<version>` from the index when `version` is set. The install
-  step body MUST be held in parity with the scan action's by a test.
+  step body MUST be identical to the scan action's except for the version
+  probe line, which MUST confirm that `planlint witness --help` mentions
+  `--witness-dir` and refuse the install otherwise — a release that carries
+  `report` but predates this change would otherwise install cleanly and die
+  at `witness --witness-dir` with an argparse exit 2. The recorder MUST
+  export `EVIDENCE` so the shared body's `${EVIDENCE}/planlint-src` resolves
+  under `RUNNER_TEMP`. A test MUST hold the two bodies in parity minus the
+  probe line.
 - R-WCA-18: The recorder MUST derive the sha by running `git rev-parse HEAD`
   in `target`, MUST NOT read `GITHUB_SHA`, MUST pass the result to `--sha`
   unabbreviated, and MUST fail with exit 1 and a message — recording nothing —
-  when that command fails.
+  when that command fails. The empty `exit-code` rule of R-WCA-19 MUST be
+  applied before the sha is derived.
 - R-WCA-19: The recorder MUST run `planlint --target <target> witness --stage
   <stage> --exit <exit-code> [--coverage <coverage>] --witness-dir <dir>`
   exactly once per invocation, omitting `--coverage` when `coverage` is
-  empty. It MUST NOT invoke `make`, any Makefile target, or any other command
-  of the target repository.
+  empty. When `exit-code` is empty — the value a skipped stage step's output
+  yields, since GitHub does not enforce `required: true` on composite inputs
+  at run time — the recorder MUST run no `planlint` command, MUST write
+  nothing, MUST print one `::notice` naming the stage as not run, and MUST
+  exit 0. It MUST NOT invoke `make`, any Makefile target, or any other
+  command of the target repository.
 - R-WCA-20: The recorder MUST upload `<dir>` as the artifact `artifact-name`
   under `always()` and `upload-artifact == 'true'` and on nothing else. Its
   documentation MUST state that the name must be unique per upload within a
@@ -186,9 +203,10 @@ their account.
   that step's output, and `artifact-name: planlint-witness-<stage>`) and
   `gate` (`needs: stages`, `if: always()`, checkout,
   `actions/download-artifact@v4` with `pattern: planlint-witness-*`,
-  `merge-multiple: true` and `path: ${{ runner.temp }}/planlint-witnesses`,
-  the scan action with `require-witness: "true"` and `witness-dir`, then the
-  SARIF upload as the existing template has it).
+  `merge-multiple: true` and `path: ${{ runner.temp }}/planlint-witnesses`;
+  then one step that fails with a named `::error` when that directory holds
+  no `*.json` file; then the scan action with `require-witness: "true"` and
+  `witness-dir`; then the SARIF upload as the existing template has it).
 - R-WCA-25: The new template MUST declare the same `permissions` block as
   `templates/spec-gate.yml`, MUST trigger on `pull_request`, `push` to the
   default branch and `workflow_dispatch`, MUST NOT contain
@@ -208,16 +226,19 @@ their account.
   `test`; `self-validate` → `validate`; `encoding-stress` → `e2e-live`;
   `coverage-tools` → `coverage-tools`; `docs` → `docs-check`; `security` →
   `thresholds` and `security`; `packaging` → `wheel-check`. Each recorded
-  stage step MUST capture its exit code with the idiom of R-WCA-22 and exit
-  with it.
-- R-WCA-28: A new `ladder` job MUST run `make ci`, `make matcher-accuracy`
-  and `make pre-pr`, each as its own recorded step.
+  stage step MUST carry `if: always()`, so every stage runs and is recorded
+  whatever an earlier step did, and MUST capture its exit code with the idiom
+  of R-WCA-22 and exit with it.
+- R-WCA-28: A new `ladder` job MUST run `make ci` and `make pre-pr`, each as
+  its own recorded step, and MUST NOT run any other make target
+  (`DEC-WCA-025`).
 - R-WCA-29: A new `witness-gate` job MUST list every recording job and
   `ladder` in `needs:`, carry `if: always()`, download every
   `planlint-witness-*` artifact merged into `${{ runner.temp }}/planlint-witnesses`,
-  and run `./.github/actions/planlint` with `require-witness: "true"`,
-  `witness-dir` set to that directory and `fail-on: ERROR`, under a read-only
-  token with no secret.
+  fail with a named `::error` before the scan when that directory holds no
+  `*.json` file, and run `./.github/actions/planlint` with
+  `require-witness: "true"`, `witness-dir` set to that directory and
+  `fail-on: ERROR`, under a read-only token with no secret.
 - R-WCA-30: A test MUST derive the W001-enforced stage set from this
   repository's own specs — every criterion's `verified_by` through the
   package's parser and `MAKE_REF` — and assert that `ci.yml` runs each stage
@@ -231,7 +252,7 @@ their account.
   name in CI — never by recording a witness by hand, and never by adding or
   renaming a Makefile target so a citation resolves.
 
-### Documentation and the skill
+### Documentation, the skill and repository configuration
 
 - R-WCA-33: `README.md`, `skills/planlint-spec-governance/SKILL.md`,
   `skills/planlint-spec-governance/references/exit-codes.md`,
@@ -245,6 +266,11 @@ their account.
   `("validate", "--require-witness", "--witness-dir", <placeholder>)`, the
   placeholder substituted at run time with an existing directory outside the
   target tree, following the `delta --baseline` precedent.
+- R-WCA-35: `.github/dependabot.yml` MUST gain a `github-actions` entry with
+  `directory: "/.github/actions/planlint-witness"`, matching the existing
+  `/.github/actions/planlint` entry, so the recorder's third-party pins are
+  watched (`test_every_composite_action_directory_is_watched_by_dependabot`
+  requires one entry per composite action directory).
 
 ### Constraints
 
@@ -295,7 +321,9 @@ their account.
   claim about the specs — and reporting it as "the specs are lying" would
   send a maintainer to fix citations that are fine. `R-GA-6` already makes
   the action say "precondition or usage error, not a spec failure" for exit
-  2, so the message lands in the right place without new YAML.
+  2, so the message lands in the right place without new YAML. The case this
+  rule cannot see — a directory that exists but is empty — is handled one
+  layer up, in the consumer workflow (`DEC-WCA-023`).
 - **DEC-WCA-004:** `witness --witness-dir` creates the directory;
   `validate --witness-dir` does not. A writer creating its own output
   directory is ordinary and is what `write_witness` already does for the
@@ -318,7 +346,8 @@ their account.
   stage leaves no witness and is invisible to W001, because the store has
   no notion of how many legs were expected and inventing one would need
   configuration this tool refuses to carry; that leg's own job is red, and
-  CI as a whole is red with it.
+  CI as a whole is red with it. In this repository's own `ci.yml` the gap is
+  closed from the other side by `DEC-WCA-024`.
 - **DEC-WCA-006:** W001 does not infer that a `pre-pr` witness proves `test`
   ran, even though `pre-pr` depends on `ci` which depends on `test` in this
   Makefile. `DEC-WM-016` already decided that every citation requires its own
@@ -357,9 +386,14 @@ their account.
   and has no envelope to project. One action with a `mode:` input would have
   two personalities, a `status` output that is meaningless in one of them,
   and an `EXPECTED_INPUTS` set that mixes both. The honest cost is a copied
-  install recipe — two actions, one shell body — and the mitigation is a
-  parity test on the install step text (`R-WCA-17`), the same move
-  `test_skill_asset_matches_template` makes for the template and its twin.
+  install recipe — two actions, one shell body — differing in exactly one
+  line: the scan action probes `planlint report --help`, the recorder must
+  probe that `planlint witness --help` mentions `--witness-dir`, because a
+  release that carries `report` but predates this change would otherwise
+  install cleanly and die at `witness --witness-dir` with an argparse exit
+  2. The mitigation is a parity test on the install step text minus that
+  probe line (`R-WCA-17`), the same move `test_skill_asset_matches_template`
+  makes for the template and its twin.
 - **DEC-WCA-010:** the recorder derives the sha with `git rev-parse HEAD`
   executed in the target, not from `GITHUB_SHA`. The gate compares a
   witness's `sha` to `detect._current_sha`, which is `git rev-parse HEAD` in
@@ -413,14 +447,17 @@ their account.
   behind each citation true in CI, which is the repair SKILL.md permits.
   Rewriting eleven specs to cite bare commands would make the specs match
   CI's accident rather than CI match the specs' intent.
-- **DEC-WCA-016:** a `ladder` job runs `make ci`, `make matcher-accuracy`
-  and `make pre-pr` by name, even though `pre-pr` re-runs the whole suite
-  the matrix already ran. Seven specs cite `pre-pr` and five cite `ci` on
-  Verified-by lines; under `DEC-WCA-006` no inference can stand in for
-  running them, and the release workflow already runs `make pre-pr` on every
-  tag, so this is the same gate moved earlier, not a new one. The cost is
-  runner minutes on one Linux job; the alternative was leaving the aggregate
-  citations permanently unproven.
+- **DEC-WCA-016:** a `ladder` job runs `make ci` and `make pre-pr` by name,
+  even though both re-run the suite the matrix already ran. Seven specs cite
+  `pre-pr` and five cite `ci` on Verified-by lines; under `DEC-WCA-006` no
+  inference can stand in for running them, and the release workflow already
+  runs `make pre-pr` on every tag, so this is the same gate moved earlier,
+  not a new one. The cost, stated as a multiplier rather than waved at:
+  `ci.yml` already runs the suite six times per pull request (four matrix
+  legs, `test-windows`, `coverage-tools`); `ladder` adds three — `make ci`
+  runs `test`, `make pre-pr` runs `ci` and therefore `test` again, and
+  `make pre-pr` runs `coverage-tools` — for nine. The alternative was leaving
+  the two aggregate citations permanently unproven.
 - **DEC-WCA-017:** `test-windows`, `graph-diff` and `action-contract` do not
   record. `graph-diff` checks out the pull request's head sha, a different
   `HEAD` from every other job, so anything it recorded would be stale by
@@ -458,7 +495,10 @@ their account.
   digest is a genuine measurement; a missing directory would exit 2 and the
   vacuity guard would correctly reject it. Outside the tree for the same
   reason `delta --baseline`'s placeholder is: a file inside the target would
-  show up as created and mask what the verb itself did.
+  show up as created and mask what the verb itself did. A consequence this
+  decision accepts on purpose: the CLI cannot treat "exists but empty" as a
+  precondition failure, which is why `DEC-WCA-023` puts that check in the
+  consumer workflow.
 - **DEC-WCA-022 (supersedes `R-GA-28`, `R-GA-32`, `C-GA-7` and `DEC-GA-019`,
   each in part):** the closed input list grows to ten, and "the action never
   passes `--require-witness`" becomes "the action passes it only when
@@ -472,13 +512,62 @@ their account.
   its verification citation is re-pointed in the same commit so the citation
   gate stays green. `DEC-WM-011` is realised by this change, not altered.
 - **DEC-WCA-023:** the GitHub Actions facts this design leans on are stated
-  as [Likely], not [Certain], and each has a fail-closed consequence if
-  wrong. If jobs in one run did not share `HEAD`, the gate would see stale
-  witnesses and fail; if `merge-multiple` did not union, the gate would see
-  a partial store and fail; if a fork pull request could not upload
-  artifacts, the gate would see nothing and fail. The hosted `witness-gate`
+  as [Likely], not [Certain], and each failure mode is named with the exit it
+  yields, so none of them can read as a pass. (i) The download step itself
+  fails — an API error, or `pattern` matching no artifact if
+  `download-artifact@v4` fails in that case [Likely]: the job fails at that
+  step; the scan action never runs and no planlint exit is produced. (ii) The
+  download step succeeds but creates `path` with nothing in it — [Likely] its
+  behaviour when a pattern matches zero artifacts: the consumer-side check of
+  `R-WCA-24`/`R-WCA-29` fails the step with a named `::error` before the scan
+  action runs. It lives in the workflow, not the action and not the CLI,
+  because `DEC-WCA-021` deliberately keeps an existing-but-empty explicit
+  directory a W001 exit 1, so the CLI cannot call it a precondition, and
+  `R-GA-8` keeps the action from touching the directory; without the check
+  the result would be W001 "has never been witnessed" for every citation —
+  fail-closed, but exactly the misdiagnosis `DEC-WCA-003` exists to prevent.
+  (iii) `path` was never created: `validate` exits 2 and the action reports
+  `error` (`DEC-WCA-003`). (iv) A partial store — one recorder's upload
+  failed, or `merge-multiple` did not union [Likely that it does]: W001 "has
+  never been witnessed" for the missing stages, exit 1, status `fail` — true
+  about the missing proof though silent about the cause, which is why every
+  recorder runs under `always()` and every recording job is in `needs:`.
+  (v) Jobs in one run do not share `HEAD` [Likely that they do]: W001
+  "witnessed, but not at the current commit", exit 1. (vi) A fork pull
+  request cannot upload artifacts [Likely that it can]: the recorder's upload
+  step fails and the gate lands in (ii) or (iv). The hosted `witness-gate`
   job (`AC-WCA-27`) is the only evidence that turns [Likely] into observed,
   which is why it is a criterion and not a note.
+- **DEC-WCA-024:** a skipped stage step yields an empty `exit-code`, and the
+  recorder treats empty as "the stage did not run — nothing to record".
+  GitHub does not enforce `required: true` on composite inputs at run time,
+  so `steps.<id>.outputs.exit-code` from a skipped step arrives as `""`, and
+  `planlint witness --exit ""` would exit 2 with an argparse usage error
+  nobody designed. The recorder therefore writes no witness, prints one
+  `::notice` naming the stage, and exits 0 — fail-closed downstream, because
+  W001 then reports that stage as never witnessed, rather than the recorder
+  inventing an exit code it did not observe. Both halves are needed. In this
+  repository's own `ci.yml` every recorded stage step also carries
+  `if: always()`: in the `test` matrix the stage steps are sequential, so
+  without it a failing `lint` would skip `typecheck` and `test` and their
+  recorders would fire with empty input; with it every stage runs and is
+  recorded whatever an earlier one did — consistent with the matrix's
+  `fail-fast: false`, and the stronger dogfood, since a failing leg then
+  yields a failing witness for every stage rather than an absent one. The
+  recorder's empty-input rule covers every consumer whose steps are not
+  written that way, the template's single-stage legs included.
+- **DEC-WCA-025:** `ladder` runs the two aggregates only — `make ci` and
+  `make pre-pr` — and never `make matcher-accuracy`. `DEC-PM-011`
+  (`fix-prose-matcher-precision`) made that target "a report target, not the
+  gate": it is composed into neither `ci` nor `pre-pr`,
+  `test_makefile_has_matcher_accuracy_report_target` pins that, and the gate
+  for the same numbers is `tests/test_matcher_accuracy.py` inside
+  `make test`. Turning it into a hard CI step would contradict a decision
+  this repository already pins by test. The single verification-line
+  citation of it (`fix-heading-regex-newline-span` AC-HNS-12) is being
+  re-pointed to `make test` in that package, so after this change no
+  verification line names the stage and `R-WCA-30`'s derived test has
+  nothing to ask for.
 
 ---
 
@@ -588,13 +677,14 @@ their account.
 
 - [ ] **AC-WCA-19:** the recorder declares exactly its nine inputs and no
   token; its header comment states the consumer idiom; its install step body
-  equals the scan action's; it runs `git rev-parse HEAD` in the target and
-  never reads `GITHUB_SHA`; it never invokes `make`; its upload is
-  conditioned on `always()` and `upload-artifact` and nothing else; every
-  redirection targets `RUNNER_TEMP` or a runner command file — all read from
-  the YAML by line scan, with no parser dependency added. (R-WCA-16,
-  R-WCA-17, R-WCA-18, R-WCA-19, R-WCA-20, R-WCA-21, R-WCA-22, C-WCA-4,
-  DEC-WCA-009, DEC-WCA-010)
+  equals the scan action's apart from the version probe line, which checks
+  that `planlint witness --help` mentions `--witness-dir`; it runs
+  `git rev-parse HEAD` in the target and never reads `GITHUB_SHA`; it never
+  invokes `make`; its upload is conditioned on `always()` and
+  `upload-artifact` and nothing else; every redirection targets
+  `RUNNER_TEMP` or a runner command file — all read from the YAML by line
+  scan, with no parser dependency added. (R-WCA-16, R-WCA-17, R-WCA-18,
+  R-WCA-19, R-WCA-20, R-WCA-21, R-WCA-22, C-WCA-4, DEC-WCA-009, DEC-WCA-010)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-WCA-20:** the recorder's extracted steps, run against a temporary
@@ -615,9 +705,11 @@ their account.
   pins; the `permissions` block equals the plain template's; the stage step
   reads the matrix value from `env:` and exits with the captured code; the
   recorder step carries `if: always()`; the `gate` job downloads
-  `planlint-witness-*` with `merge-multiple: true` into `runner.temp` and
-  passes `require-witness: "true"` and `witness-dir` to the scan action.
-  (R-WCA-22, R-WCA-24, R-WCA-25, DEC-WCA-013, DEC-WCA-014)
+  `planlint-witness-*` with `merge-multiple: true` into `runner.temp`, fails
+  with a named `::error` when that directory holds no `*.json` before the
+  scan action runs, and passes `require-witness: "true"` and `witness-dir`
+  to the scan action. (R-WCA-22, R-WCA-24, R-WCA-25, DEC-WCA-013,
+  DEC-WCA-014, DEC-WCA-023)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-WCA-23 (non-success):** `templates/spec-gate.yml` and its twin
@@ -628,14 +720,17 @@ their account.
 
 - [ ] **AC-WCA-24:** `ci.yml`'s `self-validate`, `security` and `packaging`
   jobs run `make validate`, `make thresholds` + `make security`, and
-  `make wheel-check`; every recording job records its stages through the
-  recorder with artifact names unique across the workflow; `ladder` runs its
-  three recorded steps; `witness-gate` lists every recording job in `needs:`,
-  carries `if: always()`, downloads the merged artifacts into `runner.temp`,
-  runs the local scan action with `require-witness: "true"`, `witness-dir`
-  and `fail-on: ERROR`, needs no secret, and is composed into no Makefile
-  target. (R-WCA-26, R-WCA-27, R-WCA-28, R-WCA-29, R-WCA-32, C-WCA-7,
-  DEC-WCA-015, DEC-WCA-016, DEC-WCA-017)
+  `make wheel-check`; every recorded stage step carries `if: always()` and
+  every recording job records its stages through the recorder with artifact
+  names unique across the workflow; `ladder` runs exactly two recorded steps,
+  `make ci` and `make pre-pr`; `witness-gate` lists every recording job in
+  `needs:`, carries `if: always()`, downloads the merged artifacts into
+  `runner.temp`, fails with a named `::error` before the scan when the
+  directory holds no `*.json`, runs the local scan action with
+  `require-witness: "true"`, `witness-dir` and `fail-on: ERROR`, needs no
+  secret, and is composed into no Makefile target. (R-WCA-26, R-WCA-27,
+  R-WCA-28, R-WCA-29, R-WCA-32, C-WCA-7, DEC-WCA-015, DEC-WCA-016,
+  DEC-WCA-017, DEC-WCA-023, DEC-WCA-024, DEC-WCA-025)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-WCA-25:** every stage any criterion in this repository's own
@@ -681,6 +776,28 @@ their account.
   C-WCA-3, C-WCA-4, C-WCA-5)
   _Verified by:_ `pytest -k test_cli_verbs_are_exactly_the_allow_list` · stage: `make test`
 
+- [ ] **AC-WCA-31 (non-success):** the recorder's extracted steps, run with
+  an empty `exit-code` — what a skipped stage step's output yields — run no
+  `planlint` command, write no witness, print one `::notice` naming the
+  stage, and exit 0; the directory is left empty, so a later
+  `validate --require-witness --witness-dir` over it reports W001 "has never
+  been witnessed" rather than a recorder usage error. (R-WCA-18, R-WCA-19,
+  DEC-WCA-024)
+  _Verified by:_ stage: `make test`
+
+- [ ] **AC-WCA-32:** `.github/dependabot.yml` declares a `github-actions`
+  entry for `/.github/actions/planlint-witness`, so every composite action
+  directory on disk is watched. (R-WCA-35)
+  _Verified by:_ `pytest -k test_every_composite_action_directory_is_watched_by_dependabot` · stage: `make test`
+
+- [ ] **AC-WCA-33 (non-success):** in both the witness template's `gate` job
+  and `ci.yml`'s `witness-gate` job, a step between the artifact download
+  and the scan action fails with a named `::error` when the store directory
+  holds no `*.json` file, so an empty download never reaches `validate` and
+  is never reported as "the specs are lying". (R-WCA-24, R-WCA-29,
+  DEC-WCA-023)
+  _Verified by:_ stage: `make test`
+
 ---
 
 ## Invariants Touched
@@ -692,7 +809,7 @@ spec.
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Focused | `make test` | AC-WCA-1..26, AC-WCA-28, AC-WCA-30 |
+| Focused | `make test` | AC-WCA-1..26, AC-WCA-28, AC-WCA-30..33 |
 | Core | `make ci` | the above, plus lint and this repo's own `planlint validate` over this package |
 | Docs | `make docs-check` | AC-WCA-29 |
 | Hosted | `witness-gate` job in `.github/workflows/ci.yml` | AC-WCA-27 |
