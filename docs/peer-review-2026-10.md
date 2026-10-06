@@ -336,6 +336,22 @@ refusal of an `allow-indeterminate` knob stands — the waiver and
 `continue-on-error` remain the only ways out. That is
 `widen-indeterminate-unchecked-citations`.
 
+The adversarial review of that package named the cost, and it belongs
+here. In the harness dialect, H001 (ERROR) requires every acceptance
+criterion to cite a `make` stage, so "stop citing Make" is an exit only
+for the upstream and SpecKit dialects; a harness-dialect repository that
+does not use Make is forced to write `make <x>`, always gets G010, and
+under this change is `indeterminate` on every spec until each carries a
+reasoned waiver — one line per spec, each a ledgered statement that the
+citation is shorthand. `planlint new` on a Makefile-less target scaffolds
+`make test` (DEC-UMC-008), so the scaffold's own output is `indeterminate`
+until the author adds that line. The decision stands with the cost stated
+rather than hidden: a green check over citations nobody could check is the
+thing this whole review series exists to remove, DEC-UMC-004's "not lying"
+argument is about the rule's severity and is untouched, and the scaffold
+question is recorded as a follow-up with a reopen trigger rather than
+folded in.
+
 ### D4 — Is N1 a note or a fix?
 
 **Thesis.** `eval-corpus-plan.md` Appendix C: low priority, noted for the
