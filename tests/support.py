@@ -241,8 +241,8 @@ def run_tool_main(
 
     * ``pass_argv0=True`` (the default), for a ``main`` whose first element is
       the program name: the seven hand-rolled scripts that index ``argv[1]``,
-      **and** ``matcher_accuracy``, which is argparse-based but strips the name
-      itself with ``parse_args(argv[1:])``.
+      **and** ``matcher_accuracy`` and ``stage_citations``, which are
+      argparse-based but strip the name themselves with ``parse_args(argv[1:])``.
     * ``pass_argv0=False``, for a ``main`` whose argv is arguments only:
       ``render_plugin_manifests`` and ``render_rule_catalog`` (called as
       ``main(sys.argv[1:])``), and ``check_wheel_metadata``, whose ``main``

@@ -387,6 +387,7 @@ def test_render_mermaid_rejects_bad_args() -> None:
         "matcher_accuracy.py",
         "render_plugin_manifests.py",
         "render_rule_catalog.py",
+        "stage_citations.py",
     ],
 )
 def test_gate_script_is_runnable_as_a_script(script: str, tmp_path: Path) -> None:

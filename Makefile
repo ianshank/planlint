@@ -1,4 +1,4 @@
-.PHONY: help test coverage-tools lint typecheck security validate graph graph-mermaid e2e-live ci pre-pr docs-check thresholds matcher-accuracy wheel-check skill-catalog skill-manifests skill-artifacts clean
+.PHONY: help test coverage-tools lint typecheck security validate graph graph-mermaid e2e-live ci pre-pr docs-check thresholds matcher-accuracy stage-citations wheel-check skill-catalog skill-manifests skill-artifacts clean
 
 # pytest-cov's own --cov-fail-under is disabled for `coverage-tools` so the
 # two scoped checkers below are the single gate on that run -- they read the
@@ -79,6 +79,9 @@ thresholds: ## Confirm no hard-coded thresholds in the Makefile or workflow YAML
 
 matcher-accuracy: ## Report G002/U004 precision + recall per pattern; floors read from pyproject.toml
 	python tools/matcher_accuracy.py --check --patterns
+
+stage-citations: ## Report each cited make stage: specs mentioning it, specs verifying with it, workflows running it
+	python tools/stage_citations.py
 
 wheel-check: ## Build the wheel and confirm it carries its declared SPDX licence
 	python -m build --wheel --outdir dist
