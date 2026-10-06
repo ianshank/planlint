@@ -125,45 +125,53 @@ tests, and the failure mode is a false ERROR, which is the one planlint is
 least allowed to produce. This repository's own tree contains no bare heading
 line, so the `validate` and `graph` golden hashes should not move.
 
-### N2 — 36 of this repository's 41 specs cite a stage no pull-request job runs **[Certain]**
+### N2 — eleven stages are cited as verification; six of them no pull-request job runs by name **[Certain]**
 
 Witness mode exists to answer "did the cited stage run". Before designing how
 it reaches CI, this review asked what it would say about this repository.
-Running G004's own `MAKE_REF` matcher over every `spec.md` under
-`openspec/changes/`:
+Two counts matter, and the first draft of this finding conflated them. G004
+reads `ParsedSpec.make_refs`: every backticked `` `make <x>` `` anywhere in a
+spec. W001 reads `Criterion.verified_by`: the `_Verified by:_` line of each
+criterion and nothing else (`rules_witness._stage_citations`). A stage named
+in a requirement or a decision is G004's business; only a stage named on a
+verification line is a claim witness mode would ever check. Both, over the
+41 specs at `6666444`, through the package's own parser:
 
-| Cited stage | Specs citing it | Run by a pull-request job, via `make`? |
-|---|---|---|
-| `test` | 38 | yes — four matrix legs |
-| `pre-pr` | 36 | **no** — only `release.yml`, on a tag |
-| `ci` | 11 | **no** — its three components run as separate jobs |
-| `validate` | 11 | **no** — `self-validate` runs `planlint … validate` bare, not `make validate` |
-| `docs-check` | 9 | yes |
-| `typecheck` | 5 | yes |
-| `lint` | 4 | yes |
-| `matcher-accuracy` | 2 | **no** — not run by any workflow |
-| `thresholds` | 2 | **no** — `security` runs the script bare |
-| `security` | 1 | **no** — `security` runs the gitleaks action, not `make security` |
-| `coverage-tools` | 1 | yes |
-| `e2e-live` | 1 | yes |
-| `wheel-check` | 1 | **no** — `packaging` runs `python -m build` and the checker bare |
-| `skill-catalog` | 1 | **no** — a writer target, cited as verification |
+| Stage | Specs mentioning it anywhere (G004) | Specs citing it on a verification line (W001) | Run by a pull-request job, via `make`? |
+|---|---|---|---|
+| `test` | 38 | 38 | yes — four matrix legs |
+| `pre-pr` | 36 | 5 | **no** — only `release.yml`, on a tag |
+| `validate` | 11 | 6 | **no** — `self-validate` runs `planlint … validate` bare, not `make validate` |
+| `ci` | 11 | 4 | **no** — its three components run as separate jobs |
+| `docs-check` | 9 | 9 | yes |
+| `typecheck` | 5 | 3 | yes |
+| `lint` | 4 | 2 | yes |
+| `thresholds` | 2 | 1 | **no** — `security` runs the script bare |
+| `security` | 1 | 1 | **no** — `security` runs the gitleaks action, not `make security` |
+| `wheel-check` | 1 | 1 | **no** — `packaging` runs `python -m build` and the checker bare |
+| `coverage-tools` | 1 | 1 | yes |
+| `matcher-accuracy` | 2 | 0 | not run by any workflow; never on a verification line |
+| `e2e-live` | 1 | 0 | yes; never on a verification line |
+| `skill-catalog` | 1 | 0 | a writer target; named in a requirement, never on a verification line |
 
-Fourteen distinct stages; six run by name on every pull request; eight do
-not. Every one of the fourteen is a real Makefile target, so `validate`
-passes — G004 asks whether the target exists, not whether anything runs it.
-The two most-cited stages after `test` are aggregates that no pull-request
-job invokes at all. `docs/hooks.md` says the CI jobs use "the same targets
-CI uses" as the pre-commit hooks; for three jobs that is true of the command
-and not of the name.
+Eleven distinct stages reach a verification line; five of them run by name on
+every pull request and six do not. Every one of the fourteen names is a real
+Makefile target, so `validate` passes — G004 asks whether the target exists,
+not whether anything runs it. The two aggregates are the sharp case: `make
+pre-pr` is *mentioned* in 36 specs but *cited as verification* in five, and
+those five would each fail W001 because no pull-request job runs it; the
+release workflow does, on a tag. `docs/hooks.md` says the CI jobs use "the
+same targets CI uses" as the pre-commit hooks; for three jobs that is true of
+the command and not of the name.
 
 None of this is a defect in the tool. It is the first measurement of what
 `--require-witness` would report against the repository that ships it, and
-the answer is that it would fail on day one — on the aggregate citations, on
-the three bare-command jobs, and on a writer target cited as proof. That is
-the product working. It also means R7's dogfood step cannot be "turn the flag
-on"; it has to align three CI steps to their make targets, run the aggregates
-somewhere a pull request can see, and fix one citation.
+the answer is that it would fail on day one — on the aggregate citations and
+on the three bare-command jobs. That is the product working. It also means
+R7's dogfood step cannot be "turn the flag on": it has to align three CI
+steps to their make targets and run the aggregates somewhere a pull request
+can see. Nothing in the specs needs to change — the three names that never
+reach a verification line are not claims witness mode makes.
 
 ### N3 — W001 lets a failing matrix leg be out-voted by a passing one **[Certain]**
 
@@ -303,10 +311,11 @@ it does. SKILL.md already forbids the third option — recording a witness by
 hand — and `evals/fabricate-witness` tests that an agent refuses it. So the
 package aligns the three bare-command jobs to `make validate`, `make
 thresholds` and `make wheel-check` (same commands, now by the name the specs
-cite), adds one job that runs the two aggregates and `make matcher-accuracy`
-on pull requests (the release workflow already runs `make pre-pr`; this
-moves the same gate earlier), fixes the one citation of a writer target, and
-only then adds the final `witness-gate` job. The exit criterion is that gate
+cite), adds one job that runs the two aggregates on pull requests (the
+release workflow already runs `make pre-pr`; this moves the same gate
+earlier) together with `make matcher-accuracy`, which one of the packages
+drafted here cites, and only then adds the final `witness-gate` job. The
+exit criterion is that gate
 passing on `main`. A v2 claimed anywhere before that is the same sentence
 the 2026-09 review refused to let the README keep.
 
@@ -382,7 +391,7 @@ Everything else there stands.
 | **N1** | A bare heading line is never a heading: `[^\S\n]+` in six `parse_semantics` regexes, tests per regex, generator extended (D4) | hours | `openspec/changes/fix-heading-regex-newline-span/` — drafted |
 | **R8** | `indeterminate` also when an unwaived G010 was reported; `indeterminate-cause` output; `waived` in the envelope's finding dict; two fixtures (D3) | days | `openspec/changes/widen-indeterminate-unchecked-citations/` — drafted |
 | **R7** | `--witness-dir` on `validate` and `witness`; W001 "one passing, none failing" (N3); `require-witness`/`witness-dir` action inputs; a recorder action; a two-job template; the dogfood ladder (N2) (D1, D2) | days, plus CI runs to prove it | `openspec/changes/add-witness-ci-artifacts/` — drafted |
-| **N2** | Three CI steps run their gate bare; two aggregates and one checker never run on a pull request; one writer target cited as proof | inside R7 | the dogfood milestone of `add-witness-ci-artifacts` |
+| **N2** | Three CI steps run their gate bare and two aggregates never run on a pull request, so six verification-line stages have no witness | inside R7 | the dogfood milestone of `add-witness-ci-artifacts` |
 | **N5** | A G010 waiver has no effect | inside R8 | the waiver clears the widened `indeterminate` |
 | 18 | E501 rewrap, 121 lines | hours | its own change, as item 18 already says; the number should not be re-counted a fourth time |
 | L1 | S005 cannot see a wrong-level spec that also lacks success criteria | recorded | exits 2, loud; not planned |
@@ -482,10 +491,14 @@ reported at line 5, the bare `##` line.
 
 ### G. N2 — cited stages
 
-`MAKE_REF` (`` `make\s+([a-z][a-z0-9_-]*)` ``) over
-`openspec/changes/*/specs/*/spec.md`, counted per spec; `make` invocations
-over `.github/workflows/*.yml`. 41 specs, every one citing at least one
-stage; the table in N2 is the full result.
+Each `openspec/changes/*/specs/*/spec.md` parsed with
+`openspec_graph.parse.parse_spec`; the "anywhere" column counts specs whose
+`ParsedSpec.make_refs` contains the stage, the "verification line" column
+counts specs with a criterion whose `Criterion.verified_by` matches
+`MAKE_REF` for it; `make` invocations read from `.github/workflows/*.yml`.
+41 specs, every one citing at least one stage on a verification line; the
+table in N2 is the full result. The R7 drafter caught the first version of
+this appendix measuring only the first column.
 
 ### H. N5 — G010 and its waiver
 
