@@ -397,7 +397,7 @@ jobs:
   specs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: ianshank/planlint/.github/actions/planlint@a1b686864282e27c754ec1d49ac6f931e1e140e1

@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The scan needs no credentials, so it should not be handed any: an
           # unused token left in the checkout's git config is reachable by
@@ -61,6 +61,11 @@ jobs:
       # exist until the release workflow cuts it; until then pin this SHA
       # (the last Action implementation). After the tag exists, switch to:
       #   uses: ianshank/planlint/.github/actions/planlint@v0.2.0
+      # The third-party steps (the checkout above, the SARIF upload below) are
+      # pinned to commit SHAs with the release tag in the trailing comment. In
+      # your repository a `github-actions` Dependabot entry moves SHA and
+      # comment together; planlint's own Dependabot does not read templates,
+      # so these two pins are refreshed by hand when the template changes.
       - id: planlint
         uses: ianshank/planlint/.github/actions/planlint@a1b686864282e27c754ec1d49ac6f931e1e140e1
         with:
@@ -79,7 +84,7 @@ jobs:
           (github.event_name != 'pull_request' ||
            github.event.pull_request.head.repo.full_name == github.repository)
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@1190a975f95ce23525efb6a3fc21ea29567c1b52 # v3.38.2
         with:
           sarif_file: ${{ steps.planlint.outputs.sarif-path }}
           category: planlint

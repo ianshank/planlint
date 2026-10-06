@@ -24,11 +24,14 @@
 version: 2
 updates:
   - package-ecosystem: "github-actions"
-    # "/" covers .github/workflows/. The composite action under
-    # .github/actions/planlint/ needs its own entry: Dependabot resolves
-    # `directory` against the repository root and only discovers workflow files
-    # at the root entry, so a nested composite action is invisible without it.
-    directory: "/"
+    # One entry for both directories. Dependabot resolves them against the
+    # repository root and discovers workflow files only at "/", so the
+    # composite action under .github/actions/planlint/ has to be listed too --
+    # and listing both in one entry yields one grouped pull request that moves
+    # every copy under .github/ together, which the agreement guard in
+    # tests/test_workflow_hardening.py needs now that every ref is a pinned
+    # SHA with its release tag (pin-actions-by-sha).
+    directories: ["/", "/.github/actions/planlint"]
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -40,25 +43,15 @@ updates:
     groups:
       # One pull request for the routine first-party bumps rather than four.
       # `pypa/gh-action-pypi-publish` is deliberately excluded from the group:
-      # it is the only action with write access to a package index, its ref is
-      # a moving branch, and its updates deserve to be read on their own.
+      # it is the only action with write access to a package index, it is
+      # pinned to a tagged commit rather than the moving branch it used to
+      # ride, and its updates deserve to be read on their own.
       actions-minor:
         patterns:
           - "actions/*"
         update-types:
           - "minor"
           - "patch"
-
-  - package-ecosystem: "github-actions"
-    directory: "/.github/actions/planlint"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "github-actions"
-    commit-message:
-      prefix: "ci"
 
   - package-ecosystem: "docker"
     # The Dockerfile pins its base by digest (harden-ci-workflows), and a

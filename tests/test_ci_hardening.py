@@ -832,14 +832,23 @@ DEPENDABOT = REPO_ROOT / ".github" / "dependabot.yml"
 
 
 def _dependabot_directories() -> set[str]:
-    """The `directory:` values declared in dependabot.yml, as text.
+    """Every directory dependabot.yml watches, as text.
 
-    Parsed with `re` rather than PyYAML for the same reason every other config
-    assertion here is: the package declares zero dependencies and the test
-    suite does not get to import one the product cannot.
+    Reads the singular `directory:` and the plural `directories:` -- flow
+    list or block list -- because one entry with `directories:` is how a
+    bump of every copy under `.github/` arrives as one grouped pull request
+    (pin-actions-by-sha R-ASP-11). Parsed with `re` rather than PyYAML for the
+    same reason every other config assertion here is: the package declares
+    zero dependencies and the test suite does not get to import one the
+    product cannot.
     """
     text = DEPENDABOT.read_text(encoding="utf-8")
-    return set(re.findall(r'^\s*directory:\s*"([^"]+)"', text, re.MULTILINE))
+    found = set(re.findall(r'^\s*directory:\s*"([^"]+)"', text, re.MULTILINE))
+    for flow in re.findall(r"^\s*directories:\s*\[([^\]]*)\]", text, re.MULTILINE):
+        found |= {item.strip().strip("\"'") for item in flow.split(",") if item.strip()}
+    for block in re.findall(r'^\s*directories:\s*\n((?:\s+-\s*"[^"]+"\s*\n)+)', text, re.MULTILINE):
+        found |= set(re.findall(r'"([^"]+)"', block))
+    return found
 
 
 def test_dependabot_config_exists_and_watches_github_actions() -> None:

@@ -169,15 +169,18 @@ u004_min_recall_pct = 90
 
 # Per-action major floors for every third-party `uses:` in the workflows, the
 # composite action, the adopter templates and the README snippet, enforced by
-# tests/test_workflow_hardening.py. A floor is a ratchet, not a pin: it is set
-# to the major this repository landed when it moved every action onto a Node
-# 24 release (harden-ci-workflows; CI run #37522794352 carried no Node 20
+# tests/test_workflow_hardening.py. Every such action is pinned to a commit
+# SHA with its release tag in a trailing comment (pin-actions-by-sha), and the
+# floor is read from that tag. A floor is a ratchet, not a pin: it is set to
+# the major this repository landed when it moved every action onto a Node 24
+# release (harden-ci-workflows; CI run #37522794352 carried no Node 20
 # deprecation annotation), a later Dependabot bump never has to touch it, and
 # only a regression trips it -- including every copy sliding back together,
 # which the agreement guard alone cannot see. Raising a floor is a deliberate
 # act; lowering one needs a reason in the commit message.
-# `pypa/gh-action-pypi-publish` rides a branch ref (`release/v1`) and has no
-# major to floor; moving it to a tag is the plan's W1.2 with the SHA pins.
+# `pypa/gh-action-pypi-publish` is pinned to a tagged commit (the v1.14.2
+# release) and is a Docker-backed action whose image is named after the ref;
+# its floor of 1 is the baseline a future v2 would have to clear.
 [tool.specgraph.action_major_floors]
 "actions/checkout" = 7
 "actions/setup-python" = 7
@@ -185,6 +188,7 @@ u004_min_recall_pct = 90
 "actions/download-artifact" = 8
 "gitleaks/gitleaks-action" = 3
 "github/codeql-action" = 3
+"pypa/gh-action-pypi-publish" = 1
 
 [project.optional-dependencies]
 # tomli backports stdlib tomllib (3.11+) for coverage.process_startup()'s

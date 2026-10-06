@@ -27,6 +27,7 @@ WORKFLOWS = sorted(WORKFLOWS_DIR.glob("*.yml"))
 CI_YML = WORKFLOWS_DIR / "ci.yml"
 RELEASE_YML = WORKFLOWS_DIR / "release.yml"
 ACTION_YML = REPO_ROOT / ".github" / "actions" / "planlint" / "action.yml"
+ACTION_YMLS = sorted((REPO_ROOT / ".github" / "actions").glob("*/action.yml"))
 DOCKERFILE = REPO_ROOT / "Dockerfile"
 DEPENDABOT = REPO_ROOT / ".github" / "dependabot.yml"
 TEMPLATES = sorted((REPO_ROOT / "templates").glob("*.yml"))
@@ -37,7 +38,16 @@ HOOKS_DOC = REPO_ROOT / "docs" / "hooks.md"
 #: Every file whose third-party `uses:` refs must agree (R-HCW-1, R-HCW-2,
 #: DEC-HCW-012): the workflows, the composite action, the adopter templates
 #: and the README's copyable snippet.
-ACTION_REF_SCAN: list[Path] = [*WORKFLOWS, ACTION_YML, *TEMPLATES, README]
+ACTION_REF_SCAN: list[Path] = [*WORKFLOWS, *ACTION_YMLS, *TEMPLATES, README]
+
+#: Where a pin has to be carried by hand: Dependabot reads neither the
+#: adopter template (nor its byte copy under the skill) nor the README, so a
+#: bump under `.github/` leaves them behind until someone copies the pin.
+HAND_CARRY = (
+    "`templates/spec-gate.yml`, its copy under `skills/planlint-spec-governance/assets/` "
+    "and `README.md` are not watched by Dependabot; carry the SHA and its `# vX.Y.Z` "
+    "comment there by hand."
+)
 
 #: This repository's own composite action, as adopters reference it. Its ref
 #: is a commit SHA until the first public tag exists; that ref belongs to
@@ -108,18 +118,29 @@ def _top_level_block(text: str, key: str) -> dict[str, str] | None:
 
 _USES = re.compile(r"^\s*-?\s*uses:\s*(\S+)")
 _SHA = re.compile(r"^[0-9a-f]{40}$")
+_PIN_COMMENT = re.compile(r"^v\d+\.\d+\.\d+$")
 
 
-def _uses_refs(paths: Iterable[Path]) -> list[tuple[Path, int, str, str]]:
-    """``(file, line, owner/repo, ref)`` for every third-party ``uses:``.
+def _uses_refs(paths: Iterable[Path]) -> list[tuple[Path, int, str, str, str | None]]:
+    """``(file, line, owner/repo, ref, comment)`` for every third-party ``uses:``.
 
-    Skips ``./`` local actions and this repository's own action. The action
-    name is the first two path segments, so ``github/codeql-action/upload-sarif``
-    is ``github/codeql-action`` -- one action, however many entry points.
+    Read from the raw line rather than ``_code_lines``, on purpose: a pin is
+    ``@<sha> # v7.0.1`` and the trailing comment is the only place its
+    release lives, so this one reader keeps the comment -- as stripped text,
+    or ``None`` when the line has no ``#`` -- and applies no pattern to it;
+    the callers classify. A line whose code half is blank is a whole-line
+    comment and yields nothing, which is the posture every other guard takes
+    from ``_code_lines``. Skips ``./`` local actions and this repository's
+    own action. The action name is the first two path segments, so
+    ``github/codeql-action/upload-sarif`` is ``github/codeql-action`` -- one
+    action, however many entry points.
     """
-    refs: list[tuple[Path, int, str, str]] = []
+    refs: list[tuple[Path, int, str, str, str | None]] = []
     for path in paths:
-        for number, code in _code_lines(path.read_text(encoding="utf-8")):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            code, hash_sign, comment = line.partition("#")
+            if not code.strip():
+                continue
             match = _USES.match(code)
             if not match:
                 continue
@@ -127,19 +148,48 @@ def _uses_refs(paths: Iterable[Path]) -> list[tuple[Path, int, str, str]]:
             if target.startswith(("./", OWN_ACTION_PREFIX)):
                 continue
             name, _, ref = target.partition("@")
-            refs.append((path, number, "/".join(name.split("/")[:2]), ref))
+            action = "/".join(name.split("/")[:2])
+            refs.append((path, number, action, ref, comment.strip() if hash_sign else None))
     return refs
 
 
+def _pin_offenders(paths: Iterable[Path]) -> list[str]:
+    """Every third-party ``uses:`` that is not ``@<40-hex> # vMAJOR.MINOR.PATCH``.
+
+    Three shapes, each named so the fix is obvious: a tag or branch ref is
+    not pinned at all; a SHA with no comment is pinned but no reader can tell
+    which release it is; a SHA whose comment is not a release tag is a hand
+    edit that drifted (Dependabot writes exactly ``# vX.Y.Z``).
+    """
+    offenders = []
+    for path, number, action, ref, comment in _uses_refs(paths):
+        where = f"{_rel(path)}:{number} {action}@{ref}"
+        if not _SHA.match(ref):
+            offenders.append(f"{where} is not a commit SHA")
+        elif comment is None:
+            offenders.append(f"{where} has no `# vX.Y.Z` release-tag comment")
+        elif not _PIN_COMMENT.match(comment):
+            offenders.append(
+                f"{where} # {comment} is not a release tag; expected `# vMAJOR.MINOR.PATCH`"
+            )
+    return offenders
+
+
 def _ref_disagreements(paths: Iterable[Path]) -> list[str]:
-    by_action: dict[str, list[tuple[Path, int, str]]] = {}
-    for path, number, action, ref in _uses_refs(paths):
-        by_action.setdefault(action, []).append((path, number, ref))
+    """One action, one ``(ref, comment)`` pair across the scan set.
+
+    The pair, not the ref alone: two copies on one SHA with different
+    comments disagree about which release that SHA is, and the comment is
+    what Dependabot classifies the update from.
+    """
+    by_action: dict[str, list[tuple[Path, int, str, str | None]]] = {}
+    for path, number, action, ref, comment in _uses_refs(paths):
+        by_action.setdefault(action, []).append((path, number, ref, comment))
     offenders = []
     for action, uses in sorted(by_action.items()):
-        if len({ref for _, _, ref in uses}) > 1:
-            where = ", ".join(f"{_rel(p)}:{n} @{ref}" for p, n, ref in uses)
-            offenders.append(f"{action} is referenced on more than one ref: {where}")
+        if len({(ref, comment) for _, _, ref, comment in uses}) > 1:
+            where = ", ".join(f"{_rel(p)}:{n} @{ref} # {c}" for p, n, ref, c in uses)
+            offenders.append(f"{action} is referenced on more than one ref: {where}. {HAND_CARRY}")
     return offenders
 
 
@@ -164,30 +214,25 @@ def _floor_offenders(paths: Iterable[Path], floors: dict[str, int]) -> list[str]
     The agreement guard sees only disagreement: every copy of an action
     sliding back to a retired major together is still one ref. The floor is
     the independent invariant that catches that, and an action the table
-    forgot is a hole in it, so it is reported too. A branch or SHA ref has no
-    major and is outside this rule (the plan's W1.2 owns those).
+    forgot is a hole in it, so it is reported too. For a SHA pin the major
+    is read from the release tag in its comment; a branch ref, a bare SHA or
+    an unparseable comment has no major and is the shape guard's to name.
     """
     offenders = []
-    for path, number, action, ref in _uses_refs(paths):
-        major = _major(ref)
+    for path, number, action, ref, comment in _uses_refs(paths):
+        pinned = bool(_SHA.match(ref))
+        major = _major(comment or "") if pinned else _major(ref)
         if major is None:
             continue
+        shown = f"{action}@{ref} # {comment}" if pinned else f"{action}@{ref}"
         floor = floors.get(action)
         if floor is None:
             offenders.append(
-                f"{_rel(path)}:{number} {action}@{ref} has no floor in [tool.specgraph.{FLOOR_TABLE}]"
+                f"{_rel(path)}:{number} {shown} has no floor in [tool.specgraph.{FLOOR_TABLE}]"
             )
         elif major < floor:
-            offenders.append(f"{_rel(path)}:{number} {action}@{ref} is below its floor v{floor}")
+            offenders.append(f"{_rel(path)}:{number} {shown} is below its floor v{floor}")
     return offenders
-
-
-def _sha_refs(paths: Iterable[Path]) -> list[str]:
-    return [
-        f"{_rel(path)}:{number} {action}@{ref}"
-        for path, number, action, ref in _uses_refs(paths)
-        if _SHA.match(ref)
-    ]
 
 
 def _job_permission_blocks(text: str) -> list[tuple[str, dict[str, str], bool]]:
@@ -454,17 +499,39 @@ def _user_override_offenders(text: str) -> list[str]:
 
 
 def _dependabot_entries(text: str) -> set[tuple[str, str]]:
-    """``(package-ecosystem, directory)`` pairs, in order of appearance."""
+    """``(package-ecosystem, directory)`` pairs, one per watched directory.
+
+    Reads the singular ``directory:`` and the plural ``directories:`` -- as
+    a flow list (``["/", "/x"]``) or a block list (one ``- "/x"`` line each)
+    -- because one entry with ``directories:`` is how a bump of every copy
+    under ``.github/`` arrives as one grouped pull request.
+    """
     entries: set[tuple[str, str]] = set()
     ecosystem: str | None = None
+    in_block_list = False
     for _, code in _code_lines(text):
-        stripped = code.strip().lstrip("- ")
-        name, _, value = stripped.partition(":")
-        if name == "package-ecosystem":
-            ecosystem = value.strip().strip("\"'")
-        elif name == "directory" and ecosystem is not None:
-            entries.add((ecosystem, value.strip().strip("\"'")))
+        stripped = code.strip()
+        if in_block_list:
+            if stripped.startswith("- ") and ":" not in stripped and ecosystem is not None:
+                entries.add((ecosystem, stripped[2:].strip().strip("\"'")))
+                continue
+            in_block_list = False
             ecosystem = None
+        name, _, value = stripped.lstrip("- ").partition(":")
+        value = value.strip()
+        if name == "package-ecosystem":
+            ecosystem = value.strip("\"'")
+        elif name == "directory" and ecosystem is not None:
+            entries.add((ecosystem, value.strip("\"'")))
+            ecosystem = None
+        elif name == "directories" and ecosystem is not None:
+            if value.startswith("["):
+                for item in value.strip("[]").split(","):
+                    if item.strip():
+                        entries.add((ecosystem, item.strip().strip("\"'")))
+                ecosystem = None
+            else:
+                in_block_list = True
     return entries
 
 
@@ -506,7 +573,7 @@ def _ci_text() -> str:
     return CI_YML.read_text(encoding="utf-8")
 
 
-# --- R-HCW-1 / R-HCW-2 / C-HCW-3: action refs agree, and none is a SHA ------
+# --- R-HCW-1 / R-HCW-2 / R-ASP-1: action refs agree, and every one is a pinned SHA
 
 
 def test_every_reference_to_one_action_agrees_on_one_ref() -> None:
@@ -522,15 +589,20 @@ def test_a_leftover_retired_major_is_reported_with_file_and_line(tmp_path: Path)
     workflow moved is named with both files and lines."""
     workflow = tmp_path / "ci.yml"
     template = tmp_path / "spec-gate.yml"
-    workflow.write_text("jobs:\n  t:\n    steps:\n      - uses: actions/checkout@v7\n", encoding="utf-8")
+    new, old = "a" * 40, "b" * 40
+    workflow.write_text(
+        f"jobs:\n  t:\n    steps:\n      - uses: actions/checkout@{new} # v7.0.1\n", encoding="utf-8"
+    )
     template.write_text(
         "jobs:\n  t:\n    steps:\n      # uses: actions/checkout@v1 (a comment must not count)\n"
-        "      - uses: actions/checkout@v4\n",
+        f"      - uses: actions/checkout@{old} # v4.2.2\n",
         encoding="utf-8",
     )
     offenders = _ref_disagreements([workflow, template])
     assert len(offenders) == 1, offenders
-    assert "ci.yml:4 @v7" in offenders[0] and "spec-gate.yml:5 @v4" in offenders[0], offenders
+    assert f"ci.yml:4 @{new} # v7.0.1" in offenders[0], offenders
+    assert f"spec-gate.yml:5 @{old} # v4.2.2" in offenders[0], offenders
+    assert offenders[0].endswith(HAND_CARRY), offenders
 
 
 def test_every_third_party_action_meets_its_major_floor() -> None:
@@ -541,48 +613,142 @@ def test_every_third_party_action_meets_its_major_floor() -> None:
 
 
 def test_a_uniformly_retired_major_is_named_with_file_and_line(tmp_path: Path) -> None:
-    """AC-HCW-29 (non-success): two files agreeing on `@v4` pass the
-    agreement guard and fail the floor guard, each named."""
+    """AC-HCW-29 (non-success): two files agreeing on one retired pin pass
+    the agreement guard and fail the floor guard, each named with the
+    release tag the floor was read from (R-ASP-4)."""
     paths = [tmp_path / "ci.yml", tmp_path / "spec-gate.yml"]
+    sha = "a" * 40
     for path in paths:
-        path.write_text("jobs:\n  t:\n    steps:\n      - uses: actions/checkout@v4\n", encoding="utf-8")
+        path.write_text(
+            f"jobs:\n  t:\n    steps:\n      - uses: actions/checkout@{sha} # v4.2.2\n", encoding="utf-8"
+        )
     assert _ref_disagreements(paths) == []
     assert _floor_offenders(paths, {"actions/checkout": 7}) == [
-        "ci.yml:4 actions/checkout@v4 is below its floor v7",
-        "spec-gate.yml:4 actions/checkout@v4 is below its floor v7",
+        f"ci.yml:4 actions/checkout@{sha} # v4.2.2 is below its floor v7",
+        f"spec-gate.yml:4 actions/checkout@{sha} # v4.2.2 is below its floor v7",
     ]
 
 
 def test_an_action_without_a_floor_is_named(tmp_path: Path) -> None:
     """AC-HCW-29 (non-success): a table that forgot an action is a hole;
-    a branch ref has no major and is not the floor's business."""
+    a branch ref has no major and is the shape guard's business, not the
+    floor's."""
     planted = tmp_path / "t.yml"
+    sha = "a" * 40
     planted.write_text(
-        "jobs:\n  t:\n    steps:\n      - uses: some/action@v2\n"
+        f"jobs:\n  t:\n    steps:\n      - uses: some/action@{sha} # v2.0.0\n"
         "      - uses: pypa/gh-action-pypi-publish@release/v1\n",
         encoding="utf-8",
     )
     assert _floor_offenders([planted], {"actions/checkout": 7}) == [
-        f"t.yml:4 some/action@v2 has no floor in [tool.specgraph.{FLOOR_TABLE}]"
+        f"t.yml:4 some/action@{sha} # v2.0.0 has no floor in [tool.specgraph.{FLOOR_TABLE}]"
     ]
-    assert _major("v7") == 7 and _major("v7.0.1") == 7
+    assert _major("v7") == 7 and _major("v7.0.1") == 7 and _major("v3.38.2") == 3
     assert _major("release/v1") is None and _major("a" * 40) is None
 
 
-def test_no_third_party_action_ref_is_a_commit_sha() -> None:
-    """AC-HCW-24: SHA pinning is a separate package; this repository's own
-    action ref is exempt and policed by tests/test_adopter_urls.py."""
-    assert not _sha_refs(ACTION_REF_SCAN), _sha_refs(ACTION_REF_SCAN)
+def test_every_third_party_action_is_pinned_to_a_commit_sha_with_its_release_tag() -> None:
+    """AC-ASP-1: every third-party `uses:` in the scan set is a 40-hex commit
+    with its release tag in a trailing comment (R-ASP-1)."""
+    assert _uses_refs(ACTION_REF_SCAN), "found no third-party uses: at all -- the scan is broken"
+    offenders = _pin_offenders(ACTION_REF_SCAN)
+    assert not offenders, "\n".join(offenders)
+
+
+def test_a_sha_pin_without_its_release_tag_comment_is_named(tmp_path: Path) -> None:
+    """AC-ASP-2 (non-success): a bare SHA is pinned but unreadable; it is
+    named beside a commented one that is not."""
+    planted = tmp_path / "t.yml"
+    planted.write_text(
+        f"jobs:\n  t:\n    steps:\n      - uses: actions/checkout@{'a' * 40} # v7.0.1\n"
+        f"      - uses: actions/setup-python@{'b' * 40}\n",
+        encoding="utf-8",
+    )
+    assert _pin_offenders([planted]) == [
+        f"t.yml:5 actions/setup-python@{'b' * 40} has no `# vX.Y.Z` release-tag comment"
+    ]
 
 
 def test_the_own_action_ref_is_exempt_from_the_sha_check(tmp_path: Path) -> None:
+    """This repository's own action ref (a bare SHA until the first tag,
+    policed by tests/test_adopter_urls.py) and a `./` local action are not
+    the third-party guards' business; the third-party bare SHA beside them is."""
     planted = tmp_path / "t.yml"
     planted.write_text(
         f"jobs:\n  t:\n    steps:\n      - uses: {OWN_ACTION_PREFIX}.github/actions/planlint@{'a' * 40}\n"
         f"      - uses: ./.github/actions/planlint\n      - uses: actions/checkout@{'b' * 40}\n",
         encoding="utf-8",
     )
-    assert _sha_refs([planted]) == [f"t.yml:6 actions/checkout@{'b' * 40}"]
+    assert _pin_offenders([planted]) == [
+        f"t.yml:6 actions/checkout@{'b' * 40} has no `# vX.Y.Z` release-tag comment"
+    ]
+
+
+def test_an_unpinned_ref_is_named_with_file_and_line(tmp_path: Path) -> None:
+    """AC-ASP-2 (non-success): a tag, a branch, and two malformed comments
+    are each named; a whole-line `# uses:` comment is not."""
+    planted = tmp_path / "t.yml"
+    sha = "c" * 40
+    planted.write_text(
+        textwrap.dedent(
+            f"""\
+            jobs:
+              t:
+                steps:
+                  # uses: actions/checkout@v1 is a comment, not a ref
+                  - uses: actions/checkout@v7
+                  - uses: pypa/gh-action-pypi-publish@release/v1
+                  - uses: actions/upload-artifact@{sha} # v7
+                  - uses: actions/download-artifact@{sha} # 7.0.1
+            """
+        ),
+        encoding="utf-8",
+    )
+    assert _pin_offenders([planted]) == [
+        "t.yml:5 actions/checkout@v7 is not a commit SHA",
+        "t.yml:6 pypa/gh-action-pypi-publish@release/v1 is not a commit SHA",
+        (
+            f"t.yml:7 actions/upload-artifact@{sha} # v7 is not a release tag; "
+            "expected `# vMAJOR.MINOR.PATCH`"
+        ),
+        (
+            f"t.yml:8 actions/download-artifact@{sha} # 7.0.1 is not a release tag; "
+            "expected `# vMAJOR.MINOR.PATCH`"
+        ),
+    ]
+
+
+def test_the_version_comment_is_read_from_the_raw_line(tmp_path: Path) -> None:
+    """AC-ASP-2: the reader keeps the comment `_code_lines` strips (R-ASP-6)."""
+    planted = tmp_path / "t.yml"
+    planted.write_text(
+        f"jobs:\n  t:\n    steps:\n      - uses: actions/checkout@{'a' * 40} # v7.0.1\n", encoding="utf-8"
+    )
+    [(_, _, action, ref, comment)] = _uses_refs([planted])
+    assert (action, ref, comment) == ("actions/checkout", "a" * 40, "v7.0.1")
+    assert all("#" not in code for _, code in _code_lines(planted.read_text(encoding="utf-8")))
+
+
+def test_a_comment_disagreement_behind_one_sha_is_named(tmp_path: Path) -> None:
+    """AC-ASP-6 (non-success): one SHA, two release-tag comments -- the pair
+    disagrees even though the ref agrees (R-ASP-5)."""
+    sha = "a" * 40
+    first, second = tmp_path / "ci.yml", tmp_path / "release.yml"
+    first.write_text(f"jobs:\n  t:\n    steps:\n      - uses: actions/checkout@{sha} # v7.0.1\n", encoding="utf-8")
+    second.write_text(f"jobs:\n  t:\n    steps:\n      - uses: actions/checkout@{sha} # v7.0.0\n", encoding="utf-8")
+    offenders = _ref_disagreements([first, second])
+    assert len(offenders) == 1, offenders
+    assert f"ci.yml:4 @{sha} # v7.0.1" in offenders[0] and f"release.yml:4 @{sha} # v7.0.0" in offenders[0]
+
+
+def test_a_version_comment_below_the_floor_is_named(tmp_path: Path) -> None:
+    """AC-ASP-4 (non-success): the floor reads the comment, and names it."""
+    planted = tmp_path / "t.yml"
+    sha = "a" * 40
+    planted.write_text(f"jobs:\n  t:\n    steps:\n      - uses: actions/checkout@{sha} # v4.2.2\n", encoding="utf-8")
+    assert _floor_offenders([planted], {"actions/checkout": 7}) == [
+        f"t.yml:4 actions/checkout@{sha} # v4.2.2 is below its floor v7"
+    ]
 
 
 # --- R-HCW-4 / R-HCW-5: least privilege, stated and commented ---------------
@@ -924,6 +1090,24 @@ def test_a_weak_dockerfile_is_named(label: str, dockerfile: str, expected: str) 
     assert any(expected in offender for offender in offenders), (label, offenders)
 
 
+def test_a_plural_directories_entry_is_read_as_one_pair_per_directory() -> None:
+    """AC-ASP-17: one `github-actions` entry with `directories:` is read as
+    one pair per directory, in flow and in block form (R-ASP-11)."""
+    expected = {("github-actions", "/"), ("github-actions", "/.github/actions/planlint"), ("docker", "/")}
+    flow = (
+        'version: 2\nupdates:\n  - package-ecosystem: "github-actions"\n'
+        '    directories: ["/", "/.github/actions/planlint"]\n'
+        '  - package-ecosystem: "docker"\n    directory: "/"\n'
+    )
+    block = (
+        'version: 2\nupdates:\n  - package-ecosystem: "github-actions"\n    directories:\n'
+        '      - "/"\n      - "/.github/actions/planlint"\n    schedule:\n      interval: "weekly"\n'
+        '  - package-ecosystem: "docker"\n    directory: "/"\n'
+    )
+    assert _dependabot_entries(flow) == expected
+    assert _dependabot_entries(block) == expected
+
+
 def test_an_unwatched_digest_is_named() -> None:
     dockerfile = f"FROM python:3.12-slim@sha256:{'0' * 64}\n"
     dependabot = 'version: 2\nupdates:\n  - package-ecosystem: "github-actions"\n    directory: "/"\n'
@@ -967,4 +1151,21 @@ def test_threshold_guard_stays_quiet_on_timeouts_env_and_concurrency(tmp_path: P
     )
     assert guard.check_workflow(planted) == []
     planted.write_text(planted.read_text(encoding="utf-8") + "      - run: pytest --cov-fail-under=90\n", encoding="utf-8")
+    assert guard.check_workflow(planted), "a planted coverage floor went unreported"
+
+
+def test_threshold_guard_stays_quiet_on_a_sha_pinned_uses_line(tmp_path: Path) -> None:
+    """AC-ASP-16: a `uses: owner/repo@<sha> # vX.Y.Z` line registers nothing
+    with tools/check_no_hardcoded_thresholds.py, and a real floor still does."""
+    guard = load_tool("thresholds_quiet_sha", "check_no_hardcoded_thresholds.py")
+    planted = tmp_path / "ci.yml"
+    planted.write_text(
+        f"jobs:\n  t:\n    steps:\n      - uses: actions/checkout@{'a' * 40} # v7.0.1\n"
+        "      - run: make test\n",
+        encoding="utf-8",
+    )
+    assert guard.check_workflow(planted) == []
+    planted.write_text(
+        planted.read_text(encoding="utf-8") + "      - run: pytest --cov-fail-under=90\n", encoding="utf-8"
+    )
     assert guard.check_workflow(planted), "a planted coverage floor went unreported"
