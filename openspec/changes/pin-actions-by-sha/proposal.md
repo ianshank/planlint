@@ -49,9 +49,10 @@ re-measured against this tree.
 
 This package lands first of M1's three, ahead of `write-down-policies` and
 then `prepare-release-0-3-0`, which moves the CHANGELOG's `[Unreleased]`
-body under the release heading and must come last. The three touch the same
-lines in three files, and the order is what keeps each merge clean
-(DEC-ASP-012).
+body under the release heading and must come last. The three share four
+edit sites — `release.yml`'s publish step, the template's comment block and
+its byte copy, the CHANGELOG's `[Unreleased]` body and the README's workflow
+block — and the order is what keeps each merge clean (DEC-ASP-012).
 
 **Evidence:** measured at `5fe043e` on branch `claude/m1-pin-and-release`,
 the tree M0 landed on; `write-down-policies`' draft has since landed on the
@@ -74,11 +75,11 @@ first may move a line number without moving the fact.
   only SHA-pinned `uses:` lines are this repository's own action —
   `templates/spec-gate.yml` line 65, `README.md` lines 403 and 451 — which
   `tests/test_adopter_urls.py::test_ci_template_pins_the_floor_the_skill_enforces`
-  requires until the first public tag, numbered by `prepare-release-0-3-0`,
-  exists.
+  accepts in either state: that SHA now, or the first public tag once
+  `prepare-release-0-3-0` numbers it.
 - **The guard forbids a SHA today, and would go blind on one.**
   `tests/test_workflow_hardening.py`: `ACTION_REF_SCAN` (line 40) is the
-  workflows, `ACTION_YML` (line 27 — the single path
+  workflows, `ACTION_YML` (line 29 — the single path
   `.github/actions/planlint/action.yml`, not the `.github/actions/*/action.yml`
   glob R-HCW-1 names), `templates/*.yml` and the README;
   `OWN_ACTION_PREFIX = "ianshank/planlint/"` (line 46) is skipped by

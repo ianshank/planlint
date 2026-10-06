@@ -42,6 +42,26 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   non-propagating logger directly; the one test whose records depended on
   test order now passes alone.
 
+### Changed — every third-party action pinned to a commit (M1)
+
+- **`pin-actions-by-sha`.** Every third-party `uses:` in both workflows, the
+  composite action, the adopter template (and its copy under the skill) and
+  the README snippet is a 40-hex commit with its release tag in a trailing
+  comment (`actions/checkout@3d3c42e5… # v7.0.1`); `pypa/gh-action-pypi-publish`
+  moves from the `release/v1` branch to the v1.14.2 tag's commit, which that
+  branch pointed at when pinned. `tests/test_workflow_hardening.py` holds the
+  shape (the guard that forbade a SHA is gone; one requiring the pinned shape
+  and one naming a bare SHA replace it), reads the per-action major floor
+  from the comment, and the floor table gains a row for the publisher.
+  `.github/dependabot.yml`'s two `github-actions` entries become one with
+  `directories:`, so a bump is one grouped pull request for every copy under
+  `.github/`; the template, its skill copy and the README are carried by
+  hand, which the agreement guard's message now says. Supersedes
+  `harden-ci-workflows`' C-HCW-3 and AC-HCW-24, amended in place on the same
+  branch, and closes the deferral the "Added — Dependabot" entry below
+  records — whose row lives in `docs/next-steps.md`, not
+  `docs/distribution-plan.md`.
+
 ### Deprecated
 
 - **Python 3.10 support ends in 0.4.0.** PEP 619 ends upstream support for

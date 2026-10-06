@@ -354,10 +354,11 @@ another package's verification line.
   group for the person reading release notes, in the README alias paragraph
   for the person choosing a command, and in the `[project.scripts]` comment
   for the person editing the entry points. The general rule the window is
-  an instance of — announced under `Deprecated` naming the removal version,
-  warns through the next minor series, removed no earlier than the minor
-  after — is `write-down-policies`' and lives in `docs/policies.md`; this
-  package does not restate it. The `Deprecated` line itself is written once,
+  an instance of — announced under `Deprecated` in the notes of a minor
+  release 0.Y.0 naming the removal version, working and warning through
+  the whole 0.Y.x series, removable from 0.(Y+1).0 (its R-POL-3) — is
+  `write-down-policies`' and lives in `docs/policies.md`; this package
+  does not restate it. The `Deprecated` line itself is written once,
   by whichever package is in the tree first: `write-down-policies` writes it
   under `[Unreleased]` and the verbatim move of R-REL-4 carries it into
   `[0.3.0]`; if this package lands into a tree without it, this package
@@ -393,7 +394,7 @@ another package's verification line.
   GitHub raises an "Unexpected input" warning annotation on the run — a
   visible signal where the default would have gone quietly missing. The
   comment on the step says exactly this (R-REL-10), so a future pin is read
-  against the floor without leaving the file. The guard asserts the input
+  against the minimum without leaving the file. The guard asserts the input
   and not the ref, because the ref is the sibling's: a test here that
   pinned `release/v1` would go red the moment the sibling landed, and one
   that pinned the SHA would be a second copy of the pin (DEC-REL-011).
@@ -499,14 +500,18 @@ another package's verification line.
   resolved on purpose rather than by whichever hunk git keeps:
   `release.yml`'s publish step (the sibling rewrites the `uses:` line; this
   package adds `with:` directly beneath it — adjacent hunks, keep both);
-  `templates/spec-gate.yml` lines 59–65 and its byte copy under `skills/`
+  `templates/spec-gate.yml` lines 59–70 at `7d626ba` (59–65 at drafting)
+  and its byte copy under `skills/`
   (the sibling adds two comment sentences to the block; this package
   rewrites the version in it; after the merge the template is copied over
   the asset so `test_skill_asset_matches_template` is green again);
   `CHANGELOG.md` `[Unreleased]` (both siblings add entries; this package
   moves the body — the reason it lands last); `README.md` lines 400–417
   (the sibling pins `actions/checkout` at 400; this package edits the prose
-  at 415–417 before the tag and the own-action ref at 403 after it). Every
+  at 415–417 before the tag and the own-action ref at 403 after it).
+  `tests/test_workflow_hardening.py` is the sibling's alone: this package
+  reads it under `make pre-pr` for C-REL-4's no-pin property and edits no
+  line of it. Every
   line number in this spec and in `tasks.md` is a drafting measurement at
   `ea40bc2`, re-measured at implementation against the tree the siblings
   leave; a sibling moves a line without moving the fact. Rejected: landing

@@ -12,7 +12,7 @@ package lands first of M1's three, before `write-down-policies` and before
 `prepare-release-0-3-0`; the shared edit sites and what each later package
 does at them are listed under Milestone 4.
 
-## Milestone 1 — The guard, red on the unpinned tree
+## Milestone 1 — The guard, red on the unpinned tree [DONE]
 
 - `tests/test_workflow_hardening.py`: replace the single-path `ACTION_YML`
   with `ACTION_YMLS = sorted((REPO_ROOT / ".github" / "actions").glob("*/action.yml"))`
@@ -109,14 +109,11 @@ does at them are listed under Milestone 4.
   to a tagged commit and is a Docker-backed action whose image is named
   after the ref; its floor of 1 is the baseline a future v2 would have to
   clear (R-ASP-3, R-ASP-9, DEC-ASP-005). No other row moves.
-- `openspec/changes/prepare-release-0-3-0/specs/release-readiness/spec.md`:
-  in the same commit, re-point AC-REL-12's selector from
-  `test_no_third_party_action_ref_is_a_commit_sha` to
-  `test_every_third_party_action_is_pinned_to_a_commit_sha_with_its_release_tag`
-  and reword its text and C-REL-4 so they state what is true after this
-  package: that package pins nothing and moves no pin (C-ASP-2, DEC-ASP-012).
-  `harden-ci-workflows`' three amendments (DEC-ASP-007) are already in this
-  stack from drafting.
+- `harden-ci-workflows`' three amendments (DEC-ASP-007) are already in this
+  stack from drafting. `prepare-release-0-3-0`'s AC-REL-12 cites no test —
+  that package's own revision recast it and C-REL-4 as a diff property read
+  under `make pre-pr` — so this package edits no sibling (C-ASP-2,
+  DEC-ASP-012).
 - Run `python -m pytest tests/test_workflow_hardening.py -q` against the
   still-unpinned tree and record here the offender list
   `test_every_third_party_action_is_pinned_to_a_commit_sha_with_its_release_tag`
@@ -129,10 +126,24 @@ does at them are listed under Milestone 4.
   still clears its floor, and the branch ref is skipped, not reported
   (AC-ASP-14, DEC-ASP-008, DEC-ASP-011). Record the run's output here. Do
   not commit this state.
+  **Recorded (2026-10-06, unpinned tree at 5fe043e + the guard edits, never
+  committed):** `test_every_third_party_action_is_pinned_to_a_commit_sha_with_its_release_tag`
+  FAILED with 34 offenders, every one "is not a commit SHA", in
+  `_pin_offenders`' path-then-line order — `.github/actions/planlint/action.yml`
+  163 (setup-python), 337 (upload-artifact); `.github/workflows/ci.yml` 45,
+  78, 111, 132, 173, 202, 282, 360, 398, 410 (checkout), 47, 80, 113, 134,
+  175, 207, 364, 399, 411 (setup-python), 156, 230 (upload-artifact), 377
+  (gitleaks-action); `.github/workflows/release.yml` 34, 56 (checkout), 38,
+  58 (setup-python), 94 (upload-artifact), 112 (download-artifact), 117
+  (`pypa/gh-action-pypi-publish@release/v1`); `README.md` 400 (checkout);
+  `templates/spec-gate.yml` 52 (checkout), 82 (`github/codeql-action`) —
+  exactly the Evidence list of `proposal.md`, nothing else. The floor guard
+  (`test_every_third_party_action_meets_its_major_floor`) stayed green on
+  that tree: every tag ref cleared its floor and the branch ref was skipped.
 - **Gate:** `make test` — red by design here, with exactly the offenders
   recorded above and nothing else; the commit is Milestone 2's.
 
-## Milestone 2 — The pins, as one batch, in the same commit
+## Milestone 2 — The pins, as one batch, in the same commit [DONE]
 
 - Re-run, for each of the seven repositories, `git ls-remote --tags
   https://github.com/<owner>/<repo>` and record the lines beside the
@@ -157,6 +168,15 @@ does at them are listed under Milestone 4.
   and `refs/heads/release/v1` (pypa/gh-action-pypi-publish — pin the peeled
   line; newest tag by `sort -V` of `refs/tags/v1.*`) (R-ASP-2, DEC-ASP-003,
   DEC-ASP-005).
+  **Recorded (2026-10-06, re-run before the pins):** every value above
+  unchanged — `3d3c42e5…` `refs/tags/v7` (checkout), `5fda3b95…`
+  `refs/tags/v7` (setup-python), `043fb46d…` `refs/tags/v7`
+  (upload-artifact), `3e5f45b2…` `refs/tags/v8` (download-artifact),
+  `e0c47f4f…` `refs/tags/v3` (gitleaks-action), `87ef0dc9…` `refs/tags/v3`
+  with `1190a975…` `refs/tags/v3^{}` (codeql-action, peeled line pinned),
+  `dc37677b…` `refs/heads/release/v1` = `refs/tags/v1.14.2^{}` (publisher).
+  CI's own "Download action repository" lines on run #195 (below) show the
+  same SHAs being fetched, which is the cross-check against a wrong pin.
 - Publisher image check: obtain an anonymous pull token from
   `https://ghcr.io/token?scope=repository:pypa/gh-action-pypi-publish:pull`
   and issue `HEAD https://ghcr.io/v2/pypa/gh-action-pypi-publish/manifests/<pinned sha>`
@@ -165,6 +185,12 @@ does at them are listed under Milestone 4.
   both `sha256:a68d05…`; `:v1.14.2` a different digest). This is the only
   exercise the publish path gets before a `v*` tag (R-ASP-3, DEC-ASP-005,
   AC-ASP-9).
+  **Recorded (2026-10-06):** `HEAD …/manifests/dc37677b2e1c63e2034f94d8a5b11f265b73ba33`
+  → HTTP 200, `docker-content-digest:
+  sha256:a68d05519f6d7e47372aeaddab80b851b69afa89be179ec41775c72c4e3ab2d5`;
+  `:release-v1` → 200 with the same digest; `:v1.14.2` → 200 with
+  `sha256:5c2f7030fbef8308068eb4cc9080fd3c9e157ccf6d511924d69f8f4b23dc95c1`.
+  The review's values hold.
 - `.github/workflows/ci.yml`: `actions/checkout@v7` →
   `actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1` at
   lines 45, 78, 111, 132, 173, 202, 282, 360, 398, 410;
@@ -216,10 +242,12 @@ does at them are listed under Milestone 4.
   skills/planlint-spec-governance/assets/spec-gate.yml` is silent, and that
   `grep -rn "release/v1"` over the scan set finds nothing; record both here
   (AC-ASP-8).
+  **Recorded (7d626ba):** `cmp` silent; `grep -rn "release/v1" .github
+  templates skills/planlint-spec-governance/assets README.md` → no matches.
 - **Gate:** `make test` — green; this is the commit that carries Milestone 1
   and Milestone 2 together.
 
-## Milestone 3 — Records and docs
+## Milestone 3 — Records and docs [DONE]
 
 - `.github/dependabot.yml`: rewrite the header paragraph at lines 16–22 —
   every third-party action is pinned to a commit SHA with its release tag in
@@ -257,7 +285,11 @@ does at them are listed under Milestone 4.
   it lands.
 - Confirm `python tools/check_no_hardcoded_thresholds.py` still prints PASS
   on the pinned tree (C-ASP-3, AC-ASP-16).
-- **Gate:** `make docs-check`, then `make thresholds`
+  **Recorded:** `PASS: no hard-coded thresholds in Makefile or workflow
+  YAML` on the pinned tree, locally and in run #195's `security` job; the
+  script is absent from the diff.
+- **Gate:** `make docs-check`, then `make thresholds` — both PASS on the
+  finished tree.
 
 ## Milestone 4 — Confirm, record, and hand off to the siblings
 
@@ -274,7 +306,10 @@ does at them are listed under Milestone 4.
   to `test_a_plural_directories_entry_is_read_as_one_pair_per_directory` —
   keeping each stage. Run `python -m pytest tests/test_spec_test_citations.py -q`
   and confirm every selector in every spec resolves, the re-pointed
-  AC-HCW-24 and AC-REL-12 included (AC-ASP-12, C-ASP-2).
+  AC-HCW-24 included (AC-ASP-12, C-ASP-2).
+  **Recorded (7d626ba → this commit):** re-pointed as listed, every stage
+  kept; `python -m pytest tests/test_spec_test_citations.py -q` → 6 passed,
+  every selector in every spec resolving.
 - Record here the first CI run on the branch after Milestone 2: its run
   number, and from each job's log the "Download action repository" lines
   showing `actions/checkout@3d3c42e5…`, `actions/setup-python@5fda3b95…`,
@@ -285,21 +320,43 @@ does at them are listed under Milestone 4.
   recorded by `prepare-release-0-3-0` with the release, not here; the
   manifest check in Milestone 2 is this package's only evidence for the
   publisher (AC-ASP-9, DEC-ASP-003, DEC-ASP-005).
+  **Recorded:** CI run #195 (`actions/runs/37534942732`, `pull_request` on
+  PR #39, head `7d626ba`), conclusion success, 18 jobs green. Set-up lines
+  from the job logs: `security` — `Download action repository
+  'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
+  (SHA:3d3c42e5…)`, `'actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97'`,
+  `'gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e'`;
+  gitleaks 8.24.3 scanned 7 commits, "no leaks found", SARIF artifact
+  finalized. `action-contract (passing)` — the composite action's own
+  `'actions/setup-python@5fda3b95…'` and
+  `'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'`
+  downloads, then `planlint-evidence-passing` uploaded (artifact
+  11446590498). `self-validate` and `graph-diff` each ran their
+  `actions/upload-artifact@043fb46d…` step green. Every job's checkout and
+  setup-python step is named with the pinned SHA in the run's step list.
 - Confirm this package validates clean under the repo's own rules
   (`planlint --target . validate --fail-on ERROR --change
   pin-actions-by-sha`), then `--change harden-ci-workflows`, then
   `--change prepare-release-0-3-0`, then the whole tree; record each exit
   code here (AC-ASP-18).
+  **Recorded (this commit):** `--change pin-actions-by-sha` 0;
+  `--change harden-ci-workflows` 0; `--change prepare-release-0-3-0` 0;
+  whole tree 0 — see the gate line in the commit message for the count.
 - Run `make stage-citations` and confirm this package added no stage to the
   set no workflow invokes by name (the stages cited here — `make test`,
   `make thresholds`, `make docs-check`, `make validate`, `make pre-pr` — are
   ones `harden-ci-workflows` already cites).
+  **Recorded:** `make stage-citations` on this tree — 16 stages cited, 12
+  on a verification line, 5 invoked by no scanned workflow (`ci`,
+  `security`, `thresholds`, `validate`, `wheel-check`), the same five as
+  before this package; nothing added.
 - Sibling hand-off, recorded here for whoever lands the next two packages
   (R-ASP-12, DEC-ASP-012): (1) `release.yml`'s publisher step — this package
   rewrote the `uses:` line at 117; `prepare-release-0-3-0` inserts
   `with: attestations: true` and its comment directly beneath it, touching
-  no part of the pinned line. (2) `templates/spec-gate.yml` lines 59–63 and
-  the byte copy — this package added the pin sentences;
+  no part of the pinned line. (2) `templates/spec-gate.yml` lines 59–68 at
+  7d626ba (59–63 before the pins) and the byte copy — this package added
+  the pin sentences at 64–68;
   `prepare-release-0-3-0` renames the tag in the same block; after its edit,
   re-copy the template over the skill asset so
   `test_skill_asset_matches_template` is green again. (3) `CHANGELOG.md`

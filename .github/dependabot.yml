@@ -13,13 +13,16 @@
 # that decision on every release, so it is omitted on purpose rather than
 # forgotten.
 #
-# Why Actions matter: six third-party actions are referenced across
-# `.github/workflows/` and the composite action, every one on a floating major
-# tag, and `pypa/gh-action-pypi-publish@release/v1` is a *branch* ref rather
-# than a tag. `docs/distribution-plan.md` records SHA-pinning them as deferred
-# "until the pins can be resolved and verified" -- an update bot is the thing
-# that makes pinned SHAs maintainable rather than instantly stale, so this is
-# the prerequisite for closing that item, not a substitute for it.
+# Why Actions matter: every third-party action referenced across
+# `.github/workflows/`, the composite action, the adopter template and the
+# README snippet is pinned to a commit SHA with its release tag in a trailing
+# comment (pin-actions-by-sha). Dependabot rewrites SHA and comment as one
+# update and classifies the update from the comment, which is why
+# tests/test_workflow_hardening.py requires the comment. The publisher,
+# `pypa/gh-action-pypi-publish`, is on a tagged commit rather than a branch
+# and stays out of the `actions-minor` group. This closed the deferred row in
+# `docs/next-steps.md` ("SHA-pinning the third-party actions"); the earlier
+# attribution of that deferral to `docs/distribution-plan.md` was wrong.
 
 version: 2
 updates:

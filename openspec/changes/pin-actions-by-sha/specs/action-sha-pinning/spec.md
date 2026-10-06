@@ -45,13 +45,15 @@ setup-python and upload-artifact in `action.yml` (lines 163, 337);
 (lines 52, 82) in `templates/spec-gate.yml` and its byte copy under
 `skills/planlint-spec-governance/assets/`; `actions/checkout@v7` at
 `README.md` line 400. The scan's action entry is the single path
-`ACTION_YML` (line 27), not a glob. `_code_lines` (line 70) drops everything
+`ACTION_YML` (line 29), not a glob. `_code_lines` (line 70) drops everything
 after `#`; `_major` (line 149) returns `None` for a SHA and
 `_floor_offenders` (line 161) skips `None`; `_sha_refs` (line 185) feeds
 `test_no_third_party_action_ref_is_a_commit_sha` (line 572), which
-`harden-ci-workflows`' AC-HCW-24 and `prepare-release-0-3-0`'s AC-REL-12
-(its spec, line 438) cite and `tests/test_spec_test_citations.py` resolves
-by substring over test function names in every file matching
+`harden-ci-workflows`' AC-HCW-24 cited at drafting and
+`prepare-release-0-3-0`'s AC-REL-12 (its spec, line 438) cited until that
+package's own revision recast it as a diff property;
+`tests/test_spec_test_citations.py` resolves every such selector by
+substring over test function names in every file matching
 `openspec/changes/*/specs/*/spec.md`. `[tool.specgraph.action_major_floors]`
 (`pyproject.toml` lines 181–187) has no row for the publisher, and its
 header comment's last two lines (179–180) say the publisher has no major to
@@ -210,8 +212,8 @@ the publisher's `uses:` line, and moves the CHANGELOG's `[Unreleased]` body.
   or removed. Every `pytest -k` selector in every spec under
   `openspec/changes/` MUST resolve after this change: `harden-ci-workflows`'
   AC-HCW-24 is re-pointed in this stack, and `prepare-release-0-3-0`'s
-  AC-REL-12, which cites the deleted test, MUST be re-pointed in the commit
-  that deletes it or before that package lands. No package on `main` is
+  AC-REL-12 cites no test (recast as a diff property by that package's
+  revision). No package on `main` is
   edited; `harden-ci-workflows` is amended because it is on this branch
   (DEC-ASP-007).
 - C-ASP-3: No rule changes — `RULES`, the README's rules table and
@@ -356,9 +358,9 @@ the publisher's `uses:` line, and moves the CHANGELOG's `[Unreleased]` body.
   criterion — left packages that were already on `main`; `harden-ci-workflows`
   is on this same unmerged branch, so its record can still be made true
   before anyone reads it as history. `prepare-release-0-3-0` is on this
-  branch too and its AC-REL-12 cites the deleted test; this draft does not
-  edit that package, and the re-point is a named step in the deleting commit
-  (C-ASP-2, DEC-ASP-012).
+  branch too; its AC-REL-12 once cited the deleted test, and that package's
+  own revision recast it as a diff property read under `make pre-pr`, so
+  this package edits no sibling (C-ASP-2, DEC-ASP-012).
 - **DEC-ASP-008:** the floor stays a *major floor* and is applied to the
   comment. DEC-HCW-014's argument is unchanged by the pin: a floor ratchets,
   a bump never edits it, and it is the invariant the agreement guard lacks —
@@ -424,13 +426,18 @@ the publisher's `uses:` line, and moves the CHANGELOG's `[Unreleased]` body.
   package adds the pin sentences and the release package renames the tag,
   with `test_skill_asset_matches_template` needing the copy re-synced after
   each; `CHANGELOG.md`'s `[Unreleased]`, where this package adds a `Changed`
-  entry, `write-down-policies` an `Added` one, and the release package moves
-  all of it. Because the release package numbers the first public tag, this
-  package never writes that number: every mention is "the first public tag,
-  numbered by `prepare-release-0-3-0`". The release package's AC-REL-12
-  cites the test this package deletes, so that selector is re-pointed in the
-  deleting commit — the one edit this package makes to a sibling, recorded
-  in `tasks.md` rather than performed by this draft.
+  entry, `write-down-policies` an `Added` entry and the `specgraph`
+  `Deprecated` line, and the release package moves all of it; and
+  `README.md`'s workflow block (lines 400–417), where this package pins
+  `actions/checkout` at 400 and the release package edits the prose and the
+  own-action ref around it. `tests/test_workflow_hardening.py` is this
+  package's alone: the release package reads it under `make pre-pr` for its
+  no-pin property and edits no line of it. Because the release package
+  numbers the first public tag, this package never writes that number: every
+  mention is "the first public tag, numbered by `prepare-release-0-3-0`".
+  The release package's AC-REL-12 once cited the test this package deletes;
+  its own revision recast it as a diff property, so this package edits no
+  sibling.
 - **DEC-ASP-013:** `github/codeql-action` has no refresh path in this
   repository under a SHA pin, and that is accepted in writing. It appears
   only in the template and the skill copy, which Dependabot does not read,
@@ -446,14 +453,14 @@ the publisher's `uses:` line, and moves the CHANGELOG's `[Unreleased]` body.
 
 ## Acceptance Criteria
 
-- [ ] **AC-ASP-1:** every third-party `uses:` under `.github/workflows/`,
+- [x] **AC-ASP-1:** every third-party `uses:` under `.github/workflows/`,
   `.github/actions/*/action.yml`, `templates/` and in `README.md`'s workflow
   snippet is `@<40-hex> # vMAJOR.MINOR.PATCH`, no tag ref or branch ref
   remains in the scan set, and the scan constant holds the composite-action
   glob. (R-ASP-1, R-ASP-3)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_every_third_party_action_is_pinned_to_a_commit_sha_with_its_release_tag` · stage: `make test`
 
-- [ ] **AC-ASP-2 (non-success):** a planted tag ref (`@v7`), a planted branch
+- [x] **AC-ASP-2 (non-success):** a planted tag ref (`@v7`), a planted branch
   ref (`@release/v1`), a planted SHA with no comment, and a planted SHA whose
   comment is not a release tag (`# v7`, `# 7.0.1`) each fail the suite with
   a message naming the file and line — the bare SHA as having no release-tag
@@ -461,40 +468,40 @@ the publisher's `uses:` line, and moves the CHANGELOG's `[Unreleased]` body.
   whole-line comment mentioning a `uses:` is not reported; and the comment
   text is read from the raw line while the comment-stripped code carries
   none. (R-ASP-1, R-ASP-6, R-ASP-8)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_an_unpinned_ref_is_named_with_file_and_line or test_a_sha_pin_without_its_release_tag_comment_is_named or test_the_version_comment_is_read_from_the_raw_line"` · stage: `make test`
 
-- [ ] **AC-ASP-3:** every pinned third-party action's comment names a major
+- [x] **AC-ASP-3:** every pinned third-party action's comment names a major
   at or above its row in `[tool.specgraph.action_major_floors]`, and every
   pinned action — the publisher included — has a row. (R-ASP-3, R-ASP-4)
   _Verified by:_ `pytest -k test_every_third_party_action_meets_its_major_floor` · stage: `make test`
 
-- [ ] **AC-ASP-4 (non-success):** two files agreeing on one synthetic SHA
+- [x] **AC-ASP-4 (non-success):** two files agreeing on one synthetic SHA
   with a comment below the floor pass the agreement guard and fail the floor
   guard with both files and lines named and the comment version quoted in
   the message; a pinned action missing from the table is named; a branch ref
   and a bare SHA are not reported by the floor guard. (R-ASP-4, R-ASP-8)
-  _Verified by:_ `pytest -k "test_a_uniformly_retired_major_is_named_with_file_and_line or test_an_action_without_a_floor_is_named"` · stage: `make test`
+  _Verified by:_ `pytest -k "test_a_uniformly_retired_major_is_named_with_file_and_line or test_a_version_comment_below_the_floor_is_named or test_an_action_without_a_floor_is_named"` · stage: `make test`
 
-- [ ] **AC-ASP-5:** every reference to one action across the scan set carries
+- [x] **AC-ASP-5:** every reference to one action across the scan set carries
   the same SHA and the same comment, and the template under `skills/` is
   byte-identical to `templates/spec-gate.yml` after the pins. (R-ASP-5,
   R-ASP-7)
   _Verified by:_ `pytest -k "test_every_reference_to_one_action_agrees_on_one_ref or test_skill_asset_matches_template"` · stage: `make test`
 
-- [ ] **AC-ASP-6 (non-success):** two copies of one action on different SHAs
+- [x] **AC-ASP-6 (non-success):** two copies of one action on different SHAs
   fail naming each file and line with the message ending in the three
   unwatched files and the hand-carry instruction, and two copies on the same
   SHA with different comments fail the same way. (R-ASP-5, R-ASP-8)
-  _Verified by:_ `pytest -k test_a_leftover_retired_major_is_reported_with_file_and_line` for the SHA half and the message tail, the comment half by stage until its test exists · stage: `make test`
+  _Verified by:_ `pytest -k "test_a_leftover_retired_major_is_reported_with_file_and_line or test_a_comment_disagreement_behind_one_sha_is_named"` · stage: `make test`
 
-- [ ] **AC-ASP-7:** this repository's own action ref is exempt: a planted
+- [x] **AC-ASP-7:** this repository's own action ref is exempt: a planted
   own-action SHA with no comment and a planted `./` local action are not
   reported while a third-party SHA with no comment on the next line is; and
   the template still pins the own action to the SHA the adopter-URL test
   requires. (C-ASP-1)
   _Verified by:_ `pytest -k "test_the_own_action_ref_is_exempt_from_the_sha_check or test_ci_template_pins_the_floor_the_skill_enforces"` · stage: `make test`
 
-- [ ] **AC-ASP-8:** `release.yml`'s publisher is the peeled commit of its
+- [x] **AC-ASP-8:** `release.yml`'s publisher is the peeled commit of its
   newest release tag with that tag in the comment, `release/v1` appears
   nowhere in the scan set, and the `gate → build → publish` chain, its
   permissions and `id-token: write` are unchanged — the release test asserts
@@ -502,7 +509,7 @@ the publisher's `uses:` line, and moves the CHANGELOG's `[Unreleased]` body.
   the ref. (R-ASP-3, C-ASP-5)
   _Verified by:_ `pytest -k test_release_workflow_is_gated_and_uses_trusted_publishing`, with the `release/v1` search over the scan set recorded in `tasks.md` · stage: `make test`
 
-- [ ] **AC-ASP-9:** `tasks.md` records, for every third-party action, the
+- [x] **AC-ASP-9:** `tasks.md` records, for every third-party action, the
   `git ls-remote --tags` line the pin was taken from — the `^{}` line for an
   annotated tag — and the SHA in the tree equals it; it records the `HEAD`
   against the GHCR manifest URL for the publisher's pinned SHA answering 200
@@ -511,26 +518,26 @@ the publisher's `uses:` line, and moves the CHANGELOG's `[Unreleased]` body.
   recorded. (R-ASP-2, R-ASP-3, C-ASP-4)
   _Verified by:_ the recorded `ls-remote` lines against the tree, the recorded manifest check, and the run's job log · stage: `make pre-pr`
 
-- [ ] **AC-ASP-10:** the composite action's inputs, outputs and defaults are
+- [x] **AC-ASP-10:** the composite action's inputs, outputs and defaults are
   unchanged and it still declares no token input and no `permissions:`; its
   only diff is two `uses:` lines. (C-ASP-3)
   _Verified by:_ `pytest -k "test_the_action_declares_exactly_the_v1_inputs or test_the_action_needs_no_token_and_no_privileged_permission"` · stage: `make test`
 
-- [ ] **AC-ASP-11:** the rule set is unchanged; `.github/dependabot.yml` has
+- [x] **AC-ASP-11:** the rule set is unchanged; `.github/dependabot.yml` has
   one `github-actions` entry whose `directories:` list covers `/` and every
   composite-action directory, carrying the `actions-minor` group; the
   `docker` entry still watches `/`; and there is still no `pip` ecosystem.
   (C-ASP-3, R-ASP-11)
   _Verified by:_ `pytest -k "test_rule_set_matches_baseline or test_every_composite_action_directory_is_watched_by_dependabot or test_a_digest_pinned_base_is_watched_by_a_docker_dependabot_entry or test_dependabot_does_not_add_a_pip_ecosystem"` · stage: `make test`
 
-- [ ] **AC-ASP-12:** every `pytest -k` selector in every spec under
+- [x] **AC-ASP-12:** every `pytest -k` selector in every spec under
   `openspec/changes/` resolves to a test function after this change — the
-  re-pointed AC-HCW-24 and AC-REL-12 included — and
+  re-pointed AC-HCW-24 included — and
   `harden-ci-workflows`' spec carries the three amendments DEC-ASP-007
   names, read directly. (C-ASP-2, DEC-ASP-007)
   _Verified by:_ `pytest -k test_every_spec_test_citation_resolves_to_a_real_test` · stage: `make test`
 
-- [ ] **AC-ASP-13:** the Dependabot header, the `docs/next-steps.md` row and
+- [x] **AC-ASP-13:** the Dependabot header, the `docs/next-steps.md` row and
   the CHANGELOG no longer describe SHA pinning as deferred and no record
   attributes the deferral to `docs/distribution-plan.md`; `docs/aqa.md`,
   `docs/hooks.md` and the floor table's header comment describe the pinned
@@ -540,28 +547,28 @@ the publisher's `uses:` line, and moves the CHANGELOG's `[Unreleased]` body.
   (R-ASP-7, R-ASP-9, R-ASP-10)
   _Verified by:_ stage: `make docs-check`
 
-- [ ] **AC-ASP-14 (non-success):** the pin-shape guard, run against the tree
+- [x] **AC-ASP-14 (non-success):** the pin-shape guard, run against the tree
   before the pins land, fails naming every floating tag ref in the scan set
   and the publisher's branch ref, each with file and line; the floor guard
   does not report the branch ref; the offender list is recorded in
   `tasks.md` and the red tree is never committed. (R-ASP-8, DEC-ASP-011)
   _Verified by:_ the recorded red run · stage: `make test`
 
-- [ ] **AC-ASP-15:** no workflow job is renamed or removed; `docs/hooks.md`'s
+- [x] **AC-ASP-15:** no workflow job is renamed or removed; `docs/hooks.md`'s
   CI table still lists every `ci.yml` job. (C-ASP-3)
   _Verified by:_ `pytest -k test_hooks_ci_table_lists_every_ci_job` · stage: `make test`
 
-- [ ] **AC-ASP-16:** `tools/check_no_hardcoded_thresholds.py` is unedited and
+- [x] **AC-ASP-16:** `tools/check_no_hardcoded_thresholds.py` is unedited and
   reports PASS on the finished tree, with a planted pinned `uses:` line and
   its version comment yielding no finding from `check_workflow`. (C-ASP-3)
-  _Verified by:_ the guard's PASS line on the finished tree, with the script absent from the diff · stage: `make thresholds`
+  _Verified by:_ `pytest -k test_threshold_guard_stays_quiet_on_a_sha_pinned_uses_line`, with the guard's PASS line on the finished tree and the script absent from the diff · stage: `make thresholds`
 
-- [ ] **AC-ASP-17 (non-success):** a planted Dependabot config whose
+- [x] **AC-ASP-17 (non-success):** a planted Dependabot config whose
   `github-actions` entry uses the plural `directories:` list is read by
   `_dependabot_entries` as one pair per directory, and a planted config
   whose list omits a composite-action directory is named by the
   directory-watch guard's helper. (R-ASP-11, R-ASP-8)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_a_plural_directories_entry_is_read_as_one_pair_per_directory or test_every_composite_action_directory_is_watched_by_dependabot"`, the omitted-directory half by stage until its planted test exists · stage: `make test`
 
 - [ ] **AC-ASP-18:** the package is merged before `write-down-policies` and
   `prepare-release-0-3-0`; after each later sibling lands, the template and

@@ -255,7 +255,8 @@ and a sibling landing first moves a line number without moving the fact.
   — whose `uses:` line `pin-actions-by-sha` has already pinned — gains
   `with: attestations: true` and the comment of R-REL-10 naming it as the
   action's default since v1.11.0, stated so a pin cannot drop it, with the
-  floor the pin must satisfy. No `uses:` line and no other line changes.
+  minimum version the pin must satisfy. No `uses:` line and no other line
+  changes.
 - `tests/test_adopter_urls.py`: two new tests —
   `test_every_copyable_tag_ref_names_the_current_version` (every
   copyable tag token in the adopter corpus other than `CHANGELOG.md` equals

@@ -286,6 +286,6 @@ its bullets are filled in after the fact with what was observed.
   merges: the SKILL.md fields were already pinned by three existing tests
   (DEC-REL-003); the bump-set guard is a test, not a `tools/` script
   (DEC-REL-004); attestations are declared on the publish step with the
-  v1.11.0 floor named and verified by hand (DEC-REL-006); the three M1
+  v1.11.0 minimum named and verified by hand (DEC-REL-006); the three M1
   packages landed in the order pin, policies, release (DEC-REL-011).
 - **Gate:** `make pre-pr`

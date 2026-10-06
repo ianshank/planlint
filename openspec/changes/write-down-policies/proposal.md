@@ -93,7 +93,7 @@ Milestone 4 re-measures at the branch head.
   `Deprecated` group state the window (R-REL-6). Neither states the general
   rule the window is an instance of.
 - **The package version is SemVer by declaration.** `CHANGELOG.md:4`
-  declares Semantic Versioning 2.0.0; `openspec_graph/__init__.py:16` is
+  declares Semantic Versioning 2.0.0; `openspec_graph/__init__.py:15` is
   `__version__ = "0.2.0"`, the single source `pyproject.toml` reads
   (DEC-SD-009, in the comment above it); `grep -n "^## " CHANGELOG.md`
   shows `[Unreleased]`, `[0.2.0] — 2026-09-12` and `[0.1.0] — 2026-08-30`.
