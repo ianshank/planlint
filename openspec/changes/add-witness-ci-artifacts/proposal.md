@@ -58,16 +58,16 @@ tree reproduced every fact below.
    `openspec/changes/*/specs/*/` at HEAD, the whole-file regex
    `` `make\s+([a-z][a-z0-9_-]*)` `` finds 14 distinct stages (the brief's
    measurement). W001 reads a narrower set: for the harness dialect
-   `Criterion.verified_by` is the `_Verified by:_` line alone
+   `Criterion.verified_by` is the Verified-by line alone
    (`parse_harness.py:55`), and `rules_witness._stage_citations` scans only
-   that (`rules_witness.py:31-34`). Re-measured on `_Verified by:_` lines
-   only, W001 enforces 12 stages: `test` (40 files), `docs-check` (10),
-   `pre-pr` (7), `validate` (7), `ci` (5), `typecheck` (3), `lint` (2), and
-   one file each for `security`, `coverage-tools`, `thresholds`,
-   `wheel-check`, `matcher-accuracy`. `e2e-live` and `skill-catalog` appear
-   only in prose and matrix tables, never on a `_Verified by:_` line, so W001
-   never asks for them. Of the 12, `.github/workflows/ci.yml` runs five by
-   their make-target name (`test`, `lint`, `typecheck`, `coverage-tools`,
+   that (`rules_witness.py:31-34`). Re-measured on Verified-by lines only,
+   W001 enforces 12 stages: `test` (40 files), `docs-check` (10), `pre-pr`
+   (7), `validate` (7), `ci` (5), `typecheck` (3), `lint` (2), and one file
+   each for `security`, `coverage-tools`, `thresholds`, `wheel-check`,
+   `matcher-accuracy`. `e2e-live` and `skill-catalog` appear only in prose
+   and matrix tables, never on a Verified-by line, so W001 never asks for
+   them. Of the 12, `.github/workflows/ci.yml` runs five by their
+   make-target name (`test`, `lint`, `typecheck`, `coverage-tools`,
    `docs-check`). Three run as bare commands under a different name:
    `self-validate` runs `planlint --target . validate --fail-on ERROR`
    (`ci.yml:115`) rather than `make validate`; `security` runs
@@ -166,9 +166,9 @@ tree reproduced every fact below.
   pin-parity extended to the new template and both of its `uses:` refs.
   **`tests/test_ci_hardening.py`** — the `witness-gate` job, the `needs:`
   closure, unique artifact names, and a test deriving the W001-enforced stage
-  set from the specs' own `_Verified by:_` lines and asserting `ci.yml` runs
-  each by its make-target name. **`tests/test_graft_witness.py`** — the CLI
-  and W001 cases named in `tasks.md`.
+  set from the specs' own Verified-by lines and asserting `ci.yml` runs each
+  by its make-target name. **`tests/test_graft_witness.py`** — the CLI and
+  W001 cases named in `tasks.md`.
 - **`docs/hooks.md`** — CI table rows for `ladder` and `witness-gate`;
   amended gate cells for `self-validate`, `security`, `packaging`.
 - **Docs that move together** — `README.md` (the witness paragraph at

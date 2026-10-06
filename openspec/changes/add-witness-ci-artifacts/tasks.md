@@ -10,9 +10,9 @@
   the scan action from ever downloading into the checkout; W001's `any`
   (`rules_witness.py:61`) against W002's `every` (`DEC-WM-019`).
 - Re-measure the stage set W001 enforces with the package's own extraction
-  (`parse_harness.py:55` — the `_Verified by:_` line only;
+  (`parse_harness.py:55` — the Verified-by line only;
   `rules_witness.py:31-34`), not the whole-file regex the peer review used.
-  Record both numbers: 14 stages by whole-file regex, 12 on `_Verified by:_`
+  Record both numbers: 14 stages by whole-file regex, 12 on Verified-by
   lines. `e2e-live` and `skill-catalog` are prose and matrix mentions only;
   `lint-empty-speckit-requirements/.../spec.md:132` sits inside `R-SER-10`,
   not a criterion, so W001 never reads it and that spec needs no edit.
@@ -129,8 +129,8 @@
   `test_the_step_extractor_sees_the_whole_action`'s env set.
 - `openspec/changes/add-finding-line-hits/specs/github-action-contract/spec.md`:
   `AC-GA-29` cites `test_action_does_not_pass_require_witness`, which this
-  milestone deletes. In the same commit, re-point that `_Verified by:_` at
-  `test_require_witness_flag_appears_only_inside_the_conditional_append`
+  milestone deletes. In the same commit, re-point that verification citation
+  at `test_require_witness_flag_appears_only_inside_the_conditional_append`
   and amend the AC's "no step passes `--require-witness`" clause to "no step
   passes it unconditionally", so `test_spec_test_citations.py` stays green
   and the older spec stops describing behaviour the action no longer has.
@@ -246,12 +246,12 @@
 - `docs/hooks.md`: rows for `ladder` and `witness-gate`; the `self-validate`,
   `security`, `packaging` gate cells name their make targets.
 - First hosted run: the `witness-gate` job's W001 findings, if any, name
-  exactly the `_Verified by:_` citations CI does not back. Each is a
-  citation to fix in that spec — never a witness to record by hand, never a
-  Makefile target added or renamed to make one resolve (`SKILL.md`).
-  Expected: zero, because Milestone 0's re-measurement found every
-  W001-enforced stage is run by name after this milestone. If the run shows
-  otherwise, the re-measurement was wrong and the finding is the correction.
+  exactly the Verified-by citations CI does not back. Each is a citation to
+  fix in that spec — never a witness to record by hand, never a Makefile
+  target added or renamed to make one resolve (`SKILL.md`). Expected: zero,
+  because Milestone 0's re-measurement found every W001-enforced stage is
+  run by name after this milestone. If the run shows otherwise, the
+  re-measurement was wrong and the finding is the correction.
 - **Gate:** `make pre-pr`
 
 ## Milestone 9 — Docs and close-out

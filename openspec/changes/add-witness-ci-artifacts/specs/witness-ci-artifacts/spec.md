@@ -44,7 +44,7 @@ Two further facts shape the design. `rules_witness.py:61` passes W001 when
 repository runs `make test` on four interpreters (`ci.yml:14`), and under
 W001 as written a failing leg is out-voted by a passing one. And the
 dogfood gap is measurable: `Criterion.verified_by` for the harness dialect is
-the `_Verified by:_` line alone (`parse_harness.py:55`), W001 scans only that
+the Verified-by line alone (`parse_harness.py:55`), W001 scans only that
 (`rules_witness.py:31-34`), and across the 43 spec files under
 `openspec/changes/*/specs/*/` those lines cite 12 distinct stages. Five run
 in `ci.yml` under their make-target name (`test`, `lint`, `typecheck`,
@@ -54,8 +54,8 @@ name (`self-validate` at `ci.yml:115`, `security` at `:332`, `packaging` at
 `matcher-accuracy`, `security`; `make pre-pr` runs only in `release.yml:42`
 on a tag). The brief's whole-file regex counted 14 stages; `e2e-live` and
 `skill-catalog` appear only in prose and matrix tables, never on a
-`_Verified by:_` line, so W001 never asks for them and no spec needs editing
-on their account.
+Verified-by line, so W001 never asks for them and no spec needs editing on
+their account.
 
 ---
 
@@ -416,7 +416,7 @@ on their account.
 - **DEC-WCA-016:** a `ladder` job runs `make ci`, `make matcher-accuracy`
   and `make pre-pr` by name, even though `pre-pr` re-runs the whole suite
   the matrix already ran. Seven specs cite `pre-pr` and five cite `ci` on
-  `_Verified by:_` lines; under `DEC-WCA-006` no inference can stand in for
+  Verified-by lines; under `DEC-WCA-006` no inference can stand in for
   running them, and the release workflow already runs `make pre-pr` on every
   tag, so this is the same gate moved earlier, not a new one. The cost is
   runner minutes on one Linux job; the alternative was leaving the aggregate
@@ -469,8 +469,8 @@ on their account.
   survives intact: no `extra-args`, no `token`, and a wrapper flag only
   where it has a tested contract — which `R-WCA-15` now gives it.
   `add-finding-line-hits`'s `AC-GA-29` cites the test this change replaces;
-  its `_Verified by:_` is re-pointed in the same commit so the citation gate
-  stays green. `DEC-WM-011` is realised by this change, not altered.
+  its verification citation is re-pointed in the same commit so the citation
+  gate stays green. `DEC-WM-011` is realised by this change, not altered.
 - **DEC-WCA-023:** the GitHub Actions facts this design leans on are stated
   as [Likely], not [Certain], and each has a fail-closed consequence if
   wrong. If jobs in one run did not share `HEAD`, the gate would see stale
