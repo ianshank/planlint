@@ -59,7 +59,7 @@ about how this repository is worked on.
 | Tool runtime | `planlint validate` 0.36 s, `graph --format json` 0.46 s on this repository (44 specs, this container) | a baseline, so a decomposition that slows the CLI is visible |
 | Evals | `evals/` cases run through `claude plugin eval` by design (its README); their structure is pinned by three test modules | not a CI gap; recorded so nobody re-finds it |
 | Suite shape | 13 of 43 test modules import nothing from `tests/support.py`; 21 use no `parametrize`; no pytest markers are registered; the four largest modules exceed 700 lines | |
-| Suite cost | the ladder runs the full suite **twice** (`test`, `coverage-tools`); CI runs it **six** times per pull request (four matrix legs, `test-windows`, `coverage-tools`) | durations below |
+| Suite cost | the ladder runs the full suite **twice** (`test`, `coverage-tools`); CI runs it **six** times per pull request (four matrix legs, `test-windows`, `coverage-tools`); 235 s single-process here, 66 s on four `xdist` workers | durations below |
 
 ### 1.3 Suite durations
 
@@ -401,10 +401,17 @@ selected (a config that silently drops a family is how debt returns).
    fast `-m unit` loop exists for the hook ladder without changing the
    directory topology #35 fixed; route the 13 helper-less modules through
    `tests/support.py` where they duplicate `run_cli`/`write_spec` shapes.
-5. **Parallelism:** `pytest-xdist` as a dev extra for the matrix legs
-   (`[tool.coverage.run] parallel = true` is already set, so data combines);
-   measure first with the durations table, adopt only if a leg drops by a
-   third **[Likely]**.
+5. **Parallelism — measured.** `pytest-xdist` with four workers on this
+   four-core container runs the suite in **66 s against 235 s**
+   single-process (3.6×), with every test passing — so no test-order or
+   shared-state dependence surfaced on the first parallel run.
+   `[tool.coverage.run] parallel = true` is already set, so coverage data
+   from workers combines. Two notes for the package: the parallel run
+   reported 1500 passed where the serial run reports 1498 — two tests
+   behave differently by process context and must be understood, not
+   averaged away; and the hosted runners have fewer cores than this
+   container, so the matrix legs should be re-measured there before the
+   dev extra is added.
 
 ### W8 — Enterprise organisation
 
@@ -513,6 +520,7 @@ W9.1 (SessionStart hook) can land any time after M0; it blocks nothing.
 | mypy | pragmatic | `strict = true` |
 | Coverage floors (package / tools) | 90/80 / 90/80 | 97/95 / 94/91, plus a per-file report |
 | Full-suite runs per ladder / per PR | 2 / 6 | 1 / 5 |
+| Suite wall time, single process → four workers | 235 s → 66 s (measured here) | the matrix legs run with `-n auto` once re-measured on the hosted runners |
 | Workflow jobs with timeout / least-privilege token | 0 / 1 | all / all |
 | Third-party actions pinned by SHA | 0 of 6 | 6 of 6, updated by Dependabot |
 | Open Dependabot PRs older than a week | 7 | 0 |
@@ -553,6 +561,7 @@ python tools/check_coverage_floor.py combined.json --scope openspec_graph   # ex
 mypy --explicit-package-bases tests
 ruff check --select D100,D101,D102,D103 --statistics openspec_graph
 TIMEFORMAT='%R s'; time planlint --target . validate --fail-on ERROR
+pip install pytest-xdist && time python -m pytest tests/ -p no:cacheprovider -q -n 4 -o addopts=""   # 66.8 s, 1500 passed
 grep -n "def find_spec_files" -A 1 openspec_graph/detect.py ; sed -n 700,715p openspec_graph/detect.py
 ```
 
