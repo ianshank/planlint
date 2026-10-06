@@ -2,10 +2,10 @@
 name: planlint-spec-governance
 description: Validate OpenSpec or SpecKit change packages (proposal.md, spec.md, tasks.md) against a repository's real Makefile targets, coverage floor, waivers and witnesses using the deterministic planlint CLI. Use when asked to validate, lint, check or repair specs or implementation plans, before writing code from a plan, or when a spec-gate CI job fails. Read-only by default; never writes waivers or witnesses.
 license: Apache-2.0
-compatibility: Requires the planlint CLI (version 0.2.0 or newer) on PATH and Python 3.10 or newer. git is optional.
+compatibility: Requires the planlint CLI (version 0.3.0 or newer) on PATH and Python 3.10 or newer. git is optional.
 metadata:
-  version: 0.2.0
-  planlint-min-version: 0.2.0
+  version: 0.3.0
+  planlint-min-version: 0.3.0
 ---
 
 # planlint spec governance
@@ -175,8 +175,8 @@ treated as "unknown" rather than as an error.
 `assets/spec-gate.yml` is a ready workflow. Copy it into the target
 repository's own workflows directory. It calls this project's composite
 action. The Action installs the CLI from its own checkout, so the `uses:`
-ref pins the adapter and the CLI together. Until `v0.2.0` is tagged, that
-ref is a commit SHA; after the tag exists, switch it to `@v0.2.0`. The
+ref pins the adapter and the CLI together. Until `v0.3.0` is tagged, that
+ref is a commit SHA; after the tag exists, switch it to `@v0.3.0`. The
 composite steps are bash and the template's runner is `ubuntu-latest`. The
 workflow runs the gate once, annotates the pull request, writes a job
 summary, and uploads the complete evidence bundle as a workflow artifact.

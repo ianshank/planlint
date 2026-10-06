@@ -9,34 +9,37 @@
 The skill, its generated catalog and manifests, the retrieval config, the
 evaluation suite and the release workflow all exist. The composite Action
 already works from any git ref of this repository (checkout install). What
-does not exist is a **PyPI release**: no `v0.2.0` tag has been pushed, so
+does not exist is a **PyPI release**: no `v0.3.0` tag has been pushed, so
 `pip install planlint`, the skill preflight, and the Action `version:`
 index override still 404. That is the remaining critical path. Adopter
-templates pin a commit SHA until the tag exists; switch them to `@v0.2.0`
+templates pin a commit SHA until the tag exists; switch them to `@v0.3.0`
 in the same sitting as the publish. Everything else on this page is hygiene
 that should not delay §3.
 
 ---
 
-## 0. Release readiness, verified at `a1b6868`
+## 0. Release readiness, verified at `428f6b7` (dry run)
 
-Every row below was **run**, not read. The engineering side of 0.2.0 is done;
-what remains is §3, and §3 is entirely outside this repository.
+Every row below was **run**, not read, on the M1 branch head plus the
+`prepare-release-0-3-0` edits — a dry run before the release commit exists;
+§3 step (1) re-runs the rows on that commit and records its SHA here. The
+engineering side of 0.3.0 is done; what remains is §3, and §3 is entirely
+outside this repository.
 
-| Gate | Command | Result |
+| Gate | Command | Result (dry run) |
 |---|---|---|
 | Full enterprise ladder | `make pre-pr` | exit 0 |
-| Coverage | `tools/check_coverage_floor.py`, `check_branch_coverage.py` | line 99.3% (floor 90), branch 97.6% (floor 80) |
-| Self-validation | `planlint --target . validate --fail-on ERROR` | 40 specs, 0 error / 0 warn / 0 info (37 at `a1b6868`; three change packages added since) |
-| Types, lint | `make typecheck`, `make lint` | mypy clean over 42 files; ruff clean |
+| Coverage | `tools/check_coverage_floor.py`, `check_branch_coverage.py` | line 98.89% (floor 90); `tools/` line 96.1% / branch 93.2% (floors 90/80) |
+| Self-validation | `planlint --target . validate --fail-on ERROR` | 49 specs, 0 error / 0 warn / 0 info |
+| Types, lint | `make typecheck`, `make lint` | mypy clean over 43 files; ruff clean |
 | Live CLI, incl. ASCII console | `make e2e-live` | exit 0 |
 | Prose-matcher floors | `make matcher-accuracy` | every configured floor met |
 | Generated-artifact freshness | both `render_*.py --check` | both fresh |
-| Install from git | `pip install git+…@a1b6868` in a clean venv | prints `planlint 0.2.0` |
+| Wheel | `make wheel-check`, then the wheel into a fresh venv | licence metadata present; `planlint --version` prints `planlint 0.3.0` |
 
 Still unpublished, confirmed live rather than inferred: `planlint` and
 `openspec-graph` both 404 on PyPI; the only GitHub release is `v0.1.0`
-(2026-08-30, pre-rename); no `v0.2.0` tag exists on `origin`.
+(2026-08-30, pre-rename); no `v0.3.0` tag exists on `origin` (2026-10-06).
 
 **GitHub surface, still outstanding** — each checked against the repository
 API, not the plan's memory of it:
@@ -88,10 +91,12 @@ Each row was checked against the checkout or the live index, not inferred.
 | A wrapper script is needed so agents can invoke the CLI | The project already declined a wrapper, for reasons that still hold |
 | Copies of the skill are needed under other agents' directories | The marketplace source form in use is the documented one, and the skill carries no repository-relative references |
 
-## 3. Phase 0 — release unblock
+## 3. Phase 0 — the 0.3.0 release
 
-Manual, outside the repository, in this order. Slice 1 and slice 2 are
-already in `main`. Nothing in §4 blocks these.
+Manual, outside the repository, in this order (`prepare-release-0-3-0`,
+R-REL-11). Steps (1) and (8) touch the tree; everything between them does
+not. The release commit is the merge of the M1 branch, or a follow-up on
+`main` that only sets the changelog date.
 
 GitHub surface, before the tag:
 
@@ -103,44 +108,73 @@ GitHub surface, before the tag:
 - Disable the empty wiki, or put a one-line stub that points at the README.
   An enabled empty wiki is a dead product surface.
 
-Then the publish sequence:
+Then the release sequence:
 
-1. Confirm the distribution name is still unclaimed on PyPI (`planlint`
-   404s; `plan-lint` is somebody else's project).
-2. Register a **pending trusted publisher** on PyPI: project `planlint`, owner
-   `ianshank`, repository `planlint`, workflow `release.yml`, environment
-   `pypi`. The environment string must match the release workflow's
-   `environment:` value exactly; a mismatch fails only at the final step,
-   after the whole gate has already run.
-3. Create the GitHub environment `pypi` (today only `copilot` exists). A
-   required reviewer here means the publish job waits for approval rather
-   than failing.
-4. `workflow_dispatch` `.github/workflows/release.yml` once on `main`. `gate`
-   and `build` run; `publish` is `if: github.ref_type == 'tag'` and must be
-   skipped. This is the dry-run. Do not push a tag until it is green.
-5. Tag the merge commit whose package version matches the tag (`0.2.0`),
-   and push `v0.2.0`. The build job compares the two and fails on a mismatch.
-   Do not push the tag as a documentation convenience without steps 2–3:
-   the workflow will run and the publish job will go red.
-6. Watch the three jobs. `gate` is the first time the full pre-PR ladder runs
-   in continuous integration on a tag; `build` is the only thing anywhere that
-   exercises the installed console script; `publish` needs the OIDC identity
-   from step 2.
-7. Install the published distribution into a fresh virtual environment, run
-   the version command, and re-run by hand every install line this repository
-   prints. Switch the Action `uses:` refs in the README, both `spec-gate.yml`
-   copies, and `.pre-commit-hooks.yaml` from the interim SHA to `@v0.2.0`.
-8. Create the GitHub release from the `[0.2.0]` changelog section.
-9. Submit the repository to Context7. The committed configuration means the
-   indexed scope does not depend on choices made in a web form.
+1. **Pre-tag checks on the release commit.** `make pre-pr` exit 0; both
+   generators fresh (`python tools/render_plugin_manifests.py --check` and
+   `python tools/render_rule_catalog.py --check` exit 0); `make e2e-live`
+   exit 0; a local `python -m build` installed into a fresh venv whose
+   `planlint --version` prints `planlint 0.3.0`. These are the §0 rows,
+   re-run on the commit that will carry the tag.
+2. **One-time registration.** Register a **pending trusted publisher** on
+   PyPI: project `planlint`, owner `ianshank`, repository `planlint`,
+   workflow `release.yml`, environment `pypi`. Create the GitHub environment
+   `pypi`. The environment string must match `release.yml`'s `environment:`
+   value exactly; a mismatch fails only at the final step, after the whole
+   gate has already run. A required reviewer on the environment makes the
+   publish job wait for approval rather than fail.
+3. **Dry run.** `workflow_dispatch` `.github/workflows/release.yml` on the
+   release commit. `gate` and `build` run; `publish` is
+   `if: github.ref_type == 'tag'` and is skipped. Stop here if either job is
+   red; do not push a tag until both are green.
+4. **Tag.** Tag the release commit `v0.3.0` and push the tag. The `[0.3.0]`
+   heading in `CHANGELOG.md` must read the day the tag is pushed; if the
+   sitting slipped past the date written there, amend it in the commit that
+   gets tagged.
+5. **Watch.** `gate` runs the full ladder on the tag; `build` is the only
+   place the installed console script is exercised from a wheel and fails
+   if the tag and the packaged version disagree; `publish` mints the OIDC
+   token through `id-token: write` and uploads both files with PEP 740
+   attestations (`attestations: true`, stated on the step).
+6. **Verify the attestations** on both published files. For the wheel and
+   the sdist, `GET https://pypi.org/integrity/planlint/0.3.0/<filename>/provenance`
+   must return HTTP 200 with at least one attestation bundle whose publisher
+   is GitHub; then
+   `pipx run pypi-attestations verify pypi --repository https://github.com/ianshank/planlint pypi:<filename>`
+   for each, expecting success.
+7. **Install what was published.** In a fresh venv: `pip install planlint==0.3.0`,
+   `planlint --version` (expect `planlint 0.3.0`), and
+   `planlint --target <this clone> validate --fail-on ERROR` (expect exit 0).
+   This is the plan's M1 exit criterion.
+8. **The post-tag commit.** Flip every own-action ref to `@v0.3.0`
+   (`templates/spec-gate.yml`, its byte copy under `skills/`, `README.md`
+   ×2) and the `.pre-commit-hooks.yaml` example to `rev: v0.3.0`; delete the
+   README's "Not on PyPI yet" note and replace its `git+` install line with
+   `pip install planlint`; rewrite SKILL.md's "Wiring it into CI" sentence to
+   "pin `@v0.3.0`"; name 0.3.0 in `SECURITY.md`'s supported-versions
+   paragraph; re-run the §0 rows on the merge commit and record its SHA
+   there. `make pre-pr` green on it. No test demands this step
+   (`test_ci_template_pins_the_floor_the_skill_enforces` accepts the SHA and
+   the tag alike), so this list is the only trigger.
+9. **GitHub release**, created from the `[0.3.0]` changelog section.
+10. **Context7 submission.** The committed configuration means the indexed
+    scope does not depend on choices made in a web form.
 
-**Exit criterion:** `pip install planlint` in a fresh venv prints
-`planlint 0.2.0`, and `uses: ianshank/planlint/.github/actions/planlint@v0.2.0`
-resolves.
+**Exit criterion:** M1's — the tag is published, and `pip install
+planlint==0.3.0` in a fresh venv runs `validate --fail-on ERROR` on this
+repository with exit 0.
 
 **Failure mode:** tag without the publisher → the Action pin starts working,
 PyPI still 404s, the release workflow is red. That is a half-product. Do
-steps 2–6 in one sitting.
+steps (2)–(7) in one sitting.
+
+**Interim window.** Between the merge of the version bump and the tag, the
+README's `git+` install still points at the pre-bump commit and reports
+`planlint 0.2.0`, which the skill's `planlint-min-version` (0.3.0) refuses;
+the composite Action, installing from its own checkout, is unaffected. If the
+sitting will slip, the option is one follow-up commit on `main` that points
+the README's `git+` line at the merge SHA — a later commit can name the merge
+commit — and the tag then goes on that commit.
 
 **First foreign CI adopter (after the tag, or on the SHA until then).** Copy
 `templates/spec-gate.yml` into `ianshank/Agents` at `fail-on: ERROR`. A live
@@ -151,7 +185,9 @@ gate on `Mouse-Droid-AGI` (45 ERROR; unstable default branch) or
 follow-up in Agents, not here: eval-corpus-plan D6 — `planlint validate
 --fail-on ERROR` as the objective grader for `openspec-quality-plan` /
 `openspec-peer-review`, paired with `detect` so exit 2 is not conflated
-with fail.
+with fail. The template's own-action ref is `@v0.3.0` once step (8) lands.
+
+---
 
 ## 4. Phase 1 — in-repo slices
 

@@ -59,13 +59,15 @@ a local net before the round-trip to CI.
 | `security` | push + PR | gitleaks + no-hardcoded-thresholds (hard) |
 | `coverage-tools` (PYTHON_DEFAULT) | push + PR | `make coverage-tools` — the `tools/` gate scripts against their own floors, `[tool.specgraph] tools_*_fail_under` (hard) |
 | `docs` | push + PR | `make docs-check` (hard) |
-| `release` (separate workflow) | `v*` tag | `make pre-pr`, then a clean-venv smoke test of the `planlint` console script, then trusted publishing to PyPI |
+| `release` (separate workflow) | `v*` tag | `make pre-pr`, then a clean-venv smoke test of the `planlint` console script, then trusted publishing to PyPI, which uploads PEP 740 attestations for both files |
 
 The workflow holds itself to the posture the gates inside it enforce
 (`harden-ci-workflows`; `tests/test_workflow_hardening.py` is the guard).
-Every third-party action sits at or above a per-action major floor in
-`pyproject.toml` (`[tool.specgraph.action_major_floors]`), a ratchet that a
-bump never edits and only a regression trips -- including every copy sliding
+Every third-party action is pinned to a commit SHA with its release tag in a
+trailing comment, every copy of one action must agree on both, and each sits
+at or above a per-action major floor in `pyproject.toml`
+(`[tool.specgraph.action_major_floors]`) read from that tag -- a ratchet that
+a bump never edits and only a regression trips, including every copy sliding
 back together, which an agreement check alone cannot see.
 Every job runs with a read-only token: `ci.yml` declares `permissions:
 contents: read` at the top, and a job widens only in its own block, under a
@@ -222,7 +224,7 @@ not?). `evaluate_tree()` stays two parallel blocks rather than a registry
 for two instances; revisit that only if a third whole-tree rule arrives
 (`DEC-AD-003`).
 
-## Releasing a skill change
+## Releasing
 
 The `.claude-plugin/` manifests carry a `version`, generated from
 `openspec_graph.__version__` by `make skill-manifests`. That number is not
@@ -244,6 +246,22 @@ back to the resolved commit sha — was rejected: the manifests are pinned to th
 package version by `AC-SD-7`, and releases here are already tag-driven, so a
 sha-tracking plugin would refresh on every unrelated commit to `main` while the
 distribution it invokes stayed put.
+
+The release checklist, in order (`prepare-release-0-3-0`): edit `__version__`
+in `openspec_graph/__init__.py`; run `make skill-manifests`; run `make test`
+and follow its failures, which name every remaining hand edit --
+`test_skill_metadata_version_matches_the_package`,
+`test_ci_template_pins_the_floor_the_skill_enforces` and
+`test_compatibility_prose_matches_the_declared_minimum` for the three SKILL.md
+fields, `test_every_changelog_version_links_to_its_release_tag` for the
+changelog section and its link, and
+`test_every_copyable_tag_ref_names_the_current_version` for every copyable tag
+ref in the adopter corpus; then the hand edits no test names -- the SKILL.md
+"Wiring it into CI" prose and the `version` example in
+`.github/actions/planlint/action.yml`; then the changelog cut (the
+`[Unreleased]` body moves verbatim under `## [X.Y.Z] — <date>`, the date being
+the day the tag is pushed) and the runbook in `docs/distribution-plan.md` §3.
+A future bump is one literal, one regeneration and one suite run.
 
 ## Adding a new pure derived-output module
 

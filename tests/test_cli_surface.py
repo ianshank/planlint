@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from openspec_graph import __version__
 from openspec_graph.cli import build_parser, main, main_deprecated
 from tests import support
 from tests.support import normalize_root, run_cli, write_spec
@@ -479,3 +480,23 @@ def fixtures() -> dict[str, Path]:
 @pytest.fixture
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def test_deprecated_alias_names_its_removal_version(repo: Path, fixtures: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
+    """The alias warning states its window, not just that one exists (R-REL-7).
+
+    The window is the minimum `docs/policies.md` states: warns through the
+    current minor series, removable from the next minor. Both are derived from
+    `__version__` so the assertion follows the release rather than a literal.
+    """
+    (repo / "Makefile").write_text((fixtures["makefile"]).read_text())
+    write_spec(repo, "c1", "cap", (fixtures["good_harness"]).read_text())
+    rc = main_deprecated(["--target", str(repo), "validate", "--fail-on", "ERROR"])
+    assert rc == 0, "clean repo must exit 0 through the alias"
+    err = capsys.readouterr().err
+    major, minor, _ = __version__.split(".")
+    series, removal = f"{major}.{minor}.x", f"{major}.{int(minor) + 1}.0"
+    assert "is deprecated; use `planlint`" in err, "the existing warning text must survive"
+    assert series in err and removal in err, (
+        f"the alias warning must name its window ({series}) and removal version ({removal}); got {err!r}"
+    )

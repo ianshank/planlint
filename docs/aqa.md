@@ -37,12 +37,14 @@ coverage floor or tool-version pin is re-introduced into the Makefile or
 workflow (rule G003 / AC-EH-6).
 
 What is *not* externalized and is intentional: GitHub Action versions
-(`actions/checkout@v7`), the Python version matrix, and the Docker base image
+(each a commit SHA with its release tag in a trailing comment), the Python
+version matrix, and the Docker base image
 (`python:3.12-slim`) are CI/infrastructure pins, not quality thresholds — they
 are not in scope of the no-hardcoded-thresholds gate. Two of them are held by
 tests instead: every third-party action sits at or above a per-action major
-floor in `pyproject.toml` (`[tool.specgraph.action_major_floors]`, a ratchet a
-bump never edits), and the Dockerfile's base tag must equal the workflows'
+floor in `pyproject.toml` (`[tool.specgraph.action_major_floors]`, read from
+the release tag in the pin's comment; a ratchet a bump never edits), and the
+Dockerfile's base tag must equal the workflows'
 `PYTHON_DEFAULT` — both in `tests/test_workflow_hardening.py`.
 
 A missing floor or uninstrumented source is a **misconfiguration**, not a skip:

@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
@@ -393,3 +394,95 @@ def test_the_adopter_corpus_includes_the_composite_action() -> None:
 
     assert ".github/actions/planlint/action.yml" in names, sorted(names)
     assert ".pre-commit-hooks.yaml" in names, sorted(names)
+
+
+# --- copyable tag references (prepare-release-0-3-0, R-REL-8) ----------------
+
+#: A tag a reader would paste: a free-standing `@vX.Y.Z` (not the tail of a
+#: third-party `owner/repo@vX.Y.Z`, whose `@` follows a word character), this
+#: repository's own action at a tag, or a pre-commit `rev:`. Anchored on the
+#: left so `some/action@v7.0.1` is never read as this project's tag
+#: (DEC-REL-004).
+_TAG_REF = re.compile(
+    r"(?<![\w/.-])@v\d+\.\d+\.\d+"
+    r"|ianshank/planlint\S*@v\d+\.\d+\.\d+"
+    r"|rev:\s*v\d+\.\d+\.\d+"
+)
+_TAG_VERSION = re.compile(r"v\d+\.\d+\.\d+$")
+
+
+def _display(path: Path) -> str:
+    try:
+        return path.relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def _copyable_tag_refs(paths: Iterable[Path]) -> list[tuple[Path, int, str]]:
+    """``(path, line number, token)`` for every copyable tag reference in ``paths``."""
+    return [
+        (path, number, match.group(0))
+        for path in paths
+        for number, line in _lines(path)
+        for match in _TAG_REF.finditer(line)
+    ]
+
+
+def _stale_tag_refs(refs: Iterable[tuple[Path, int, str]], version: str) -> list[str]:
+    """Every token whose version is not ``v<version>``, as ``path:line token``."""
+    expected = f"v{version}"
+    offenders: list[str] = []
+    for path, number, token in refs:
+        found = _TAG_VERSION.search(token)
+        assert found, f"{_display(path)}:{number} {token!r} matched the tag pattern without a version"
+        if found.group(0) != expected:
+            offenders.append(f"{_display(path)}:{number} {token}")
+    return offenders
+
+
+def _assert_tag_refs_present(refs: list[tuple[Path, int, str]], paths: Iterable[Path]) -> None:
+    """The presence floor: a corpus with no tag reference makes the scan vacuous."""
+    assert refs, (
+        f"no copyable tag reference found in {[_display(p) for p in paths]}; the pattern "
+        "or the corpus has drifted and the version check below would pass on nothing"
+    )
+
+
+def test_every_copyable_tag_ref_names_the_current_version() -> None:
+    """Every `@v…`, own-action tag and `rev: v…` a reader could paste is the package's version.
+
+    The release train's recurring defect: `__version__` moves and the copyable
+    refs do not, so an adopter pins a tag that does not exist or a release that
+    is one behind. `CHANGELOG.md` is excluded because its sections are a dated
+    record and every old tag in it is correct where it stands.
+    """
+    paths = [p for p in ADOPTER_FILES if p != CHANGELOG]
+    refs = _copyable_tag_refs(paths)
+    _assert_tag_refs_present(refs, paths)
+    stale = _stale_tag_refs(refs, __version__)
+    assert not stale, (
+        f"{len(stale)} copyable tag reference(s) do not name v{__version__} "
+        f"(path:line token):\n  " + "\n  ".join(stale)
+    )
+
+
+def test_a_stale_tag_ref_is_named_with_file_and_line(tmp_path: Path) -> None:
+    """The guard above, shown red on a planted corpus and quiet on a third-party tag."""
+    stale = tmp_path / "stale.md"
+    stale.write_text("intro\n\nuses: ianshank/planlint/.github/actions/planlint@v0.2.0\n", encoding="utf-8")
+    offenders = _stale_tag_refs(_copyable_tag_refs([stale]), __version__)
+    assert offenders == [f"{stale.as_posix()}:3 ianshank/planlint/.github/actions/planlint@v0.2.0"], offenders
+
+    empty = tmp_path / "empty.md"
+    empty.write_text("no tag here\n", encoding="utf-8")
+    with pytest.raises(AssertionError, match="no copyable tag reference"):
+        _assert_tag_refs_present(_copyable_tag_refs([empty]), [empty])
+
+    third_party = tmp_path / "third-party.yml"
+    third_party.write_text("      - uses: some/action@v7.0.1\n", encoding="utf-8")
+    assert _copyable_tag_refs([third_party]) == [], (
+        "a third-party owner/repo@vX.Y.Z must not be read as this project's tag"
+    )
+    current = tmp_path / "current.yaml"
+    current.write_text(f"#       rev: v{__version__}\n", encoding="utf-8")
+    assert _stale_tag_refs(_copyable_tag_refs([current]), __version__) == []

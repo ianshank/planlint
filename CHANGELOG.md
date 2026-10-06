@@ -5,6 +5,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-07
+
+> `v0.3.0` is the first tag pushed under the `planlint` name and the first
+> release published to PyPI. `v0.2.0` was never tagged: the section below
+> records the version that existed in the tree from 2026-09-12 and was
+> installable from git by commit. Every entry under this heading sat under
+> Unreleased until the tag — milestones M0 and M1 of the October 2026
+> reflection plan included — and the deprecation window stated under
+> `Deprecated` follows the rule in `docs/policies.md`.
+
 ### Changed — the CI workflows now hold themselves to their own gates (M0)
 
 - **`harden-ci-workflows`.** Every third-party action in `.github/workflows/`,
@@ -42,6 +52,49 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   non-propagating logger directly; the one test whose records depended on
   test order now passes alone.
 
+### Changed — every third-party action pinned to a commit (M1)
+
+- **`pin-actions-by-sha`.** Every third-party `uses:` in both workflows, the
+  composite action, the adopter template (and its copy under the skill) and
+  the README snippet is a 40-hex commit with its release tag in a trailing
+  comment (`actions/checkout@3d3c42e5… # v7.0.1`); `pypa/gh-action-pypi-publish`
+  moves from the `release/v1` branch to the v1.14.2 tag's commit, which that
+  branch pointed at when pinned. `tests/test_workflow_hardening.py` holds the
+  shape (the guard that forbade a SHA is gone; one requiring the pinned shape
+  and one naming a bare SHA replace it), reads the per-action major floor
+  from the comment, and the floor table gains a row for the publisher.
+  `.github/dependabot.yml`'s two `github-actions` entries become one with
+  `directories:`, so a bump is one grouped pull request for every copy under
+  `.github/`; the template, its skill copy and the README are carried by
+  hand, which the agreement guard's message now says. Supersedes
+  `harden-ci-workflows`' C-HCW-3 and AC-HCW-24, amended in place on the same
+  branch, and closes the deferral the "Added — Dependabot" entry below
+  records — whose row lives in `docs/next-steps.md`, not
+  `docs/distribution-plan.md`.
+
+### Added — the working policies, written down once (M1)
+
+- **`docs/policies.md`** is the document of record for how this repository
+  is versioned and worked on: Semantic Versioning read for a 0.x package (a
+  minor is the only release that may remove or break; a patch never does);
+  one integer `schema_version` per stored machine-readable output (five named;
+  the read-only listings carry none), bumped only in a
+  release that may break and never for an additive key; the deprecation
+  window as a minimum — announced under `Deprecated` in the 0.Y.0 notes
+  naming the removal version, working and warning through 0.Y.x, removable
+  from 0.(Y+1).0 — with `specgraph`, `detect --json` and Python 3.10 as its
+  three instances; a number in a spec, decision, plan or document of record
+  names the command that regenerates it, `make stage-citations` for every
+  count of cited stages; and one agent per pull-request thread, merge over
+  force-push. Pointed at in one sentence each from `openspec/AGENTS.md`,
+  `docs/AGENTS.md` and `docs/agents-skills-harness.md`, listed in
+  `tools/check_docs.py`'s `REQUIRED_DOCS`, the README and `llms.txt`.
+  `tests/test_policies_doc.py` reads the document rather than a copy: every
+  level-two heading is indexed and every index anchor is a heading, every
+  `policies.md#<anchor>` pointer lands on a heading and resolves from its
+  own directory, and every `make` target it cites exists — with planted
+  defects showing each check fire (`write-down-policies`).
+
 ### Deprecated
 
 - **Python 3.10 support ends in 0.4.0.** PEP 619 ends upstream support for
@@ -50,6 +103,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   3.11). Nothing changes before that release: the 3.10 leg stays in the
   matrix, and `requires-python = ">=3.10"` and `[tool.mypy] python_version =
   "3.10"` are unchanged.
+- **The `specgraph` alias is removed in 0.4.0.** It warns to stderr through
+  every 0.3.x release and delegates to `planlint` with the exit code
+  preserved; in 0.4.0 the entry point goes. The waiver syntax
+  (`<!-- specgraph:allow ... -->`), the `openspec/specgraph.json` config file
+  and the `[tool.specgraph]` section are stable identifiers and are not
+  affected. The general rule — the minimum notice a deprecation gives — is in
+  `docs/policies.md`.
 
 ### Added — a peer-review deep dive, and three reviewed change packages
 
@@ -414,6 +474,11 @@ gated by `make coverage-tools` against `[tool.specgraph] tools_line_fail_under`
 > runs. This section includes every change that sat under Unreleased until the
 > tag (through PR #24): `report`, the four-way Action contract, SARIF, `delta`,
 > the labelled detect corpus, matcher precision, and the findings envelope.
+> This section's date is the day it was folded from the earlier `2026-09-02`
+> heading (PR #25), not a tag date: the `v0.2.0` tag was never pushed, so the
+> first public tag the release-train honesty entry below promised became
+> `v0.3.0` (the section above), and the `[0.2.0]` link definition is kept for
+> the file's one-link-per-version convention and does not resolve.
 
 ### Added — finding line hits and named Action scope (`add-finding-line-hits`)
 
@@ -1473,5 +1538,7 @@ gated by `make coverage-tools` against `[tool.specgraph] tools_line_fail_under`
 - GitHub Actions CI: test matrix (3.10–3.13), self-validate hard gate,
   graph-diff regression gate on PRs.
 
+[Unreleased]: https://github.com/ianshank/planlint/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/ianshank/planlint/releases/tag/v0.3.0
 [0.2.0]: https://github.com/ianshank/planlint/releases/tag/v0.2.0
 [0.1.0]: https://github.com/ianshank/planlint/releases/tag/v0.1.0

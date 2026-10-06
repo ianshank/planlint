@@ -140,3 +140,10 @@ repository's real targets by G004's own matcher.
 [`agent-directory-wiring-plan.md`](agent-directory-wiring-plan.md) is the plan
 they came from, kept for its record of what it got wrong and of the one claim
 it could not test.
+
+## Where the working policies live
+
+How this repository is worked on — one agent per review thread, counts that
+name the command that produced them, the version and deprecation window — is
+policy, written once in [policies.md](policies.md#one-agent-per-thread) and
+pointed at from here.

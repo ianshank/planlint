@@ -168,7 +168,8 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   in `pyproject.toml`, set to the major this change lands and only ever
   raised. A ref below its floor, and a major-tagged action with no floor,
   MUST fail the suite naming the file and line. A branch ref has no major
-  and is outside this rule.
+  and is outside this rule. `pin-actions-by-sha` applies the floor to the
+  release tag in a pin's comment.
 - C-HCW-1: No job in any workflow MAY be renamed or removed, no `make` target
   MAY change what it does, and the composite action's inputs, outputs and
   defaults MUST be unchanged apart from its two `uses:` refs. Every existing
@@ -183,6 +184,8 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   the README is owned by
   `tests/test_adopter_urls.py::test_ci_template_pins_the_floor_the_skill_enforces`
   and `docs/distribution-plan.md`, and is not this package's to move.
+  Superseded by `pin-actions-by-sha`, which pins every third-party action to
+  a commit.
 - C-HCW-4: No version bump, tag, or `requires-python` change. The 3.10 leg
   stays in the matrix and `[tool.mypy] python_version` stays `"3.10"`.
 - C-HCW-5: The Dockerfile stays unbuilt in CI. The `docker build` check is a
@@ -513,13 +516,11 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   _Verified by:_ `pytest -k "test_ci_job_blocks_returns_empty_when_jobs_key_is_absent or test_ci_job_blocks_ignores_comments_mentioning_jobs"` · stage: `make test`
 
 - [x] **AC-HCW-24:** the rule set is unchanged, the Makefile is unedited, and
-  no third-party action ref is a commit SHA — this repository's own action
-  ref in the templates and the README stays the SHA `tests/test_adopter_urls.py`
-  requires; `pypa/gh-action-pypi-publish@release/v1` is untouched. (C-HCW-3,
-  DEC-HCW-001, DEC-HCW-012)
-  _Verified by:_ `pytest -k "test_rule_set_matches_baseline or test_no_third_party_action_ref_is_a_commit_sha or test_the_own_action_ref_is_exempt_from_the_sha_check"` · stage: `make test`
+  this repository's own action ref stays exempt from the third-party guards.
+  (C-HCW-3, DEC-HCW-001, DEC-HCW-012)
+  _Verified by:_ `pytest -k "test_rule_set_matches_baseline or test_the_own_action_ref_is_exempt_from_the_sha_check"` · stage: `make test`
 
-- [ ] **AC-HCW-25:** the first CI run on the branch carries no "Node.js 20 is
+- [x] **AC-HCW-25:** the first CI run on the branch carries no "Node.js 20 is
   deprecated" annotation on any job, every job finishes inside its
   `timeout-minutes`, the artifact uploads in `self-validate`, `graph-diff`
   and `action-contract` succeed under `contents: read`, and the `security`
@@ -529,7 +530,7 @@ coverage-floor literal (line 99) and a `ruff==`/`mypy==`/`pytest==` pin (line
   R-HCW-4, R-HCW-5, R-HCW-6, DEC-HCW-002, DEC-HCW-013)
   _Verified by:_ the run's annotations and job log, with the run number recorded in `tasks.md` · stage: `make pre-pr`
 
-- [ ] **AC-HCW-26:** a second push to the same pull request cancels the first
+- [x] **AC-HCW-26:** a second push to the same pull request cancels the first
   run's in-progress jobs, and a run for a push to `main` is neither cancelled
   nor left pending and superseded by a later push — each `main` push has its
   own group. (R-HCW-7, DEC-HCW-003, DEC-HCW-013)

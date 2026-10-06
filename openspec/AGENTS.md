@@ -35,6 +35,11 @@ Four ways a package fails that are not obvious from reading a good one:
   parser takes the first one in the block, so H001 fires on a criterion that
   does cite a stage. Write "verification line" in prose instead.
 
+A number written into a package — a spec count, a test count, a line budget —
+names the command that regenerates it, so the next reader re-runs it rather
+than trusts it; the policy is
+[docs/policies.md](../docs/policies.md#count-cites-a-command).
+
 The `spec.md` — not just the `proposal.md` — has to match what shipped. This
 repository has already merged one proposal describing behaviour the code did
 not have; drafting against the diff is the habit that prevents it.
