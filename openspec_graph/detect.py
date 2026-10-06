@@ -637,6 +637,13 @@ def filter_by_change(spec_files: Sequence[Path], change: str) -> list[Path]:
     ]
 
 
+# How long the one `git rev-parse HEAD` call may take before it is treated as
+# "sha unavailable". Named rather than inlined: it bounds a subprocess against
+# a repository planlint does not own, and a reader looking for every external
+# wait should find it by name. Not a quality threshold, so not configuration.
+GIT_TIMEOUT_SECONDS = 5
+
+
 def _current_sha(root: Path) -> str | None:
     """The target repo's current commit sha, or ``None`` if it can't be
     determined -- the only place ``subprocess`` is used anywhere in
@@ -662,16 +669,26 @@ def _current_sha(root: Path) -> str | None:
             cwd=root,
             capture_output=True,
             text=True,
-            timeout=5,
+            timeout=GIT_TIMEOUT_SECONDS,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except OSError as exc:
+        # The four "unknown" causes fold to one verdict, but not to one log
+        # line: W001's "current commit sha could not be determined" is only
+        # actionable once you know which of these it was.
+        logger.debug("current sha: could not run git (%s)", exc.__class__.__name__)
+        return None
+    except subprocess.TimeoutExpired:
+        logger.debug("current sha: git rev-parse exceeded %ss", GIT_TIMEOUT_SECONDS)
         return None
     if result.returncode != 0:
+        logger.debug("current sha: git rev-parse exited %d (not a git checkout?)", result.returncode)
         return None
     sha = result.stdout.strip()
     if not re.fullmatch(r"[0-9a-fA-F]{40}", sha):
+        logger.debug("current sha: unexpected git output %r", sha[:60])
         return None
+    logger.debug("current sha: %s", sha)
     return sha
 
 

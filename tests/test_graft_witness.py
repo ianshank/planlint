@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 import subprocess
 import textwrap
 from pathlib import Path
@@ -17,7 +18,7 @@ from tests.graft_support import (
     GOOD_HARNESS,
     GOOD_UPSTREAM,
 )
-from tests.support import write_spec
+from tests.support import run_cli, write_spec
 
 # --- witness mode data model (CP-WM) ----------------------------------------
 
@@ -478,3 +479,82 @@ def test_validate_require_witness_passes_once_a_matching_fresh_witness_is_record
     assert main(["--target", str(repo), "validate", "--require-witness"]) == 0
 
 
+
+
+# --- debug logging: why the current sha is unknown ----------------------------
+#
+# Every failure of the one `git rev-parse HEAD` call folds to ``None``, which
+# W001 reports as "the current commit sha could not be determined". The verdict
+# stays one case; the log line says which of four it was.
+
+
+def _capture_detect(caplog: pytest.LogCaptureFixture) -> logging.Logger:
+    target = logging.getLogger("planlint.detect")
+    target.addHandler(caplog.handler)
+    caplog.set_level(logging.DEBUG, logger="planlint.detect")
+    return target
+
+
+@pytest.mark.parametrize(
+    ("label", "outcome", "expected"),
+    [
+        ("git-missing", FileNotFoundError(2, "No such file"), "could not run git (FileNotFoundError)"),
+        ("timeout", subprocess.TimeoutExpired(cmd="git", timeout=detect.GIT_TIMEOUT_SECONDS), "exceeded"),
+        ("not-a-repo", subprocess.CompletedProcess(["git"], 128, "", "fatal"), "exited 128"),
+        ("garbage", subprocess.CompletedProcess(["git"], 0, "not-a-sha\n", ""), "unexpected git output"),
+    ],
+)
+def test_each_unknown_sha_cause_is_logged_and_still_returns_none(
+    repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    label: str,
+    outcome: object,
+    expected: str,
+) -> None:
+    def fake_run(*_args: object, **kwargs: object) -> object:
+        assert kwargs.get("timeout") == detect.GIT_TIMEOUT_SECONDS
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(detect.subprocess, "run", fake_run)
+    target = _capture_detect(caplog)
+    try:
+        assert detect._current_sha(repo) is None, label
+    finally:
+        target.removeHandler(caplog.handler)
+    assert any(expected in r.getMessage() for r in caplog.records), [r.getMessage() for r in caplog.records]
+
+
+def test_a_resolved_sha_is_logged(repo: Path, caplog: pytest.LogCaptureFixture) -> None:
+    _git_init_and_commit(repo)
+    target = _capture_detect(caplog)
+    try:
+        sha = detect._current_sha(repo)
+    finally:
+        target.removeHandler(caplog.handler)
+    assert sha is not None
+    assert any(r.getMessage() == f"current sha: {sha}" for r in caplog.records)
+
+
+def test_verbose_validate_names_a_dropped_witness_on_stderr_and_keeps_stdout_clean(repo: Path) -> None:
+    """Integration: the reason reaches an operator through ``--verbose``, on
+    stderr only; the verdict is the same fail-closed W001 as without it, and
+    the machine-readable stdout carries no log line."""
+    write_spec(repo, "c1", "cap1", GOOD_HARNESS)
+    _git_init_and_commit(repo)
+    store = repo / witness.WITNESS_DIR_NAME
+    store.mkdir(parents=True)
+    bad = b'{"schema_version": 99}'
+    name = f"{witness.compute_hash(bad)}.json"
+    (store / name).write_bytes(bad)
+
+    quiet = run_cli(repo, "validate", "--require-witness", "--format", "json")
+    loud = run_cli(repo, "-v", "validate", "--require-witness", "--format", "json")
+
+    assert loud.returncode == quiet.returncode == 1
+    assert json.loads(loud.stdout)["findings"] == json.loads(quiet.stdout)["findings"]
+    assert any(f["rule"] == "W001" for f in json.loads(loud.stdout)["findings"])
+    assert f"skipping {name}: schema_version 99 is not" in loud.stderr
+    assert "skipping" not in quiet.stderr

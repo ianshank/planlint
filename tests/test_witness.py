@@ -8,9 +8,12 @@ exercises the git-dependent _current_sha() lazy wiring).
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+import logging
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -324,3 +327,129 @@ def test_write_witness_reraises_the_original_error_not_the_cleanup_one(
     with pytest.raises(OSError) as caught:
         witness.write_witness(tmp_path, record)
     assert "No space left on device" in str(caught.value)
+
+
+# --- debug logging: why a record was skipped ---------------------------------
+#
+# The loader fails closed by dropping a bad record. That is right for the
+# verdict and opaque for whoever is debugging a CI run that reports W001
+# "never witnessed" against a store that visibly holds files, so every skip
+# names its file and cause at DEBUG. Captured by attaching to the emitting
+# logger directly: ``log.configure()`` sets ``planlint.propagate = False``, so
+# records never reach the root handler caplog installs (see test_repo_io.py).
+
+
+@contextlib.contextmanager
+def _captured(caplog: pytest.LogCaptureFixture, name: str = "planlint.witness") -> Iterator[None]:
+    target = logging.getLogger(name)
+    target.addHandler(caplog.handler)
+    try:
+        with caplog.at_level(logging.DEBUG, logger=name):
+            yield
+    finally:
+        target.removeHandler(caplog.handler)
+
+
+def _messages(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [record.getMessage() for record in caplog.records]
+
+
+_GOOD = {
+    "schema_version": witness.WITNESS_SCHEMA_VERSION,
+    "stage": "test",
+    "exit_code": 0,
+    "coverage": 97.5,
+    "sha": SHA,
+    "recorded_at": "2026-01-01T00:00:00Z",
+}
+
+
+@pytest.mark.parametrize(
+    ("label", "record", "reason"),
+    [
+        ("wrong-schema", {**_GOOD, "schema_version": 2}, "schema_version 2 is not"),
+        ("bool-schema", {**_GOOD, "schema_version": True}, "schema_version True is not"),
+        ("nan-coverage", {**_GOOD, "coverage": float("nan")}, "coverage nan is not a finite number"),
+        ("bool-exit", {**_GOOD, "exit_code": False}, "exit_code False is not an integer"),
+        ("missing-stage", {k: v for k, v in _GOOD.items() if k != "stage"}, "missing required field 'stage'"),
+    ],
+)
+def test_each_skipped_record_logs_its_file_and_reason(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, label: str, record: dict[str, object], reason: str
+) -> None:
+    """Non-success: a dropped record is still dropped, and now says why."""
+    path = _write_raw(tmp_path, record)
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+    lines = _messages(caplog)
+    assert any(path.name in line and reason in line for line in lines), (label, lines)
+    assert any("loaded 0 of 1 record(s)" in line for line in lines), lines
+
+
+def test_a_hash_mismatch_is_logged_as_such(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    directory = tmp_path / witness.WITNESS_DIR_NAME
+    directory.mkdir(parents=True)
+    forged = directory / f"{'0' * 64}.json"
+    forged.write_bytes(witness.serialize(_witness()))
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+    assert any(
+        forged.name in line and "does not match the sha256" in line for line in _messages(caplog)
+    )
+
+
+@pytest.mark.parametrize(
+    ("payload", "reason"),
+    [(b"{not json", "not valid UTF-8 JSON"), (b"\xff\xfe\x00", "not valid UTF-8 JSON"), (b"[1, 2]", "not an object")],
+)
+def test_undecodable_and_non_object_records_are_logged(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, payload: bytes, reason: str
+) -> None:
+    directory = tmp_path / witness.WITNESS_DIR_NAME
+    directory.mkdir(parents=True)
+    (directory / f"{witness.compute_hash(payload)}.json").write_bytes(payload)
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+    assert any(reason in line for line in _messages(caplog)), _messages(caplog)
+
+
+def test_an_absent_store_and_a_loaded_record_are_both_logged(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+        recorded = witness.write_witness(tmp_path, _witness())
+        assert witness.load_witnesses(tmp_path) == (_witness(),)
+    lines = _messages(caplog)
+    assert any("no store at" in line for line in lines), lines
+    assert any("recorded stage 'test'" in line and recorded.name in line for line in lines), lines
+    assert any("loaded 1 of 1 record(s)" in line for line in lines), lines
+
+
+def test_skip_logging_is_silent_at_the_default_level(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The default run stays quiet: nothing is emitted above DEBUG."""
+    _write_raw(tmp_path, {**_GOOD, "schema_version": 2})
+    target = logging.getLogger("planlint.witness")
+    target.addHandler(caplog.handler)
+    try:
+        with caplog.at_level(logging.WARNING, logger="planlint.witness"):
+            witness.load_witnesses(tmp_path)
+    finally:
+        target.removeHandler(caplog.handler)
+    assert caplog.records == []
+
+
+def test_an_oversized_untrusted_value_is_truncated_in_the_log(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Non-success: a record's values are untrusted, so one huge field must not
+    flood a CI log, and an embedded newline must not forge a second line."""
+    path = _write_raw(tmp_path, {**_GOOD, "exit_code": "x" * 10_000 + "\n::error::forged"})
+    with _captured(caplog):
+        assert witness.load_witnesses(tmp_path) == ()
+    line = next(m for m in _messages(caplog) if path.name in m)
+    assert len(line) < 300, len(line)
+    assert "\n" not in line
+    assert line.endswith("... is not an integer"), line

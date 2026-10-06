@@ -27,6 +27,7 @@ import contextlib
 import dataclasses
 import hashlib
 import json
+import logging
 import math
 import os
 import tempfile
@@ -35,6 +36,15 @@ from pathlib import Path
 
 WITNESS_SCHEMA_VERSION = 1
 WITNESS_DIR_NAME = ".planlint/witnesses"
+
+# Child of ``planlint``; ``log.configure()`` owns the handler (DEC-LH-005).
+# The loader fails closed by *skipping* a bad record, which is right for the
+# verdict and opaque for the person debugging it: a CI run that reports W001
+# "never witnessed" against a store that visibly holds files needs to say,
+# under ``--verbose``, which file was dropped and why. Every skip below logs
+# its reason at DEBUG, so the default run stays quiet and the verdict is
+# unchanged (R-WM-9: still never raises, still never a pass).
+logger = logging.getLogger("planlint.witness")
 
 __all__ = [
     "WITNESS_DIR_NAME",
@@ -116,15 +126,35 @@ def write_witness(root: Path, witness: Witness) -> Path:
         with contextlib.suppress(OSError):
             os.unlink(tmp_name)
         raise
+    logger.debug("witness: recorded stage %r at %s as %s", witness.stage, witness.sha, target.name)
     return target
+
+
+def _skip(path: Path, reason: str) -> None:
+    """One DEBUG line per dropped record, naming the file and the cause."""
+    logger.debug("witness: skipping %s: %s", path.name, reason)
+
+
+# A record's values are untrusted: a store is whatever an artifact download
+# put there. ``repr`` already escapes newlines and control characters, so a
+# value cannot forge a log line; this also bounds its length, so one oversized
+# field cannot flood a CI log.
+_BRIEF_LIMIT = 60
+
+
+def _brief(value: object) -> str:
+    text = repr(value)
+    return text if len(text) <= _BRIEF_LIMIT else f"{text[:_BRIEF_LIMIT]}..."
 
 
 def _load_one(path: Path) -> Witness | None:
     try:
         payload = path.read_bytes()
-    except OSError:
+    except OSError as exc:
+        _skip(path, f"unreadable ({exc.__class__.__name__})")
         return None
     if compute_hash(payload) != path.stem:
+        _skip(path, "content does not match the sha256 in its filename")
         return None
     try:
         data = json.loads(payload)
@@ -134,21 +164,26 @@ def _load_one(path: Path) -> Witness | None:
         # JSONDecodeError subclass) directly from that step, before json's
         # own parser ever runs. Must not escape load_witnesses()'s "never
         # raises" contract (R-WM-9).
+        _skip(path, "not valid UTF-8 JSON")
         return None
     if not isinstance(data, dict):
+        _skip(path, f"top level is {type(data).__name__}, not an object")
         return None
     schema_version = data.get("schema_version")
     # bool is an int subclass in Python (True == 1) -- schema_version: true
     # must not silently pass this check as if it were the real value 1.
     if isinstance(schema_version, bool) or schema_version != WITNESS_SCHEMA_VERSION:
+        _skip(path, f"schema_version {_brief(schema_version)} is not {WITNESS_SCHEMA_VERSION}")
         return None
     coverage = data.get("coverage")
     if coverage is not None:
         if isinstance(coverage, bool) or not isinstance(coverage, (int, float)) or not math.isfinite(coverage):
+            _skip(path, f"coverage {_brief(coverage)} is not a finite number")
             return None
         coverage = float(coverage)
     exit_code = data.get("exit_code")
     if isinstance(exit_code, bool) or not isinstance(exit_code, int):
+        _skip(path, f"exit_code {_brief(exit_code)} is not an integer")
         return None
     try:
         return Witness(
@@ -159,7 +194,11 @@ def _load_one(path: Path) -> Witness | None:
             sha=str(data["sha"]),
             recorded_at=str(data["recorded_at"]),
         )
-    except (KeyError, TypeError, ValueError):
+    except KeyError as exc:
+        _skip(path, f"missing required field {_brief(exc.args[0])}")
+        return None
+    except (TypeError, ValueError) as exc:
+        _skip(path, f"malformed field ({exc.__class__.__name__})")
         return None
 
 
@@ -175,12 +214,17 @@ def load_witnesses(root: Path) -> tuple[Witness, ...]:
     """
     directory = root / WITNESS_DIR_NAME
     if not directory.is_dir():
+        logger.debug("witness: no store at %s", directory)
         return ()
     witnesses: list[Witness] = []
-    for path in sorted(directory.glob("*.json")):
+    candidates = sorted(directory.glob("*.json"))
+    for path in candidates:
         witness = _load_one(path)
         if witness is not None:
             witnesses.append(witness)
+    logger.debug(
+        "witness: loaded %d of %d record(s) from %s", len(witnesses), len(candidates), directory
+    )
     return tuple(witnesses)
 
 
