@@ -4,7 +4,7 @@
 
 Three rules this repository already lives by are written nowhere a reader
 would look for them, or are written in one directory's `AGENTS.md` and not
-the next. Every machine-readable output the tool emits announces an integer
+the next. Every machine-readable output a consumer keeps announces an integer
 `schema_version`, and the only statement of when that integer moves is a
 code comment beside one of the five declarations; nothing says what a bump
 means for a consumer, or in which kind of release it may happen. The

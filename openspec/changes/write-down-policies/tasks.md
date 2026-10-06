@@ -246,6 +246,13 @@ specs, `pre-pr` mentioned in 44 and verified by 11, `validate` mentioned in
   `### Deprecated` under `[Unreleased]` carries the Python 3.10 entry and
   the `specgraph` line this package wrote, once. The document matches the
   tree on the day it lands.
+  **Recorded (after review, PR #39):** two overclaims corrected in the
+  document and the spec — the schema rule scoped to the five outputs a
+  consumer keeps (`rules --json`, `graph --format json`, `waivers --format
+  json` and `detect --json` carry no integer), and the version described as
+  the canonical source with copies held equal by tests rather than as
+  "never restated"; the index bullet, `llms.txt`, the CHANGELOG entry and
+  DEC-POL-003 carry the same scope.
 - Confirm `openspec_graph/`, `skills/`, the `Makefile`,
   `tests/baseline_rules.json` and `README.md`'s rules table are absent from
   this package's diff, and that `tools/check_docs.py`'s diff is one list

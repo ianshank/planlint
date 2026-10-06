@@ -84,8 +84,9 @@ list.
   Semantic Versioning with `openspec_graph.__version__` as its one source;
   that while the major is 0 a minor release is the only release in which a
   surface may be removed or an output shape broken, and a patch release
-  never removes or breaks; that every machine-readable output carries its
-  own integer `schema_version`, declared beside the type whose serialization
+  never removes or breaks; that every machine-readable output a consumer
+  keeps — the five versioned envelopes, not the read-only listings — carries
+  its own integer `schema_version`, declared beside the type whose serialization
   it describes and independent of the package version; that a bump of that
   integer is a breaking change for every consumer of that output — a saved
   envelope the next `report` refuses with exit 2, a witness record the next
@@ -284,6 +285,17 @@ list.
   is the tool version, and a change to what planlint writes into it follows
   the package rule. Rejected: one shared schema integer; a schema integer
   on the SARIF output, which would version a standard this tool does not own.
+  Amended after review (Copilot on PR #39): the rule is scoped to the
+  outputs a consumer keeps — the five envelopes named — because `rules
+  --json`, `graph --format json`, `waivers --format json` and the
+  deprecated `detect --json` emit JSON with no planlint integer, as
+  projections of the tree at the moment of the call; the document says so
+  and files their shape under the package rule, so the claim matches the
+  CLI. The same review found "nothing restates it" false of the version —
+  SKILL.md's three fields and the generated manifests are copies held
+  equal by tests and `make skill-manifests` — and the document now says
+  that instead.
+
 - **DEC-POL-004:** the deprecation window is a minimum of one minor series,
   as the plan's W1.5 and W5 both assume and as `prepare-release-0-3-0`'s
   DEC-REL-005 states it — "a full minor version is the notice". Announced

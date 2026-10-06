@@ -1178,8 +1178,11 @@ def _publisher_step_declares(release_text: str, key: str, value: str) -> bool:
     """Whether the publish job's pypa/gh-action-pypi-publish step has ``key: value`` under ``with:``.
 
     Read from the comment-stripped job block, so a comment that merely mentions
-    the input satisfies nothing. Says nothing about the step's ``uses:`` ref,
-    which is the pin guards' to hold (DEC-REL-011).
+    the input satisfies nothing, and by indentation, so the input has to be a
+    direct child of the step's ``with:`` mapping: a same-named key beside
+    ``with:`` is one GitHub ignores and this guard must not credit. Says
+    nothing about the step's ``uses:`` ref, which is the pin guards' to hold
+    (DEC-REL-011).
     """
     jobs = workflow_job_blocks(release_text)
     publish = jobs.get("publish", "")
@@ -1188,10 +1191,21 @@ def _publisher_step_declares(release_text: str, key: str, value: str) -> bool:
     publisher = [step for step in steps if "pypa/gh-action-pypi-publish" in step]
     if len(publisher) != 1:
         return False
-    step = publisher[0]
-    has_with = re.search(r"^\s*with:\s*$", step, re.MULTILINE) is not None
-    has_input = re.search(rf"^\s*{re.escape(key)}:\s*{re.escape(value)}\s*$", step, re.MULTILINE) is not None
-    return has_with and has_input
+    lines = publisher[0].splitlines()
+    with_at = [i for i, line in enumerate(lines) if re.fullmatch(r"\s*with:\s*", line)]
+    if len(with_at) != 1:
+        return False
+    with_indent = len(lines[with_at[0]]) - len(lines[with_at[0]].lstrip())
+    wanted = re.compile(rf"\s*{re.escape(key)}:\s*{re.escape(value)}\s*")
+    for line in lines[with_at[0] + 1 :]:
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip())
+        if indent <= with_indent:
+            break  # the with: mapping ended; a later sibling key is not an input
+        if wanted.fullmatch(line):
+            return True
+    return False
 
 
 def test_publish_declares_attestations_explicitly() -> None:
@@ -1210,4 +1224,14 @@ def test_publish_declares_attestations_explicitly() -> None:
     planted = text.replace("          attestations: true", "          # attestations: true")
     assert not _publisher_step_declares(planted, "attestations", "true"), (
         "a commented-out input must not satisfy the guard"
+    )
+    # The key beside `with:` rather than under it: GitHub ignores it, and so
+    # must the guard, even though a `with:` block is present on the step.
+    sibling = text.replace(
+        "        with:\n          attestations: true",
+        "        attestations: true\n        with:\n          verbose: true",
+    )
+    assert "        attestations: true\n        with:" in sibling, "the planted shape was not applied"
+    assert not _publisher_step_declares(sibling, "attestations", "true"), (
+        "an input beside with: instead of under it must not satisfy the guard"
     )

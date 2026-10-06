@@ -291,7 +291,7 @@ does at them are listed under Milestone 4.
 - **Gate:** `make docs-check`, then `make thresholds` — both PASS on the
   finished tree.
 
-## Milestone 4 — Confirm, record, and hand off to the siblings
+## Milestone 4 — Confirm, record, and hand off to the siblings [DONE]
 
 - Re-point the stage-only verification lines in
   `specs/action-sha-pinning/spec.md` to the tests Milestone 1 named, now
@@ -368,6 +368,13 @@ does at them are listed under Milestone 4.
   each sibling lands, run the tree gate and
   `pytest -k test_skill_asset_matches_template` and record the exit codes
   here (AC-ASP-18).
+  **Recorded:** this package landed first inside the branch (`7d626ba`,
+  `b6b991d`), then `write-down-policies` (`428f6b7`), then
+  `prepare-release-0-3-0` (`31d7275`). After each sibling: `cmp
+  templates/spec-gate.yml skills/planlint-spec-governance/assets/spec-gate.yml`
+  silent, `pytest -k test_skill_asset_matches_template` passed, and
+  `planlint --target . validate --fail-on ERROR` exit 0 (49 specs, 0 error,
+  0 warn, 0 info) — at `428f6b7` and again at `31d7275`.
 - Record for the plan's M1 row, when `docs/reflection-plan-2026-10.md`
   merges: the publisher is pinned to the `v1.14.2` commit, which is also the
   `release/v1` head at pinning time, and its Docker payload still arrives

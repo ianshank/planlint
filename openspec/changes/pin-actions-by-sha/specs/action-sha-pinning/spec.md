@@ -570,7 +570,7 @@ the publisher's `uses:` line, and moves the CHANGELOG's `[Unreleased]` body.
   directory-watch guard's helper. (R-ASP-11, R-ASP-8)
   _Verified by:_ `pytest -k "test_a_plural_directories_entry_is_read_as_one_pair_per_directory or test_every_composite_action_directory_is_watched_by_dependabot"`, the omitted-directory half by stage until its planted test exists · stage: `make test`
 
-- [ ] **AC-ASP-18:** the package is merged before `write-down-policies` and
+- [x] **AC-ASP-18:** the package is merged before `write-down-policies` and
   `prepare-release-0-3-0`; after each later sibling lands, the template and
   its skill copy are byte-identical again and the whole tree validates
   clean. (R-ASP-12, DEC-ASP-012)

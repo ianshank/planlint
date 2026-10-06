@@ -16,7 +16,7 @@ time, in continuous integration and before a pull request — is
 [`hooks.md`](hooks.md)'s.
 
 - [Versioning and deprecation](#versioning-and-deprecation) — Semantic
-  Versioning read for a 0.x package, one `schema_version` integer per
+  Versioning read for a 0.x package, one `schema_version` integer per stored
   machine-readable output, and the minimum notice a deprecation gives
 - [Count cites a command](#count-cites-a-command) — a number written into a
   spec, a decision, a plan or a document of record names the command that
@@ -27,13 +27,18 @@ time, in continuous integration and before a pull request — is
 ## Versioning and deprecation
 
 **The package.** planlint follows Semantic Versioning 2.0.0, and
-`openspec_graph.__version__` is the one source of the version: `pyproject.toml`
-reads it, nothing restates it. While the major is 0, a minor release
+`openspec_graph.__version__` is the canonical source of the version:
+`pyproject.toml` reads it dynamically, and the copies that have to spell it —
+the three version fields of `skills/planlint-spec-governance/SKILL.md` and
+the generated `.claude-plugin/` manifests — are held equal to it by tests and
+by `make skill-manifests`, never edited on their own. While the major is 0, a
+minor release
 (0.Y.0) is the only release in which a user-facing surface may be removed or
 a machine-readable output's shape broken. A patch release (0.Y.Z, Z > 0) is a
 fix: it never removes a surface and never breaks an output.
 
-**The schema integers.** Every machine-readable output carries its own
+**The schema integers.** Every machine-readable output a consumer keeps —
+stores, diffs across runs or feeds back into the tool — carries its own
 integer `schema_version`, declared beside the type whose serialization it
 describes and independent of the package version. There are five: the
 `validate --json` findings envelope (`FINDINGS_SCHEMA_VERSION` in
@@ -41,7 +46,11 @@ describes and independent of the package version. There are five: the
 `openspec_graph/dialect_card.py`), the witness record
 (`WITNESS_SCHEMA_VERSION` in `openspec_graph/witness.py`), the card diff
 (`DELTA_SCHEMA_VERSION` in `openspec_graph/delta.py`) and the stage-citations
-report (`SCHEMA_VERSION` in `tools/stage_citations.py`). A bump of one of
+report (`SCHEMA_VERSION` in `tools/stage_citations.py`). The read-only
+listings — `rules --json`, `graph --format json`, `waivers --format json` and
+the deprecated `detect --json` — are projections of the tree at the moment
+of the call, carry no planlint integer, and change only under the package
+rule above. A bump of one of
 these integers is a breaking change for every consumer of that output: a
 saved findings envelope the next `report` refuses with exit 2, a witness
 record the next run skips rather than reads. So a bump lands only in a

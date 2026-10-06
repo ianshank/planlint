@@ -77,7 +77,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **`docs/policies.md`** is the document of record for how this repository
   is versioned and worked on: Semantic Versioning read for a 0.x package (a
   minor is the only release that may remove or break; a patch never does);
-  one integer `schema_version` per machine-readable output, bumped only in a
+  one integer `schema_version` per stored machine-readable output (five named;
+  the read-only listings carry none), bumped only in a
   release that may break and never for an additive key; the deprecation
   window as a minimum — announced under `Deprecated` in the 0.Y.0 notes
   naming the removal version, working and warning through 0.Y.x, removable
