@@ -478,7 +478,7 @@ the hole.
   measurement; the gate that enforces the floors is
   `tests/test_matcher_accuracy.py` inside the test stage (DEC-PM-011).
   (R-HNS-9, C-HNS-1, DEC-HNS-008)
-  _Verified by:_ `pytest -k test_matcher_accuracy` · stage: `make test`
+  _Verified by:_ `pytest -k "test_g002_meets_its_configured_accuracy_floors or test_u004_meets_its_configured_accuracy_floors"` · stage: `make test`
 
 - [ ] **AC-HNS-13:** the six regexes resolve their horizontal-whitespace
   class from one shared definition, and a structural test selects every
