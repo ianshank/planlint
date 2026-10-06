@@ -190,22 +190,29 @@ not force-pushed. These are the habits the plan must not trade away for speed.
 *Baseline:* green; unhardened (§1.2 rows "Workflow hardening", "Configuration
 literals", "Dependabot").
 
-1. **Dependabot batch.** Rebase the seven PRs onto `main`; merge
-   `upload-artifact` 4→7 and `download-artifact` 4→8 in one commit (the
-   consumer and the producer must agree); `setup-python` 5→7 and
-   `checkout` 4→7 next (Node 24 runtimes — GitHub-hosted runners qualify);
-   `gitleaks-action` 2→3 last and alone (it is the `security` gate). The
-   composite action's two bumps ride with their root-level twins. Each merge
-   is one CI run; `action-contract` already asserts the composite action end
-   to end.
+1. **Dependabot batch.** Land the seven proposed bumps in-tree as one
+   reviewed batch rather than merging the PRs (their base is two merges
+   behind `main`): `upload-artifact` 4→7 with `download-artifact` 4→8 in the
+   same commit (the consumer and the producer must agree), `setup-python`
+   5→7 and `checkout` 4→7 (Node 24 runtimes — GitHub-hosted runners
+   qualify), and `gitleaks-action` 2→3 in the same batch — v3 is
+   byte-identical to v2 in source apart from the runtime, and its three
+   `GITHUB_TOKEN` calls are enumerated, so a red `security` job stays
+   attributable without landing last and alone (`harden-ci-workflows`
+   DEC-HCW-001 amends the earlier "last and alone" here). The composite
+   action's two bumps ride with their root-level twins; Dependabot closes
+   the seven PRs as superseded once the refs are on `main`.
+   `action-contract` already asserts the composite action end to end.
 2. **SHA-pin every third-party action** with the version in a trailing
    comment (`uses: actions/checkout@<sha> # v7.0.1`), and pin
    `pypa/gh-action-pypi-publish` to a tag SHA instead of `release/v1`.
    Dependabot keeps SHAs fresh; this meets `next-steps.md` item 232's stated
-   precondition on its own terms. Guard: a `test_ci_hardening` test that every
-   third-party `uses:` is a 40-hex ref with a version comment — exempting the
-   repository's own `uses: ./.github/actions/planlint`, and not scanning
-   `templates/spec-gate.yml` or the skill's `assets/spec-gate.yml`, which
+   precondition on its own terms. Guard: the `tests/test_workflow_hardening.py`
+   assertion that today forbids a SHA flips to require one — every third-party
+   `uses:` a 40-hex ref with a version comment — still exempting the
+   repository's own `./.github/actions/planlint` and its
+   `ianshank/planlint/...@<sha>` ref in `templates/spec-gate.yml`, the skill's
+   `assets/spec-gate.yml` and the README snippet, which
    `distribution-plan.md` deliberately moves to `@v0.2.0`.
 3. **Least privilege and bounded runs.** Top-level `permissions: contents:
    read` in `ci.yml` with job-level widening only where needed. The two
@@ -214,16 +221,22 @@ literals", "Dependabot").
    and never reads `GITHUB_TOKEN`, though its own test workflow grants
    `actions: write`, so the package proves it on the first run and widens
    those two jobs if the upload is refused. The gitleaks step passes
-   `GITHUB_TOKEN` for pull-request comments; either grant it
-   `pull-requests: write` or set `GITLEAKS_ENABLE_COMMENTS=false` — the
-   gate's exit code is what matters. `timeout-minutes` on every job, sized
+   `GITHUB_TOKEN`: it looks the owner up on every event, lists a pull
+   request's commits (`pull-requests: read`), and posts comments unless
+   `GITLEAKS_ENABLE_COMMENTS` is `"false"` — the gate's exit code is what
+   matters, so comments are off and the job carries `pull-requests: read`. `timeout-minutes` on every job, sized
    from run #171's own job durations (test legs 2–4 min, `test-windows`
    ≈ 6 min, `coverage-tools` ≈ 2 min, everything else under a minute): 15 for
-   the suite jobs, 10 for the rest. `concurrency: { group: ci-${{ github.ref
-   }}, cancel-in-progress: ${{ github.event_name == 'pull_request' }} }` —
-   conditional, so a second push never cancels the `main` run M0 depends on.
-   Guard: tests for each in `test_ci_hardening.py`, which already parses the
-   workflow.
+   the suite jobs, 10 for the rest, bounded by a range in `pyproject.toml`.
+   `concurrency` keyed on the workflow and, for pull requests, the ref —
+   every other event on its SHA — with `cancel-in-progress: ${{
+   github.event_name == 'pull_request' }}`: `cancel-in-progress: false`
+   alone would still let a *pending* `main` run be superseded by the next
+   push, and a merge commit could end with no run (DEC-HCW-003). Guard:
+   tests for each in `tests/test_workflow_hardening.py`, a module of its own
+   because `test_ci_hardening.py` already carries five packages' concerns
+   (DEC-HCW-008 amends the "in `test_ci_hardening`" here); the job-block
+   parser moves to `tests/support.py` as `workflow_job_blocks`.
 4. **One Python version, one place — in the tree.** The eleven single
    `"3.12"` values (`ci.yml`, `release.yml:34,52`, `action.yml:163`) become a
    workflow-level `env: PYTHON_DEFAULT: "3.12"` referenced from each
@@ -258,8 +271,8 @@ literals", "Dependabot").
    single source as item 4.
 
 *Proof:* CI green on every merge; `make thresholds` still passes; the new
-`test_ci_hardening` tests fail on an unpinned `uses:` or a job without a
-timeout; `test_dockerfile` (new, beside the existing Docker tests if any)
+`tests/test_workflow_hardening.py` tests fail on an unpinned `uses:` or a
+job without a timeout; `test_dockerfile` (new, beside the existing Docker tests if any)
 fails on a root user or a tag-only base.
 
 ### W2 — God-file reduction, phase two: `cli.py`
@@ -559,7 +572,7 @@ selected (a config that silently drops a family is how debt returns).
 
 | Milestone | Scope | Gate to pass before the next |
 |---|---|---|
-| **M0 — Guard the green** (days) | W1.1 Dependabot batch; W1.3 permissions, timeouts, conditional concurrency; W1.6 Python 3.14 in the matrix; W1.7 container user; W4.2 `T201` scoped; W6.1 strict mypy (+ W5.4 tools adopt `_common`, proven by the gate-script tests in `test_ci_hardening.py`) | CI green on `main` after each merge; `test_ci_hardening` covers each new guard |
+| **M0 — Guard the green** (days) | W1.1 Dependabot batch; W1.3 permissions, timeouts, conditional concurrency; W1.6 Python 3.14 in the matrix; W1.7 container user; W4.2 `T201` scoped; W6.1 strict mypy (+ W5.4 tools adopt `_common`, proven by the gate-script tests in `test_ci_hardening.py`) | CI green on `main` after each merge; `tests/test_workflow_hardening.py` covers each workflow guard and `test_ci_hardening.py` the lint and typecheck ones (PR #38) |
 | **M1 — Pin and release** (days) | W1.2 SHA pins; W1.5 release 0.3.0 with attestations and the 3.10 removal notice; W8.3 policies | tag published; `pip install planlint==0.3.0` runs `validate` on this repo |
 | **M2 — Measure cheaper** (one week) | W7.2 one-run coverage (with the `_read_floor` rule and the GTC supersession), then W7.1 floors from the minimum leg; W7.3 per-file report; W7.6 in-process loops; W5.5 dead-code report; W8.5 spec-status report; W7.4 markers; W6.5 tests under mypy (lenient override); W6.6 `D1` ratchet config | ladder wall time down by the `coverage-tools` leg and the loop conversion; floors hold on every leg; scoped numbers equal the two-run numbers on the first run |
 | **M3 — Split `cli.py`** (one week) | W2 with its proofs (`cli/__main__.py` in the first commit; the three guards recursive; AC-DG-8's test name kept); W3 items 1 and 3 (ratchet config, `GraphBuild`) | golden hashes, `--help` snapshot and test-name set unchanged |
