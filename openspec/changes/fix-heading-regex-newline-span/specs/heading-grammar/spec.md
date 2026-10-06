@@ -326,7 +326,11 @@ the hole.
   oracle concern. `derandomize=True` stays, per the module docstring: a gate
   that fails one run in fifty gets overridden and then deleted.
 - **DEC-HNS-008:** `make matcher-accuracy` is run and reported even though
-  no prose matcher changes. The hook in
+  no prose matcher changes — as the report it is, never as a stage a
+  criterion cites: DEC-PM-011 (`fix-prose-matcher-precision`) makes it a
+  report target composed into neither `ci` nor `pre-pr`, with
+  `tests/test_matcher_accuracy.py` inside the test stage as the gate, and
+  AC-HNS-12 cites that gate. The hook in
   `.claude/hooks/nudge_rule_registry.sh` asks for it on any
   `parse_semantics.py` edit, and `docs/hooks.md` records why: a pattern
   change in that module is a change to a number. This change touches no
@@ -470,8 +474,11 @@ the hole.
 - [ ] **AC-HNS-12 (non-success):** `make matcher-accuracy` reports the same
   per-pattern precision and recall for G002 and U004 as the before-figures
   recorded in `tasks.md`, and no `*_pct` floor in `pyproject.toml` and no
-  row under `tests/fixtures/phrasing/` is touched. (R-HNS-9, C-HNS-1)
-  _Verified by:_ `make matcher-accuracy` · stage: `make matcher-accuracy`
+  row under `tests/fixtures/phrasing/` is touched. The report target is the
+  measurement; the gate that enforces the floors is
+  `tests/test_matcher_accuracy.py` inside the test stage (DEC-PM-011).
+  (R-HNS-9, C-HNS-1, DEC-HNS-008)
+  _Verified by:_ `pytest -k test_matcher_accuracy` · stage: `make test`
 
 - [ ] **AC-HNS-13:** the six regexes resolve their horizontal-whitespace
   class from one shared definition, and a structural test selects every
@@ -545,6 +552,6 @@ spec.
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
 | Focused | `make test` | AC-HNS-1..10, AC-HNS-13..16, AC-HNS-18..21 |
-| Matcher | `make matcher-accuracy` | AC-HNS-12 — per-pattern figures equal to the before-figures in `tasks.md`, no floor moved |
+| Matcher | `make test` | AC-HNS-12 — `tests/test_matcher_accuracy.py` holds every floor; `make matcher-accuracy`, run by hand per the hook, reports per-pattern figures equal to the before-figures in `tasks.md` |
 | Self-check | `make validate` | AC-HNS-11 — every package in the tree, this one included, stays clean against the rules it describes |
 | Full | `make pre-pr` | AC-HNS-17; full regression, lint, typecheck, security, docs, thresholds |

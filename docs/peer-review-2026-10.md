@@ -313,9 +313,8 @@ package aligns the three bare-command jobs to `make validate`, `make
 thresholds` and `make wheel-check` (same commands, now by the name the specs
 cite), adds one job that runs the two aggregates on pull requests (the
 release workflow already runs `make pre-pr`; this moves the same gate
-earlier) together with `make matcher-accuracy`, which one of the packages
-drafted here cites, and only then adds the final `witness-gate` job. The
-exit criterion is that gate
+earlier), and only then adds the final `witness-gate` job. The exit
+criterion is that gate
 passing on `main`. A v2 claimed anywhere before that is the same sentence
 the 2026-09 review refused to let the README keep.
 
