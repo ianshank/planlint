@@ -221,8 +221,11 @@ Three facts, each reproduced on a target with no Makefile whose one spec
 cites a make stage:
 
 1. `validate --fail-on ERROR` prints `INFO G010 … G004 could not run`,
-   `PASS`, exit 0. The Action projects that envelope as `status=pass` — a
-   green check whose only caveat is `discovery-warnings=1`.
+   `PASS`, exit 0. Projected through `report --format github-outputs` with
+   the target's dialect card, the envelope reads `status=pass`, `infos=1`,
+   `make-targets=0`, `discovery-warnings=2` (one note each for the missing
+   make targets and the missing floor) — a green check whose only caveats
+   are two warning annotations.
 2. `<!-- specgraph:allow G010 reason -->` yields `INFO G010 … [waived] …`:
    same severity, same count, exit 1 at `--fail-on INFO`. The CHANGELOG
    records this as "G010 is effectively unwaivable".
