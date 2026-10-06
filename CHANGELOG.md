@@ -30,7 +30,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   mention it (what G004 reads), how many cite it on a verification line (what
   W001 reads), and which workflow files invoke it directly. A report, not a
   gate — the `make matcher-accuracy` shape (`DEC-PM-011`): exit 0 whatever it
-  finds, exit 2 with no spec tree or an unknown `--workflow`. It exists because
+  finds, exit 2 when it cannot run — no spec tree, an unreadable spec or
+  workflow, or an unknown `--workflow`. A stage counts as invoked only where
+  `make <stage>` stands in command position, not quoted or passed as an
+  argument. It exists because
   the review's first count of stages witness mode would check used the wrong
   column; `--root <checkout> --workflow ci.yml` reproduces the review's table
   at `6666444` exactly.
