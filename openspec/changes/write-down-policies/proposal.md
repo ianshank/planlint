@@ -31,8 +31,10 @@ re-measured against this checkout. Docs plus one test; no code behaviour
 changes.
 
 **Evidence:** measured at `5fe043e` (the head of `claude/m0-guard-the-green`,
-read from `.git/refs/heads/`), 2026-10-06. Each number names the command that
-produced it, which is the policy this package writes down, applied to itself.
+read from `.git/refs/heads/`), 2026-10-06, before the two sibling M1 packages
+landed on this branch. Each number names the command that produced it, which
+is the policy this package writes down, applied to itself; `tasks.md`
+Milestone 4 re-measures at the branch head.
 
 - **Five schema versions, one comment.**
   `grep -rn "SCHEMA_VERSION\s*=" openspec_graph tools` finds five
@@ -43,22 +45,28 @@ produced it, which is the policy this package writes down, applied to itself.
   `openspec_graph/delta.py:40` (`DELTA_SCHEMA_VERSION`) and
   `tools/stage_citations.py:67`. Only `rule_types.py:32–36` says when the
   integer moves: "Bump on any breaking change to the envelope or to a
-  finding's own keys; additive keys do not bump it." The consumer side is
-  implemented and undocumented as policy: `report.parse_envelope`
-  (`openspec_graph/report.py:257–260`) and `parse_card` (`:301–304`) refuse
-  a payload whose version is not this build's — exit 2, quoted at
-  `skills/planlint-spec-governance/references/exit-codes.md:107` — while a
-  `tool_version` mismatch is a WARNING that still projects (`:111–112`);
-  `witness._load_one` skips a record whose version differs
-  (`openspec_graph/witness.py:194–198`); `dialect_card.diff_cards` reports
-  a card whose version changed as its own kind of change
-  (`openspec_graph/dialect_card.py:58–61`). The SARIF projection carries no
-  planlint schema version at all: `openspec_graph/sarif.py:28` pins
-  `SARIF_VERSION = "2.1.0"` and `:172–173` puts the tool version in
-  `driver.version`. Two precedents exist and neither is written as a rule:
-  `add-findings-json-envelope`'s DEC-FE-010 started the envelope at 1 and
-  kept it apart from the package version, and `add-finding-line-hits` left it
-  at 1 because "the `line` key already existed" (`CHANGELOG.md:423`).
+  finding's own keys; additive keys do not bump it." — and the same comment
+  says "all three machine-readable outputs announce their shape the same
+  way", a count that was true when it was written and is two short today.
+  The consumer side is implemented and undocumented as policy:
+  `report.parse_envelope` (`openspec_graph/report.py:257–261`) and
+  `parse_card` (`:301–305`) refuse a payload whose version is not this
+  build's with exit 2 — the message the code emits is "findings
+  schema_version <got> is not the <n> this build reads; regenerate the
+  envelope with this version of planlint", which is not the string
+  `skills/planlint-spec-governance/references/exit-codes.md:107` quotes —
+  while a `tool_version` mismatch is a WARNING that still projects
+  (`exit-codes.md:111–112`); `witness._load_one` skips a record whose
+  version differs (`openspec_graph/witness.py:194–198`);
+  `dialect_card.diff_cards` reports a card whose version changed as its own
+  kind of change (`openspec_graph/dialect_card.py:58–61`). The SARIF
+  projection carries no planlint schema version at all:
+  `openspec_graph/sarif.py:28` pins `SARIF_VERSION = "2.1.0"` and `:172–173`
+  puts the tool version in `driver.version`. Two precedents exist and
+  neither is written as a rule: `add-findings-json-envelope`'s DEC-FE-010
+  started the envelope at 1 and kept it apart from the package version, and
+  `add-finding-line-hits` left it at 1 because "the `line` key already
+  existed" (`CHANGELOG.md:423`).
 - **Two deprecations, two conventions.**
   `grep -n -i deprecat openspec_graph/cli.py`: `_DEPRECATION_WARNING`
   (`cli.py:1010–1013`) reads "`specgraph` is deprecated; use `planlint`
@@ -70,19 +78,20 @@ produced it, which is the policy this package writes down, applied to itself.
   1.0". `pyproject.toml:67` still maps the `specgraph` console script to
   `main_deprecated`. `README.md:84–89` describes the alias with no window.
   `grep -n -i specgraph CHANGELOG.md` finds the rename entry inside the
-  0.2.0 section (`CHANGELOG.md:1382–1391`) and no `Deprecated` entry for the
-  alias anywhere; the only `Deprecated` entry under `[Unreleased]`
-  (`CHANGELOG.md:45–52`) is Python 3.10's, which names 0.4.0
+  0.2.0 section (`CHANGELOG.md:1383–1391`), under the heading
+  `### Changed — rename CLI to planlint + positioning` (`:1381`); the 0.2.0
+  section has no `Deprecated` group at all (`grep -n "^### " CHANGELOG.md`
+  between `:408` and `:1464`), so the alias has warned since 0.2.0 without
+  ever being announced. The only `Deprecated` entry in the file is under
+  `[Unreleased]` (`CHANGELOG.md:45–52`): Python 3.10's, which names 0.4.0
   (`harden-ci-workflows` R-HCW-12, DEC-HCW-006). The plan's §1.2 row
   "Release" records the same fact — "the `specgraph` alias is deprecated with
   no removal date" — and its W1.5 states the window to adopt: warns through
   0.3.x, removed in 0.4.0. A sibling draft on this branch,
-  `openspec/changes/prepare-release-0-3-0/` (W1.5), already specifies both
-  edits that close it: its R-REL-6 writes the `specgraph` window into the
-  CHANGELOG's `Deprecated` group and its R-REL-7 makes the warning string
-  name 0.4.0 (DEC-REL-005, "stated where each audience reads"). It states
-  the same window this package writes down; what it does not do is state
-  the general rule the window is an instance of.
+  `openspec/changes/prepare-release-0-3-0/` (W1.5), specifies the warning
+  string that names 0.4.0 (R-REL-7, DEC-REL-005) and asks that the `[0.3.0]`
+  `Deprecated` group state the window (R-REL-6). Neither states the general
+  rule the window is an instance of.
 - **The package version is SemVer by declaration.** `CHANGELOG.md:4`
   declares Semantic Versioning 2.0.0; `openspec_graph/__init__.py:16` is
   `__version__ = "0.2.0"`, the single source `pyproject.toml` reads
@@ -122,7 +131,8 @@ produced it, which is the policy this package writes down, applied to itself.
   links that resolve from the containing directory
   (`test_agent_index_links_resolve`, which also covers `llms.txt`); and
   `test_every_make_citation_in_an_agent_index_names_a_real_target` runs
-  G004's own matcher over those files. `docs/agents-skills-harness.md` is
+  G004's own matcher over those files. No test holds a markdown line width,
+  so a link may sit on its own line. `docs/agents-skills-harness.md` is
   read by `tests/test_rule_registry_docs.py:58–63` for the phrase
   `The (\d+) rules`, so an edit there must not add a second rule-count claim.
 - **How a document becomes gated.** `tools/check_docs.py:17–40`
@@ -130,7 +140,10 @@ produced it, which is the policy this package writes down, applied to itself.
   `README.md`; `make docs-check` (`Makefile:74–75`) runs it;
   `tests/test_gate_scripts.py:34–47` builds its fixture from `REQUIRED_DOCS`
   itself, so a new entry needs no test edit;
-  `tests/test_enterprise.py:307` runs the real tree.
+  `tests/test_enterprise.py:307` runs the real tree. Nothing ties `llms.txt`
+  to `REQUIRED_DOCS`: `check_docs.py` reads `README.md` only, and
+  `test_agent_index_links_resolve` checks that `llms.txt`'s links resolve,
+  not that any particular document is among them.
   `test_every_root_markdown_file_is_wired_into_the_docs_gate` is root-scoped
   by design, so a file under `docs/` is gated only if someone registers it.
   `docs/AGENTS.md` says a `*-plan.md` is deliberately ungated because it is
@@ -142,12 +155,14 @@ produced it, which is the policy this package writes down, applied to itself.
   saying what it is and is not, an index with one bullet per policy linking
   its anchor, then three sections with plain-word headings — versioning and
   deprecation (semantic versioning for the package, what a `schema_version`
-  bump means and where it may land, the deprecation window, with `specgraph`
-  as the first instance and `detect --json` as the second); the
-  count-cites-a-command rule; the one-agent-per-thread convention — each
-  carrying the wording DEC-POL-003 through DEC-POL-006 decide, and a closing
-  line pointing at `SKILL.md`, `SECURITY.md` and `docs/hooks.md` for the
-  rules this document deliberately does not restate.
+  bump means and where it may land, the deprecation window — one minor
+  series as the minimum, a longer named window allowed, an unnamed one not —
+  with `specgraph`, `detect --json` and the Python 3.10 drop as its
+  instances); the count-cites-a-command rule; the one-agent-per-thread
+  convention — each carrying the wording DEC-POL-003 through DEC-POL-006
+  decide, and a closing line pointing at `SKILL.md`, `SECURITY.md` and
+  `docs/hooks.md` for the rules this document deliberately does not
+  restate.
 - `tools/check_docs.py`: one `REQUIRED_DOCS` entry, `docs/policies.md`,
   with a comment in the style of the entries above it saying why a policy
   document is gated where a plan is not.
@@ -158,7 +173,8 @@ produced it, which is the policy this package writes down, applied to itself.
   agent index names the policy an envelope consumer needs.
 - `openspec/AGENTS.md`: one sentence after the four-trap list — a number in
   a package names the command that regenerates it — linking the policy's
-  anchor through `../docs/policies.md`. Nothing else in the file changes.
+  anchor through `../docs/policies.md`, with the link on its own line.
+  Nothing else in the file changes.
 - `docs/agents-skills-harness.md`: one short closing section whose single
   sentence says that how this repository is worked on — one agent per
   thread, counts that name their command, the version and deprecation
@@ -168,29 +184,35 @@ produced it, which is the policy this package writes down, applied to itself.
   policy's anchor, and the diagram's label for the gated documents gains
   `policies.md`, so the picture of what `check_docs.py` gates stays true.
 - `tests/test_policies_doc.py` (new): the guard. It asserts
-  `docs/policies.md` is in `REQUIRED_DOCS` and is named in `README.md`;
-  reads the index and the `##` headings from the document and asserts they
+  `docs/policies.md` is in `REQUIRED_DOCS`, is named in `README.md` and is
+  named in `llms.txt`; reads the index and the `##` headings from the
+  document — outside fenced code blocks — and asserts each list is
+  non-empty, every heading is plain words and unique, and the two lists
   agree in both directions; reads every link to `policies.md#<anchor>` in
   the agent-facing files and asserts each anchor is a heading; asserts each
   pointer file carries at least one such link; runs G004's `MAKE_REF` over
   the document against `detect.profile().make_targets`; and, on planted
-  fixtures, asserts a dead anchor and an unindexed heading are each named.
-  Every check collects its offenders before asserting. The test carries no
-  list of expected headings.
-- `CHANGELOG.md` `[Unreleased]`: an `Added` entry for this package. The
-  `specgraph` line under `Deprecated` is `prepare-release-0-3-0`'s R-REL-6
-  and is not written a second time here; the policy document names the
-  window itself, so the two packages may land in either order.
+  texts, asserts a dead anchor, an unindexed heading, a dangling pointer
+  fragment and an empty document are each named. The offender collection
+  lives in two named functions the real-tree tests and the planted tests
+  both call. The test carries no list of expected headings.
+- `CHANGELOG.md` `[Unreleased]`: an `Added` entry for this package, and the
+  `specgraph` line under `Deprecated` — the alias warns through 0.3.x and is
+  removed in 0.4.0 — written here because this package lands before
+  `prepare-release-0-3-0` cuts `[Unreleased]` into `[0.3.0]`; the cut
+  carries both lines into the 0.3.0 notes, which is where the policy says a
+  deprecation is announced. The warning string that names the version is
+  the release package's R-REL-7 and is not touched here.
 
 ## Non-Goals
 
 - **No code behaviour change.** Nothing under `openspec_graph/` is edited:
   `_DEPRECATION_WARNING` keeps its text, `main_deprecated` its contract,
-  every `*SCHEMA_VERSION` its value. Making the alias warning name 0.4.0,
-  and writing the window into the CHANGELOG's `Deprecated` group, are
-  `prepare-release-0-3-0`'s R-REL-7 and R-REL-6 on this same branch; this
-  package states the rule those two edits are the first instance of, and
-  does not duplicate either.
+  every `*SCHEMA_VERSION` its value. Making the alias warning name 0.4.0 is
+  `prepare-release-0-3-0`'s R-REL-7 on this same branch, landing after this
+  package; between the two landings the tree's warning names no version,
+  which is acceptable because both land in one stack and the CHANGELOG
+  line this package writes already names it.
 - **No release, no removal, no bump.** 0.3.0 is `prepare-release-0-3-0`
   (W1.5); nothing is removed and no schema integer moves. This package
   states the rules a removal or a bump will follow.
@@ -210,12 +232,17 @@ produced it, which is the policy this package writes down, applied to itself.
   `skills/planlint-spec-governance/SKILL.md`'s and stay there. Disclosure
   is `SECURITY.md`'s. The gate ladder is `docs/hooks.md`'s. The policy
   document points at each and copies none.
+- **No fix to the two stale restatements this package finds.**
+  `openspec_graph/rule_types.py:32–36` restates the bump rule and counts
+  "three" machine-readable outputs where five exist, and
+  `skills/planlint-spec-governance/references/exit-codes.md:107` quotes a
+  refusal message the code does not emit. The first is under
+  `openspec_graph/`, which C-POL-1 closes to this package; the second is in
+  the distributable skill, which ships in a package release
+  (`docs/hooks.md`, "Releasing a skill change"). Both are flagged in
+  `tasks.md` as follow-ups with their file and line.
 - **No archive, no spec-status report, no `CODEOWNERS`, no retiring of
   plans.** W8.2, W8.4, W8.5 and W8.6 are their own items.
-- **No edit to the plan's W5 sketch**, which removes symbols deprecated in
-  0.3.0 at 0.4.0. Under the window this package writes, a surface first
-  deprecated in 0.3.0 is removed no earlier than 0.5.0; DEC-POL-004 records
-  the consequence so the W5 package meets it rather than discovers it.
 
 ## Affected Capabilities
 
