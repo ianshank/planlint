@@ -20,7 +20,7 @@ flowchart TD
     gate --> cites["test_spec_test_citations.py<br/>every _Verified by: names a real test"]
 ```
 
-Three ways a package fails that are not obvious from reading a good one:
+Four ways a package fails that are not obvious from reading a good one:
 
 - **The id shape is exact:** `(?:R|C)-[A-Z]{2,}-\d+` with a word boundary. A
   letter suffix like `R-SER-3a` kills the boundary and H002 rejects it — use
@@ -31,13 +31,17 @@ Three ways a package fails that are not obvious from reading a good one:
 - **Every `_Verified by:` selector must name a real test function.**
   `test_spec_test_citations.py` resolves each one by AST, so a renamed test
   breaks the spec that cites it.
+- **The marker in an AC's own prose becomes its verification line.** The
+  parser takes the first one in the block, so H001 fires on a criterion that
+  does cite a stage. Write "verification line" in prose instead.
 
 The `spec.md` — not just the `proposal.md` — has to match what shipped. This
 repository has already merged one proposal describing behaviour the code did
 not have; drafting against the diff is the habit that prevents it.
 
 Draft with the `spec-drafter` subagent, then review with `spec-adversary`
-before implementation starts. Neither replaces running the gate yourself.
+before implementation starts; the `planlint-change-package` skill is the whole
+loop. Neither replaces running the gate yourself.
 
 Precedence: where this disagrees with the operating contract in
 [`SKILL.md`](../skills/planlint-spec-governance/SKILL.md), `SKILL.md` wins;

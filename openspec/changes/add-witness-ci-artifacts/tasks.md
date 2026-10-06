@@ -306,7 +306,9 @@
   here; the deferral-table row at line 225 that says to leave the flag alone
   amended. `docs/differentiation-roadmap.md`: the v2 note rewritten from
   "does not yet reach CI" to the shipped shape, citing the `witness-gate`
-  job, and its `.gitignore` line number corrected from 52 to 55.
+  job (its `.gitignore` line number already reads 55, corrected on the
+  planning branch; the dated 2026-09 review keeps its own 52, which was right
+  at the commit it measured).
   `docs/peer-review-2026-09.md`: R7 row → "shipped —
   `add-witness-ci-artifacts`". `docs/architecture/c4.md`: the `witness.py`
   row mentions the explicit-directory reader/writer if its responsibility
