@@ -33,31 +33,34 @@ minimum, which coverage.py's total cannot express, becomes a report in the
 same checker.
 
 This reverses six recorded requirements and decisions of
-`gate-tools-coverage`, which is on `main`, and touches the stage list and
-one decision of the unimplemented `add-witness-ci-artifacts` draft; both are
-recorded here by name.
+`gate-tools-coverage`, which is on `main`, and amends the stage list, the
+recording idiom and two decisions of the unimplemented
+`add-witness-ci-artifacts` draft, which is on `main` too; both are recorded
+here by name.
 
-**Evidence:** measured at `31d7275` on `claude/m2-measure-cheaper`,
-2026-10-06; each command is in the proposal. `make -n pre-pr | grep -c
-"python -m pytest"` prints 2; `ci.yml` runs `make test` on five matrix legs
-and `test-windows` and `make coverage-tools` in a job of its own. Against
-the HEAD reports, `--scope openspec_graph` exits 2 from both checkers ("no
-line floor set in pyproject.toml [tool.specgraph]
-openspec_graph_line_fail_under"), the unscoped line checker reads 99.3 %
-(2276/2292), and `--scope tools` reads 96.1 % (842/876) and 93.2 %
-(276/296). The Appendix A combined run at the same commit — 232.9 s wall in
-the drafter's run, 230.9 s in the reviewer's re-measurement, both dated
-2026-10-06 — reproduces those four pairs exactly per scope while its
-unscoped totals read 98.4 % (3118/3168) and 96.4 % (1020/1058); the two-run
-`coverage-tools.json`'s own totals are already 2850/3168, because the CLI
-subprocesses `run_cli` launches from the repository root are measured by
-coverage.py's own `a1_coverage.pth` hook (keyed on
-`COVERAGE_PROCESS_START`, which `run_cli` sets; pytest-cov 7 removed its
-own) against the config's `source`. `tools/_common.py` has
+**Evidence:** measured at `5246931` (`main`, the squash of M1; the measured
+files are byte-identical to `31d7275` on `claude/m1-pin-and-release`, where
+the figures were first taken), 2026-10-06; each command is in the proposal.
+`make -n pre-pr | grep -c "python -m pytest"` prints 2; `ci.yml` runs
+`make test` on five matrix legs and `test-windows` and `make coverage-tools`
+in a job of its own. Against the drafting-time reports, `--scope
+openspec_graph` exits 2 from both checkers ("no line floor set in
+pyproject.toml [tool.specgraph] openspec_graph_line_fail_under"), the
+unscoped line checker reads 99.3 % (2276/2292), and `--scope tools` reads
+96.1 % (842/876) and 93.2 % (276/296). The Appendix A combined run at the
+same commit — 232.9 s wall in the drafter's run, 230.9 s in the reviewer's
+re-measurement, both dated 2026-10-06 — reproduces those four pairs exactly
+per scope while its unscoped totals read 98.4 % (3118/3168) and 96.4 %
+(1020/1058); the two-run `coverage-tools.json`'s own totals are already
+2850/3168, because the CLI subprocesses `run_cli` launches from the
+repository root are measured by coverage.py's own `a1_coverage.pth` hook
+(keyed on `COVERAGE_PROCESS_START`, which `run_cli` sets; pytest-cov 7
+removed its own) against the config's `source`. `tools/_common.py` has
 `read_pyproject_int`, `scoped_floor_key`, `coverage_totals` and
 `parse_coverage_argv` and no list reader; `_read_floor` and
 `_read_branch_floor` map a scope to `[tool.specgraph]
-<scope>_<kind>_fail_under` and nothing else. `planlint --target . detect`
+<scope>_<kind>_fail_under` and nothing else, and today `--scope tools/`
+exits 2 asking for `tools/_line_fail_under`. `planlint --target . detect`
 reports the floor locator as `pyproject.toml:[tool.coverage.report].fail_under`.
 `tools/check_no_hardcoded_thresholds.py` would flag a literal threshold in a
 recipe and passes `$(NO_FLOOR)`. The two-run design is described in
@@ -66,11 +69,14 @@ recipe and passes `$(NO_FLOOR)`. The two-run design is described in
 comment in `tests/test_gate_scripts.py`. `test_hooks_ci_table_lists_every_ci_job`
 holds every `ci.yml` job to a `docs/hooks.md` row and not the reverse.
 `add-witness-ci-artifacts` is DRAFT with every criterion unchecked and no
-code in the tree, and names `coverage-tools` in its stage list, its
-recording-job list and its suite-run arithmetic. `make stage-citations` at
-`31d7275` reports `coverage-tools` verified by two specs and run directly
-by `ci.yml`. At the plan's threshold of 85, one module is below:
-`tools/check_branch_coverage.py` at 84.2 %.
+code in the tree; it names `coverage-tools` in its stage list, its
+recording table, its suite-run arithmetic and its recording-job list, and
+its R-WCA-30, AC-WCA-25 and DEC-WCA-018 require every stage cited on a
+verification line to appear in `ci.yml` as `make <stage>`, which
+`coverage-tools` does today and will not after this change. `make
+stage-citations` at that commit reports `coverage-tools` verified by two
+specs and run directly by `ci.yml`. At the plan's threshold of 85, one
+module is below: `tools/check_branch_coverage.py` at 84.2 %.
 
 ---
 
@@ -95,31 +101,40 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   against `coverage.json` under `--scope openspec_graph` and under
   `--scope tools` — four invocations, each a hard step. pytest-cov's own
   total MUST gate nothing.
-- R-MCO-3: `tools/_common.py` MUST expose `coverage_sources(pyproject) ->
-  list[str]`, a stdlib-only reader of the `source` array under the literal
-  `[tool.coverage.run]` table — an inline or multi-line array of quoted
-  strings, each entry normalised by stripping a leading `./` and a trailing
-  `/`, table-aware so a `source` key under another table is not read —
-  returning `[]` when the file, table or key is absent. The dotted
+- R-MCO-3: `tools/_common.py` MUST expose `normalize_scope(name) -> str`,
+  which strips a leading `./` and a trailing `/`; `coverage_sources(pyproject)
+  -> list[str]`, a stdlib-only reader of the `source` array under the
+  literal `[tool.coverage.run]` table — an inline or multi-line array of
+  quoted strings, each entry passed through `normalize_scope`, table-aware
+  so a `source` key under another table is not read — returning `[]` when
+  the file, table or key is absent; and `scoped_floor(pyproject, scope,
+  kind) -> int | None` with `kind` in `line`/`branch`. The dotted
   `[tool.coverage] run.source` form and `source_pkgs` MUST NOT be read; a
-  configuration in either form is a scope that is not declared for this
-  reader's purposes and surfaces as R-MCO-4's exit 2 naming both places,
-  never as a silent pass. It MUST also expose `scoped_floor(pyproject,
-  scope, kind) -> int | None` with `kind` in `line`/`branch`, returning the
+  configuration in either form has, for this reader, no first entry, and
+  surfaces as R-MCO-4's exit 2 naming both places, never as a silent pass.
+  `scoped_floor` MUST normalise `scope` the same way before anything else,
+  so `--scope openspec_graph/` and `--scope ./tools` behave exactly as the
+  bare names do, and MUST build the scoped key from the normalised name
+  (`tools_line_fail_under`, never `tools/_line_fail_under`); it returns the
   scoped key `<scope>_<kind>_fail_under` under `[tool.specgraph]` when it is
-  present; otherwise, when `scope` equals the **first** entry of
-  `coverage_sources`, the unscoped locator for that kind —
-  `[tool.coverage.report] fail_under` for `line`, `[tool.specgraph]
-  branch_fail_under` for `branch`; otherwise `None`. No other entry of
-  `source` falls back. `check_coverage_floor._read_floor` and
-  `check_branch_coverage._read_branch_floor` MUST read every scoped floor
-  through it; their unscoped behaviour MUST be unchanged.
-- R-MCO-4: A scope with no scoped key that is not the first entry of
-  `source` — `tools` with its `tools_*` keys removed, or a scope absent from
-  `source` altogether — MUST still exit 2 from both checkers, so R-GTC-11
-  stands as written, and the message MUST name both places that were looked
-  in: the scoped key, and that the unscoped locators apply only to the
-  first `source` entry, naming it. The nothing-measured exit, the
+  present; otherwise, when `scope in coverage_sources(pyproject)[:1]` — the
+  first entry, with an empty list needing no special case — the unscoped
+  locator for that kind: `[tool.coverage.report] fail_under` for `line`,
+  `[tool.specgraph] branch_fail_under` for `branch`; otherwise `None`. No
+  other entry of `source` falls back. `check_coverage_floor._read_floor`
+  and `check_branch_coverage._read_branch_floor` MUST read every scoped
+  floor through it; their unscoped behaviour MUST be unchanged.
+- R-MCO-4: A scoped read that finds no floor MUST exit 2 from both checkers
+  with a message that names both places looked, branched on which case it
+  is: for a scope that is not the first `source` entry — `tools` with its
+  `tools_*` keys removed, or a scope absent from `source` altogether — the
+  message names the scoped key and says the unscoped locator applies only
+  to the first `source` entry, naming it (or saying none is declared); for
+  the first entry itself with the unscoped key absent, the message names
+  the scoped key and says `[tool.coverage.report] fail_under` (for `line`)
+  or `[tool.specgraph] branch_fail_under` (for `branch`), the first entry's
+  floor, is absent too. R-GTC-11 therefore stands as written: a missing
+  floor is a misconfiguration, never a skip. The nothing-measured exit, the
   usage-error exit, every accepted `--scope` spelling and the separator
   normalisation MUST be unchanged (R-GTC-10 stands).
 - R-MCO-5: The first entry of `source` MUST carry no scoped key — no
@@ -146,10 +161,11 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   `if: always()`, using the `actions/upload-artifact` SHA and release-tag
   comment already in the file, under a name built from `runner.os` and the
   leg's interpreter expression and carrying no version literal. pytest-cov
-  writes the JSON report on a failed run and `if: always()` uploads it; a
-  leg that died before `make test` has no file, and the action's
-  `if-no-files-found` default of `warn` means it contributes nothing rather
-  than failing the leg twice. No other job MAY change.
+  writes the JSON report on a run with failing tests and `if: always()`
+  uploads it; a leg with no report — one that died before `make test`, or
+  whose pytest ended at collection with exit 2 — has nothing to upload, and
+  the action's `if-no-files-found` default of `warn` covers both cases
+  without failing the leg a second time. No other job MAY change.
 - R-MCO-8: `docs/hooks.md`'s CI table MUST lose the `coverage-tools` row,
   its `test` and `test-windows` rows MUST say both trees' floors are gated
   and the leg's report uploaded, and the `test` row's version-range cell
@@ -176,22 +192,43 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   edited. R-GTC-8, R-GTC-10, R-GTC-11, DEC-GTC-011 and DEC-GTC-012 stand.
 - R-MCO-10: `add-witness-ci-artifacts`' record MUST be amended in this
   package at every site in its spec and tasks that names the
-  `coverage-tools` job — the stage list of jobs that run a make target by
-  name, R-WCA-27's recording table, DEC-WCA-016's suite-run arithmetic and
-  the recording-job list in its tasks — plus the two sites that take over
-  the recording: R-WCA-28 and the `ladder` bullet of its tasks, which gain
-  the recording of `coverage-tools` from the `make pre-pr` step, and
-  DEC-WCA-006, which gains the one sanctioned inference by name and why:
-  `coverage-tools` is a prerequisite of the very `make pre-pr` invocation
-  the `ladder` job runs, so the two share one exit code, and an exit 0
-  proves the prerequisite was built and passed; a red `pre-pr` proves less
-  — Make may have stopped before `coverage-tools` was built — so the step
-  MUST record `coverage-tools` only when the invocation exited 0 and
-  otherwise record nothing for it, leaving W001 to report the stage
-  unwitnessed rather than failed. DEC-WCA-016's count becomes a description
-  of the set with `make -n pre-pr | grep -c "python -m pytest"` as its
-  regenerator. Each edit MUST name this package. That package's dated
-  Problem-Statement measurements and its proposal MUST NOT be edited, and
+  `coverage-tools` job or requires every cited stage to run by name, each
+  edit naming this package. The sites that name the job: the stage-list
+  sentence of jobs that run a make target by name (its Problem Statement's
+  dated count of cited stages, two sentences earlier, stays as written —
+  the count is a measurement, the list is a plan), R-WCA-27's recording
+  table, DEC-WCA-016's suite-run arithmetic and the recording-job list in
+  its tasks. The sites that take over the recording: R-WCA-28 and the
+  `ladder` bullet of its tasks, which gain the recording of
+  `coverage-tools` from the `make pre-pr` step; AC-WCA-24, whose "exactly
+  two recorded steps" becomes "two stage steps and three recorder steps,
+  the third conditional on the `pre-pr` step's exit 0", with its planned
+  `test_ci_ladder_runs_only_the_two_aggregates` counting `run: make` steps
+  and not recorder steps; R-WCA-22 and R-WCA-27, whose recorder idiom —
+  `if: always()`, so a failing stage is recorded as failing rather than not
+  at all — gains its one exception, the `coverage-tools` recorder, which is
+  conditional on exit 0 and records nothing on red; and DEC-WCA-006, which
+  gains the one sanctioned inference by name and why: `coverage-tools` is a
+  prerequisite of the very `make pre-pr` invocation the `ladder` job runs,
+  so the two share one exit code, and an exit 0 proves the prerequisite
+  was built and passed; a red `pre-pr` proves less — Make may have stopped
+  before `coverage-tools` was built — so the step MUST record
+  `coverage-tools` only when the invocation exited 0 and otherwise record
+  nothing for it, leaving W001 to report the stage with no witness at the
+  current commit, not as a failing run. The sites that require every cited
+  stage to run by name: R-WCA-30, AC-WCA-25 and DEC-WCA-018, and the
+  planned `test_ci_runs_every_w001_enforced_stage_by_its_make_target_name`
+  in its tasks, each of which gains the carve-out "each stage appears as
+  `make <stage>` in `ci.yml`, or is a prerequisite of an aggregate the
+  `ladder` job runs and is recorded under DEC-WCA-006's one sanctioned
+  inference" — because after R-MCO-7 `make coverage-tools` appears in no
+  workflow while two specs still cite it on verification lines, and
+  without the carve-out that test would be red and AC-WCA-25 unsatisfiable.
+  DEC-WCA-016's count becomes a description of the set, each figure with
+  its own regenerator: `grep -c "run: make test" .github/workflows/ci.yml`
+  for the legs that run the suite, `make -n pre-pr | grep -c "python -m
+  pytest"` for the runs one `make pre-pr` invocation issues. That package's
+  dated Problem-Statement count and its proposal MUST NOT be edited, and
   its `--change` validation MUST stay clean.
 - R-MCO-11: `tools/check_coverage_floor.py` MUST accept a `--per-file-min`
   flag, consumed in `main` before `parse_coverage_argv` so that function's
@@ -206,7 +243,9 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   `coverage.json`, MUST list `coverage-run` — not `test` — as its
   prerequisite, so the report is reachable while a floor is red, MUST be
   `.PHONY` and help-documented, and MUST be composed into neither `ci` nor
-  `pre-pr`. `check_branch_coverage.py` MUST NOT gain the flag.
+  `pre-pr`. `check_branch_coverage.py` MUST NOT gain the flag and
+  `parse_coverage_argv` MUST NOT change: the branch checker keeps ignoring
+  a trailing `--per-file-min` and gating normally, as it does today.
 - R-MCO-12: After the first CI run that uploads the per-leg reports of
   R-MCO-7, the four floors MUST be set by this rule and no other: over the
   legs whose `make test` step was green on that run — a red leg's report
@@ -228,13 +267,14 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   and MUST be shown red on a planted counter-example: a `pyproject.toml`
   whose first source has no scoped key and is read under the fallback, one
   whose first source carries a scoped key (the misconfiguration), one whose
-  second source lacks its keys; a Makefile text with `--cov=openspec_graph`
-  on the pytest line, with a literal floor, with `coverage-tools` or `test`
-  lacking the `coverage-run` prerequisite, with two pytest lines, and with
-  the report target composed into `pre-pr`; a workflow text with a job that
-  runs `make test` and uploads nothing; a `docs/hooks.md` text whose CI
-  table carries a row naming no job in any workflow; a coverage report with
-  one module below the minimum.
+  second source lacks its keys, one whose first source lacks the unscoped
+  key too; a Makefile text with `--cov=openspec_graph` on the pytest line,
+  with a literal floor, with `coverage-tools` or `test` lacking the
+  `coverage-run` prerequisite, with two pytest lines, and with the report
+  target composed into `pre-pr`; a workflow text with a job that runs
+  `make test` and uploads nothing; a `docs/hooks.md` text whose CI table
+  carries a row naming no job in any workflow; a coverage report with one
+  module below the minimum.
 - R-MCO-14: `CHANGELOG.md`'s `[Unreleased]` section MUST carry a `Changed`
   entry for this package naming the one run through `coverage-run`, the
   mapping rule, the removed job and the per-leg artifacts, the six
@@ -291,63 +331,75 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   disabled with `$(NO_FLOOR)`, and no floor on the combined number. The
   Makefile's two-run comment protected two honest numbers from one diluted
   total; the scoped checkers protect them from one data file, which is what
-  the plan's D2 says and what the Appendix A run shows: at `31d7275` the
-  combined report sums per scope to exactly the two-run figures for both
-  trees and both kinds, while its totals read 98.4 % and 96.4 %. The total
-  is disabled rather than floored because a floor on it would be the diluted
-  number the Makefile refused, and because it would be a third floor with no
-  tree of its own to describe. `NO_FLOOR` already exists for the tools run
-  and keeps the thresholds guard quiet; it moves to the `coverage-run`
-  recipe with its comment. Rejected: a floor on the total "as a backstop"
-  (it backs up nothing the scoped reads do not already check, and lowers
-  the bar to the better tree's headroom); keeping `--cov=openspec_graph
-  --cov=tools` on the command line rather than in `source` (pytest-cov's
-  documentation prefers the config form for several sources, and a `--cov=x`
-  on the line overrides it — the recipe states both facts once).
+  the plan's D2 says and what the Appendix A run shows: at the measurement
+  commit the combined report sums per scope to exactly the two-run figures
+  for both trees and both kinds, while its totals read 98.4 % and 96.4 %.
+  The total is disabled rather than floored because a floor on it would be
+  the diluted number the Makefile refused, and because it would be a third
+  floor with no tree of its own to describe. `NO_FLOOR` already exists for
+  the tools run and keeps the thresholds guard quiet; it moves to the
+  `coverage-run` recipe with its comment. Rejected: a floor on the total
+  "as a backstop" (it backs up nothing the scoped reads do not already
+  check, and lowers the bar to the better tree's headroom); keeping
+  `--cov=openspec_graph --cov=tools` on the command line rather than in
+  `source` (pytest-cov's documentation prefers the config form for several
+  sources, and a `--cov=x` on the line overrides it — the recipe states both
+  facts once).
 - **DEC-MCO-002:** one mapping rule — the scoped key if present, else the
   unscoped locators for the first entry of `[tool.coverage.run] source`
   only, else `None` — with a guard that forbids the first entry a scoped
-  key. The first entry and not every declared source, because `tools` is a
-  declared source too, and a fallback for every entry would turn "`tools`
-  with its `tools_*` keys deleted" from the exit-2 misconfiguration
-  R-GTC-11 made it into a silent inheritance of the package's floors; with
-  the rule scoped to the first entry, R-GTC-11 stands as written for every
-  other tree and the fallback means exactly one thing: the tree whose
-  floors have always been `fail_under` and `branch_fail_under`. The scoped
-  key is read first so a future tree gets its own floors by adding keys and
-  nothing else — DEC-GTC-012's property, extended — which has a consequence
-  the guard exists for: a scoped key on the first entry would be honoured
-  by the checkers and would silently make `fail_under` dead config, so
-  R-MCO-5's test over the real `pyproject.toml` forbids it, and names it on
-  a planted file. The fallback targets `fail_under` and `branch_fail_under`
-  because D2 rejects the duplicate key for two reasons that both hold
-  against the tree: two places for one threshold is how `make thresholds`
-  came to exist, and `planlint --target . detect` reports this repository's
-  floor as `[tool.coverage.report].fail_under` — the key a duplicate would
-  leave read by nothing but a disabled total. One function for both kinds,
-  so the two checkers cannot disagree about where a floor lives (the drift
-  DEC-GTC-012 named). The missing-floor message names both places looked,
-  because a reader who sees only "no `tools_line_fail_under`" might add a
-  key for the wrong tree. Rejected: a `[tool.specgraph] default_scope` key
-  (a second place to say what the order of `source` already says); a
-  fallback for every declared source (the R-GTC-11 regression above);
-  reading `source` with `tomllib` (absent on the 3.10 leg; the gates are
-  stdlib-only and run before anything is installed, which is why
-  `read_pyproject_int` is hand-rolled too).
+  key, and with the scope normalised before the comparison. The first entry
+  and not every declared source, because `tools` is a declared source too,
+  and a fallback for every entry would turn "`tools` with its `tools_*`
+  keys deleted" from the exit-2 misconfiguration R-GTC-11 made it into a
+  silent inheritance of the package's floors; with the rule scoped to the
+  first entry, R-GTC-11 stands as written for every other tree and the
+  fallback means exactly one thing: the tree whose floors have always been
+  `fail_under` and `branch_fail_under`. The comparison is `scope in
+  sources[:1]`, so an empty list — no `source`, or a form the reader does
+  not read — is simply "no first entry" rather than an index error. The
+  scoped key is read first so a future tree gets its own floors by adding
+  keys and nothing else — DEC-GTC-012's property, extended — which has a
+  consequence the guard exists for: a scoped key on the first entry would
+  be honoured by the checkers and would silently make `fail_under` dead
+  config, so R-MCO-5's test over the real `pyproject.toml` forbids it, and
+  names it on a planted file. The fallback targets `fail_under` and
+  `branch_fail_under` because D2 rejects the duplicate key for two reasons
+  that both hold against the tree: two places for one threshold is how
+  `make thresholds` came to exist, and `planlint --target . detect` reports
+  this repository's floor as `[tool.coverage.report].fail_under` — the key a
+  duplicate would leave read by nothing but a disabled total. One function
+  for both kinds, so the two checkers cannot disagree about where a floor
+  lives (the drift DEC-GTC-012 named). The missing-floor message names both
+  places looked and is branched on the case, because a reader who sees only
+  "no `tools_line_fail_under`" might add a key for the wrong tree, and a
+  reader of the first entry whose `fail_under` is simply missing must be
+  told that and not sent to the scoped key. Rejected: a `[tool.specgraph]
+  default_scope` key (a second place to say what the order of `source`
+  already says); a fallback for every declared source (the R-GTC-11
+  regression above); reading `source` with `tomllib` (absent on the 3.10
+  leg; the gates are stdlib-only and run before anything is installed,
+  which is why `read_pyproject_int` is hand-rolled too).
 - **DEC-MCO-003:** `coverage_sources` is a hand-rolled reader that accepts
   exactly the shape this file uses — an array of quoted strings, inline or
   spread over lines, under the literal `[tool.coverage.run]` header — and
-  normalises each entry by stripping a leading `./` and a trailing `/`, the
-  two spellings coverage.py treats as the same directory and a scope prefix
-  must match. It is table-aware for the reason `read_pyproject_int` is: a
-  bare search for `source` would match another table or a comment. It does
-  not read the dotted `[tool.coverage] run.source` form or `source_pkgs`,
-  and says so in its docstring; a repository configured that way has, for
-  this reader, no first entry, so a scoped read of its package falls
-  through to R-MCO-4's exit 2 naming both places — a loud mismatch, never a
-  pass on a floor nobody read. It returns `[]` rather than `None` for an
-  absent key so the first-entry test needs no special case. Rejected: a
-  general TOML array parser (a second parser to keep correct for one key).
+  the same `normalize_scope` that strips a leading `./` and a trailing `/`
+  is applied to each entry and to the `--scope` value, because coverage.py
+  treats the two spellings as one directory and today the checkers do not:
+  `--scope tools/` exits 2 asking for `tools/_line_fail_under`, which is not
+  a regression but would make `--scope openspec_graph/` exit 2 where the
+  bare name falls back. The scoped key is built from the normalised name.
+  It is table-aware for the reason `read_pyproject_int` is: a bare search
+  for `source` would match another table or a comment. It does not read the
+  dotted `[tool.coverage] run.source` form or `source_pkgs`, and says so in
+  its docstring; a repository configured that way has, for this reader, no
+  first entry, so a scoped read of its package falls through to R-MCO-4's
+  exit 2 naming both places — a loud mismatch, never a pass on a floor
+  nobody read. It returns `[]` rather than `None` for an absent key, and the
+  comparison is written `scope in sources[:1]` so the empty list is handled
+  by the slice and not by a branch. Rejected: a general TOML array parser
+  (a second parser to keep correct for one key); comparing the raw scope
+  (the slash case above).
 - **DEC-MCO-004:** the pytest line moves into its own `coverage-run`
   target, and `test`, `coverage-tools` and the per-file report all depend
   on it. Four properties follow and each is stated because a guard reads
@@ -386,9 +438,10 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   allowed because it names `release.yml` rather than one of its jobs. Until
   that test exists the stage is the citation. The stage moves into
   `make stage-citations`' set that no workflow invokes by name — recorded,
-  not hidden (R-MCO-15). The per-leg upload is placed on the same jobs so
-  the artifacts the ratchet reads come from the runs that gate, not from a
-  job of their own.
+  not hidden (R-MCO-15) — and that is exactly why R7's "every cited stage
+  runs by name" sites need the carve-out of DEC-MCO-007. The per-leg upload
+  is placed on the same jobs so the artifacts the ratchet reads come from
+  the runs that gate, not from a job of their own.
 - **DEC-MCO-006:** six records of `gate-tools-coverage` are superseded and
   named — R-GTC-9 (its own coverage run), C-GTC-4 (`make test` measures the
   package alone), R-GTC-12 (its own CI job with a `docs/hooks.md` row),
@@ -421,17 +474,23 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   every criterion unchecked, no recorder action and no `witness_dir` in the
   code. A draft is a plan, not a record of what shipped, so amending it is
   not the rewriting of history the precedents refuse; and leaving it would
-  leave a plan that requires a job this package removes. The set of sites
-  is described, not counted: every site in that package's spec and tasks
-  that names the job, the two sites that take over its recording (R-WCA-28
-  and the tasks' `ladder` bullet), and DEC-WCA-006; its dated
-  Problem-Statement measurements and its proposal stay as written. The
-  amendment is written here because this package's writes are confined to
-  its own directory at drafting; the implementer applies it in Milestone 2
-  and re-validates that package. The consequence for W001 is decided
-  rather than left to be found: `coverage-tools` stays cited on
-  verification lines, and with no job running it by name its witness must
-  come from the `ladder` job, whose `make pre-pr` builds it. DEC-WCA-006
+  leave a plan that requires a job this package removes. R7 is on `main`,
+  so — as with `gate-tools-coverage` and the `select-zero-cost-guards`
+  precedent — the amendment is recorded in this package and applied to
+  R7's files by Milestone 2 as this package's edit, with each edit naming
+  this package. The set of sites is described, not counted, and widened at
+  review from "every site that names the job" to "every site that names
+  the job or requires every cited stage to run by name", because the
+  second kind does not contain the string `coverage-tools` and a grep for
+  the job would miss it: R-WCA-30, AC-WCA-25 and DEC-WCA-018 require that
+  every stage cited on a verification line appears in `ci.yml` as `make
+  <stage>`, and after this package `make coverage-tools` appears in no
+  workflow while two shipped specs still cite it — without a carve-out R7's
+  own guard would be red on the amended tree and AC-WCA-25 unsatisfiable.
+  The carve-out is the sanctioned inference's other face: a stage appears
+  as `make <stage>` in `ci.yml`, or is a prerequisite of an aggregate the
+  `ladder` job runs and is recorded under DEC-WCA-006's one inference.
+  That inference is decided here rather than left to be found: DEC-WCA-006
   refuses to infer `test` from a `pre-pr` witness because a parsed
   prerequisite is a claim about what would run; this amendment sanctions
   exactly one inference and names why it is different in kind: the
@@ -442,14 +501,24 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   a reading of the Makefile. A red `pre-pr` is not evidence either way:
   Make may have stopped at `ci` before `coverage-tools` was built. So the
   step records `coverage-tools` only on exit 0 and otherwise records
-  nothing for it, and W001 then reports the stage unwitnessed, which is the
-  honest state. DEC-WCA-016's count of suite runs is replaced by a
-  description of the set and its regenerating command — the count policy
-  applied to the text being amended. Rejected: landing after R7 (its
-  schedule is not this package's to wait on, and the drift would be R7's to
-  find); amending R7's proposal (a dated measurement); recording
-  `coverage-tools` as failed on a red `pre-pr` (an attribution the exit
-  code cannot make).
+  nothing for it, and W001 then reports the stage with no witness at the
+  current commit, not as a failing run — the honest state, in the message
+  shapes DEC-WCA-020 pins. That is a deliberate departure from R-WCA-22's
+  and R-WCA-27's recorder idiom (`if: always()`, so a failing stage is
+  recorded as failing rather than not at all), and the one recorder in the
+  workflow that is not `if: always()`; both requirements gain the exception
+  by name, and AC-WCA-24's "exactly two recorded steps" becomes two stage
+  steps and three recorder steps, with its planned
+  `test_ci_ladder_runs_only_the_two_aggregates` counting `run: make` steps
+  rather than recorder steps. DEC-WCA-016's count of suite runs is replaced
+  by a description of the set, each figure with its own regenerating
+  command — the leg count by `grep -c "run: make test"` over `ci.yml`, the
+  per-invocation count by `make -n pre-pr | grep -c "python -m pytest"` —
+  the count policy applied to the text being amended. Rejected: landing
+  after R7 (its schedule is not this package's to wait on, and the drift
+  would be R7's to find); amending R7's proposal or its dated
+  Problem-Statement count (measurements); recording `coverage-tools` as
+  failed on a red `pre-pr` (an attribution the exit code cannot make).
 - **DEC-MCO-008:** the subprocess hook is not claimed to exercise `tools/`,
   and the plan's expectation that it would is recorded as not borne out —
   with the mechanism stated correctly, because the first draft had it wrong
@@ -487,21 +556,25 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   comment says. The flag is consumed before `parse_coverage_argv` so that
   function's `(path, scope)` contract — pinned by
   `test_coverage_argv_parses_every_accepted_shape` — stands, and so
-  `check_branch_coverage.py`, which shares the parser, is untouched. The
-  target depends on `coverage-run`, not on `test`, for DEC-MCO-004's reason:
-  a report over a stale file misleads, Make makes the fresh one free when
-  the run was already built in the same invocation, and a report that
-  depended on the gate could not be read while a floor was red — exactly
-  when it is wanted. Lines, not branches: W7.3 asks for modules below a
-  line minimum, and a branch minimum per file would need its own data (a
-  module with two branches and one covered is 50 %). Gating is a later
-  package with its own reason, once the list is empty on every leg; at
-  `31d7275` the list at 85 holds one module,
-  `tools/check_branch_coverage.py`, which this package edits. Rejected:
-  `coverage.py`'s own per-file `fail_under` (there is none — its
-  `fail_under` is a total, Appendix B); a new script under `tools/` (a
-  second reader of the same report and one more line in the
-  runnable-script parametrize list for no new logic).
+  `check_branch_coverage.py`, which shares the parser, is untouched: that
+  parser keeps the first positional as the path and drops the rest, so the
+  branch checker given a trailing `--per-file-min` ignores it and gates
+  normally today, and keeps doing so. The target depends on
+  `coverage-run`, not on `test`, for DEC-MCO-004's reason: a report over a
+  stale file misleads, Make makes the fresh one free when the run was
+  already built in the same invocation, and a report that depended on the
+  gate could not be read while a floor was red — exactly when it is wanted.
+  Lines, not branches: W7.3 asks for modules below a line minimum, and a
+  branch minimum per file would need its own data (a module with two
+  branches and one covered is 50 %). Gating is a later package with its own
+  reason, once the list is empty on every leg; at the measurement commit
+  the list at 85 holds one module, `tools/check_branch_coverage.py`, which
+  this package edits. Rejected: `coverage.py`'s own per-file `fail_under`
+  (there is none — its `fail_under` is a total, Appendix B); a new script
+  under `tools/` (a second reader of the same report and one more line in
+  the runnable-script parametrize list for no new logic); teaching
+  `parse_coverage_argv` the flag (R-MCO-11 and the Non-Goals forbid
+  changing it).
 - **DEC-MCO-010:** floors move to two points under the minimum green CI
   leg, per tree and per kind, computed from counts, after the first run
   that uploads the reports, and never down — D7 and the operating contract.
@@ -510,29 +583,31 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   capability-probe tests while the 3.10 leg is the oldest interpreter; a
   floor set from a Linux container's reading would turn red on the first
   Windows run. From legs whose `make test` was green only: pytest-cov
-  writes the JSON report on a failed run and `if: always()` uploads it on
-  purpose, so a red leg's file exists and would otherwise pull the minimum
-  down to a number that describes a failure rather than the tree; a leg
-  that died before `make test` has no file, and `upload-artifact`'s
-  `if-no-files-found` default of `warn` lets it contribute nothing without
-  failing the leg a second time. From `covered` and `total` in the JSON,
-  never from the checker's printed one-decimal percentage, because
-  truncation of a rounded figure is a different number — 2850/3168 prints
-  90.0 and is 89.96, and `int(90.0) - 2` is not `int(89.96) - 2`. Two
-  under rather than at the reading because a floor at the measurement
-  fails on the first honest deletion of a tested branch; two points is a
-  refactor's room without hiding a regression of real size. Truncated to
-  an integer because the floors are integers (`read_pyproject_int`).
-  `max(current, candidate)` because a leg that measures below the current
-  floor minus two is a red run to fix, never a reason to lower a floor.
-  The rule is written now and the numbers later, because the numbers do
-  not exist until CI produces them; a milestone whose figures are "expected
-  near 97/95 and 94/91" writes the expectation in `tasks.md` as what the
-  plan predicted and records what the legs said. Artifact names come from
-  `runner.os` and the leg's interpreter expression so no literal version
-  enters the file. Rejected: a floor per leg (five more keys for a property
-  one minimum expresses); setting the floors from this container now (the
-  reason above); reading the printed percentages (the rounding above).
+  writes the JSON report on a run with failing tests and `if: always()`
+  uploads it on purpose, so a red leg's file exists and would otherwise
+  pull the minimum down to a number that describes a failure rather than
+  the tree; a leg with no report — one that died before `make test`, or
+  whose pytest ended at collection with exit 2 and wrote none — uploads
+  nothing, and `upload-artifact`'s `if-no-files-found` default of `warn`
+  lets both cases contribute nothing without failing the leg a second time.
+  From `covered` and `total` in the JSON, never from the checker's printed
+  one-decimal percentage, because truncation of a rounded figure is a
+  different number — 2850/3168 prints 90.0 and is 89.96, and `int(90.0) -
+  2` is not `int(89.96) - 2`. Two under rather than at the reading because
+  a floor at the measurement fails on the first honest deletion of a tested
+  branch; two points is a refactor's room without hiding a regression of
+  real size. Truncated to an integer because the floors are integers
+  (`read_pyproject_int`). `max(current, candidate)` because a leg that
+  measures below the current floor minus two is a red run to fix, never a
+  reason to lower a floor. The rule is written now and the numbers later,
+  because the numbers do not exist until CI produces them; a milestone
+  whose figures are "expected near 97/95 and 94/91" writes the expectation
+  in `tasks.md` as what the plan predicted and records what the legs said.
+  Artifact names come from `runner.os` and the leg's interpreter expression
+  so no literal version enters the file. Rejected: a floor per leg (five
+  more keys for a property one minimum expresses); setting the floors from
+  this container now (the reason above); reading the printed percentages
+  (the rounding above).
 - **DEC-MCO-011:** every property this package changes is read from the
   file by a test, not asserted by hand, and each guard is seen red first.
   The Makefile's shape — `coverage-run` holding the erase and the one bare
@@ -558,14 +633,16 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   after, dated with its commit — `make -n pre-pr | grep -c "python -m
   pytest"` for the count of runs and `time make pre-pr` for the wall time —
   rather than claimed from the plan's figures, and where two sessions
-  measured the same commit both figures are kept: at `31d7275` the
-  drafter's combined run took 232.9 s and the reviewer's 230.9 s; the
-  Appendix A durations command gave 1578 passed in 212.5 s and 210.46 s.
-  The durations command is recorded as W7.6's baseline and is not expected
-  to move here: this package changes how often the suite runs, not how
-  long one run takes. The combined-versus-two-run equality is recorded at
-  the branch head in Milestone 0, because it is the premise of DEC-MCO-001
-  and a premise is re-measured where it is relied on.
+  measured the same commit both figures are kept: at `5246931` (the files
+  of `31d7275`) the drafter's combined run took 232.9 s and the reviewer's
+  230.9 s; the Appendix A durations command gave 1578 passed in 212.5 s and
+  210.46 s. The durations command is recorded as W7.6's baseline and is not
+  expected to move here: this package changes how often the suite runs, not
+  how long one run takes. The combined-versus-two-run equality is recorded
+  at the branch head in Milestone 0, because it is the premise of
+  DEC-MCO-001 and a premise is re-measured where it is relied on; the
+  reports in the working tree at drafting were a drafting-time reading, and
+  Milestone 0's regeneration, dated at its commit, is the figure of record.
 - **DEC-MCO-013:** documents that describe the design are updated; dated
   records are left. `docs/hooks.md`, `docs/architecture/c4.md`,
   `tests/AGENTS.md`, the `pyproject.toml` and `Makefile` comments and the
@@ -588,23 +665,29 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
 - [ ] **AC-MCO-1:** against a planted `pyproject.toml` declaring `source =
   ["openspec_graph", "tools"]` with `fail_under`, `branch_fail_under` and the
   `tools_*` keys and no `openspec_graph_*` key, both checkers under
-  `--scope openspec_graph` read the unscoped locators and gate the summed
-  `openspec_graph/` entries against them — failing below and passing at the
-  floor — while `--scope tools` reads the `tools_*` keys as before; and on
-  a planted file whose first entry does carry a scoped key, the checkers
-  honour that key (the misconfiguration the guard of AC-MCO-3 exists to
-  forbid). The tests are written with this change; until they exist the
-  stage is the citation. (R-MCO-3, R-MCO-5, DEC-MCO-002)
+  `--scope openspec_graph` — and under `--scope openspec_graph/`, which
+  normalises to the same name — read the unscoped locators and gate the
+  summed `openspec_graph/` entries against them — failing below and passing
+  at the floor — while `--scope tools` reads the `tools_*` keys as before;
+  and on a planted file whose first entry does carry a scoped key, the
+  checkers honour that key (the misconfiguration the guard of AC-MCO-3
+  exists to forbid). The tests are written with this change; until they
+  exist the stage is the citation. (R-MCO-3, R-MCO-5, DEC-MCO-002,
+  DEC-MCO-003)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-MCO-2 (non-success):** `--scope tools` on a planted file that
   declares `tools` second in `source` and carries no `tools_*` key exits 2
-  from both checkers, as does a scope absent from `source`, and the message
-  names the scoped key and the first entry the unscoped locators belong to;
+  from both checkers, as does a scope absent from `source`, with a message
+  naming the scoped key and the first entry the unscoped locators belong
+  to; `--scope openspec_graph` on a planted file whose first entry lacks
+  `fail_under` (or `branch_fail_under`) exits 2 with a message naming the
+  scoped key and saying the first entry's unscoped floor is absent too;
   the existing fixture, which declares no `source`, proves the exit code
   unchanged; the nothing-measured exit, every `--scope` spelling, the usage
-  error and the Windows separators behave as before. The message assertion
-  is a new test; until it exists the stage covers it. (R-MCO-4, C-MCO-5)
+  error and the Windows separators behave as before. The message assertions
+  are new tests; until they exist the stage covers them. (R-MCO-4,
+  C-MCO-5)
   _Verified by:_ `pytest -k "test_scoped_gate_fails_loudly_when_its_floor_is_not_configured or test_a_scope_matching_nothing_fails_the_gate_rather_than_passing or test_scoped_totals_normalize_windows_separators or test_coverage_argv_parses_every_accepted_shape or test_coverage_argv_rejects_a_scope_without_a_value or test_scoped_gate_reports_a_usage_error_as_exit_2"` · stage: `make test`
 
 - [ ] **AC-MCO-3 (non-success):** the real `pyproject.toml`'s first `source`
@@ -618,9 +701,10 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   multi-line array under `[tool.coverage.run]`, normalises `./tools/` and
   `tools/` to `tools`, ignores a `source` key under another table, does not
   read the dotted `[tool.coverage] run.source` form or `source_pkgs`, and
-  returns an empty list when the file, table or key is absent. The test is
-  written with this change; until it exists the stage is the citation.
-  (R-MCO-3, DEC-MCO-003)
+  returns an empty list when the file, table or key is absent; and
+  `normalize_scope` maps `openspec_graph/`, `./openspec_graph` and
+  `openspec_graph` to one name. The test is written with this change; until
+  it exists the stage is the citation. (R-MCO-3, DEC-MCO-003)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-MCO-5:** the scoped sum, the unscoped totals read, the
@@ -712,12 +796,15 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   _Verified by:_ `pytest -k test_every_spec_test_citation_resolves_to_a_real_test` · stage: `make test`
 
 - [ ] **AC-MCO-15:** `add-witness-ci-artifacts`' spec and tasks carry the
-  amendments R-MCO-10 describes — every site naming the job, the two
-  recording sites, DEC-WCA-006 — each naming this package, with its dated
-  measurements and its proposal untouched and nothing else in that package
-  changed, and that package validates clean under the repository's own
-  rules after the edit, as does this one. The edits are read directly; the
-  gate holds both packages. (R-MCO-10, C-MCO-7, DEC-MCO-007)
+  amendments R-MCO-10 describes — every site naming the job, the recording
+  sites (R-WCA-28, the `ladder` bullet, AC-WCA-24, R-WCA-22, R-WCA-27), the
+  run-by-name sites (R-WCA-30, AC-WCA-25, DEC-WCA-018 and the planned test)
+  with their carve-out, and DEC-WCA-006 — each naming this package, with
+  its dated Problem-Statement count and its proposal untouched and nothing
+  else in that package changed, and that package validates clean under the
+  repository's own rules after the edit, as does this one. The edits are
+  read directly; the gate holds both packages. (R-MCO-10, C-MCO-7,
+  DEC-MCO-007)
   _Verified by:_ stage: `make validate`
 
 - [ ] **AC-MCO-16 (non-success):** `check_coverage_floor.py --per-file-min`
@@ -739,10 +826,12 @@ by `ci.yml`. At the plan's threshold of 85, one module is below:
   _Verified by:_ `pytest -k test_makefile_has_matcher_accuracy_report_target` · stage: `make test`
 
 - [ ] **AC-MCO-18:** `parse_coverage_argv` returns the same `(path, scope)`
-  pair for every accepted shape it accepted before, and the per-file flag
-  is consumed by `check_coverage_floor.main` before it — so
-  `check_branch_coverage.py` is unchanged in its argument handling.
-  (R-MCO-11, DEC-MCO-009)
+  pair for every accepted shape it accepted before, the per-file flag is
+  consumed by `check_coverage_floor.main` before it, and
+  `check_branch_coverage.py` given a trailing `--per-file-min` ignores it
+  and gates normally, exactly as it does today. The last clause is a new
+  test; until it exists the existing argv test and the stage are the
+  citation. (R-MCO-11, DEC-MCO-009)
   _Verified by:_ `pytest -k test_coverage_argv_parses_every_accepted_shape` · stage: `make test`
 
 - [ ] **AC-MCO-19 (observed after the first CI run):** the source run's

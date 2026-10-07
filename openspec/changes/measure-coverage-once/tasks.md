@@ -1,13 +1,14 @@
 # Tasks: measure-coverage-once
 
-Measured at `31d7275` on `claude/m2-measure-cheaper`, 2026-10-06 — the tree
-that carries milestones M0 and M1; this draft was committed on the same
-branch as `c172eef` the same day, and figures taken with it present say so.
+Measured at `5246931` (`main`, the squash of M1; the measured files are
+byte-identical to `31d7275` on `claude/m1-pin-and-release`, where the figures
+were first taken), 2026-10-06; figures taken with this draft present are
+dated at `92acd04` on `claude/m2-measure-cheaper` and say so.
 Every line number below is re-checked against the branch head before the
 milestone that uses it; a sibling package landing first may move a line
 without moving the fact. Every number here names the command that produced
 it, and where the adversarial review re-measured one at the same commit
-both figures stand. At `31d7275`: `make -n pre-pr | grep -c "python -m
+both figures stand. At `5246931`: `make -n pre-pr | grep -c "python -m
 pytest"` prints 2 and `make -n coverage-tools | grep -c "python -m pytest"`
 prints 1; the Appendix A durations command (`python -m pytest tests/ -p
 no:cacheprovider -q --durations=12 -o addopts=""`) reports 1578 passed in
@@ -18,18 +19,18 @@ the reviewer's; the Appendix A combined run (`python -m pytest tests/
 in a scratch directory; 232.9 s wall in the drafter's run, 230.9 s in the
 reviewer's) sums per scope to `openspec_graph/` 2276/2292 lines and 744/762
 branches and `tools/` 842/876 and 276/296 — exactly the figures in the
-tree's HEAD `coverage.json` and `coverage-tools.json` — with unscoped totals
+drafting-time `coverage.json` and `coverage-tools.json` — with unscoped totals
 3118/3168 and 1020/1058; the `test` recipe's pytest line alone, timed the
 same way into the scratch directory, took 234.3 s and wrote 2276/2292 and
 744/762, and the `coverage-tools` recipe's pytest line alone took 236.7 s
 and wrote 842/876 and 276/296 under `--scope tools` (its report holding 43
 files, the 30 of `openspec_graph/` and the 13 of `tools/`);
 `planlint --target . detect` counted 48 change packages. With this draft
-present (`c172eef`): `detect` counts 49 change packages, and
+present (`92acd04`, re-verified by the review): `detect` counts 49 change packages, and
 `make stage-citations` reads 50 specs, `coverage-tools` mentioned in 3 and
 verified by 2 and run directly by `ci.yml`, `test` 47 and 47, `pre-pr` 45
 and 12, `ci` 14 and 7, 5 stages invoked by no scanned workflow (`ci`,
-`security`, `thresholds`, `validate`, `wheel-check`) — at `31d7275` without
+`security`, `thresholds`, `validate`, `wheel-check`) — at `5246931` without
 the draft the same report read 49 specs, `coverage-tools` 2 and 2, `test`
 46 and 46, `pre-pr` 44 and 11. Order (DEC-MCO-011, DEC-MCO-012): measure,
 then the mapping rule with its guards seen red, then the one run with its
@@ -54,7 +55,7 @@ committed.
   checkers print against each report (`python tools/check_coverage_floor.py
   <report> --scope tools`, the branch checker likewise; the package figures
   by summing `summary` entries under `openspec_graph/`, since the scoped
-  package read does not exist yet). Drafting values at `31d7275`: 234.3 s
+  package read does not exist yet). Drafting values at `5246931`: 234.3 s
   and 236.7 s, with the figures in the header. Re-run the combined command
   at the branch head and confirm the per-scope sums still equal the two-run
   figures; record both sets side by side (AC-MCO-9's before half,
@@ -63,16 +64,16 @@ committed.
   `python tools/check_coverage_floor.py coverage.json --scope openspec_graph`
   and the branch checker both exit 2 naming `openspec_graph_line_fail_under`
   / `openspec_graph_branch_fail_under`; the unscoped line checker on the
-  combined report reads its diluted total (98.4 % at `31d7275`). Record
+  combined report reads its diluted total (98.4 % at `5246931`). Record
   `python tools/check_no_hardcoded_thresholds.py` → PASS.
 - Record the per-file list at the branch head at the plan's 85, by summing
   each file's `summary` under its scope prefix in the two reports: at
-  `31d7275`, `openspec_graph/` none below (lowest `openspec_graph/sarif.py`
+  `5246931`, `openspec_graph/` none below (lowest `openspec_graph/sarif.py`
   89.1 %, 41/46); `tools/` one below, `tools/check_branch_coverage.py`
   84.2 % (32/38).
 - Confirm the subprocess-hook facts DEC-MCO-008 rests on, against the
   installed packages: `ls` the `site-packages` directory for `*.pth` files
-  (at `31d7275`: only coverage.py's `a1_coverage.pth`, keyed on
+  (at `5246931`: only coverage.py's `a1_coverage.pth`, keyed on
   `COVERAGE_PROCESS_START` / `COVERAGE_PROCESS_CONFIG`);
   `python -c "import importlib.metadata as m; print(m.metadata('pytest-cov'))"`
   for the sentence that `.pth` support "was removed in pytest-cov 7";
@@ -80,7 +81,7 @@ committed.
   uses `cwd=tmp_path` and `env=env_without_coverage()`. Record what each
   says.
 - Re-check `add-witness-ci-artifacts`' status: `Status: DRAFT`;
-  `grep -c "^- \[ \] \*\*AC-WCA"` over its spec (34 at `31d7275`) and the
+  `grep -c "^- \[ \] \*\*AC-WCA"` over its spec (34 at `5246931`) and the
   `[x]` form (0); `ls .github/actions/` (only `planlint`);
   `grep -n "witness_dir\|ladder:" .github/workflows/ci.yml openspec_graph/detect.py openspec_graph/cli.py`
   (nothing). If any of these has changed, stop and re-read DEC-MCO-007
@@ -125,6 +126,11 @@ committed.
   a scope absent from `source` behaves the same — the existing
   `test_scoped_gate_fails_loudly_when_its_floor_is_not_configured` keeps
   proving the exit code on a fixture with no `source` at all; R-MCO-4);
+  `test_the_first_source_without_its_unscoped_floor_is_named_as_absent`
+  (`--scope openspec_graph` with `openspec_graph` first in `source` and no
+  `fail_under` / `branch_fail_under`: both checkers exit 2 and stderr names
+  the scoped key and says the first entry's unscoped floor is absent too —
+  the other branch of R-MCO-4's message);
   `test_coverage_sources_reads_the_run_table_array_and_nothing_else`
   (inline `["a", "b"]`, a multi-line array, `["./tools/", "openspec_graph/"]`
   normalised to `["tools", "openspec_graph"]`, a `source` key under
@@ -138,17 +144,22 @@ committed.
   record here which of these are red and with what message; the
   duplicate-key test is green on the real tree from the start and red only
   on its planted half, which is the expected shape.
-- `tools/_common.py`: add `coverage_sources(pyproject: Path) -> list[str]`
+- `tools/_common.py`: add `normalize_scope(name: str) -> str` — strip a
+  leading `./` and a trailing `/`, the one spelling `--scope` and `source`
+  compare in — and `coverage_sources(pyproject: Path) -> list[str]`
   beside `read_pyproject_int`, hand-rolled on the same table-tracking loop
   — enter the literal `[tool.coverage.run]` header, find `source = [`,
   collect quoted strings until the closing `]`, which may be on a later
-  line, strip a leading `./` and a trailing `/` from each — with a docstring
+  line, pass each through `normalize_scope` — with a docstring
   saying why it is not `tomllib`, what shape it accepts, and that the dotted
   `[tool.coverage] run.source` form and `source_pkgs` are not read and
   surface as the exit-2 message (DEC-MCO-003). Add `scoped_floor(pyproject:
-  Path, scope: str, kind: str) -> int | None` implementing R-MCO-3 in that
-  order — scoped key, then the unscoped locator when `scope` equals
-  `coverage_sources(pyproject)[0]`, then `None` — with the unscoped
+  Path, scope: str, kind: str) -> int | None` implementing R-MCO-3 on the
+  normalised scope, in that order — the scoped key, built from the
+  normalised name (`tools_line_fail_under`, never `tools/_line_fail_under`),
+  then the unscoped locator when `normalize_scope(scope) in
+  coverage_sources(pyproject)[:1]` (an empty list needs no special case),
+  then `None` — with the unscoped
   locators as one module-level mapping `{"line": ("[tool.coverage.report]",
   "fail_under"), "branch": (SCOPED_FLOOR_SECTION, "branch_fail_under")}` so
   both checkers read the same pair, and a docstring stating the rule, why
@@ -157,16 +168,22 @@ committed.
   `parse_coverage_argv` unchanged.
 - `tools/check_coverage_floor.py`: `_read_floor(pyproject, scope)` returns
   the unscoped read when `scope is None` and `scoped_floor(pyproject, scope,
-  "line")` otherwise; the `floor is None` branch's `where` for a scope
-  becomes "`[tool.specgraph] <scope>_line_fail_under`; the unscoped
-  `fail_under` applies only to the first `[tool.coverage.run] source` entry
-  (`<first or 'none declared'>`)" (R-MCO-4). Update the module docstring:
+  "line")` otherwise; the `floor is None` branch's `where` for a scope is
+  branched (R-MCO-4): for a scope that is not the first entry,
+  "`[tool.specgraph] <scope>_line_fail_under`; the unscoped `fail_under`
+  applies only to the first `[tool.coverage.run] source` entry (`<first or
+  'none declared'>`)"; for the first entry itself with `fail_under` absent,
+  "`[tool.specgraph] <scope>_line_fail_under`, and `[tool.coverage.report]
+  fail_under` — the first source entry's floor — is absent too", so a
+  reader of the first entry is not sent to the scoped key. Update the
+  module docstring:
   one run writes `coverage.json`; this script reads it under `--scope` for
   each measured tree; the floor is the scoped key or, for the first source
   entry without one, `[tool.coverage.report] fail_under`.
 - `tools/check_branch_coverage.py`: `_read_branch_floor` likewise through
-  `scoped_floor(pyproject, scope, "branch")`; the message names both places
-  the same way; docstring updated the same way.
+  `scoped_floor(pyproject, scope, "branch")`; the message is branched the
+  same way, naming `[tool.specgraph] branch_fail_under` in the first-entry
+  case; docstring updated the same way.
 - Re-run `python -m pytest tests/test_gate_scripts.py tests/test_ci_hardening.py -q`
   and record: the new tests green, every pre-existing checker test green
   without an edit (C-MCO-5, AC-MCO-5). Run
@@ -278,14 +295,16 @@ committed.
   make pre-pr` and record the wall time beside Milestone 0's before figure
   (R-MCO-15, DEC-MCO-012).
 - `.github/workflows/ci.yml`: delete the `coverage-tools` job (lines
-  384–403 at `31d7275`, comment included). In the `test` job, after the
+  384–403 at `5246931`, comment included). In the `test` job, after the
   `make test` step, add `- uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1`
   with `if: always()`, `name: coverage-${{ runner.os }}-${{ matrix.python-version }}`
   and `path: coverage.json`, under a comment saying the per-leg report is
   what the floor ratchet reads (R-MCO-12), that a red leg's report is
   uploaded on purpose and excluded by the ratchet, and that a leg with no
-  file contributes nothing under the action's `if-no-files-found` default
-  of `warn`. In `test-windows`, the same step with
+  report — one that died before `make test`, or whose pytest ended at
+  collection with exit 2 and wrote none — contributes nothing under the
+  action's `if-no-files-found` default of `warn`. In `test-windows`, the
+  same step with
   `name: coverage-${{ runner.os }}-${{ env.PYTHON_DEFAULT }}`. Nothing else
   changes (R-MCO-7). Run
   `python -m pytest tests/test_workflow_hardening.py tests/test_ci_hardening.py -q`
@@ -325,7 +344,7 @@ committed.
   lines 43–44 become "Run `make test`; it measures both trees in one run and
   reads each floor scoped, so one tree's headroom never hides the other's
   regression. `make coverage-tools` re-reads `tools/` from the same report."
-  Replace, do not add; `wc -l tests/AGENTS.md` read 50 at `31d7275` against
+  Replace, do not add; `wc -l tests/AGENTS.md` read 50 at `5246931` against
   `MAX_NESTED_LINES = 60`. Run `python -m pytest tests/test_agent_artifacts.py -q -k "nested_agents or agent_index_links"`.
 - `tests/test_gate_scripts.py`: the comment at 430–432 above the
   scoped-floor tests becomes "`make test` gates both trees from one report
@@ -336,18 +355,20 @@ committed.
 - `openspec/changes/add-witness-ci-artifacts/specs/witness-ci-artifacts/spec.md`
   (R-MCO-10, DEC-MCO-007), each edit ending "(amended by
   `measure-coverage-once`)", at every site Milestone 0's `grep -n
-  coverage-tools` found plus the two recording sites and DEC-WCA-006; at
-  `31d7275` those are: the stage-list sentence at line 56 — "Four run in
+  coverage-tools` found, the recording sites, the run-by-name sites (which
+  a grep for the job does not find) and DEC-WCA-006; at
+  `5246931` those are: the stage-list sentence at line 56 — "Four run in
   `ci.yml` under their make-target name (`test`, `lint`, `typecheck`,
   `docs-check`); `coverage-tools` is built by `make pre-pr` and runs in no
-  job of its own" — leaving the dated measurement in the same paragraph as
-  it is; R-WCA-27 at 227 — delete the `coverage-tools` → `coverage-tools`
+  job of its own" — leaving the dated count at `:51–52` in the same
+  paragraph as it is (the count is a measurement, the list at `:56` is a
+  plan); R-WCA-27 at 227 — delete the `coverage-tools` → `coverage-tools`
   row; R-WCA-28 — add "the `ladder` job's `make pre-pr` step also records
   `coverage-tools`, which that invocation builds as a prerequisite of
   `pre-pr`, and records it only when the invocation exited 0 — a red
   `pre-pr` proves nothing about whether `coverage-tools` was reached, so
-  nothing is recorded for it and W001 reports the stage unwitnessed
-  (DEC-WCA-006)"; DEC-WCA-006 at 359 — append "One inference is sanctioned,
+  nothing is recorded for it and W001 reports the stage with no witness at
+  the current commit, not as a failing run (DEC-WCA-006)"; DEC-WCA-006 at 359 — append "One inference is sanctioned,
   and only this one: `coverage-tools` is a prerequisite of the very `make
   pre-pr` invocation the `ladder` job runs, so the two share one exit code,
   and Make reaches `pre-pr`'s own recipe only after every prerequisite
@@ -356,13 +377,30 @@ committed.
   not evidence either way, so the step records `coverage-tools` on exit 0
   only and otherwise records nothing for it"; DEC-WCA-016's sentence at
   467–470 — "`ci.yml` already runs the suite once per `test` matrix leg and
-  once on `test-windows` (`make -n pre-pr | grep -c "python -m pytest"`
-  prints 1 since `measure-coverage-once`); `ladder` adds two — `make ci`
-  runs `test`, and `make pre-pr`, a separate Make invocation, runs it
-  again". `tasks.md:249`: drop `coverage-tools` from the recording-job list
-  and add the exit-0-only recording of `coverage-tools` to its `ladder`
-  bullet. Nothing else in that package — not its Problem Statement's dated
-  measurement, not its proposal. Run
+  once on `test-windows` — the leg count regenerated by `grep -c "run: make
+  test" .github/workflows/ci.yml` — and one `make pre-pr` invocation issues
+  one pytest run (`make -n pre-pr | grep -c "python -m pytest"` prints 1
+  since `measure-coverage-once`); `ladder` adds two — `make ci` runs
+  `test`, and `make pre-pr`, a separate Make invocation, runs it again";
+  AC-WCA-24 at 744–756 — "`ladder` runs exactly two recorded steps" becomes
+  "two stage steps and three recorder steps, the third conditional on the
+  `pre-pr` step's exit 0", and its planned
+  `test_ci_ladder_runs_only_the_two_aggregates` (`tasks.md:276`) counts
+  `run: make` steps, not recorder steps; R-WCA-22 at 185–190 and R-WCA-27
+  at 223–225 — the `if: always()` recorder idiom gains its one exception by
+  name, the `coverage-tools` recorder, conditional on exit 0 and recording
+  nothing on red; R-WCA-30 at 242–245, AC-WCA-25 at 758–762, DEC-WCA-018 at
+  481–487 and the planned
+  `test_ci_runs_every_w001_enforced_stage_by_its_make_target_name`
+  (`tasks.md:277–280`) — each gains the carve-out "each stage appears as
+  `make <stage>` in `ci.yml`, or is a prerequisite of an aggregate the
+  `ladder` job runs and is recorded under DEC-WCA-006's one sanctioned
+  inference", because after this package `make coverage-tools` appears in
+  no workflow while two shipped specs cite it on verification lines.
+  `tasks.md:249`: drop `coverage-tools` from the recording-job list and add
+  the exit-0-only recording of `coverage-tools` to its `ladder` bullet.
+  Nothing else in that package — not its Problem Statement's dated count at
+  `:51–52`, not its proposal. Run
   `planlint --target . validate --fail-on ERROR --change add-witness-ci-artifacts`
   and record exit 0.
 - `CHANGELOG.md`, under `## [Unreleased]`: `### Changed — one suite run
@@ -406,10 +444,11 @@ committed.
   `tools/` module below and not the `openspec_graph/` one);
   `test_per_file_flag_leaves_the_argv_contract_alone` (`main` with the flag
   and `--scope tools` and a path still reaches the same `(path, scope)`;
-  `check_branch_coverage.main` given the flag reports a usage error rather
-  than silently accepting it — or, if `parse_coverage_argv` treats it as a
-  positional, name that here and keep the branch script's behaviour what it
-  was). Record the red run.
+  `check_branch_coverage.main` given a trailing `--per-file-min` ignores it
+  and gates normally, as `parse_coverage_argv` already makes it — it keeps
+  the first positional as the path and drops the rest — and given the flag
+  first takes it as the path and exits 2, file not found; both recorded,
+  neither changed). Record the red run.
 - `pyproject.toml`, `[tool.specgraph]`: `per_file_line_min = 85` under a
   comment — the reporting threshold for `check_coverage_floor.py
   --per-file-min`, read by the `coverage-per-file` target; it gates nothing
@@ -437,9 +476,11 @@ committed.
   --per-file-min`; add it to `.PHONY`; `ci` and `pre-pr` unchanged. It
   depends on the run and not on `test`, so it can be read while a floor is
   red (DEC-MCO-009). Confirm `make thresholds` prints PASS (no literal on
-  the line) and that `make help` lists it.
+  the line) and that `make help` lists it; its seventeen-character name
+  overruns the help's `%-14s` column by three — accepted rather than
+  widening the column and moving every row.
 - Run `make coverage-per-file` at the branch head and record its output
-  here beside Milestone 0's list; at `31d7275` the expected list is the one
+  here beside Milestone 0's list; at `5246931` the expected list is the one
   module `tools/check_branch_coverage.py` (84.2 %, 32/38), which Milestone
   1's edit to that file may have moved — record what it prints, not what
   was expected.
@@ -456,7 +497,8 @@ committed.
   by R-MCO-12. Record the run id and the artifact names here
   (`coverage-Linux-3.10` … `coverage-Linux-3.14`, `coverage-Windows-3.12` —
   whatever the expressions produced), and any leg whose artifact is absent
-  (a leg that died before `make test` uploads nothing under the action's
+  (a leg with no report — died before `make test`, or pytest ended at
+  collection — uploads nothing under the action's
   `if-no-files-found` default of `warn`).
 - Download every `coverage.json` artifact into a scratch directory and,
   for each leg, sum `covered_lines`/`num_statements` and
