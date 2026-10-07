@@ -346,6 +346,7 @@ _REQUIRED_REPORT_TARGETS = (
     "coverage-per-file",
     "stage-citations",
     "dead-code",
+    "spec-status",
 )
 
 @pytest.mark.integration

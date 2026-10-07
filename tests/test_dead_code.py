@@ -37,7 +37,7 @@ TOOL = "dead_code.py"
 CONFIDENCE_KEY = "dead_code_min_confidence"
 
 #: The scripts that must not carry the configured confidence as a literal.
-CONFIDENCE_FREE_SCRIPTS = ("dead_code.py",)
+CONFIDENCE_FREE_SCRIPTS = ("dead_code.py", "spec_status.py")
 
 #: A planted confidence that is not vulture's own level, so a test can tell
 #: the configured value from a default.

@@ -363,6 +363,7 @@ def test_read_json_reports_a_missing_file_by_name(tmp_path: Path) -> None:
         "render_rule_catalog.py",
         "stage_citations.py",
         "dead_code.py",
+        "spec_status.py",
     ],
 )
 def test_gate_script_is_runnable_as_a_script(script: str, tmp_path: Path) -> None:

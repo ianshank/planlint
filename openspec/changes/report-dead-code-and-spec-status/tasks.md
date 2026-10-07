@@ -992,7 +992,7 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
     0, `no module below 85% line coverage`, so neither script is on the
     list.
 
-## Milestone 3 — The spec-status report, its guards seen red first
+## Milestone 3 — The spec-status report, its guards seen red first [DONE]
 
 - `tests/test_spec_status.py` (new), written before the script and run red
   (R-RDS-9 to R-RDS-12, R-RDS-19, R-RDS-23). In-process through
@@ -1135,6 +1135,146 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   close: once Milestone 5 is `[DONE]` and every criterion is ticked, the row
   is `draft-but-complete` (Milestone 5 records it).
 - **Gate:** `make test`
+  **Recorded (Milestone 3, 2026-10-07, on `462aecf` + the Milestone 3 tree):**
+  - *Red first: `tests/test_spec_status.py`,* written before the script.
+    `python -m pytest tests/test_spec_status.py -q -p no:cacheprovider -o
+    addopts="" -rA`: 30 failed, every one with `FileNotFoundError: [Errno 2]
+    No such file or directory: '/home/user/planlint/tools/spec_status.py'`
+    (29 from `load_tool`, 1 from the import test's read). Every planned test
+    is there, by its planned name. Two plan items are parametrised cases:
+    the five unrecognised-header cases (no header, `IMPLEMENTED`, a
+    lower-case `draft`, a proposal word outside the vocabulary, no
+    `spec.md`), and the seven exit-2 cases (no `openspec/changes/`, one
+    holding no package, an undecodable `proposal.md`, `tasks.md` or
+    `CHANGELOG.md`, an unreadable `spec.md` or `tasks.md` through an
+    injected `PermissionError`). An extra test planting an undecodable
+    `spec.md` was drafted and dropped before the run. DEC-RDS-013 plants no
+    such case, and writing those bytes would have written a spec path by
+    hand.
+  - *Red first: the three list entries.*
+    `test_every_report_target_stays_out_of_the_ladder` with `spec-status`
+    required: `Left contains one more item: 'spec-status is not a report
+    target'`. `test_gate_script_is_runnable_as_a_script` with
+    `"spec_status.py"`: 1 failed, `AssertionError: spec_status.py is listed
+    but absent`, 13 passed. `test_the_confidence_lives_only_in_the_specgraph_table`
+    with `spec_status.py` among its scripts: `FileNotFoundError` on the
+    script.
+  - *The script.* `tools/spec_status.py` as planned: `VOCABULARY`,
+    `PROPOSAL_VOCABULARY`, `HEADER_STATUS`, `PROPOSAL_STATUS`,
+    `header_block` (blanking through `blank_html_comments` before the block
+    is cut), `read_header`, `read_proposal_status`, `PackageRow`,
+    `packages`, `read_package`, `changelog_entries`, `finding` and `main`,
+    plus `build_rows` and `render`, which the tests read rows through. It
+    imports `detect` from `openspec_graph`, and `MAKE_REF`, `SpecReadError`
+    and `parse_spec` from `openspec_graph.parse`, where `stage_citations.py`
+    takes them, since the package root does not export `MAKE_REF`. The
+    first write tripped ruff's `B905` (`zip` without `strict=`); it passes
+    `strict=True`. `ruff check tools tests`: all checks passed. `mypy
+    tools`: no issues in 15 source files.
+  - *The target.* `spec-status` joins `.PHONY` beside `dead-code`, with the
+    planned help text and recipe; the `ci:` and `pre-pr:` lines are
+    unchanged. `make thresholds`: PASS. `make help` lists `spec-status
+    Report each change package's Status header beside its evidence — a
+    report, not a gate`.
+  - *Green.* `python -m pytest tests/test_spec_status.py
+    tests/test_ci_makefile.py tests/test_dead_code.py
+    tests/test_gate_scripts.py tests/test_suite_shape.py
+    tests/test_suite_routing.py -q -p no:cacheprovider`: 178 passed. Every
+    new test is `integration`, the module's `pytestmark`, which the
+    criterion computes for each: each loads the script or reads the tree.
+    The routing guard names no hand-written spec path. `wc -l
+    tests/test_spec_status.py`: 465, against `MAX_TEST_MODULE_LINES` 700.
+    After the record, two tests grew a check each: the unrecognised-header
+    cases also run `main` (exit 1), and the CHANGELOG test names one package
+    twice in one section, listed once. `python -m pytest
+    tests/test_suite_shape.py tests/test_suite_routing.py -q -p
+    no:cacheprovider`: 52 passed.
+  - *`make spec-status` at the branch head* (`462aecf` + this tree; `python
+    tools/spec_status.py` exits 1, which `make` reports as `make: ***
+    [Makefile:101: spec-status] Error 1` and exit 2; 0.22 s by `time`). This
+    is the worklist for `settle-package-status-headers` (DEC-RDS-008,
+    R-RDS-22). Its figures include this package's own spec:
+
+    ```
+    python tools/spec_status.py
+    package                                  headers                              criteria  tasks            changelog   unrun stages                finding
+    ---------------------------------------  -----------------------------------  --------  ---------------  ----------  --------------------------  ------------------
+    add-agent-skill-distribution             spec DRAFT                           17/17     milestones 0/7   -           -                           -
+    add-architecture-drift-lint              spec APPROVED                        16/16     milestones 6/6   -           -                           -
+    add-cli-version-flag                     spec APPROVED                        6/6       milestones 1/1   -           -                           -
+    add-delta-lint                           spec DRAFT                           0/15      milestones 0/5   -           -                           -
+    add-dialect-cards                        spec APPROVED                        7/7       milestones 4/4   -           -                           -
+    add-finding-line-hits                    spec DRAFT, DRAFT                    0/23      milestones 0/6   0.2.0       -                           -
+    add-findings-json-envelope               spec APPROVED                        12/12     milestones 0/6   -           -                           -
+    add-github-action-contract               spec DRAFT                           24/24     milestones 9/10  0.2.0       ci                          -
+    add-graph-export                         spec APPROVED                        0/7       milestones 2/2   -           ci, validate                -
+    add-mermaid-graph-export                 spec APPROVED                        9/9       milestones 4/4   -           -                           -
+    add-parser-property-tests                spec DRAFT                           7/7       milestones 3/3   0.2.0       -                           draft-but-complete
+    add-sarif-and-actions                    spec DRAFT                           0/19      milestones 0/8   -           -                           -
+    add-speckit-dialect                      spec DRAFT                           51/51     milestones 5/5   -           -                           draft-but-complete
+    add-waiver-ledger-and-inv-lints          spec APPROVED                        13/13     milestones 4/4   -           -                           -
+    add-witness-ci-artifacts                 spec DRAFT                           0/34      milestones 0/10  -           ci                          -
+    add-witness-mode                         spec APPROVED                        26/26     milestones 7/7   -           -                           -
+    decompose-god-files                      spec APPROVED                        0/8       tasks 7/7        -           -                           -
+    enterprise-hardening                     spec APPROVED                        0/8       milestones 3/3   -           security                    -
+    fix-adopter-artifact-drift               spec APPROVED                        6/6       milestones 2/2   -           -                           -
+    fix-coverage-floor-detection-gap         spec APPROVED                        5/5       milestones 1/1   -           -                           -
+    fix-detect-corpus-defects                spec DRAFT                           12/12     milestones 4/4   0.2.0       -                           draft-but-complete
+    fix-heading-regex-newline-span           spec DRAFT; proposal proposed        0/21      milestones 0/4   -           validate                    -
+    fix-init-snapshot-wording                spec APPROVED                        4/4       milestones 1/1   -           -                           -
+    fix-makefile-define-block-misparse       spec APPROVED                        10/10     milestones 3/3   -           -                           -
+    fix-makefile-discovery-names             spec DRAFT                           1/12      milestones 0/5   -           -                           -
+    fix-prose-matcher-precision              spec DRAFT                           17/17     milestones 5/5   0.2.0       validate                    draft-but-complete
+    fix-stdout-encoding-crash                spec APPROVED                        6/6       milestones 2/2   -           -                           -
+    fix-subprocess-coverage-blind-spot       spec APPROVED                        8/8       milestones 2/2   -           -                           -
+    fix-symlinked-spec-dir-double-count      spec DRAFT                           10/10     milestones 4/5   -           -                           -
+    fix-u003-mandatory-given                 spec APPROVED; proposal proposed     0/8       milestones 4/4   -           validate                    headers-disagree
+    fix-u004-body-blind-modal-check          spec APPROVED                        3/3       milestones 1/1   -           -                           -
+    fix-unreadable-spec-exit-code            spec APPROVED                        12/12     milestones 0/5   -           -                           -
+    fix-windows-path-separator-leak          spec APPROVED                        11/11     milestones 3/3   -           -                           -
+    gate-tools-coverage                      spec DRAFT                           19/19     milestones 5/5   -           coverage-tools, thresholds  draft-but-complete
+    harden-ci-gates                          spec APPROVED                        0/8       milestones 3/3   -           ci, validate                -
+    harden-ci-workflows                      spec DRAFT                           29/29     milestones 8/9   0.3.0       thresholds                  -
+    harden-two-track-e2e-aqa                 spec APPROVED                        7/7       milestones 5/5   -           -                           -
+    lint-empty-speckit-requirements          spec DRAFT; proposal proposed        1/19      milestones 0/4   -           validate                    -
+    measure-coverage-once                    spec DRAFT                           23/23     milestones 5/6   Unreleased  thresholds, validate        -
+    migrate-license-metadata-pep639          spec APPROVED                        9/9       milestones 0/6   -           ci, wheel-check             -
+    parse-repo-machinery-structurally        spec APPROVED; proposal implemented  7/7       milestones 5/5   -           -                           -
+    pin-actions-by-sha                       spec DRAFT                           18/18     milestones 4/4   0.3.0       thresholds, validate        draft-but-complete
+    post-merge-quality-review                spec APPROVED                        8/8       tasks 9/9        -           -                           -
+    prepare-release-0-3-0                    spec DRAFT                           19/24     milestones 2/3   -           wheel-check                 -
+    rename-cli-and-positioning               spec APPROVED                        0/8       milestones 2/2   -           -                           -
+    report-dead-code-and-spec-status         spec DRAFT                           0/22      milestones 3/6   -           thresholds, validate        -
+    report-unchecked-make-citations          spec DRAFT                           0/15      milestones 0/5   -           validate                    -
+    select-zero-cost-guards                  spec DRAFT                           20/20     milestones 5/5   0.3.0       ci, coverage-tools          draft-but-complete
+    shape-the-test-suite                     spec DRAFT                           18/18     milestones 8/8   Unreleased  validate                    draft-but-complete
+    widen-indeterminate-unchecked-citations  spec DRAFT                           0/20      milestones 0/6   -           ci                          -
+    write-down-policies                      spec DRAFT                           12/12     milestones 4/4   -           validate                    draft-but-complete
+
+    51 package(s); 10 finding(s): 0 header-unrecognised, 1 headers-disagree, 9 draft-but-complete, 0 settled-but-empty
+    make: *** [Makefile:101: spec-status] Error 1
+    ```
+
+  - *Beside the drafting reading.* 9 `draft-but-complete`, the drafting
+    nine by name: `add-parser-property-tests`, `add-speckit-dialect`,
+    `fix-detect-corpus-defects`, `fix-prose-matcher-precision`,
+    `gate-tools-coverage`, `pin-actions-by-sha`, `select-zero-cost-guards`,
+    `shape-the-test-suite` and `write-down-policies`. 0
+    `settled-but-empty`. 1 `headers-disagree`, `fix-u003-mandatory-given`.
+    0 `header-unrecognised`. The CHANGELOG column names 10 of the 51
+    packages, as at drafting. No difference. This package's own row,
+    `DRAFT` with Milestones 3 to 5 open and no criterion ticked, carries no
+    finding at this point.
+  - *Coverage.* `make test` on the tree this record closes: exit 0.
+    `openspec_graph/` 2276/2292 lines and 744/762 branches; `tools/ line
+    coverage 96.4% (1305/1354) meets floor 94%`; `tools/ branch coverage
+    94.3% (434/460) meets floor 91%` (1304/1354 and 432/460 before the two
+    tests grew). `tools/spec_status.py` reads 95 %. Unrun: the defensive
+    `OSError` and `UnicodeDecodeError` arm of `main`, which no read of this
+    script's own reaches, because every one of them is translated where it
+    is made; the `SpecReadError` arm around `parse_spec`, which the script's
+    own read of the same file reaches first; the not-a-directory root; and
+    the `__main__` line. `make lint`: exit 0. `make typecheck`: no issues.
 
 ## Milestone 4 — Documents, the reports table and the records
 
