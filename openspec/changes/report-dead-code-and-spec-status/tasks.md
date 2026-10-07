@@ -1748,3 +1748,19 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
 
     #44's package joins the `draft-but-complete` worklist that `settle-package-status-headers` owns. Its CHANGELOG cell reads `-` because its bullet leads with `` **`ratchet-test-types-and-docstrings`: `` with a colon inside the bold. That is neither of the two shapes R-RDS-10 reads, and the CHANGELOG column enters no finding (DEC-RDS-007).
   - *Gate, before the merge commit.* `make pre-pr` on the merged and fixed tree exited 0 in 287 s of wall time (`date +%s` before and after), ending `pre-pr: all enterprise gates passed`. The four scoped lines are unchanged: `openspec_graph/` 99.3 % (2276/2292) and 97.6 % (744/762), and `tools/` 96.4 % (1305/1354) and 94.3 % (434/460).
+
+  **Recorded (Copilot's review of #46, 2026-10-07, on `9afd621` + the fix):** four findings. Each was traced to a real input and fixed in proportion, with a test seen red first.
+  1. *A second rule for a target was not followed.* `_prerequisites` in `tests/test_ci_makefile.py` returned the first matching rule only, but GNU Make merges the prerequisites of every ordinary rule for a target. So `test: audit` on a second line composed a report into the ladder unseen.
+     - It now gathers every rule's prerequisites in file order.
+     - Planted case: `test_a_report_target_composed_into_the_ladder_is_named[a second rule for an intermediate target adding it…]`. It was red (`[] == [...]`), then green.
+  2. *A directory named `*.py` passed the empty-tree check.* `check_trees` in `tools/dead_code.py` took the first `rglob("*.py")` hit, which can be a directory. A tree holding only `placeholder.py/` would then read as clean.
+     - It now requires a regular file.
+     - Planted case: `test_a_declared_tree_that_is_absent_or_holds_no_python_exits_two[py-named-directory]`. It was red (exit 1, not 2), then green.
+  3. *A hyphenated proposal word read as absent.* `PROPOSAL_STATUS` captured `\w+`, so `> **Status: in-review.**` matched nothing, and the package escaped R-RDS-11's `header-unrecognised`.
+     - It now captures `[A-Za-z-]+`, the spec header's shape.
+     - Planted case: `test_a_missing_or_unrecognised_status_header_is_a_finding[hyphenated-proposal-word]`. It was red (`None`), then green.
+  4. *A FIFO blocked the report.* `exists()` is true for a FIFO, and `open()` on one blocks until a writer appears. `spec_status._read` and `dead_code.read_whitelist` now refuse a path that is not a regular file. The report raises `ReportError`, which is exit 2 naming the file, the hazard `openspec_graph/repo_io.py` already guards for `detect`.
+     - Tests: `test_a_fifo_where_a_package_file_belongs_exits_two_rather_than_blocking` (proposal, tasks, CHANGELOG) and `test_a_fifo_where_the_whitelist_belongs_exits_two_rather_than_blocking`.
+     - Before the fix, both ran under `timeout 20` and were killed at the limit (exit 124): they blocked. Both pass after.
+     - They skip where `os.mkfifo` is absent, through the `getattr` form #44's R-TDR-3 asks for.
+  - *After.* Run with `-o addopts=""`, `tests/test_ci_makefile.py`, `tests/test_dead_code.py`, `tests/test_spec_status.py` and `tests/test_static_ratchets.py` give 104 passed. `make lint` and `make typecheck` (111 files) are clean. Both reports' output on this tree is byte-identical to the previous record's (`diff` empty).

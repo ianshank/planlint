@@ -20,6 +20,7 @@ repository: the header-reader agreement test and the real-tree run. The
 from __future__ import annotations
 
 import ast
+import os
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -184,9 +185,13 @@ def test_a_proposal_status_that_disagrees_with_its_spec_header_is_a_finding(
         (_spec("> **Status:** IMPLEMENTED"), None),
         (_spec("> **Status:** draft"), None),
         (_spec(), _proposal("shipped")),
+        (_spec(), _proposal("in-review")),
         (None, None),
     ],
-    ids=["no-header", "IMPLEMENTED", "lower-case-draft", "proposal-word", "no-spec"],
+    ids=[
+        "no-header", "IMPLEMENTED", "lower-case-draft", "proposal-word",
+        "hyphenated-proposal-word", "no-spec",
+    ],
 )
 def test_a_missing_or_unrecognised_status_header_is_a_finding(
     tmp_path: Path, spec: str | None, proposal: str | None
@@ -435,6 +440,35 @@ def test_spec_status_exits_two_when_it_cannot_run(
     err = capsys.readouterr().err
     assert "Traceback" not in err
     assert expected in err, err
+
+
+#: ``os.mkfifo`` where the platform has one, else ``None``: read through
+#: ``getattr`` so this module type-checks alike under ``--platform linux`` and
+#: ``--platform win32`` (``ratchet-test-types-and-docstrings`` R-TDR-3).
+_MKFIFO: Callable[[Path], None] | None = getattr(os, "mkfifo", None)
+
+
+@pytest.mark.skipif(_MKFIFO is None, reason="FIFOs are a POSIX feature")
+@pytest.mark.parametrize(
+    "relative",
+    ["openspec/changes/p/proposal.md", "openspec/changes/p/tasks.md", "CHANGELOG.md"],
+)
+def test_a_fifo_where_a_package_file_belongs_exits_two_rather_than_blocking(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], relative: str
+) -> None:
+    """R-RDS-12: ``exists()`` is true for a FIFO, and ``open()`` on one blocks
+    until a writer appears -- forever, here. A file that is not a regular file
+    is one the report cannot read: exit 2, the file named, before any read."""
+    _package(tmp_path, "p", spec=_spec(), tasks=_tasks([False]), proposal=_proposal("proposed"))
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    target = tmp_path / relative
+    target.unlink()
+    assert _MKFIFO is not None
+    _MKFIFO(target)
+    assert _main(tmp_path) == 2  # would block here before the fix
+    err = capsys.readouterr().err
+    assert "Traceback" not in err
+    assert "not a regular file" in err and target.name in err, err
 
 
 # --- imports and the real tree ------------------------------------------------

@@ -94,7 +94,7 @@ FINDINGS = ("header-unrecognised", "headers-disagree", "draft-but-complete", "se
 CHANGES = Path("openspec") / "changes"
 
 HEADER_STATUS = re.compile(r"^> \*\*Status:\*\* ([A-Za-z-]+)", re.MULTILINE)
-PROPOSAL_STATUS = re.compile(r"^> \*\*Status: (\w+)\.?\*\*", re.MULTILINE)
+PROPOSAL_STATUS = re.compile(r"^> \*\*Status: ([A-Za-z-]+)\.?\*\*", re.MULTILINE)
 
 _CRITERION = re.compile(r"^- \[([ xX])\] \*\*AC-", re.MULTILINE)
 _MILESTONE = re.compile(r"^## Milestone\b.*$", re.MULTILINE)
@@ -169,6 +169,11 @@ def _read(path: Path, *, replace: bool = False) -> str | None:
     or decode is a ``ReportError`` naming the file."""
     if not path.exists():
         return None
+    # is_file() before any open: a FIFO passes exists(), and open() on one
+    # blocks until a writer appears (the hazard openspec_graph/repo_io.py
+    # guards for detect).
+    if not path.is_file():
+        raise ReportError(f"cannot read {path}: not a regular file")
     try:
         if replace:
             return path.read_text(encoding="utf-8-sig", errors="replace")

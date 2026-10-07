@@ -168,7 +168,7 @@ def check_trees(root: Path, trees: Sequence[str]) -> None:
         path = root / tree
         if not path.is_dir():
             raise ReportError(f"declared tree {tree}/ is not a directory under {root}")
-        if next(path.rglob("*.py"), None) is None:
+        if not any(candidate.is_file() for candidate in path.rglob("*.py")):
             raise ReportError(
                 f"declared tree {tree}/ holds no .py file; vulture would read it as clean"
             )
@@ -179,6 +179,11 @@ def read_whitelist(path: Path) -> dict[str, str]:
     if not path.exists():
         logger.debug("dead-code: no whitelist at %s", path)
         return {}
+    # is_file() before any open: a FIFO passes exists(), and open() on one
+    # blocks until a writer appears (the hazard openspec_graph/repo_io.py
+    # guards for detect).
+    if not path.is_file():
+        raise ReportError(f"cannot read {path}: not a regular file")
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:

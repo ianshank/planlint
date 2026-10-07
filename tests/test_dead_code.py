@@ -21,6 +21,7 @@ from __future__ import annotations
 import ast
 import importlib.metadata
 import importlib.util
+import os
 import re
 import sys
 from collections.abc import Callable, Sequence
@@ -506,7 +507,7 @@ def test_dead_code_exits_two_when_it_cannot_run(
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("shape", ["absent", "no-python"])
+@pytest.mark.parametrize("shape", ["absent", "no-python", "py-named-directory"])
 def test_a_declared_tree_that_is_absent_or_holds_no_python_exits_two(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], shape: str
 ) -> None:
@@ -516,11 +517,38 @@ def test_a_declared_tree_that_is_absent_or_holds_no_python_exits_two(
     (root / "lib" / "mod.py").unlink()
     if shape == "absent":
         (root / "lib").rmdir()
+    elif shape == "py-named-directory":
+        (root / "lib" / "placeholder.py").mkdir()
     else:
         (root / "lib" / "README.md").write_text("# no python here\n", encoding="utf-8")
     assert _main(root, _never) == 2
     err = capsys.readouterr().err
     assert "tree lib/" in err and "Traceback" not in err
+
+
+#: ``os.mkfifo`` where the platform has one, else ``None``: read through
+#: ``getattr`` so this module type-checks alike under ``--platform linux`` and
+#: ``--platform win32`` (``ratchet-test-types-and-docstrings`` R-TDR-3).
+_MKFIFO: Callable[[Path], None] | None = getattr(os, "mkfifo", None)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(_MKFIFO is None, reason="FIFOs are a POSIX feature")
+def test_a_fifo_where_the_whitelist_belongs_exits_two_rather_than_blocking(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """R-RDS-5: a whitelist that is not a regular file is one the report
+    cannot read -- exit 2, named, before vulture starts -- rather than an
+    ``open()`` that blocks until a writer appears."""
+    root = _plant(tmp_path, whitelist="")
+    whitelist = root / "tools" / "dead_code_whitelist.txt"
+    whitelist.unlink()
+    assert _MKFIFO is not None
+    _MKFIFO(whitelist)
+    assert _main(root, _never) == 2  # would block here before the fix
+    err = capsys.readouterr().err
+    assert "Traceback" not in err
+    assert "not a regular file" in err and whitelist.name in err, err
 
 
 # --- the whitelist binds something (R-RDS-7) ----------------------------------

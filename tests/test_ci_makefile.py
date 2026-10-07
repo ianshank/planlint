@@ -100,12 +100,17 @@ def _make_targets(makefile_text: str) -> list[str]:
     return targets
 
 def _prerequisites(makefile_text: str, target: str) -> list[str]:
-    """The targets `target` depends on, from its rule line, help text dropped."""
+    """The targets `target` depends on, help text dropped, gathered from every
+    ordinary rule for it in file order: GNU Make merges the prerequisites of
+    all of a target's rules, so a second `test: audit` composes `audit` as
+    surely as the first rule would."""
+    found: list[str] = []
     for line in makefile_text.splitlines():
         match = _MAKE_RULE.match(line)
         if match and match.group(1) == target:
-            return match.group(2).split("##", 1)[0].split()
-    return []
+            found += [name for name in match.group(2).split("##", 1)[0].split()
+                      if name not in found]
+    return found
 
 def _phony_targets(makefile_text: str) -> set[str]:
     """Every target named on a `.PHONY:` line."""
@@ -404,6 +409,15 @@ _PLANTED_REPORT_MAKEFILE = textwrap.dedent(
             "ci composing it through an intermediate target",
             "test: ##",
             "test: audit ##",
+            [
+                "ci composes the audit report via ci -> test -> audit",
+                "pre-pr composes the audit report via pre-pr -> ci -> test -> audit",
+            ],
+        ),
+        (
+            "a second rule for an intermediate target adding it",
+            "lint: ## Lint\n",
+            "test: audit\nlint: ## Lint\n",
             [
                 "ci composes the audit report via ci -> test -> audit",
                 "pre-pr composes the audit report via pre-pr -> ci -> test -> audit",
