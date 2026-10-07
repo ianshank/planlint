@@ -10,6 +10,7 @@ invocation ci.yml's ``release-tier`` job makes.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -153,12 +154,12 @@ def test_smoke_expect_keeps_an_equals_sign_in_the_path() -> None:
 
 
 @pytest.mark.integration
-def test_smoke_venv_layout_follows_the_platform(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_smoke_venv_layout_follows_the_platform() -> None:
     tool = _tool()
-    monkeypatch.setattr(tool.sys, "platform", "win32")
-    assert tool.venv_bin(Path("v"), "planlint") == Path("v") / "Scripts" / "planlint.exe"
-    monkeypatch.setattr(tool.sys, "platform", "linux")
-    assert tool.venv_bin(Path("v"), "planlint") == Path("v") / "bin" / "planlint"
+    assert tool.venv_bin(Path("v"), "planlint", windows=True) == Path("v") / "Scripts" / "planlint.exe"
+    assert tool.venv_bin(Path("v"), "planlint", windows=False) == Path("v") / "bin" / "planlint"
+    native = tool.venv_bin(Path("v"), "planlint")
+    assert native == tool.venv_bin(Path("v"), "planlint", windows=os.name == "nt")
 
 
 @pytest.mark.e2e

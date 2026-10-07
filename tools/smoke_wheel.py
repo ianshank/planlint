@@ -27,6 +27,7 @@ install failed). Exit 2 is never a pass. Stdlib only.
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 import tempfile
@@ -57,9 +58,17 @@ def _run(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def venv_bin(venv: Path, name: str) -> Path:
-    """Where ``name`` lands inside ``venv`` on this platform."""
-    if sys.platform == "win32":
+def venv_bin(venv: Path, name: str, *, windows: bool | None = None) -> Path:
+    """Where ``name`` lands inside ``venv``: ``Scripts/<name>.exe`` on Windows, else ``bin/<name>``.
+
+    ``windows`` defaults to this interpreter's platform. It is read from
+    ``os.name`` rather than ``sys.platform`` because mypy narrows the latter
+    per ``--platform``, which made one branch "unreachable" on each CI leg;
+    passing it explicitly is how a test asserts both layouts on one host.
+    """
+    if windows is None:
+        windows = os.name == "nt"
+    if windows:
         return venv / "Scripts" / f"{name}.exe"
     return venv / "bin" / name
 
