@@ -78,19 +78,26 @@ sibling package landing first may move a line without moving the fact.
   `production_branch = "main"`, `hotfix_prefix = "hotfix/"` — and a comment
   naming this package and the one literal copy (`ci.yml`'s push branches).
 - `tools/_common.py`: `read_pyproject_str(pyproject, section, key)`, the
-  string sibling of `read_pyproject_int` on the same loop; `None` when the
-  file, table, key or value is absent.
+  string sibling of `read_pyproject_int`; `None` when the file, table, key or
+  value is absent. One shared table walker (`table_header`, `table_lines`,
+  `has_pyproject_key`) now serves every reader, and ends a table at a commented
+  header instead of reading the next table's keys into it.
 - `tools/check_promotion.py` (new, stdlib-only): subcommands `branches`
   (print the roles), `route` (judge a pull request's base and head, compute
-  the release tier, write it to `$GITHUB_OUTPUT`), `tag-ancestry` (is the
-  tagged commit an ancestor of `origin/<production>`, optionally fetching
-  first) and `aggregate` (judge `toJSON(needs)` read on stdin). Exit 0 pass,
+  the release tier, write it to `$GITHUB_OUTPUT`; an incomplete input is exit
+  2), `tag-ancestry` (is the tagged commit on the first-parent chain of
+  `origin/<production>`, optionally fetching first, optionally requiring the
+  configured production branch to equal an expected one) and `aggregate`
+  (judge `toJSON(needs)` read on stdin, the tier read from the route job's own
+  output). Exit 0 pass,
   1 refusal, 2 could-not-run; logging through the `planlint.tools` logger, so
   `PLANLINT_LOG_LEVEL=DEBUG` shows what was read.
 - `tools/smoke_wheel.py` (new, stdlib-only): install the single wheel in a
   dist directory into a clean venv and run its console script — `--version`,
   `--target . detect`, `--target . validate --fail-on ERROR` — plus any
-  repeatable `--expect PATH=EXITCODE` probes.
+  repeatable `--expect PATH=EXITCODE` probes; a probe that crashed fails even
+  with the expected code, the venv is created with `--clear`, and the console
+  script is read from `[project.scripts]`.
 - `.github/workflows/ci.yml`: push branches become `[main, qa, dev]`;
   three new jobs — `promotion` (runs `route`, always), `release-tier` (needs
   `promotion`, runs when its output says so: `make pre-pr`, sdist and wheel
@@ -98,14 +105,23 @@ sibling package landing first may move a line without moving the fact.
   `passing`/`failing` action fixtures as probes) and `ci-ok` (`if: always()`,
   needs every other job, runs `aggregate`). Every new job has a timeout in the
   configured range and no permission beyond the workflow's read-only default.
-- `.github/workflows/release.yml`: `gate` gains a tag-only step running
-  `check_promotion.py tag-ancestry --fetch`; `build`'s smoke step calls
-  `tools/smoke_wheel.py`, keeping the venv the tag-versus-version step reads;
+- `.github/workflows/release.yml`: `gate` gains a tag-only step running the
+  default branch's own `check_promotion.py tag-ancestry --fetch
+  --expect-production`; `build`'s smoke step calls `tools/smoke_wheel.py` with
+  the same fixture probes as CI, keeping the venv the tag-versus-version step
+  reads;
   `publish`'s block gains `contents: read` and its comment is corrected. No
   new workflow file.
-- `tests/test_promotion.py`, `tests/test_smoke_wheel.py` (new) and new tests
-  in `tests/test_ci_workflow.py` and `tests/test_release_surface.py`; the two
-  new scripts join `test_gate_script_is_runnable_as_a_script`'s list.
+- Tests (new): `tests/test_promotion.py`, `tests/test_promotion_gates.py`,
+  `tests/test_smoke_wheel.py`, `tests/test_ci_promotion.py`,
+  `tests/test_claude_guard.py`, and the uncollected `tests/promotion_support.py`;
+  new tests in `tests/test_release_surface.py`, `tests/test_gate_scripts.py`,
+  `tests/test_claude_hooks.py` and `tests/test_agent_skill_docs.py`. Every
+  workflow guard is asserted against a planted counter-example too.
+- Harness: `.claude/hooks/guard_promotion.py`, a `PreToolUse` guard wired in
+  `.claude/settings.json`; new `PostToolUse` nudge arms; the
+  `planlint-release` contributor skill; the `planlint-verifier` agent's
+  CI-only gates.
 - `docs/hooks.md`: CI table rows for `promotion`, `release-tier` and `ci-ok`,
   and a "Branching and promotion" section stating the model, the merge
   methods, the required check and the base-retarget limitation.

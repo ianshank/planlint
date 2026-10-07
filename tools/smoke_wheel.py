@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -38,10 +39,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _common import logger
+from _common import logger, read_pyproject_str, repo_root, table_lines
 
-#: The console script ``[project.scripts]`` declares.
-CONSOLE_SCRIPT = "planlint"
+#: Where the console script under test is declared; its first entry is the
+#: script the probes run, so a rename there needs no edit here.
+SCRIPTS_SECTION = "[project.scripts]"
+PROJECT_SECTION = "[project]"
+_SCRIPT_ENTRY = re.compile(r"""^["']?([A-Za-z0-9_.-]+)["']?\s*=""")
+_EXIT_CODE = re.compile(r"^-?\d+$")
 
 #: What CPython prints when an exception escapes. An uncaught exception also
 #: exits 1 -- the same code as "findings" -- so a probe expecting a failing
@@ -79,10 +84,25 @@ def venv_bin(venv: Path, name: str, *, windows: bool | None = None) -> Path:
     return venv / "bin" / name
 
 
+def console_script(pyproject: Path) -> str | None:
+    """The console script to probe: the one named like the project, else the first declared.
+
+    Preferring ``[project] name`` keeps the choice stable when the table is
+    reordered -- this project also ships a deprecated alias that would pass
+    every probe while testing the wrong entry point. ``None`` when none.
+    """
+    names = [m.group(1) for line in table_lines(pyproject, SCRIPTS_SECTION)
+             if (m := _SCRIPT_ENTRY.match(line))]
+    project = read_pyproject_str(pyproject, PROJECT_SECTION, "name")
+    if project in names:
+        return project
+    return names[0] if names else None
+
+
 def parse_expect(raw: str) -> tuple[str, int]:
     """``"path=1"`` -> ``("path", 1)``; anything else is a ``ValueError``."""
     path, sep, code = raw.rpartition("=")
-    if not sep or not path or not code.strip().lstrip("-").isdigit():
+    if not sep or not path or not _EXIT_CODE.match(code.strip()):
         raise ValueError(f"--expect wants PATH=EXITCODE, got {raw!r}")
     return path, int(code)
 
@@ -106,9 +126,16 @@ def smoke(
     probes: Sequence[Probe],
     *,
     python: str,
+    script: str,
     runner: Runner | None = None,
 ) -> int:
-    """Install the one wheel in ``dist`` into a fresh ``venv`` and run ``probes``."""
+    """Install the one wheel in ``dist`` into a fresh ``venv`` and run ``probes`` with ``script``.
+
+    The venv is created with ``--clear``: an existing directory (a reused
+    ``--venv`` path, a self-hosted runner) would otherwise keep an earlier
+    install, and pip would report a same-version wheel as already satisfied
+    -- smoking the old artifact instead of this one.
+    """
     run = runner or _run
     wheels = sorted(dist.glob("*.whl")) if dist.is_dir() else []
     if len(wheels) != 1:
@@ -119,7 +146,7 @@ def smoke(
     wheel = wheels[0]
 
     for label, args in (
-        ("create venv", [python, "-m", "venv", str(venv)]),
+        ("create venv", [python, "-m", "venv", "--clear", str(venv)]),
         ("install wheel", [str(venv_bin(venv, "python")), "-m", "pip", "install", "--quiet", str(wheel)]),
     ):
         done = run(args)
@@ -128,10 +155,10 @@ def smoke(
             print(f"ERROR {label} failed ({done.returncode}): {done.stderr.strip()}", file=sys.stderr)
             return 2
 
-    script = str(venv_bin(venv, CONSOLE_SCRIPT))
+    executable = str(venv_bin(venv, script))
     failed = 0
     for probe in probes:
-        done = run([script, *probe.args])
+        done = run([executable, *probe.args])
         logger.debug("smoke_wheel: %s -> %s (expected %s)", probe.label, done.returncode, probe.expected)
         crashed = TRACEBACK_MARKER in done.stderr
         if done.returncode == probe.expected and not crashed:
@@ -149,7 +176,8 @@ def smoke(
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="smoke_wheel.py", description=__doc__.split("\n\n")[0])
+    # `or ""`: under `python -OO` docstrings are stripped to None.
+    parser = argparse.ArgumentParser(prog="smoke_wheel.py", description=(__doc__ or "").split("\n\n")[0])
     parser.add_argument("dist", nargs="?", default="dist", help="directory holding the built wheel")
     parser.add_argument(
         "--venv", type=Path, default=None,
@@ -162,6 +190,14 @@ def _parser() -> argparse.ArgumentParser:
         help="also validate PATH and require exactly CODE (repeatable)",
     )
     parser.add_argument("--python", default=sys.executable, help="interpreter that creates the venv")
+    parser.add_argument(
+        "--script", default=None,
+        help=f"console script to probe (default: the first entry of {SCRIPTS_SECTION} in --pyproject)",
+    )
+    parser.add_argument(
+        "--pyproject", type=Path, default=None,
+        help="where the console script is declared (default: this repository's pyproject.toml)",
+    )
     return parser
 
 
@@ -172,11 +208,17 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(f"ERROR {exc}", file=sys.stderr)
         return 2
+    script = args.script or console_script(args.pyproject or repo_root() / "pyproject.toml")
+    if not script:
+        print(f"ERROR no console script: pass --script or declare one under {SCRIPTS_SECTION}",
+              file=sys.stderr)
+        return 2
+    logger.debug("smoke_wheel: probing console script %r", script)
     probes = build_probes(args.target, args.fail_on, expects)
     if args.venv is not None:
-        return smoke(Path(args.dist), args.venv, probes, python=args.python)
+        return smoke(Path(args.dist), args.venv, probes, python=args.python, script=script)
     with tempfile.TemporaryDirectory(prefix="planlint-smoke-") as scratch:
-        return smoke(Path(args.dist), Path(scratch) / "venv", probes, python=args.python)
+        return smoke(Path(args.dist), Path(scratch) / "venv", probes, python=args.python, script=script)
 
 
 if __name__ == "__main__":

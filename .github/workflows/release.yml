@@ -50,9 +50,19 @@ jobs:
       # tier. The branch is read from pyproject.toml, not named here. Tag runs
       # only: a workflow_dispatch dry run on a branch builds and never
       # publishes, so it has nothing to check.
+      #
+      # The tool and its configuration come from the production branch, not
+      # from the tagged commit: a tag's author controls the tagged tree, so a
+      # check read from it could be edited to pass. The repository's default
+      # branch is the authority the configured production branch must equal.
       - name: Require the tagged commit to be on the production branch
         if: github.ref_type == 'tag'
-        run: python tools/check_promotion.py tag-ancestry --sha "$GITHUB_SHA" --fetch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git fetch --no-tags origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+          git worktree add --detach "$RUNNER_TEMP/production" "origin/$DEFAULT_BRANCH"
+          python "$RUNNER_TEMP/production/tools/check_promotion.py" --pyproject "$RUNNER_TEMP/production/pyproject.toml" tag-ancestry --sha "$GITHUB_SHA" --fetch --expect-production "$DEFAULT_BRANCH"
 
       - name: Full enterprise gate
         run: make pre-pr
@@ -87,7 +97,10 @@ jobs:
       # The same tool ci.yml's release-tier job runs before any tag exists, so
       # this step repeats a check the candidate already passed.
       - name: Smoke-test the console script in a clean environment
-        run: python tools/smoke_wheel.py dist --venv /tmp/smoke
+        run: >-
+          python tools/smoke_wheel.py dist --venv /tmp/smoke
+          --expect tests/fixtures/action/passing=0
+          --expect tests/fixtures/action/failing=1
 
       - name: Confirm the tag matches the packaged version
         run: |

@@ -14,6 +14,7 @@ flowchart LR
         sec["check_secrets<br/>gitleaks, else a real fallback"]
         thr["check_no_hardcoded_thresholds<br/>the G003 rule, on this repo"]
         gen["render_* — one writer each,<br/>--check mode is the gate"]
+        rel["check_promotion · smoke_wheel<br/>route, ci-ok, tag ancestry; wheel smoke"]
     end
     gates --> verdict["exit 0 / 1 / 2"]
 ```
@@ -42,16 +43,15 @@ what `main` expects. Program name first: the five hand-rolled `check_*`
 coverage/docs/thresholds/secrets scripts, plus `matcher_accuracy`,
 `stage_citations`, `diff_spec_graph` and `render_mermaid`, which strip it
 themselves with `parse_args(argv[1:])`. Arguments only: `render_plugin_manifests`,
-`render_rule_catalog`, and `check_wheel_metadata` (whose `main` defaults `argv`
-to `None`). `run_tool_main`'s `pass_argv0` picks.
+`render_rule_catalog`, `check_wheel_metadata`, `check_promotion` and `smoke_wheel`
+(the last three default `argv` to `None`). `run_tool_main`'s `pass_argv0` picks.
 
 Test behaviour in-process against `main(argv)` — a subprocess is invisible to
 coverage. The `python tools/<script>.py` path is covered once for the whole
 directory by `test_gate_script_is_runnable_as_a_script`; adding a script means
 adding one line to its parametrize list.
 
-Verify with `make pre-pr`, or the `planlint-verifier` subagent, which runs the
-whole ladder and reports per-gate remediation.
+Verify with `make pre-pr`, or the `planlint-verifier` subagent (whole ladder, per-gate remediation).
 
 Precedence: where this disagrees with the operating contract in
 [`SKILL.md`](../skills/planlint-spec-governance/SKILL.md), `SKILL.md` wins;

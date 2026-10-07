@@ -100,14 +100,19 @@ digits only.
   production only through a promotion merge's second parent or not at all;
   and 2 when git cannot answer. With `--fetch` it MUST first fetch the
   production branch with an explicit refspec, so the remote-tracking ref is
-  updated whatever the remote's configured refspec (DEC-BPM-014).
+  updated whatever the remote's configured refspec (DEC-BPM-014). With
+  `--expect-production BRANCH` it MUST exit 2 unless the configured production
+  branch equals BRANCH, and a `--sha` that is empty or starts with `-` MUST
+  exit 2 (DEC-BPM-017).
 - R-BPM-8: `aggregate` MUST read the `needs` context as JSON on stdin and
   MUST fail on any job whose result is anything other than `success` --
   `failure`, `cancelled`, an unknown value -- and on any `skipped` job not
   declared conditional. The release tier MUST be read from the route job's
   own `release-tier` output inside that JSON (`--release-tier-from`), and
   MUST be exactly `true` or `false`: an empty, missing or other value exits
-  2, never a default (DEC-BPM-016). A job declared
+  2, never a default (DEC-BPM-016) -- and every failing job MUST still be
+  named before that exit 2. A needs entry that is not a mapping MUST be named
+  as malformed. A job declared
   `--pull-request-only` MAY be skipped only when the event is not
   `pull_request`; a job declared `--release-tier-only` MAY be skipped only
   when the release tier is false. Any other skip MUST fail, naming the job.
@@ -119,7 +124,10 @@ digits only.
   `--target PATH validate --fail-on ERROR`, exiting 1 naming any probe whose
   exit code differs from the one declared, or whose stderr carries a Python
   traceback -- an uncaught exception also exits 1, so a failing verdict must
-  be shown not to be a crash.
+  be shown not to be a crash. The venv MUST be created with `--clear`, so a
+  reused directory cannot smoke an earlier install, and the console script
+  probed MUST be the `[project.scripts]` entry named like `[project] name`
+  (else the first entry) unless `--script` names another; none found is exit 2.
 - R-BPM-10: `ci.yml`'s `on.push.branches` MUST be exactly the three
   configured branches, and a test MUST hold that list equal to the
   promotion table; `master` is dropped.
@@ -141,9 +149,31 @@ digits only.
   `check_promotion.py tag-ancestry --fetch` in a step that runs only for a
   tag ref; `build`'s smoke step MUST call `tools/smoke_wheel.py`, the same
   tool `ci.yml`'s `release-tier` calls, with `--venv` naming the path the
-  tag-versus-version step reads; `publish`'s job-level block MUST grant
+  tag-versus-version step reads; the tag-ancestry step MUST read the tool and `pyproject.toml` from a
+  worktree of the repository's default branch, passing that branch as
+  `--expect-production` (DEC-BPM-017); `build` MUST carry the same `--expect`
+  fixture probes as `release-tier`; `publish`'s job-level block MUST grant
   `contents: read` beside `id-token: write`, with a comment that is true of
   the block.
+- R-BPM-15: a pull-request route with an empty or blank base or head, or
+  without a base repository, and any other event without a ref, MUST exit 2
+  and emit no tier; a head equal to the bare
+  hotfix prefix is not a hotfix (DEC-BPM-018).
+- R-BPM-16: `.claude/hooks/guard_promotion.py`, wired as a `PreToolUse` hook
+  for Bash and the pull-request tool, MUST deny a direct push to the candidate
+  or production branch -- a push with no refspec or a bare `HEAD` judged
+  against the checked-out branch -- a force-push or delete of any long-lived
+  branch, a push of every branch (`--all`, `--mirror`), a GitHub tool writing a
+  file straight to the candidate or production branch, and a pull request
+  (the GitHub tool or `gh pr create`) whose route `check_promotion.py` refuses;
+  MUST ask before a `v*` tag push, `--tags`, a squash merge (`gh pr merge`
+  `--squash`/`-s`, or the merge tool's `squash` method) and a retarget onto the
+  candidate or production branch; MUST see through leading `VAR=value`
+  assignments, `env`-style wrappers, git's own options and newline-separated
+  commands; MUST read every branch name through `check_promotion.py`; and MUST
+  stay silent on input it cannot parse (DEC-BPM-019). It cannot see a command
+  run inside another shell (`bash -c`), which CI and the rulesets still gate. Dependabot's `target-branch` MUST name the integration branch
+  exactly when `enforce_routes` is true, held by a test.
 - R-BPM-13: `docs/hooks.md` MUST list `promotion`, `release-tier` and `ci-ok`
   in its CI table and MUST gain a "Branching and promotion" section stating
   the three roles and where they are declared; that feature pull requests
@@ -314,6 +344,31 @@ digits only.
   failed to start and turned `ci-ok` green. Read from the route job's entry in
   the JSON the verdict is computed over, the two cannot disagree, and a value
   other than `true` or `false` exits 2.
+- **DEC-BPM-017:** the tag check trusts the production branch, not the tag
+  (review H1). The release `gate` checks out the tagged commit; running that
+  commit's own `check_promotion.py` against its own `pyproject.toml` let a tag's
+  author edit either to pass. The step reads both from a worktree of
+  `github.event.repository.default_branch`, and `--expect-production` fails a
+  configuration whose production branch is not that default branch. What this
+  closes is drift, not a hostile tagger: on a tag push GitHub runs the
+  `release.yml` of the tagged commit, so whoever controls that commit controls
+  the step too. The defence against a hostile tag is outside the tree and
+  required in Phase 2 -- a `v*` tag ruleset restricting who may create tags,
+  and a required reviewer on the `pypi` environment.
+- **DEC-BPM-018:** an incomplete route is exit 2 (review M1). An empty base --
+  or, for any other event, an empty ref -- read as "no protected branch", a
+  way `route` could pass and skip the release tier. A missing base repository silently disabled the fork check. Both are
+  wiring faults in CI, where `github.base_ref` and `github.repository` are
+  always set, so neither is defaulted.
+- **DEC-BPM-019:** the harness carries the promotion model too. A `PreToolUse`
+  guard stops the forbidden pushes and routes before they leave the machine --
+  the window before any ruleset exists -- reusing `check_promotion.py route`
+  rather than restating the topology. It is a seat belt: input it cannot parse
+  passes, because CI and the rulesets are the gate. The `PostToolUse` nudge
+  points edits of `pyproject.toml`, the promotion tools and the workflows at
+  their tests; a `planlint-release` skill holds the release order; the
+  `planlint-verifier` agent reproduces the CI-only gates; and a test holds every
+  agent and skill named in both harness indexes.
 
 ---
 
@@ -501,6 +556,45 @@ digits only.
   after the promotion table does not leak its keys into it. (R-BPM-1, R-BPM-4, DEC-BPM-013, DEC-BPM-015)
   _Verified by:_ `pytest -k "test_route_with_enforcement_off_warns_instead_of_failing or test_route_enforcement_defaults_on or test_route_enforcement_rejects_a_non_boolean or test_route_enforcement_refuses_an_unreadable_switch or test_promotion_config_does_not_read_past_a_commented_table_header or test_pyproject_readers_stop_at_a_commented_table_header"` · stage: `make test`
 
+- [ ] **AC-BPM-30 (non-success):** a pull-request route with an empty base, an
+  empty head or no base repository exits 2 and writes no tier output; a head
+  equal to the bare hotfix prefix is refused. (R-BPM-15, DEC-BPM-018)
+  _Verified by:_ `pytest -k "test_route_refuses_an_incomplete_pull_request or test_route_rejects_an_empty_base_in_process or test_a_bare_hotfix_prefix_is_not_a_hotfix"` · stage: `make test`
+
+- [ ] **AC-BPM-31 (non-success):** `tag-ancestry` exits 2 when the configured
+  production branch is not the expected one and when the sha is option-shaped,
+  and the release `gate` reads the tool and its configuration from the
+  default-branch worktree. (R-BPM-7, R-BPM-12, DEC-BPM-017)
+  _Verified by:_ `pytest -k "test_tag_ancestry_refuses_a_production_branch_that_is_not_the_default or test_tag_ancestry_refuses_an_option_shaped_sha or test_release_gate_checks_tag_ancestry_against_production"` · stage: `make test`
+
+- [ ] **AC-BPM-32 (non-success):** with the tier output missing, `aggregate`
+  still prints every failing job before its exit 2, and a malformed needs entry
+  is named. (R-BPM-8, DEC-BPM-016)
+  _Verified by:_ `pytest -k "test_an_undecided_tier_still_names_every_failed_job or test_aggregate_names_a_malformed_needs_entry"` · stage: `make test`
+
+- [ ] **AC-BPM-33:** the smoke tool reads the console script from
+  `[project.scripts]`, exits 2 when there is none, creates its venv with
+  `--clear`, and refuses a malformed exit code. (R-BPM-9)
+  _Verified by:_ `pytest -k "test_the_console_script_is_read_from_project_scripts or test_smoke_without_a_console_script_exits_two or test_smoke_rejects_a_malformed_exit_code or test_smoke_runs_every_probe_with_the_venv_console_script"` · stage: `make test`
+
+- [ ] **AC-BPM-34:** the `PreToolUse` guard is wired before Bash and the
+  pull-request tool, denies and asks exactly as R-BPM-16 states on a planted
+  topology with foreign branch names, stays quiet on ordinary commands and on
+  input it cannot judge, and agrees with CI's bootstrap switch.
+  (R-BPM-16, DEC-BPM-019)
+  _Verified by:_ `pytest -k "test_a_push_without_a_destination_is_judged_on_the_checked_out_branch or test_the_guard_judges_the_github_tools_that_write_merge_or_retarget or test_settings_route_every_judged_github_tool_to_the_guard or test_settings_wires_the_guard_before_bash_and_pull_requests or test_the_guard_refuses_what_the_promotion_model_forbids or test_the_guard_stays_quiet_on_ordinary_commands or test_the_guard_judges_a_pull_request_with_the_ci_route or test_a_refused_route_is_only_a_warning_while_enforcement_is_off or test_the_guard_never_blocks_on_input_it_cannot_judge"` · stage: `make test`
+
+- [ ] **AC-BPM-35:** Dependabot's `target-branch` and `enforce_routes` agree;
+  every agent and skill is named in both harness indexes; and the release skill
+  cites only real `check_promotion.py` subcommands. (R-BPM-16, DEC-BPM-019)
+  _Verified by:_ `pytest -k "test_route_enforcement_and_dependabot_flip_together or test_harness_docs_list_every_agent_and_skill or test_release_skill_uses_only_real_promotion_subcommands"` · stage: `make test`
+
+- [ ] **AC-BPM-36 (non-success):** every workflow guard of this package names
+  its defect on a planted workflow: a job missing from `ci-ok`, a conditional
+  job undeclared or misdeclared, a diverging smoke caller, a soft-failing
+  promotion job, a miswired route output. (R-BPM-11, R-BPM-12)
+  _Verified by:_ `pytest -k "test_a_job_missing_from_the_aggregator_is_named or test_an_undeclared_or_misdeclared_conditional_job_is_named or test_a_diverging_smoke_caller_is_named or test_a_soft_failing_promotion_job_is_named or test_a_miswired_route_output_is_named"` · stage: `make test`
+
 ---
 
 ## Invariants Touched
@@ -512,7 +606,7 @@ spec.
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Focused | `make test` | AC-BPM-1..23, 25, 29 — the topology is read, every route, tier, aggregate and ancestry verdict holds with its counter-example, the smoke tool is shared, the workflow shape guards stay green |
+| Focused | `make test` | AC-BPM-1..23, 25, 29..36 — the topology is read, every route, tier, aggregate and ancestry verdict holds with its counter-example, the smoke tool is shared, the workflow shape guards stay green |
 | Docs | `make docs-check` | AC-BPM-24 — the branching section, runbook, template and changelog are present and linked |
 | Self-check | `make validate` | this package validates clean against the repo's own rules |
 | Full | `make pre-pr` | AC-BPM-26..28 — the local equivalent of the release tier, which `ci.yml` now runs by name; the observations recorded in `tasks.md` |

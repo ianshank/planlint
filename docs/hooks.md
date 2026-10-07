@@ -1,7 +1,9 @@
 # Hooks
 
 Pre-commit and CI hooks enforce the same gate as `make pre-pr`, so a commit can
-never bypass what CI checks.
+never bypass what CI checks. CI additionally enforces the promotion route and,
+into the release-candidate and production branches, the release tier (see
+*Branching and promotion*).
 
 ## Pre-commit
 
@@ -123,8 +125,8 @@ checkers under `--scope`. pytest-cov's own total gates nothing on that run —
 it is the diluted figure for everything measured — so neither tree's headroom
 hides the other's regression. `coverage-tools` remains a documented target
 that depends on the run and re-reads `tools/` alone; it has no job of its own
-and is reached in CI as a prerequisite of the `make pre-pr` the release
-workflow runs. Locally it is part of `make pre-pr`, not `make ci`, which stays
+and is reached in CI as a prerequisite of the `make pre-pr` that the
+`release-tier` job and the release workflow run. Locally it is part of `make pre-pr`, not `make ci`, which stays
 the fast inner loop. Every leg that runs the suite uploads its `coverage.json`
 as an artifact; those per-leg reports are what the floors are set from — two
 points under the minimum green leg, never down.
@@ -133,10 +135,14 @@ The `graph-diff` job checks out the PR head SHA (not the synthetic merge
 commit) so `merge-base` resolves to the true branch point (DEC-CH-001).
 
 `release` lives in its own workflow file because it is tag-triggered, not
-push/PR-triggered. Its clean-venv step is not redundant with the `test`
-matrix: the suite runs the CLI as `python -m openspec_graph.cli`, so nothing
-else ever exercises the console script a wheel actually installs, or proves
-the package really declares no runtime dependencies.
+push/PR-triggered. Its clean-venv step (`tools/smoke_wheel.py`) is not
+redundant with the `test` matrix: the suite runs the CLI as
+`python -m openspec_graph.cli`, so only this tool exercises the console script
+a wheel actually installs and proves the package declares no runtime
+dependencies. It is the same tool, with the same fixture probes, that
+`release-tier` runs before any tag exists, and
+`test_the_real_wheel_passes_the_shared_smoke_tool` runs it inside the suite
+when the build frontend is available.
 
 Note that `tools/check_no_hardcoded_thresholds.py` scans **every** file under
 `.github/workflows/`, not a named one — a workflow added later would otherwise
@@ -162,7 +168,24 @@ mid-edit:
   `tests/baseline_rules.json` and run `tests/test_rule_registry_docs.py`
   (see the `planlint-add-rule` skill below).
 - Editing the `Makefile` or a `.github/workflows/*.yml` file → reminds to run
-  `make thresholds`.
+  `make thresholds`, and for a workflow
+  `pytest tests/test_ci_promotion.py tests/test_ci_workflow.py tests/test_release_surface.py`:
+  a new `ci.yml` job must join `ci-ok`'s `needs` and the CI table above, a job
+  with an `if:` must be declared to the aggregator, and no promotion job may
+  soften its own failure.
+- Editing `pyproject.toml` → reminds that floors move up, never down
+  (`make thresholds`), and for the `[tool.specgraph.promotion]` table to run
+  `pytest tests/test_promotion.py tests/test_ci_promotion.py`: the push-branch
+  list must equal the table, and `enforce_routes` flips only together with
+  Dependabot's `target-branch`.
+- Editing `tools/check_promotion.py`, `tools/smoke_wheel.py` or
+  `tools/_common.py` → reminds to run
+  `pytest tests/test_promotion.py tests/test_promotion_gates.py tests/test_smoke_wheel.py tests/test_gate_scripts.py`
+  and then `make coverage-tools`.
+- Editing `.github/dependabot.yml` or a composite action → reminds to run
+  `pytest tests/test_workflow_pins.py -k dependabot`, and that a
+  `target-branch:` must name the integration branch exactly when routes are
+  enforced.
 - Editing anything under `evals/` → reminds to run
   `pytest tests/test_agent_artifacts.py`. The `planlint-add-eval-case` skill
   under `.claude/skills/` carries the full checklist. The suite's structure is asserted,
@@ -197,6 +220,24 @@ mid-edit:
   criterion from any of this repo's own change packages. The
   `planlint-add-phrasing-case` skill carries the checklist.
 
+A second hook, `PreToolUse`, runs **before** a Bash command or a GitHub
+pull-request tool call: `.claude/hooks/guard_promotion.py`
+(`adopt-branch-promotion-model`). It denies a direct push to the candidate or
+production branch (a push with no refspec is judged against the checked-out
+branch), a force-push or delete of any long-lived branch, `--all`/`--mirror`,
+a GitHub tool writing a file straight to either protected branch, and a pull
+request -- the GitHub tool or `gh pr create` -- whose route
+`tools/check_promotion.py route` refuses (it proceeds while `enforce_routes` is
+off, as in CI); it asks before a `v*` tag push or `--tags` (a tag publishes to
+PyPI), a squash merge (promotions are merge commits) and a retarget onto a
+protected branch (a retarget does not re-run CI). It sees through `VAR=value`
+prefixes, `env`, git's own options and multi-line commands, not through
+`bash -c`. Branch names come from
+`[tool.specgraph.promotion]` through that tool, never from the guard. Input
+it cannot parse it lets through: it is a seat belt for the window before the
+rulesets exist, not the gate. `tests/test_claude_guard.py` holds both
+directions.
+
 `.claude/hooks/nudge_rule_registry.sh` implements every check above via a
 single shell script (no `jq` dependency — not guaranteed to be on `PATH` in
 every dev environment this repo is used from). Despite the JSON key's name,
@@ -209,9 +250,11 @@ See also `.claude/agents/` (spec-drafter, spec-adversary, planlint-verifier —
 this repo's own dogfooded OpenSpec change-package workflow) and the
 contributor skills under `.claude/skills/`: `planlint-add-rule` (the checklist
 the first hook case above points at), `planlint-add-eval-case`,
-`planlint-add-detect-shape`, `planlint-add-phrasing-case`, and
+`planlint-add-detect-shape`, `planlint-add-phrasing-case`,
 `planlint-change-package` (the draft → gate → adversarial review → revise
-loop that `spec-drafter` and `spec-adversary` run inside). `spec-drafter`
+loop that `spec-drafter` and `spec-adversary` run inside), and
+`planlint-release` (release prep, the two promotions, the tag, the back-merge,
+hotfix and rollback, under *Branching and promotion* above). `spec-drafter`
 carries a shell for read-only checks so it can run the gate its own hook asks
 for; it writes only under its package. The hook script
 itself is held to its wiring by `tests/test_claude_hooks.py`: every path

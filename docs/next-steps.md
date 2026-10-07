@@ -234,6 +234,16 @@ with the trigger that reopens it — not omitted.
 | **Widening `indeterminate` to "no machinery detected".** | The rule-semantics question gets its own spec-drafter → spec-adversary pass. A target with no Makefile and no coverage floor passes the cited-stage and hard-coded-threshold rules vacuously; the action now *reports* that through `discovery-warnings` and a warning annotation, which is projection. Changing what `status` says about it is policy, and policy belongs in the rules. **Planned since:** `widen-indeterminate-unchecked-citations` (`docs/peer-review-2026-10.md` D3) keys the status on an unwaived G010 — the specs cite stages the run could not check — never on missing machinery alone. |
 | **A per-rule canonical-envelope snapshot corpus.** | The rule set stops changing shape. Each rule already has passing and violating fixtures in the test suite; what does not exist is a committed golden envelope per rule, which would re-pin on every registry edit for a property the existing tests already hold. |
 
+## Deferred by the branch promotion model (`adopt-branch-promotion-model`)
+
+The owner's Phase 2, in its `tasks.md` Milestone 6, after `v0.3.0` is tagged
+on trunk and that package merges: create `dev` and `qa` from `main`; in the
+same change set `enforce_routes = "true"` and Dependabot's `target-branch`
+(`test_route_enforcement_and_dependabot_flip_together` holds the two
+together); add the branch and `v*` tag rulesets, with `ci-ok` the one required
+check; and limit the `pypi` environment to `v*` tags. Retargeting an open pull
+request does not re-run CI (DEC-BPM-008); a re-run or a push does.
+
 ## Deferred / out of scope
 
 8. **Autonomous spec generation** — using an LLM to *author* specs is explicitly
@@ -256,7 +266,8 @@ it is not cargo-culted into the v0.1 surface.
     commit, which covers the main need.
 
 11. **Scheduled self-validation cron** — a scheduled job that runs `planlint
-    validate --fail-on ERROR` + `make security` against `main` to catch spec/rules
+    validate --fail-on ERROR` + `make security` against the integration branch
+    and production (`dev` and `main`) to catch spec/rules
     drift introduced by dependency or tooling bumps. Only justified once the repo
     is consumed by more than one team; for a single-consumer v0.1 tool the PR CI
     gate already enforces this on every change.
@@ -386,9 +397,10 @@ are gated; nothing here measures whether an agent reads them.
     (`make wheel-check`) fails when the SPDX expression is missing or does not
     match `pyproject.toml`, when a legacy classifier survives, or when a
     declared licence file is absent or empty, and exits 2 when there are no
-    wheels at all. It runs in a new `packaging` job on every pull request and
-    in the release workflow before anything reaches an index whose versions
-    are immutable.
+    wheels at all. It runs in a new `packaging` job on every pull request, in
+    the `release-tier` job on every pull request into `qa` or `main`, and in
+    the release workflow before anything reaches an index whose versions are
+    immutable.
 
 16. **CI wiring for the eval suite** — the cases under `evals/` have no job
     running them. `claude plugin eval` needs a plugin runtime CI does not have,

@@ -47,6 +47,11 @@ the release tag in the pin's comment; a ratchet a bump never edits), and the
 Dockerfile's base tag must equal the workflows'
 `PYTHON_DEFAULT` — in `tests/test_workflow_pins.py` and `tests/test_workflow_python.py`.
 
+Branch names are configuration too: `[tool.specgraph.promotion]` in
+`pyproject.toml`, read by `tools/check_promotion.py` and the PreToolUse guard.
+The one literal copy, `ci.yml`'s `on.push.branches`, is forced by GitHub and
+held equal to the table by `test_ci_push_branches_match_the_promotion_config`.
+
 A missing floor or uninstrumented source is a **misconfiguration**, not a skip:
 the coverage floor scripts exit 2 with a clear message. A missing gate is a bug.
 
@@ -262,18 +267,24 @@ planlint --target . validate --fail-on WARN   # warnings too, if desired
 ```
 
 CI runs the same gates across Python 3.10–3.14, plus a self-validation hard
-gate (`planlint` validates its own `openspec/` tree) and a graph-diff
-regression gate on PRs.
+gate (`planlint` validates its own `openspec/` tree), a graph-diff regression
+gate on PRs, the `promotion` route check, and `ci-ok` — the single required
+status check over every other job (see `docs/hooks.md`, *Branching and
+promotion*).
 
-One gate `make pre-pr` cannot reproduce: a `v*` tag additionally runs
-`.github/workflows/release.yml`, which builds the wheel, installs it into an
-empty virtualenv, and runs the `planlint` **console script**. The test suite
-only ever invokes `python -m openspec_graph.cli`, so nothing else exercises the
-script a user actually gets, or proves the wheel really needs no runtime
-dependencies. Reproduce it locally with:
+One tier `make pre-pr` does not reproduce on its own: the **release tier**,
+which `ci.yml`'s `release-tier` job runs on every pull request and push into the
+release-candidate or production branch, and `release.yml` runs again on a `v*`
+tag. It builds the wheel, installs it into an empty virtualenv, and runs the
+`planlint` **console script** — including against the `passing` and `failing`
+action fixtures, so the installed artifact is shown to fail a failing tree.
+The rest of the suite invokes `python -m openspec_graph.cli`;
+`test_the_real_wheel_passes_the_shared_smoke_tool` is the one test that smokes
+the real wheel, skipping only when the build frontend is unavailable.
+Reproduce the tier locally with:
 
 ```bash
-python -m build
-python -m venv /tmp/smoke && /tmp/smoke/bin/pip install dist/*.whl
-/tmp/smoke/bin/planlint --version
+rm -rf dist && python -m build --outdir dist
+python tools/check_wheel_metadata.py dist
+python tools/smoke_wheel.py dist --expect tests/fixtures/action/passing=0 --expect tests/fixtures/action/failing=1
 ```

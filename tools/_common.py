@@ -151,6 +151,12 @@ def table_header(line: str) -> str | None:
     scan inside the PREVIOUS table, so the next table's keys would leak into
     it. Shared by every reader below so they cannot disagree about where a
     table ends.
+
+    Known limits, each matching the shape this repository writes or failing
+    closed: a ``#`` inside a quoted table name is read as a comment; a spaced
+    ``[ a.b ]`` header is not matched (the table reads as absent); a
+    multi-line array element written as ``["x"]`` on its own line reads as a
+    header.
     """
     code = line.split("#", 1)[0].strip()
     return code if code.startswith("[") and code.endswith("]") else None
@@ -183,7 +189,9 @@ def has_pyproject_key(pyproject: Path, section: str, key: str) -> bool:
     Lets a caller tell "absent" from "present but not in the shape I read" --
     the difference between a default and a misconfiguration.
     """
-    pattern = re.compile(rf"{re.escape(key)}\s*=")
+    # Bare, or quoted either way: a quoted key is the same TOML key, and this
+    # reader's callers must see it as present rather than silently default.
+    pattern = re.compile(rf"""(?:{re.escape(key)}|"{re.escape(key)}"|'{re.escape(key)}')\s*=""")
     return any(pattern.match(line) for line in table_lines(pyproject, section))
 
 

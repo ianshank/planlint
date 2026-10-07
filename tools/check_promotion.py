@@ -126,7 +126,11 @@ class Topology:
 
     def head_may_target(self, base: str, head: str) -> bool:
         if base == self.production:
-            return head == self.candidate or head.startswith(self.hotfix_prefix)
+            # A hotfix branch must name something after the prefix: a head
+            # called exactly the prefix is not a hotfix.
+            return head == self.candidate or (
+                head.startswith(self.hotfix_prefix) and len(head) > len(self.hotfix_prefix)
+            )
         if base == self.candidate:
             return head == self.integration
         return True
@@ -213,7 +217,22 @@ def route(
     With ``enforce_routes`` off, a refused route comes back allowed and
     ``warned``, its reason intact, so the run still says what will fail once
     enforcement is switched on. The release tier is unaffected either way.
+
+    A pull-request event with an empty base or head, or any other event with
+    an empty ref, cannot be judged and raises ``ValueError`` (exit 2): read as
+    "no protected branch", it would pass the route and skip the release tier
+    -- failing open on a renamed variable.
     """
+    if event in PULL_REQUEST_EVENTS and not (base.strip() and head.strip()):
+        raise ValueError(f"a {event} event needs both --base and --head, got {base!r} and {head!r}")
+    if event not in PULL_REQUEST_EVENTS and not ref.strip():
+        # GitHub always sets `github.ref`; an empty one is a wiring fault that
+        # would otherwise read as "no release tier" and pass.
+        raise ValueError(f"a {event} event needs --ref, got {ref!r}")
+    logger.debug(
+        "check_promotion: route event=%s base=%r head=%r ref=%r head_repo=%r base_repo=%r",
+        event, base, head, ref, head_repo, base_repo,
+    )
     verdict = _route(topology, event=event, base=base, head=head, ref=ref,
                      head_repo=head_repo, base_repo=base_repo)
     if verdict.allowed or topology.enforce_routes:
@@ -294,7 +313,10 @@ def aggregate(
     is_pull_request = event in PULL_REQUEST_EVENTS
     for job in sorted(needs):
         entry = needs[job]
-        result = entry.get("result") if isinstance(entry, Mapping) else None
+        if not isinstance(entry, Mapping):
+            problems.append(f"{job}: malformed needs entry ({type(entry).__name__})")
+            continue
+        result = entry.get("result")
         logger.debug("check_promotion: %s -> %s", job, result)
         if result == SUCCESS:
             continue
@@ -337,6 +359,7 @@ def _read_needs(source: str) -> dict[str, Any]:
     data = json.loads(text)
     if not isinstance(data, dict):
         raise ValueError(f"needs must be a JSON object, got {type(data).__name__}")
+    logger.debug("check_promotion: read %d needs entr(ies) from %s", len(data), source)
     return data
 
 
@@ -374,6 +397,7 @@ def tag_ancestry(
         # `remote.<name>.fetch` is configured to.
         refspec = f"+refs/heads/{production}:refs/remotes/{tracking}"
         fetched = run(["git", "fetch", "--no-tags", remote, refspec])
+        logger.debug("check_promotion: fetch %s -> %s", refspec, fetched.returncode)
         if fetched.returncode != 0:
             return 2, f"could not fetch {tracking}: {fetched.stderr.strip()}"
     resolved = run(["git", "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}"])
@@ -408,7 +432,10 @@ def tag_ancestry(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="check_promotion.py",
-        description="Gate the dev -> qa -> main branch promotion model.",
+        description=(
+            "Gate the integration -> candidate -> production branch promotion model "
+            "declared in pyproject.toml [tool.specgraph.promotion]."
+        ),
     )
     parser.add_argument(
         "--pyproject", type=Path, default=None,
@@ -435,6 +462,11 @@ def _parser() -> argparse.ArgumentParser:
     tag.add_argument("--sha", required=True)
     tag.add_argument("--remote", default="origin")
     tag.add_argument("--fetch", action="store_true", help="fetch the production branch first")
+    tag.add_argument(
+        "--expect-production", default=None, metavar="BRANCH",
+        help="refuse (exit 2) unless the configured production branch is BRANCH "
+        "(the release workflow passes the repository's default branch)",
+    )
 
     agg = sub.add_parser("aggregate", help="the single required check over toJSON(needs)")
     agg.add_argument("--needs", required=True, help="a JSON file, or - for stdin")
@@ -463,11 +495,13 @@ def main(argv: list[str] | None = None) -> int:
         if not needs:
             print("ERROR needs is empty; an aggregate over nothing gates nothing", file=sys.stderr)
             return 2
+        tier_error: str | None = None
         try:
             release_tier = tier_from_needs(needs, args.release_tier_from, bool(args.release_tier_only))
         except ValueError as exc:
-            print(f"ERROR {exc}", file=sys.stderr)
-            return 2
+            # Undecided tier: judge the rest fail-closed (as if the tier
+            # applied) so every failed job is still named, then exit 2.
+            tier_error, release_tier = str(exc), True
         problems = aggregate(
             needs,
             event=args.event,
@@ -477,6 +511,9 @@ def main(argv: list[str] | None = None) -> int:
         )
         for problem in problems:
             print(f"FAIL {problem}")
+        if tier_error is not None:
+            print(f"ERROR {tier_error}", file=sys.stderr)
+            return 2
         if problems:
             return 1
         print(f"PASS all {len(needs)} required job(s) green or legitimately skipped")
@@ -498,15 +535,24 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "route":
-        verdict = route(
-            topology,
-            event=args.event,
-            base=args.base,
-            head=args.head,
-            ref=args.ref,
-            head_repo=args.head_repo,
-            base_repo=args.base_repo,
-        )
+        if args.event in PULL_REQUEST_EVENTS and not args.base_repo:
+            # Without the base repository the fork check cannot run; in CI it
+            # is always `github.repository`, so its absence is a wiring fault.
+            print("ERROR a pull-request route needs --base-repo for the fork check", file=sys.stderr)
+            return 2
+        try:
+            verdict = route(
+                topology,
+                event=args.event,
+                base=args.base,
+                head=args.head,
+                ref=args.ref,
+                head_repo=args.head_repo,
+                base_repo=args.base_repo,
+            )
+        except ValueError as exc:
+            print(f"ERROR {exc}", file=sys.stderr)
+            return 2
         output = args.github_output or os.environ.get("GITHUB_OUTPUT")
         if output:
             write_github_output(output, {TIER_OUTPUT: str(verdict.release_tier).lower()})
@@ -516,6 +562,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if verdict.allowed else 1
 
     # tag-ancestry, the only command left.
+    if args.sha.startswith("-") or not args.sha.strip():
+        print(f"ERROR --sha must name a commit, got {args.sha!r}", file=sys.stderr)
+        return 2
+    if args.expect_production is not None and args.expect_production != topology.production:
+        # The configuration was read from a tree the tag's author may control;
+        # the repository's own default branch is the authority it must agree with.
+        print(
+            f"ERROR configured production branch {topology.production!r} is not "
+            f"the expected {args.expect_production!r}",
+            file=sys.stderr,
+        )
+        return 2
     code, message = tag_ancestry(
         args.sha, topology.production, remote=args.remote, fetch=args.fetch
     )

@@ -35,7 +35,7 @@ outside this repository.
 | Live CLI, incl. ASCII console | `make e2e-live` | exit 0 |
 | Prose-matcher floors | `make matcher-accuracy` | every configured floor met |
 | Generated-artifact freshness | both `render_*.py --check` | both fresh |
-| Wheel | `make wheel-check`, then the wheel into a fresh venv | licence metadata present; `planlint --version` prints `planlint 0.3.0` |
+| Wheel | `make wheel-check`, then the wheel into a fresh venv (from the next release: `python tools/smoke_wheel.py dist`) | licence metadata present; `planlint --version` prints `planlint 0.3.0` |
 
 Still unpublished, confirmed live rather than inferred: `planlint` and
 `openspec-graph` both 404 on PyPI; the only GitHub release is `v0.1.0`

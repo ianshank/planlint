@@ -382,7 +382,11 @@ enforces:
 The mock-track gates (`test`/`lint`/`typecheck`) also run on `windows-latest`
 (`test-windows`, Python 3.12), and the live track runs under an ASCII-only
 console (`encoding-stress`), so the platform/encoding guard tests execute in
-the environments they guard.
+the environments they guard. Pull requests and pushes into the
+release-candidate or production branch also run the release tier
+(`make pre-pr`, the wheel build and `tools/smoke_wheel.py`), and `ci-ok` is the
+single required status check; the `dev → qa → main` branch model is in
+[`docs/hooks.md`](docs/hooks.md#branching-and-promotion).
 
 No numeric threshold lives in the Makefile or CI YAML — floors are read from
 `pyproject.toml` at run time, and `tools/check_no_hardcoded_thresholds.py`
@@ -554,8 +558,9 @@ change package.
 - [CHANGELOG](CHANGELOG.md) — releases and notable changes
 - [Architecture (C4)](docs/architecture/c4.md) — context, container, component, code
 - [AQA guide](docs/aqa.md) — the full quality bar and how to reproduce it
-- [Hooks](docs/hooks.md) — pre-commit + CI gates, the `.claude/` Claude Code
-  hooks/agents/skills dev-tooling layer, and how to add a rule
+- [Hooks](docs/hooks.md) — pre-commit + CI gates, the `dev → qa → main` branch
+  promotion model, the `.claude/` Claude Code hooks/agents/skills dev-tooling
+  layer, and how to add a rule
 - [Agents, skills, and the harness](docs/agents-skills-harness.md) — why this is
   a deterministic governance harness, not an autonomous agent
 - [Agent Skill](skills/planlint-spec-governance/SKILL.md) — the distributable

@@ -106,6 +106,33 @@ now fail a named test.
   what the code does; AC-BPM-29 moved; `release-tier` checkout drops
   persisted credentials.
 
+## Milestone 5c — Branch audit (code, docs wiring, harness) — done
+
+Three read-only audits of the branch against `main` (a code peer review, a
+docs and configuration wiring sweep, a skills/agents/hooks inventory), every
+finding resolved or recorded:
+
+- [x] Review H1: the release tag check reads the tool and configuration from
+  the default branch (DEC-BPM-017). M1: an incomplete route is exit 2
+  (DEC-BPM-018). M2: an undecided tier still names every failed job. M3: the
+  real-wheel test skips only when the build frontend is missing. M4: the
+  promotion guards moved to `tests/test_ci_promotion.py`, the aggregate and
+  ancestry tests to `tests/test_promotion_gates.py`, helpers to
+  `tests/promotion_support.py`. M5: the release smoke carries the same probes.
+  M6: the smoke venv is created with `--clear`. LOW items: one soft-fail token
+  list in `tests/workflow_support.py`, shared constants reused, the console
+  script read from `[project.scripts]`, the parser description names no
+  branch, DEBUG records for route inputs, fetch and needs, and the known limits
+  of `table_header` documented.
+- [x] Harness (DEC-BPM-019): `.claude/hooks/guard_promotion.py` (`PreToolUse`),
+  new nudge arms, `.claude/skills/planlint-release/SKILL.md`, the verifier's
+  CI-only gates, and `test_harness_docs_list_every_agent_and_skill`.
+- [x] Docs: `docs/architecture/c4.md`, `docs/aqa.md`, `docs/hooks.md`,
+  `README.md`, `llms.txt`, the root, `docs/` and `tools/` agent indexes,
+  `docs/next-steps.md`, `docs/policies.md`, `docs/distribution-plan.md` and the
+  changelog. `.gitignore`, `.dockerignore`, `.gitleaks.toml`, the Makefile and
+  the pre-commit configuration needed no change (checked, not assumed).
+
 ## Observed
 
 - [x] AC-BPM-26: CI run 37575715654 (#226) on `318383e`, this package's pull

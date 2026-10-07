@@ -69,6 +69,11 @@ WRITING_VERBS = ("init", "new", "witness")
 
 PULL_REQUEST_TEST = "github.event_name == 'pull_request'"
 
+#: Ways a step reports success after failing (adopt-branch-promotion-model).
+#: One tuple for every guard that forbids them, so the lists cannot drift; a
+#: comment is stripped before these are looked for, so naming one trips nothing.
+SOFT_FAIL = ("continue-on-error", "|| true", "|| :", "|| echo", "set +e")
+
 # --- helpers: read, never assert ---------------------------------------------
 
 

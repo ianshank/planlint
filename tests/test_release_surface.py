@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from tests.support import load_tool, workflow_job_blocks
-from tests.workflow_support import _code_lines
+from tests.workflow_support import RELEASE_YML, SOFT_FAIL, _code_lines
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -83,24 +83,33 @@ def test_release_gate_checks_tag_ancestry_against_production() -> None:
     Pinned in the ``gate`` job, the first link of the chain, so nothing is built
     -- let alone published -- from a commit that skipped the release-candidate
     tier. The step is conditional on a tag so a ``workflow_dispatch`` dry run
-    on a branch still builds; and it names no branch, because the production
-    branch is read from ``pyproject.toml`` by the tool.
+    on a branch still builds, it names no branch (the production branch is
+    read from ``pyproject.toml``), and both the tool and that configuration are
+    read from a worktree of the repository's default branch -- not from the
+    tagged tree, whose author could edit either to pass -- with the configured
+    production branch required to equal that default branch.
     """
-    text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
+    text = RELEASE_YML.read_text(encoding="utf-8")
     gate = "\n".join(code for _, code in _code_lines(workflow_job_blocks(text)["gate"]))
-    assert "tools/check_promotion.py tag-ancestry" in gate, (
-        "the release gate no longer checks that the tag is on the production branch"
-    )
-    step = gate.split("tools/check_promotion.py tag-ancestry", 1)[0].rsplit("- name:", 1)[1]
-    step += gate.split("tools/check_promotion.py tag-ancestry", 1)[1].split("- ", 1)[0]
+    steps = [chunk for chunk in gate.split("- name:") if "check_promotion.py" in chunk]
+    assert len(steps) == 1, "the release gate no longer checks that the tag is on the production branch"
+    step = steps[0]
     conditions = re.findall(r"^\s+if: (.+)$", step, re.MULTILINE)
     assert conditions == ["github.ref_type == 'tag'"], (
         f"the ancestry step's condition must be exactly the tag test, got {conditions}"
     )
-    for token in ("continue-on-error", "|| true", "|| :"):
+    for token in SOFT_FAIL:
         assert token not in step, f"the ancestry step softens its own failure ({token})"
-    assert "--fetch" in step, "the ancestry step must fetch the production branch it checks"
-    assert gate.index("check_promotion.py tag-ancestry") < gate.index("make pre-pr"), (
+    for needed in ("tag-ancestry", "--fetch", '--expect-production "$DEFAULT_BRANCH"',
+                   "DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}"):
+        assert needed in step, f"the ancestry step lacks {needed!r}"
+    worktree = re.search(r'git worktree add --detach "([^"]+)" "origin/\$DEFAULT_BRANCH"', step)
+    assert worktree, "the ancestry step must read the tool from a worktree of the default branch"
+    root = re.escape(worktree.group(1))
+    assert re.search(rf'python "{root}/tools/check_promotion\.py" --pyproject "{root}/pyproject\.toml"', step), (
+        "the tool and its configuration must both come from the default-branch worktree"
+    )
+    assert gate.index("check_promotion.py") < gate.index("make pre-pr"), (
         "the ancestry check must run before the slow gate, not after it"
     )
     for branch in ("origin/main", "--branch"):
