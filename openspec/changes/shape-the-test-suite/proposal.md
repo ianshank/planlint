@@ -209,7 +209,7 @@ byte-identical at `bb4e4ad`, the commit that carries this draft),
   (`:480–482`) reads the repository's `pyproject.toml` on behalf of
   `test_entry_points_wired_in_pyproject` (`:212–214`), and the `fixtures`
   fixture (`:471–477`) builds its paths from `Path(__file__)` under
-  `fixtures/` for the five `test_deprecated_alias_*` tests — so a criterion
+  `fixtures/` for the four `test_deprecated_alias_*` tests — so a criterion
   that ignores fixture parameters classes the first as `unit` while it
   reads the tree, and one that resolves them but exempts only module
   constants classes the second as `integration` while it reads a labelled
@@ -274,6 +274,10 @@ byte-identical at `bb4e4ad`, the commit that carries this draft),
   and R-GA-33 name it there.
 - `tests/shape_support.py` — new, uncollected: the R-TSS-6 criterion, by
   AST, that the tier guards assert against (DEC-TSS-007).
+- `tests/test_report.py` → `tests/test_decomposition.py` —
+  `test_report_has_no_intra_package_imports` moves beside the
+  `test_new_modules_stdlib_only` its docstring explains itself against,
+  when the in-process loops take `test_report.py` past the bound.
 - `tests/test_graft_rules.py` → `tests/test_rule_registry_docs.py` —
   `test_rule_registry_baseline_is_unchanged`, the one test there that reads
   the tree, moves beside the other baseline guard, so the module is one
@@ -297,8 +301,8 @@ byte-identical at `bb4e4ad`, the commit that carries this draft),
   the module's tests are not all one tier, which the criterion simulated
   over `test_report`, `test_sarif` and `test_cli_surface` says is the
   expected shape wherever in-process and spawning tests share a module
-  (30 unit / 2 integration / 13 e2e, 8 / 3 / 13 and 8 / 6 / 14
-  respectively); a module-level `pytestmark` entry where they are, in the
+  (the shipped tally is recorded in `tasks.md`); a module-level
+  `pytestmark` entry where they are, in the
   list form where a `pytestmark` already exists; never an alias of a tier
   mark.
 - `tests/test_decomposition.py` — its inline `_run_cli` becomes
@@ -409,9 +413,13 @@ byte-identical at `bb4e4ad`, the commit that carries this draft),
   recipe.** Two comment lines in `.github/dependabot.yml`, one in `ci.yml`
   and one in `release.yml` that name a moved module are re-pointed; no
   step, job, recipe or target changes.
-- **Splitting `tests/test_action_contract.py`.** It reads 700 lines, which
-  is the bound, not over it; it is named here so the next reader does not
-  re-find it.
+- **Splitting `tests/test_action_contract.py`.** It read 700 lines at the
+  measurement commit, the bound, not over it. Its tests stay together; only
+  its runner simulator moved, to the uncollected `tests/action_support.py`,
+  to make room for the tier marks. R-TSS-2's rule that a helper moves with
+  its only user governs splits between test modules; a helper moving into
+  an uncollected support module beside its user, as `workflow_support.py`
+  does for the workflow modules, is not such a split.
 - **More than one pull request.** This branch's pull request (#42) carries
   the whole package; its three stages — the splits and pointers, the tiers
   and routing, the loops and records — are separate commits, each recording

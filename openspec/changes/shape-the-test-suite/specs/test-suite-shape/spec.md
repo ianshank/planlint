@@ -148,13 +148,14 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   describe), `.claude/hooks/nudge_rule_registry.sh` (the Dependabot arm
   names `tests/test_workflow_pins.py`; the SKILL.md arm adds
   `tests/test_skill_distribution.py`), `tests/conftest.py`'s `repo`
-  docstring, `tools/_common.py`'s docstring at line 157,
-  `tests/support.py`'s `workflow_job_blocks` docstring (lines 259–262),
+  docstring, `tools/_common.py`'s module docstring,
+  `tests/support.py`'s `workflow_job_blocks` docstring,
   `tests/test_gate_scripts.py`'s and `tests/test_action_contract.py`'s
-  module docstrings, the `pyproject.toml` comments at lines 156 and 200,
-  the `.github/dependabot.yml` comments at lines 21 and 35,
-  `.github/workflows/ci.yml:10`, `.github/workflows/release.yml:24`,
-  `docs/aqa.md`, `skills/AGENTS.md`, `README.md:354`,
+  module docstrings, the `pyproject.toml` comments above the timeout bounds
+  and the action major floors, the two `.github/dependabot.yml` comments
+  that name a test module, the header comments of `.github/workflows/ci.yml`
+  and `release.yml`, the `Dockerfile` comment that names the base-tag
+  guard, `docs/aqa.md`, `skills/AGENTS.md`, `README.md`'s test layout,
   `.claude/agents/planlint-verifier.md` and `docs/distribution-plan.md`'s
   table rows — the set found by `grep -rn` over the five module names with
   `.git/`, `openspec/changes/` and the plan excluded. `tests/AGENTS.md`
@@ -182,7 +183,10 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   MUST mark each test function. A tier MUST be written only as a
   `@pytest.mark.<tier>` decorator or a `pytest.mark.<tier>` entry of
   `pytestmark`; an alias (`name = pytest.mark.<tier>`, the `needs_bash`
-  pattern) MUST NOT be used for a tier and MUST be named by the guard.
+  pattern) MUST NOT be used for a tier and MUST be named by the guard, as
+  MUST a test class (`class Test*`), whose items the guard does not count,
+  and a tier inside `pytest.param(..., marks=...)`, which would give one
+  parametrised item a second tier.
   `skipif`, `parametrize` and pytest's other built-in marks are not tiers
   and are unconstrained.
 - R-TSS-6: The tier of a test is decided by what it uses, and by what is
@@ -195,17 +199,23 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   not: a name bound to a tree path counts where it is used, and where it is
   bound only when nothing uses it; an annotation is never a use. A test is
   `e2e` if and only if it reaches a process start: a reference — called,
-  passed or aliased — to a process-starting function of `subprocess`, `os`,
-  `asyncio` or `pty`, the set kept as one constant of the criterion;
+  passed or aliased, under whatever import spelling (`import os.path` binds
+  `os`) — to a process-starting function of `subprocess`, `os`, `asyncio`,
+  `pty`, `multiprocessing` or `concurrent.futures`, the set kept as one
+  constant of the criterion;
   `subprocess.CompletedProcess` and `subprocess.TimeoutExpired` start
   nothing and do not count, and `run_cli` is `e2e` through its body. A test
   is `integration` if and only if it is not `e2e` and reads this
   repository's own tree: it uses `__file__`, as a bare name or as an
   attribute such as `detect.__file__`, or a name bound to it — a module
   constant, a local, or a constant of an imported module — in a path
-  expression whose chain carries no segment equal to `fixtures` or
-  `corpus`; or it uses a name imported from a script under `tools/`, which
-  runs that script in-process. `load_tool`, `run_tool_main` and the
+  expression whose final segments, after `.parent` and `..` are applied,
+  hold none equal to `fixtures` or `corpus` (a word in a method argument is
+  no segment); or it uses a function that reads a source file through an
+  object rather than a path (`inspect`'s source readers, `linecache`,
+  `importlib.resources`, kept as one constant beside the process starts);
+  or it uses a name imported from a script under `tools/`, which runs that
+  script in-process. `load_tool`, `run_tool_main` and the
   `read_pyproject` this package adds are `integration` through their
   bodies, and no list names them. A test is `unit` if and only if it
   reaches neither. The criterion stops at `tests/`: writing fixtures under
@@ -224,8 +234,14 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   reads the tree through a fixture parameter, a `unit`-marked test under an
   autouse fixture that starts a process, a `unit`-marked test that starts a
   process only through a method of a class it imports, a `unit`-marked test
-  that binds a tree read to a local it never uses, a tier written through
-  an alias, and a module over the bound; and MUST be shown quiet on a
+  that binds a tree read to a local it never uses, a `unit`-marked test that
+  reads package source through `inspect`, one whose labelled word is only a
+  method argument, one that climbs out of `fixtures/` by `.parent` and one
+  by `..`, one that spawns through an unaliased `import tests.support`, one
+  through `import os.path`, one through `multiprocessing`, one that runs a
+  `tools/` script in-process, a test class, a tier inside `pytest.param`
+  marks, a tier written through an alias, and a module over the bound; and
+  MUST be shown quiet on a
   planted `unit` test whose body builds a `__file__`-rooted path under
   `fixtures`, a `fixtures`-rooted module constant, a
   `subprocess.CompletedProcess` annotation and constructor, and a module
@@ -248,23 +264,30 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   only writers of the harness path `openspec/changes/<change>/specs/<capability>/spec.md`
   and the SpecKit path `specs/<feature>/spec.md`: `tests/test_e2e_corpus.py`'s
   `_harness_spec` becomes `write_spec(repo, change, "cap", body)`, its
-  SpecKit write and `tests/test_detect_speckit.py:105` become
-  `write_speckit_spec`, `tests/test_detect_thresholds.py:257` and
-  `tests/test_decomposition.py:102–105` become `write_spec`; a path built
+  SpecKit write and the one in `tests/test_detect_speckit.py`'s
+  `test_speckit_discovery_never_returns_plan_or_tasks_md` become
+  `write_speckit_spec`, and the harness writes in
+  `tests/test_detect_thresholds.py`'s
+  `test_g003_does_not_flag_a_criterion_that_cites_the_exact_fractional_floor`,
+  `tests/test_decomposition.py`'s `_build_repo` and
+  `tests/test_skill_contract.py`'s `test_a_real_finding_still_exits_one`
+  become `write_spec`; a path built
   for a read-error fixture (a FIFO, a directory named `spec.md`, an
   unreadable file) or asserted rather than written is not a writer.
   The release workflow's `_workflow_jobs` near-copy (in
   `tests/test_agent_artifacts.py` until the split moves it, unchanged, to
   `tests/test_release_surface.py`) MUST be replaced by
   `tests/support.workflow_job_blocks`, closing DEC-HCW-009's deferral.
-  Two guard tests MUST read the shapes by AST — a `subprocess.run` call
+  Two guard tests MUST read the shapes by AST, each read from the routed
+  helper's own body in `tests/support.py` rather than restated — a `subprocess.run` call
   whose argv list holds the two literals and `--target`; a `write_text`
   call on a path expression whose chain holds `openspec`, `changes`,
   `specs` and `spec.md`, or `specs` and `spec.md` directly under a
   repository root, resolving a local name to its assignment — and MUST be
-  shown red on planted module texts. `tests/test_skill_contract.py:657`,
-  which runs `--version` without `--target`, is not `run_cli`'s shape and
-  stays; the bare `tmp_path / "spec.md"` writes, the `-c` script spawns,
+  shown red on planted module texts.
+  `test_cli_version_flag_reports_the_package_version` (in
+  `tests/test_skill_distribution.py` since the split), which runs
+  `--version` without `--target`, is not `run_cli`'s shape and stays; the bare `tmp_path / "spec.md"` writes, the `-c` script spawns,
   the `tools/` script and `make`, `git`, `bash` and `python -m build`
   spawns are named in `tasks.md` as having nothing to route and stay.
 - R-TSS-9: Each of `test_projections_are_byte_stable_across_runs`,
@@ -288,7 +311,8 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   guard test MUST read the four bodies by AST and assert exactly one
   `run_cli` call and a reference to `main` in each.
 - R-TSS-10: A test whose process boundary is the property MUST NOT be
-  converted or edited beyond the import lines a move requires: one that
+  converted or edited beyond the import lines a move requires and the
+  nested module path R-TSS-3 requires: one that
   sets an environment variable for the child (`PYTHONIOENCODING`,
   `COVERAGE_FILE`, `PYTHONHASHSEED`), runs a program other than the CLI
   (pytest, `python -m build`, `make`, `git`, bash, a `tools/` script, a
@@ -322,9 +346,13 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   as the plan's figure, never claimed as this package's saving.
 - R-TSS-12: Every guard this spec adds MUST read the file it judges, MUST
   be written and run red before the change it covers — the flatness and
-  bound guards red on the unsplit tree, the marker guards red on the
-  unmarked tree, the routing guards red on the unrouted tree, the loop
-  guard red on the unconverted tests — with the red run recorded in
+  bound guards red on the unsplit tree, the registration and one-tier
+  guards red on the unmarked tree, the routing guards red on the unrouted
+  tree, the loop guard red on the unconverted tests; the criterion guard,
+  which judges only marked tests and is idle on the unmarked tree by
+  design, red on a copy of the marked tree with one module's tier flipped;
+  each planted counter-example red against the criterion before the rule
+  that names it — with the red run recorded in
   `tasks.md` and never committed as a tree state, and MUST be shown red on
   the planted counter-examples R-TSS-6 and R-TSS-8 name.
 - R-TSS-13: `CHANGELOG.md`'s `[Unreleased]` section MUST carry a `Changed`
@@ -357,8 +385,8 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   duration. Measurements belong in the proposal and in `tasks.md`, dated
   with their commit and naming their command.
 - C-TSS-5: The tests R-TSS-10 names MUST have bodies identical before and
-  after this package apart from import lines; the diff of each is read at
-  review.
+  after this package apart from import lines and the nested module path
+  R-TSS-3 requires; the diff of each is read at review.
 - C-TSS-6: `make lint` MUST exit 0 on every new and edited test module, and
   the `tests/*` per-file-ignores MUST NOT widen.
 - C-TSS-7: The converted tests stay `e2e` under R-TSS-6, because one
@@ -442,10 +470,11 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   with a function-level `unit` "override" would be an item with two tiers
   that `-m unit` selects wrongly; the rule that a mixed module carries no
   module-level tier keeps the source readable as the truth. Per-function
-  marks are the expected shape, not the exception: the criterion simulated
-  over `test_report`, `test_sarif` and `test_cli_surface` gives 30 / 2 / 13,
-  8 / 3 / 13 and 8 / 6 / 14 across `unit` / `integration` / `e2e`, so the
-  modules that spawn are mostly in-process tests with a spawning minority,
+  marks are the expected shape, not the exception: the round-1 simulation
+  over `test_report`, `test_sarif` and `test_cli_surface` found each of them
+  mixed, and the shipped criterion's tally, recorded in `tasks.md`, agrees
+  that the modules that spawn are mostly in-process tests with a spawning
+  minority,
   and the fast tier is larger than a module-level view would make it. The
   list form is required where a `pytestmark` already exists
   (`tests/test_spec_discovery_identity.py:28` carries a `skipif`), and the
@@ -490,7 +519,7 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   over `tests/test_cli_surface.py` showed the two failure modes of not
   doing so: `test_entry_points_wired_in_pyproject` reads the repository's
   `pyproject.toml` only through its `repo_root` parameter and would be
-  `unit` while reading the tree, and the five `test_deprecated_alias_*`
+  `unit` while reading the tree, and the four `test_deprecated_alias_*`
   tests take a `fixtures` parameter whose body is `Path(__file__)` under
   `fixtures/` — the canonical unit case of DEC-TSS-006 — and would be
   `integration` under a body-level `__file__` rule with no exemption; the
@@ -600,7 +629,7 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   the encoding tests set `PYTHONIOENCODING`; the ambient-coverage test is a
   nested pytest; the fresh-interpreter tests exist to see an interpreter
   with nothing imported. C-TSS-5 makes the promise checkable: their bodies
-  are byte-identical apart from import lines.
+  are byte-identical apart from import lines and R-TSS-3's nested path.
 - **DEC-TSS-012:** the saving is held to the four converted tests' own
   call durations and to their absence from the after table's twelve; the
   totals are recorded with their spread, and the plan's absolute target is
@@ -715,14 +744,24 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   reserves that for an unmerged sibling, and these are merged); leaving the
   stale records unnamed (a reader would take R-HCW-15 as a requirement this
   package broke).
-- **DEC-TSS-017:** the criterion is checked against runtime once, by a
-  recorded audit, and stops at `tests/`. Milestone 4 ran the whole suite
-  under a `sys.addaudithook` hook recording each test's process starts and
-  its opens of repository files, and compared the result with the AST
-  tiers: every runtime signal above a test's tier was either a process
-  started by the code under test or a tool's own state (the editable
-  install's metadata, Hypothesis's cache), and none came from code under
-  `tests/`. The record in `tasks.md` names each one. The boundary is
+- **DEC-TSS-017:** the criterion is checked against runtime by a recorded
+  audit, not by a standing test, and stops at `tests/`. Milestone 4 ran the
+  whole suite under a `sys.addaudithook` hook recording each test's process
+  starts and its opens of repository files and compared the result with
+  the AST tiers. That first audit excluded every open under
+  `openspec_graph/`, to drop import noise, and so missed a `unit` test whose
+  own code read `openspec_graph/parse.py` through `inspect.getsource`; the
+  round-2 review found it, and `test_properties.py` reading its own source
+  the same way, which no audit can see once linecache holds the file. The
+  criterion gained the source readers of R-TSS-6, both tests became
+  `integration`, and the audit was re-run without that exclusion. Every
+  runtime signal it records above a test's tier is a process started by
+  the code under test or a tool's own work (Hypothesis harvesting
+  constants from loaded `tools/` modules), none from code under `tests/`;
+  `tasks.md` names each one. An audit is a sample, not a proof: it sees
+  what one ordering of one run opens, after whatever caches earlier tests
+  warmed, so it corroborates the AST criterion and never replaces it. The
+  boundary is
   `tests/` because the package's one process start, `detect._current_sha`'s
   `git rev-parse HEAD`, and `tools/check_secrets.py`'s `git ls-files` are
   behaviour under test, and a name-level reach into `openspec_graph/`
@@ -739,15 +778,14 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
 
 ## Acceptance Criteria
 
-- [ ] **AC-TSS-1:** every collected test module is at or under
+- [x] **AC-TSS-1:** every collected test module is at or under
   `MAX_TEST_MODULE_LINES` as `wc -l` counts, and no directory under
   `tests/` holds a `test_*.py`, read from the tree by the guards; the
   before and after of `wc -l tests/test_*.py | sort -n | tail -8` are in
-  `tasks.md`. The guards are written with this change; until they exist
-  the stage is the citation. (R-TSS-1, R-TSS-12, DEC-TSS-004)
-  _Verified by:_ stage: `make test`
+  `tasks.md`. (R-TSS-1, R-TSS-12, DEC-TSS-004)
+  _Verified by:_ `pytest -k "test_the_tests_directory_stays_flat or test_no_test_module_exceeds_the_line_bound"` · stage: `make test`
 
-- [ ] **AC-TSS-2:** the sorted AST set of `def test_*` names over
+- [x] **AC-TSS-2:** the sorted AST set of `def test_*` names over
   `tests/test_*.py` excluding `tests/test_suite_shape.py`, and the
   collected count over the same set, are identical to Milestone 0's after
   each split and at each stage commit, recorded in `tasks.md`; every
@@ -756,7 +794,7 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   (R-TSS-2, C-TSS-3, DEC-TSS-001, DEC-TSS-015)
   _Verified by:_ `pytest -k "test_every_spec_test_citation_resolves_to_a_real_test or test_helpers_not_duplicated_inline"` · stage: `make test`
 
-- [ ] **AC-TSS-3:** `measure-coverage-once`'s guards run under their names
+- [x] **AC-TSS-3:** `measure-coverage-once`'s guards run under their names
   from `tests/test_ci_makefile.py`, `tests/test_ci_workflow.py` and
   `tests/test_coverage_checkers.py`, `harden-ci-workflows`' and
   `pin-actions-by-sha`'s from the three workflow modules,
@@ -769,7 +807,7 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   DEC-TSS-016)
   _Verified by:_ `pytest -k "test_the_suite_runs_once_through_coverage_run or test_test_and_coverage_tools_read_the_one_report_scoped or test_every_hooks_ci_table_row_names_a_job_or_workflow or test_scoped_totals_sum_only_the_named_subtree or test_per_file_report_names_each_module_below_the_minimum or test_every_third_party_action_is_pinned_to_a_commit_sha_with_its_release_tag or test_every_job_in_every_workflow_has_a_timeout_inside_the_range or test_no_quoted_python_version_literal_outside_env_and_matrix or test_graph_diff_passes_when_clean or test_render_mermaid_matches_to_mermaid_byte_for_byte or test_t201_is_selected_with_exactly_the_cli_and_tools_exempt or test_lint_is_a_hard_gate"` · stage: `make test`
 
-- [ ] **AC-TSS-4:** the nested pytest of the ambient-coverage test names
+- [x] **AC-TSS-4:** the nested pytest of the ambient-coverage test names
   `tests/test_coverage_checkers.py` and still reaches a verdict; the
   runnable-as-a-script contract runs from `tests/test_gate_scripts.py`; the
   rule baseline from `tests/test_rule_registry_docs.py`; the Dependabot
@@ -777,7 +815,7 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   DEC-TSS-003)
   _Verified by:_ `pytest -k "test_suite_survives_an_ambient_coverage_file or test_coverage_floor_passes_at_threshold or test_gate_script_is_runnable_as_a_script or test_rule_set_matches_baseline or test_every_composite_action_directory_is_watched_by_dependabot"` · stage: `make test`
 
-- [ ] **AC-TSS-5:** `tests/AGENTS.md` names the new modules and the tier
+- [x] **AC-TSS-5:** `tests/AGENTS.md` names the new modules and the tier
   rule and stays within `MAX_NESTED_LINES` with its precedence clause, a
   balanced Mermaid block and resolving links; `docs/hooks.md`'s `test` row
   is byte-identical and its hook-case list still names every arm the
@@ -787,42 +825,48 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   every required document is present and linked. (R-TSS-4, DEC-TSS-013)
   _Verified by:_ `pytest -k "test_nested_agents_file_stays_short or test_nested_agents_file_states_its_precedence or test_nested_agents_file_has_a_balanced_mermaid_block or test_agent_index_links_resolve or test_hooks_test_row_names_the_matrix_bounds or test_docs_list_every_hook_case_the_script_implements or test_each_documented_file_class_is_nudged"` · stage: `make docs-check`
 
-- [ ] **AC-TSS-6:** `[tool.pytest.ini_options]` registers exactly `unit`,
+- [x] **AC-TSS-6:** `[tool.pytest.ini_options]` registers exactly `unit`,
   `integration` and `e2e` under `markers`, each description stating its
   criterion, `addopts` carries `--strict-markers` and `testpaths` is
   unchanged, read structurally from `pyproject.toml`; and a collection with
-  an unregistered mark fails. The test is written with this change; until
-  it exists the stage is the citation. (R-TSS-5, DEC-TSS-005)
+  an unregistered mark fails. (R-TSS-5, DEC-TSS-005)
   _Verified by:_ `pytest -k "test_pytest_registers_exactly_the_three_tier_markers_strictly or test_an_unregistered_marker_fails_collection_under_strict_markers"` · stage: `make test`
 
-- [ ] **AC-TSS-7:** every collected test carries exactly one tier, counted
+- [x] **AC-TSS-7:** every collected test carries exactly one tier, counted
   across module-level marks — single or list form — and function-level
   marks, written as decorators or `pytestmark` entries and never through an
   alias, and each tier agrees with the mechanical criterion in both
   directions over the whole tree, fixture parameters resolved — the four
   converted tests among them, which the criterion keeps `e2e` because one
-  process start remains in each. The guards are written with this change
-  and run red on the unmarked tree; until they exist the stage is the
-  citation. (R-TSS-5, R-TSS-6, R-TSS-12, C-TSS-7, DEC-TSS-005,
+  process start remains in each; no test class and no tier inside
+  `pytest.param` marks. The one-tier guard ran red on the unmarked tree and
+  the criterion guard on a copy with a flipped tier, as R-TSS-12 states.
+  (R-TSS-5, R-TSS-6, R-TSS-12, C-TSS-7, DEC-TSS-005,
   DEC-TSS-006, DEC-TSS-007, DEC-TSS-017)
   _Verified by:_ `pytest -k "test_every_test_carries_exactly_one_tier_marker or test_every_tier_marker_matches_its_mechanical_criterion"` · stage: `make test`
 
-- [ ] **AC-TSS-8 (non-success):** on planted module texts, the guards'
+- [x] **AC-TSS-8 (non-success):** on planted module texts, the guards'
   helpers name an unmarked test, a test carrying two tiers, a `unit` test
   that calls `run_cli`, an `e2e` test that names no process start, a
   `unit` test that names a tree constant, a `unit` test that reads the
   tree only through a fixture parameter, a `unit` test under an autouse
   fixture that starts a process, a `unit` test that starts a process only
   through an imported class's method, a `unit` test that binds a tree read
-  to a local it never uses, a tier written through an alias, a module over
-  the bound and a module under a subdirectory; and do not name a `unit`
+  to a local it never uses, a `unit` test that reads package source
+  through `inspect`, one whose labelled word is only a method argument,
+  one that climbs out of `fixtures/` by `.parent` and one by `..`, one that
+  spawns through an unaliased or a dotted import or through
+  `multiprocessing`, one that runs a `tools/` script in-process, a test
+  class, a tier inside `pytest.param` marks, a tier written through an
+  alias, a module over the bound and a module under a subdirectory; and do
+  not name a `unit`
   test whose body builds a `__file__`-rooted path under `fixtures`, nor a
   `fixtures`-rooted constant, nor a `subprocess.CompletedProcess` annotation
   or constructor, nor a module exactly at the bound. (R-TSS-1, R-TSS-6,
   R-TSS-12, DEC-TSS-007)
   _Verified by:_ `pytest -k test_a_mismarked_or_unmarked_planted_module_is_named` · stage: `make test`
 
-- [ ] **AC-TSS-9:** `python -m pytest -m unit` collects a non-empty
+- [x] **AC-TSS-9:** `python -m pytest -m unit` collects a non-empty
   selection in which no item carries `e2e` or `integration`; its collected
   count and wall time are recorded in `tasks.md` with the commit; the
   command is documented in `docs/hooks.md` and `tests/AGENTS.md`; no Make
@@ -831,26 +875,23 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   the Makefile guard. (R-TSS-7, C-TSS-2, DEC-TSS-008)
   _Verified by:_ `pytest -k test_the_suite_runs_once_through_coverage_run` · stage: `make test`
 
-- [ ] **AC-TSS-10:** no test module passes an argv list holding `-m
+- [x] **AC-TSS-10:** no test module passes an argv list holding `-m
   openspec_graph.cli` and `--target` to `subprocess.run`, and no test
   module writes the harness or the SpecKit spec path by hand, read by AST
   over the tree; `tests/test_decomposition.py`'s golden hashes are unmoved
   with its `_run_cli` routed through `run_cli`; no test module defines
-  `_workflow_jobs`. The two guards are written with
-  this change and run red on the unrouted tree; until they exist the hash
-  test and the stage are the citation. (R-TSS-8, R-TSS-12, DEC-TSS-009)
-  _Verified by:_ `pytest -k "test_output_byte_identical or test_public_import_compatibility"` · stage: `make test`
+  `_workflow_jobs`. (R-TSS-8, R-TSS-12, DEC-TSS-009)
+  _Verified by:_ `pytest -k "test_no_test_module_spawns_the_cli_outside_support or test_no_test_module_writes_a_spec_path_by_hand or test_output_byte_identical or test_public_import_compatibility"` · stage: `make test`
 
-- [ ] **AC-TSS-11 (non-success):** on planted module texts, the routing
+- [x] **AC-TSS-11 (non-success):** on planted module texts, the routing
   guards' helpers name a `subprocess.run` whose argv holds the two literals
   and `--target`, and a `write_text` on a hand-built harness path and on a
   hand-built SpecKit path, and do not name a `--version` spawn without
-  `--target`, a FIFO at a spec path, or an assertion on a spec path. The
-  test is written with this change; until it exists the stage is the
-  citation. (R-TSS-8, R-TSS-12, DEC-TSS-009)
-  _Verified by:_ stage: `make test`
+  `--target`, a FIFO at a spec path, an assertion on a spec path, or a
+  main-spec path no routed writer owns. (R-TSS-8, R-TSS-12, DEC-TSS-009)
+  _Verified by:_ `pytest -k test_a_planted_inline_spawn_or_hand_written_spec_is_named` · stage: `make test`
 
-- [ ] **AC-TSS-12:** the four named tests pass with their loops through
+- [x] **AC-TSS-12:** the four named tests pass with their loops through
   `cli.main` under `capsys`, each still making every assertion it made
   before — byte stability per format, exit 2 with an empty stdout and a
   diagnostic per format and payload, three-way exit-code parity on both
@@ -859,21 +900,21 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   process by an equality on the same property. (R-TSS-9, DEC-TSS-010)
   _Verified by:_ `pytest -k "test_projections_are_byte_stable_across_runs or test_an_unprojectable_file_exits_two_with_an_empty_stdout or test_sarif_returns_the_same_exit_code_as_the_text_run or test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict"` · stage: `make test`
 
-- [ ] **AC-TSS-13:** each of the four bodies holds exactly one `run_cli`
-  call and a reference to `main`, read by AST, and a planted body with two
-  `run_cli` calls or none is named. The guard is written with this change
-  and runs red on the unconverted tests; until it exists the stage is the
-  citation. (R-TSS-9, R-TSS-12, DEC-TSS-010)
-  _Verified by:_ stage: `make test`
+- [x] **AC-TSS-13:** each of the four bodies holds exactly one `run_cli`
+  call, outside any loop, and a reference to `main`, read by AST; a planted
+  body with two `run_cli` calls, with none, with one inside a loop or with
+  no `main` is named. (R-TSS-9, R-TSS-12, DEC-TSS-010)
+  _Verified by:_ `pytest -k "test_the_converted_loops_keep_exactly_one_subprocess or test_a_planted_loop_with_the_wrong_subprocess_count_is_named"` · stage: `make test`
 
-- [ ] **AC-TSS-14 (non-success):** the process-boundary tests still pass and
-  their bodies are identical apart from import lines — the encoding tests,
+- [x] **AC-TSS-14 (non-success):** the process-boundary tests still pass and
+  their bodies are identical apart from import lines and R-TSS-3's nested
+  module path — the encoding tests,
   the ambient-coverage test, the real wheel, the action's runs, the fresh
   interpreter, the runnable-as-a-script contract and the read-only tree
   hash; the diff is read at review. (R-TSS-10, C-TSS-5, DEC-TSS-011)
   _Verified by:_ `pytest -k "test_common_verbs_do_not_crash_under_ascii_stdout_encoding or test_arbitrary_non_ascii_spec_content_survives_graph_mermaid_under_ascii_encoding or test_matcher_accuracy_tool_runs_headless_and_exits_zero or test_suite_survives_an_ambient_coverage_file or test_the_real_wheel_passes_the_gate or test_the_action_reports_each_fixtures_labelled_status or test_module_is_importable_without_the_rest_of_the_package or test_gate_script_is_runnable_as_a_script or test_read_only_verbs_leave_tree_byte_identical"` · stage: `make test`
 
-- [ ] **AC-TSS-15:** the Appendix A durations command, run back to back on
+- [x] **AC-TSS-15:** the Appendix A durations command, run back to back on
   the tree before and after the loop conversion in the same container, is
   recorded in `tasks.md` with the commit of each: each of the four named
   tests' call durations from the `--durations=0` selection is lower after
@@ -884,7 +925,7 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   DEC-TSS-012)
   _Verified by:_ stage: `make test`
 
-- [ ] **AC-TSS-16:** the rule inventory, the golden hashes, the public
+- [x] **AC-TSS-16:** the rule inventory, the golden hashes, the public
   imports and the empty runtime-dependency list are unchanged; the four
   floors are unchanged in value and both trees meet them on the finished
   tree, with the in-process loops measured directly and the one subprocess
@@ -892,13 +933,13 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   (C-TSS-1, C-TSS-2)
   _Verified by:_ `pytest -k "test_rule_set_matches_baseline or test_output_byte_identical or test_public_import_compatibility or test_runtime_dependencies_stay_empty"` · stage: `make test`
 
-- [ ] **AC-TSS-17:** `make lint` exits 0 on the tree with the new and
+- [x] **AC-TSS-17:** `make lint` exits 0 on the tree with the new and
   edited test modules and no widened `tests/*` exemption; no Makefile
   recipe, workflow step or action line is in the diff beyond the comment
   lines R-TSS-4 names. (C-TSS-2, C-TSS-6)
   _Verified by:_ stage: `make lint`
 
-- [ ] **AC-TSS-18:** `CHANGELOG.md` `[Unreleased]` carries this package's
+- [x] **AC-TSS-18:** `CHANGELOG.md` `[Unreleased]` carries this package's
   `Changed` entry with the items R-TSS-13 names and every versioned section
   still links to its release tag; `tasks.md` records every figure R-TSS-14
   names with its commit and command; no requirement or criterion of this

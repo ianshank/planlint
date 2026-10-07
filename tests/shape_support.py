@@ -1,31 +1,38 @@
-"""The AST engine behind ``tests/test_suite_shape.py``'s tier guards -- never asserting.
+"""The AST engine behind ``tests/test_suite_shape.py``'s guards -- never asserting.
 
 ``shape-the-test-suite`` R-TSS-5 and R-TSS-6: every test carries exactly one of
-:data:`TIERS`, and the tier is decided by what the test *uses*, mechanically:
+:data:`TIERS`, and the tier is decided by what the test's own code under
+``tests/`` *uses*, mechanically:
 
-* ``e2e`` -- it reaches a process start: a reference to one of the functions in
+* ``e2e`` -- it reaches a process start: a reference to a function in
   :data:`PROCESS_STARTS`, called, passed or aliased, never in an annotation.
   ``subprocess.CompletedProcess`` and ``subprocess.TimeoutExpired`` start
   nothing and do not count.
 * ``integration`` -- not ``e2e``, and it reads this repository's own tree: it
   uses ``__file__`` (a bare name, or an attribute such as ``detect.__file__``)
-  or a name bound to it, in a path expression whose chain carries no segment in
-  :data:`LABELLED_INPUT_SEGMENTS`. A binding is not a use: a name bound to a tree
-  path counts where it is used, and counts where it is bound only when nothing
-  uses it. A name imported from a script under :data:`SCRIPT_DIRECTORY` runs
-  that script in-process and counts the same way.
+  or a name bound to it in a path whose final segments hold none of
+  :data:`LABELLED_INPUT_SEGMENTS` (``.parent`` and ``..`` are applied first, so
+  a path that climbs out of ``fixtures/`` counts); or it uses a function of
+  :data:`SOURCE_READERS`, which reads a source file through an object rather
+  than a path; or it uses a name imported from a script under
+  :data:`SCRIPT_DIRECTORY`, which runs that script in-process. A binding is not
+  a use: a name bound to a tree path counts where it is used, and where it is
+  bound only when nothing uses it.
 * ``unit`` -- neither.
 
 What a test reaches: the functions, classes and module constants its body names
 in its own module; the fixtures it requests -- its parameters, the autouse
 fixtures in scope, ``usefixtures`` -- from its module or ``conftest.py``; and
-the functions, classes and constants it imports from an uncollected support
-module under ``tests/``; all transitively. A class reached absorbs every method
-it defines. Nothing is listed by hand: ``run_cli``, ``load_tool``,
-``run_tool_main`` and ``read_pyproject`` take their tiers from their bodies.
+the functions, classes and constants it imports from another module under
+``tests/``, however the import is spelt; all transitively. A class reached
+absorbs every method it defines. Nothing is listed by hand: ``run_cli``,
+``load_tool``, ``run_tool_main`` and ``read_pyproject`` take their tiers from
+their bodies.
 
 The classification errs upward: a cheap test may land above its cost, but a
-test that starts a process or reads the tree never lands on ``unit``.
+test whose own code starts a process or reads the tree never lands on
+``unit``. The criterion stops at ``tests/``: a process the code under test
+starts (``detect._current_sha``'s ``git rev-parse``) does not count (DEC-TSS-017).
 
 Debugging a disputed tier: ``python -m pytest tests/test_suite_shape.py -k
 criterion -o log_cli=true --log-cli-level=DEBUG`` logs every test's tier with
@@ -42,7 +49,7 @@ from __future__ import annotations
 import ast
 import logging
 from collections import Counter, deque
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -54,7 +61,7 @@ UNIT, INTEGRATION, E2E = TIERS
 
 _EXEC_SUFFIXES = ("l", "le", "lp", "lpe", "v", "ve", "vp", "vpe")
 
-#: Module name -> the functions in it that start a process.
+#: Module (dotted) -> the functions in it that start a process.
 PROCESS_STARTS: dict[str, frozenset[str]] = {
     "subprocess": frozenset(
         {"run", "Popen", "call", "check_call", "check_output", "getoutput", "getstatusoutput"}
@@ -66,9 +73,24 @@ PROCESS_STARTS: dict[str, frozenset[str]] = {
     ),
     "asyncio": frozenset({"create_subprocess_exec", "create_subprocess_shell"}),
     "pty": frozenset({"spawn"}),
+    "multiprocessing": frozenset({"Process", "Pool", "get_context"}),
+    "concurrent.futures": frozenset({"ProcessPoolExecutor"}),
 }
 
-#: A path chain carrying one of these segments reads labelled input, not the tree.
+#: Module (dotted) -> the functions in it that read a source file through an
+#: object rather than a path: ``inspect.getsource(parse.parse_spec)`` opens
+#: ``openspec_graph/parse.py`` with no ``__file__`` in sight.
+SOURCE_READERS: dict[str, frozenset[str]] = {
+    "inspect": frozenset(
+        {"getsource", "getsourcelines", "getsourcefile", "getfile", "findsource", "getcomments"}
+    ),
+    "linecache": frozenset({"getline", "getlines", "updatecache", "checkcache"}),
+    "importlib.resources": frozenset(
+        {"files", "read_text", "read_binary", "open_text", "open_binary", "path", "as_file"}
+    ),
+}
+
+#: A path whose final segments hold one of these reads labelled input, not the tree.
 LABELLED_INPUT_SEGMENTS = frozenset({"fixtures", "corpus"})
 
 #: The package the support modules are imported from.
@@ -79,10 +101,17 @@ SUPPORT_PACKAGE = "tests"
 #: which reads the tree as surely as ``load_tool`` does.
 SCRIPT_DIRECTORY = "tools"
 TEST_MODULE_GLOB = "test_*.py"
+TEST_CLASS_PREFIX = "Test"
 CONFTEST = "conftest.py"
 PYTESTMARK = "pytestmark"
 
+#: What ``__file__`` contributes to a path: a directory and a file, so that
+#: ``.parent`` and ``..`` climb out of it the way they climb out of a real one.
+_FILE_SEGMENTS = ("<dir>", "<file>")
+_PARENT = ".."
+
 Node = tuple[Path, str]
+Resolver = Callable[[str], "list[str] | None"]
 
 
 @dataclass(frozen=True)
@@ -157,13 +186,54 @@ def _chain_root(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> ast.AST:
         current = parent
 
 
-def _labelled(expression: ast.AST) -> bool:
-    return any(
-        isinstance(sub, ast.Constant)
-        and isinstance(sub.value, str)
-        and bool(set(sub.value.replace("\\", "/").split("/")) & LABELLED_INPUT_SEGMENTS)
-        for sub in ast.walk(expression)
-    )
+def _append(segments: list[str], more: Iterable[str]) -> list[str]:
+    """Join ``more`` onto ``segments`` the way a filesystem does: ``..`` climbs,
+    and a ``..`` with nothing left to climb is kept for the left side to meet."""
+    out = list(segments)
+    for segment in more:
+        if segment == _PARENT and out and out[-1] != _PARENT:
+            out.pop()
+        elif segment not in ("", "."):
+            out.append(segment)
+    return out
+
+
+def path_segments(expression: ast.AST | None, resolve: Resolver | None = None, depth: int = 0) -> list[str]:
+    """The segments a path expression ends at, in order: literals split on
+    ``/``, names through ``resolve``, ``.parent`` and ``..`` applied, method
+    arguments ignored (``.count("fixtures")`` names no segment)."""
+    if expression is None or depth > 64:
+        return []
+    if isinstance(expression, ast.Constant) and isinstance(expression.value, str):
+        return _append([], expression.value.replace("\\\\", "/").split("/"))
+    if isinstance(expression, ast.BinOp) and isinstance(expression.op, ast.Div):
+        left = path_segments(expression.left, resolve, depth + 1)
+        return _append(left, path_segments(expression.right, resolve, depth + 1))
+    if isinstance(expression, ast.Name):
+        if expression.id == "__file__":
+            return list(_FILE_SEGMENTS)
+        found = resolve(expression.id) if resolve is not None else None
+        return list(found) if found is not None else []
+    if isinstance(expression, ast.Attribute):
+        if expression.attr == "__file__":
+            return list(_FILE_SEGMENTS)
+        inner = path_segments(expression.value, resolve, depth + 1)
+        return _append(inner, [_PARENT]) if expression.attr == "parent" else inner
+    if isinstance(expression, ast.Subscript):
+        return path_segments(expression.value, resolve, depth + 1)
+    if isinstance(expression, ast.Call):
+        func = expression.func
+        if isinstance(func, ast.Attribute):
+            base = path_segments(func.value, resolve, depth + 1)
+            if func.attr == "joinpath":
+                for arg in expression.args:
+                    base = _append(base, path_segments(arg, resolve, depth + 1))
+            return base
+        segments: list[str] = []
+        for arg in expression.args:
+            segments = _append(segments, path_segments(arg, resolve, depth + 1))
+        return segments
+    return []
 
 
 def _decorator_target(decorator: ast.expr) -> ast.expr:
@@ -231,8 +301,14 @@ def _assigned_value(statement: ast.stmt) -> ast.expr | None:
     return None
 
 
+def _split(qualified: str) -> tuple[str, str]:
+    module, _, name = qualified.rpartition(".")
+    return module, name
+
+
 class _Module:
-    """One parsed module: what it defines, imports and binds to the tree."""
+    """One parsed module: what it defines, what its names are bound to, and
+    which of its constants are rooted at ``__file__``."""
 
     def __init__(self, path: Path, program: Program) -> None:
         self.path = path
@@ -243,31 +319,27 @@ class _Module:
         self.functions: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
         self.classes: dict[str, ast.ClassDef] = {}
         self.constants: dict[str, ast.expr] = {}
-        self.imported: dict[str, tuple[str, str]] = {}  # local name -> (support stem, name)
-        self.support_aliases: dict[str, str] = {}  # local name -> support stem
-        self.process_modules: dict[str, str] = {}  # local name -> module in PROCESS_STARTS
-        self.process_names: dict[str, str] = {}  # local name -> "module.function"
-        self.script_names: dict[str, str] = {}  # local name -> the script it runs in-process
+        #: local name -> the dotted name an import bound it to.
+        self.bindings: dict[str, str] = {}
         for statement in self.tree.body:
             self._index(statement)
-        # Imports anywhere -- a function-local import included -- resolve module-wide:
+        # Imports anywhere -- a function-local import included -- bind module-wide:
         # a name collision can only add a signal, which errs upward.
         for node in ast.walk(self.tree):
-            if isinstance(node, (ast.Import, ast.ImportFrom)):
-                self._index_import(node)
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.asname:
+                        self.bindings[alias.asname] = alias.name
+                    else:
+                        head = alias.name.split(".")[0]
+                        self.bindings[head] = head
+            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+                for alias in node.names:
+                    self.bindings[alias.asname or alias.name] = f"{node.module}.{alias.name}"
         self.fixtures = {name for name, fn in self.functions.items() if _is_fixture(fn)}
         self.autouse = sorted(name for name, fn in self.functions.items() if _is_autouse(fn))
-        self.tree_constants: set[str] = set()
-
-    def bind_tree_constants(self) -> None:
-        """Module constants bound to the tree, through other constants, to a fixed point."""
-        changed = True
-        while changed:
-            changed = False
-            for name, value in self.constants.items():
-                if name not in self.tree_constants and self.reads_tree(value, set()):
-                    self.tree_constants.add(name)
-                    changed = True
+        self.rooted: set[str] = set()
+        self._segments: dict[str, list[str]] = {}
 
     def _index(self, statement: ast.stmt) -> None:
         if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -280,106 +352,119 @@ class _Module:
                 for name in _assigned_names(statement):
                     self.constants[name] = value
 
-    def _script(self, module: str) -> str | None:
-        """The ``tools/`` script ``module`` names, if it is one of this repository's."""
-        head, _, rest = module.partition(".")
-        name = rest if head == SCRIPT_DIRECTORY else module
-        if head != SCRIPT_DIRECTORY and "." in module:
+    def bind_rooted_constants(self) -> None:
+        """Module constants rooted at ``__file__``, through other constants, to a fixed point."""
+        changed = True
+        while changed:
+            changed = False
+            for name, value in self.constants.items():
+                if name not in self.rooted and self.mentions_root(value, set()):
+                    self.rooted.add(name)
+                    changed = True
+
+    # -- names ------------------------------------------------------------------
+
+    def dotted(self, node: ast.AST) -> str | None:
+        """The dotted name an import gave ``node``: ``sp.run`` -> ``subprocess.run``."""
+        if isinstance(node, ast.Name):
+            return self.bindings.get(node.id)
+        if isinstance(node, ast.Attribute):
+            inner = self.dotted(node.value)
+            return f"{inner}.{node.attr}" if inner else None
+        return None
+
+    def support_target(self, qualified: str) -> tuple[_Module, str] | None:
+        """``tests.<stem>.<name>[...]`` -> that module and the name, if it exists."""
+        parts = qualified.split(".")
+        if len(parts) < 3 or parts[0] != SUPPORT_PACKAGE:
             return None
-        if not name:
-            return f"{SCRIPT_DIRECTORY}/"
-        script = self.program.repo_root / SCRIPT_DIRECTORY / f"{name}.py"
-        return f"{SCRIPT_DIRECTORY}/{name}.py" if script.is_file() else None
+        support = self.program.support(parts[1])
+        return (support, parts[2]) if support is not None else None
 
-    def _index_import(self, statement: ast.Import | ast.ImportFrom) -> None:
-        if isinstance(statement, ast.Import):
-            for alias in statement.names:
-                script = self._script(alias.name)
-                if script is not None:
-                    self.script_names[(alias.asname or alias.name).split(".")[0]] = script
-                if alias.name in PROCESS_STARTS:
-                    self.process_modules[alias.asname or alias.name] = alias.name
-                elif alias.name.startswith(f"{SUPPORT_PACKAGE}.") and alias.asname:
-                    self.support_aliases[alias.asname] = alias.name.split(".", 1)[1]
-        elif statement.module and not statement.level:
-            module = statement.module
-            script = self._script(module)
-            for alias in statement.names:
-                local = alias.asname or alias.name
-                if script is not None:
-                    self.script_names[local] = (
-                        self._script(f"{module}.{alias.name}") or script
-                        if module == SCRIPT_DIRECTORY
-                        else script
-                    )
-                elif module in PROCESS_STARTS and alias.name in PROCESS_STARTS[module]:
-                    self.process_names[local] = f"{module}.{alias.name}"
-                elif module == SUPPORT_PACKAGE:
-                    self.support_aliases[local] = alias.name
-                elif module.startswith(f"{SUPPORT_PACKAGE}."):
-                    self.imported[local] = (module.split(".", 1)[1], alias.name)
-
-    def is_tree_name(self, name: str, local: set[str]) -> bool:
-        if name == "__file__" or name in local or name in self.tree_constants:
+    def is_rooted(self, name: str, local: set[str]) -> bool:
+        if name == "__file__" or name in local or name in self.rooted:
             return True
-        if name in self.imported:
-            stem, original = self.imported[name]
-            support = self.program.support(stem)
-            return support is not None and support.is_tree_name(original, set())
-        return False
+        qualified = self.bindings.get(name)
+        target = self.support_target(qualified) if qualified else None
+        return target is not None and target[0].is_rooted(target[1], set())
 
-    def _tree_use(self, node: ast.AST, local: set[str]) -> str | None:
-        """What ``node`` reads of the tree, when it is a use outside labelled input."""
-        hit: str | None = None
-        if (
-            isinstance(node, ast.Name)
-            and isinstance(node.ctx, ast.Load)
-            and self.is_tree_name(node.id, local)
-        ):
-            hit = node.id
-        elif (
-            isinstance(node, ast.Name)
-            and isinstance(node.ctx, ast.Load)
-            and node.id in self.script_names
-        ):
-            return f"{node.id} (runs {self.script_names[node.id]} in-process)"
-        elif isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
-            if node.attr == "__file__":
-                hit = ast.unparse(node)
-            elif isinstance(node.value, ast.Name) and node.value.id in self.support_aliases:
-                support = self.program.support(self.support_aliases[node.value.id])
-                if support is not None and support.is_tree_name(node.attr, set()):
-                    hit = ast.unparse(node)
-        if hit is None or _labelled(_chain_root(node, self.parents)):
+    def mentions_root(self, expression: ast.AST, local: set[str]) -> bool:
+        return any(
+            (isinstance(sub, ast.Name) and self.is_rooted(sub.id, local))
+            or (isinstance(sub, ast.Attribute) and sub.attr == "__file__")
+            for sub in ast.walk(expression)
+        )
+
+    def constant_segments(self, name: str) -> list[str] | None:
+        """Where a module constant's path ends, or ``None`` if it is no constant here."""
+        if name in self._segments:
+            return self._segments[name]
+        if name in self.constants:
+            self._segments[name] = []  # cycle guard
+            self._segments[name] = path_segments(self.constants[name], self.constant_segments)
+            return self._segments[name]
+        qualified = self.bindings.get(name)
+        target = self.support_target(qualified) if qualified else None
+        return target[0].constant_segments(target[1]) if target else None
+
+    def resolver(self, local_values: dict[str, ast.expr]) -> Resolver:
+        def resolve(name: str) -> list[str] | None:
+            if name in local_values:
+                value = local_values.pop(name)  # a local is resolved once, never through itself
+                try:
+                    return path_segments(value, resolve)
+                finally:
+                    local_values[name] = value
+            return self.constant_segments(name)
+
+        return resolve
+
+    def tree_use(self, node: ast.AST, local: set[str], resolve: Resolver) -> str | None:
+        """What ``node`` reads of the tree, when it is a rooted use outside labelled input."""
+        if not isinstance(getattr(node, "ctx", None), ast.Load):
             return None
-        return hit
+        hit: str | None = None
+        if isinstance(node, ast.Name) and self.is_rooted(node.id, local):
+            hit = node.id
+        elif isinstance(node, ast.Attribute) and node.attr == "__file__":
+            hit = ast.unparse(node)
+        if hit is None:
+            return None
+        final = path_segments(_chain_root(node, self.parents), resolve)
+        return None if set(final) & LABELLED_INPUT_SEGMENTS else hit
 
-    def reads_tree(self, expression: ast.AST, local: set[str]) -> bool:
-        return any(self._tree_use(sub, local) for sub in ast.walk(expression))
-
-    def spawn_use(self, node: ast.AST) -> str | None:
-        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
-            module = self.process_modules.get(node.value.id)
-            if module is not None and node.attr in PROCESS_STARTS[module]:
-                return f"{module}.{node.attr}"
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
-            return self.process_names.get(node.id)
+    def signal_use(self, node: ast.AST) -> tuple[str, str] | None:
+        """``(kind, what)`` when ``node`` names a process start, a source reader or a
+        ``tools/`` script."""
+        if not isinstance(node, (ast.Name, ast.Attribute)) or not isinstance(
+            getattr(node, "ctx", None), ast.Load
+        ):
+            return None
+        qualified = self.dotted(node)
+        if not qualified:
+            return None
+        module, name = _split(qualified)
+        if name in PROCESS_STARTS.get(module, frozenset()):
+            return E2E, qualified
+        if name in SOURCE_READERS.get(module, frozenset()):
+            return INTEGRATION, qualified
+        script = self.program.script(qualified)
+        if script is not None:
+            return INTEGRATION, f"{ast.unparse(node)} (runs {script} in-process)"
         return None
 
     def resolve(self, name: str) -> Node | None:
-        """The definition ``name`` refers to here, following support re-exports."""
+        """The definition ``name`` refers to here, following imports under ``tests/``."""
         if name in self.functions or name in self.classes or name in self.constants:
             return (self.path, name)
-        if name in self.imported:
-            stem, original = self.imported[name]
-            support = self.program.support(stem)
-            return support.resolve(original) if support is not None else None
-        return None
+        qualified = self.bindings.get(name)
+        target = self.support_target(qualified) if qualified else None
+        return target[0].resolve(target[1]) if target else None
 
     def resolve_fixture(self, name: str) -> Node | None:
         if name in self.fixtures:
             return (self.path, name)
-        target = self.resolve(name) if name in self.imported else None
+        target = self.resolve(name) if name in self.bindings else None
         if target is not None:
             return target
         conftest = self.program.conftest
@@ -409,7 +494,7 @@ class Program:
         if path not in self._modules:
             # Registered before its constants are bound, so a circular import ends here.
             self._modules[path] = module = _Module(path, self)
-            module.bind_tree_constants()
+            module.bind_rooted_constants()
         return self._modules[path]
 
     def support(self, stem: str) -> _Module | None:
@@ -419,6 +504,13 @@ class Program:
             if directory is not None and (directory / f"{stem}.py").is_file():
                 return self.module(directory / f"{stem}.py")
         return None
+
+    def script(self, qualified: str) -> str | None:
+        """The ``tools/`` script a dotted import name runs, if it is one of this repository's."""
+        parts = qualified.split(".")
+        name = parts[1] if parts[0] == SCRIPT_DIRECTORY and len(parts) > 1 else parts[0]
+        script = self.repo_root / SCRIPT_DIRECTORY / f"{name}.py"
+        return f"{SCRIPT_DIRECTORY}/{name}.py" if script.is_file() else None
 
     def test_modules(self) -> list[Path]:
         return sorted(self.root.glob(TEST_MODULE_GLOB))
@@ -445,40 +537,50 @@ class Program:
     def _references(self, module: _Module, nodes: Iterable[ast.AST], own: str) -> list[tuple[str, Node]]:
         edges: list[tuple[str, Node]] = []
         for sub in nodes:
-            if id(sub) in module.skip:
+            if id(sub) in module.skip or not isinstance(getattr(sub, "ctx", None), ast.Load):
                 continue
             target: Node | None = None
-            label = ""
-            if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load) and sub.id != own:
-                target, label = module.resolve(sub.id), sub.id
-            elif (
-                isinstance(sub, ast.Attribute)
-                and isinstance(sub.value, ast.Name)
-                and sub.value.id in module.support_aliases
-            ):
-                support = self.support(module.support_aliases[sub.value.id])
-                target = support.resolve(sub.attr) if support is not None else None
-                label = ast.unparse(sub)
+            if isinstance(sub, ast.Name) and sub.id != own:
+                target = module.resolve(sub.id)
+            elif isinstance(sub, ast.Attribute):
+                qualified = module.dotted(sub)
+                found = module.support_target(qualified) if qualified else None
+                target = found[0].resolve(found[1]) if found else None
             if target is not None:
-                edges.append((label, target))
+                edges.append((ast.unparse(sub), target))
         return edges
+
+    @staticmethod
+    def _signals(module: _Module, nodes: Iterable[ast.AST]) -> tuple[list[str], list[str]]:
+        spawns: list[str] = []
+        reads: list[str] = []
+        for sub in nodes:
+            if id(sub) in module.skip:
+                continue
+            signal = module.signal_use(sub)
+            if signal is not None:
+                (spawns if signal[0] == E2E else reads).append(signal[1])
+        return spawns, reads
 
     def _expression_facts(self, module: _Module, value: ast.expr, own: str) -> _Facts:
         nodes = list(ast.walk(value))
-        spawns = tuple(s for s in (module.spawn_use(sub) for sub in nodes) if s)
-        return _Facts(spawns, (), tuple(self._references(module, nodes, own)))
+        spawns, reads = self._signals(module, nodes)
+        return _Facts(tuple(spawns), tuple(reads), tuple(self._references(module, nodes, own)))
 
     def _class_facts(self, module: _Module, cls: ast.ClassDef) -> _Facts:
         nodes: list[ast.AST] = list(cls.bases) + list(cls.decorator_list)
         methods: list[tuple[str, Node]] = []
         for statement in cls.body:
             if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                methods.append((f"{cls.name}.{statement.name}", (module.path, f"{cls.name}.{statement.name}")))
+                qualname = f"{cls.name}.{statement.name}"
+                methods.append((qualname, (module.path, qualname)))
             else:
                 nodes.extend(ast.walk(statement))
-        spawns = tuple(s for s in (module.spawn_use(sub) for sub in nodes) if s)
-        reads = tuple(r for r in (module._tree_use(sub, set()) for sub in nodes) if r)
-        return _Facts(spawns, reads, tuple(self._references(module, nodes, cls.name)) + tuple(methods))
+        spawns, reads = self._signals(module, nodes)
+        resolve = module.resolver({})
+        reads += [r for r in (module.tree_use(sub, set(), resolve) for sub in nodes) if r]
+        edges = tuple(self._references(module, nodes, cls.name)) + tuple(methods)
+        return _Facts(tuple(spawns), tuple(reads), edges)
 
     def _function_facts(
         self,
@@ -496,7 +598,12 @@ class Program:
             )
         assert isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef))
         nodes = list(ast.walk(function))
-        # Locals bound to a tree path, to a fixed point: their bindings defer to their uses.
+        values: dict[str, ast.expr] = {}
+        for sub in nodes:
+            if isinstance(sub, (ast.Assign, ast.AnnAssign)) and sub.value is not None:
+                for name in _assigned_names(sub):
+                    values.setdefault(name, sub.value)
+        # Locals rooted at __file__, to a fixed point: their bindings defer to their uses.
         local: set[str] = set()
         deferred: set[int] = set()
         changed = True
@@ -507,28 +614,26 @@ class Program:
                     continue
                 value = _assigned_value(sub)
                 names = _assigned_names(sub)
-                if value is not None and names and module.reads_tree(value, local):
+                if value is not None and names and module.mentions_root(value, local):
                     local.update(names)
                     deferred.add(id(sub))
                     deferred.update(id(x) for x in ast.walk(value))
                     changed = True
-        spawns: list[str] = []
-        reads: list[str] = []
+        resolve = module.resolver(values)
+        spawns, reads = self._signals(module, nodes)  # a signal counts wherever it is named
         used: set[str] = set()
         for sub in nodes:
-            if id(sub) in module.skip:
-                continue
-            spawn = module.spawn_use(sub)
-            if spawn:
-                spawns.append(spawn)  # a process start counts wherever it is named
-            if id(sub) in deferred:
+            if id(sub) in module.skip or id(sub) in deferred:
                 continue
             if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Load) and sub.id in local:
                 used.add(sub.id)
-            read = module._tree_use(sub, local)
+            read = module.tree_use(sub, local, resolve)
             if read:
                 reads.append(read)
-        reads.extend(f"{name} (bound to the tree, never used)" for name in sorted(local - used))
+        for name in sorted(local - used):
+            final = path_segments(values.get(name), resolve)
+            if not set(final) & LABELLED_INPUT_SEGMENTS:
+                reads.append(f"{name} (bound to the tree, never used)")
         edges = self._references(module, nodes, function.name)
         is_test_or_fixture = function.name.startswith("test_") or _is_fixture(function)
         if method is None and is_test_or_fixture:
@@ -598,22 +703,33 @@ class Program:
 # -- marks ---------------------------------------------------------------------
 
 
+def _mark_list(value: ast.expr) -> list[ast.expr]:
+    return list(value.elts) if isinstance(value, (ast.List, ast.Tuple)) else [value]
+
+
 def module_marks(path: Path) -> tuple[dict[str, list[str]], list[str]]:
     """Per test, every tier it carries -- module ``pytestmark`` plus decorators,
-    both levels counted -- and the module's tier aliases."""
+    both levels counted -- and every shape the one-tier rule cannot count:
+    a tier alias, a test class, a tier inside ``pytest.param(marks=...)``."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     module_tiers: list[str] = []
-    aliases: list[str] = []
+    forbidden: list[str] = []
     for statement in tree.body:
+        if isinstance(statement, ast.ClassDef) and statement.name.startswith(TEST_CLASS_PREFIX):
+            forbidden.append(f"a test class, whose items the one-tier guard cannot count: {statement.name}")
         value = _assigned_value(statement)
         if value is None:
             continue
         for name in _assigned_names(statement):
             if name == PYTESTMARK:
-                marks = value.elts if isinstance(value, (ast.List, ast.Tuple)) else [value]
-                module_tiers += [t for t in map(tier_of_mark, marks) if t]
+                module_tiers += [t for t in map(tier_of_mark, _mark_list(value)) if t]
             elif tier_of_mark(value):
-                aliases.append(f"{name} = {ast.unparse(value)}")
+                forbidden.append(f"a tier through an alias: {name} = {ast.unparse(value)}")
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "param":
+            for keyword in node.keywords:
+                if keyword.arg == "marks" and any(map(tier_of_mark, _mark_list(keyword.value))):
+                    forbidden.append(f"a tier inside pytest.param marks, line {node.lineno}")
     tiers = {
         statement.name: module_tiers
         + [t for t in map(tier_of_mark, statement.decorator_list) if t]
@@ -621,15 +737,15 @@ def module_marks(path: Path) -> tuple[dict[str, list[str]], list[str]]:
         if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef))
         and statement.name.startswith("test_")
     }
-    return tiers, aliases
+    return tiers, forbidden
 
 
 def tier_count_violations(root: Path) -> list[str]:
-    """Every test without exactly one tier, and every tier alias, named."""
+    """Every test without exactly one tier, and every shape that hides a tier, named."""
     found: list[str] = []
     for path in sorted(root.glob(TEST_MODULE_GLOB)):
-        tiers, aliases = module_marks(path)
-        found += [f"{path.name}: a tier through an alias: {alias}" for alias in aliases]
+        tiers, forbidden = module_marks(path)
+        found += [f"{path.name}: {shape}" for shape in forbidden]
         found += [
             f"{path.name}::{test}: {', '.join(marks) or 'no tier'}"
             for test, marks in tiers.items()
@@ -666,7 +782,6 @@ def tier_tally(program: Program) -> str:
     )
     return "\n".join(lines)
 
-
 # -- routing (R-TSS-8) -----------------------------------------------------------
 
 #: The shared module the routed helpers live in, and the helpers whose shapes
@@ -697,29 +812,18 @@ def _locals(function: ast.AST) -> dict[str, ast.expr]:
     }
 
 
-def path_segments(
-    expression: ast.AST, assigned: dict[str, ast.expr], depth: int = 0
-) -> list[str]:
-    """The literal segments of a path expression, in order, locals substituted."""
-    if depth > len(assigned) + 1:
-        return []
-    if isinstance(expression, ast.Constant) and isinstance(expression.value, str):
-        return [s for s in expression.value.replace("\\", "/").split("/") if s]
-    if isinstance(expression, ast.BinOp) and isinstance(expression.op, ast.Div):
-        return path_segments(expression.left, assigned, depth) + path_segments(
-            expression.right, assigned, depth
-        )
-    if isinstance(expression, ast.Name):
-        value = assigned.get(expression.id)
-        return path_segments(value, assigned, depth + 1) if value is not None else []
-    if isinstance(expression, ast.Attribute):
-        inner = path_segments(expression.value, assigned, depth)
-        return inner[:-1] if expression.attr == "parent" else inner
-    if isinstance(expression, ast.Call):
-        if isinstance(expression.func, ast.Attribute):
-            return path_segments(expression.func.value, assigned, depth)
-        return [s for arg in expression.args for s in path_segments(arg, assigned, depth)]
-    return []
+def _dict_resolver(assigned: dict[str, ast.expr]) -> Resolver:
+    """Resolve a name to where its local assignment's path ends, once per name."""
+    def resolve(name: str) -> list[str] | None:
+        if name not in assigned:
+            return None
+        value = assigned.pop(name)
+        try:
+            return path_segments(value, resolve)
+        finally:
+            assigned[name] = value
+
+    return resolve
 
 
 def _process_start(call: ast.Call) -> tuple[str, str] | None:
@@ -771,7 +875,7 @@ def routed_shapes(support: Path) -> RoutedShapes:
             and node.func.attr == WRITE_METHOD
         )
         assert isinstance(write.func, ast.Attribute)
-        writers[name] = tuple(path_segments(write.func.value, _locals(writer)))
+        writers[name] = tuple(path_segments(write.func.value, _dict_resolver(_locals(writer))))
     return RoutedShapes(module, function, frozenset(_string_constants(_argv(call))), writers)
 
 
@@ -831,7 +935,7 @@ def hand_written_specs(root: Path, shapes: RoutedShapes) -> list[str]:
                     and node.func.attr == WRITE_METHOD
                 ):
                     continue
-                writer = _writer_for(path_segments(node.func.value, assigned), shapes)
+                writer = _writer_for(path_segments(node.func.value, _dict_resolver(assigned)), shapes)
                 if writer is not None:
                     found.append(f"{path.name}:{node.lineno} ({writer})")
     return sorted(set(found))

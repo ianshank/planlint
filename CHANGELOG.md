@@ -27,10 +27,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **Tiers.** Every test carries exactly one of three registered markers —
   `unit` (its code under `tests/` starts no process and reads none of this
   repository's files outside `tests/fixtures/` and `tests/corpus/`),
-  `integration` (reads the repository, a `tools/` script loaded in-process
-  included) or `e2e` (starts a process) — decided mechanically from what the
-  test uses by `tests/shape_support.py`, through helpers, fixtures, support
-  modules and classes. `addopts` gains `--strict-markers`, so a misspelt mark
+  `integration` (reads the repository, a `tools/` script run in-process and
+  package source read through `inspect` included) or `e2e` (starts a
+  process) — decided mechanically by `tests/shape_support.py` from what the
+  test's own code under `tests/` uses, through helpers, fixtures, support
+  modules, classes and any import spelling. A process the code under test
+  starts itself, such as the package's `git rev-parse HEAD`, does not
+  count. `addopts` gains `--strict-markers`, so a misspelt mark
   fails collection. `python -m pytest -m unit` is the fast local loop, a
   command rather than a Make target because `coverage-run` stays the only
   recipe that runs pytest. `test_rule_registry_baseline_is_unchanged` moved

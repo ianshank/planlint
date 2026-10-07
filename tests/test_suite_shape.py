@@ -323,6 +323,140 @@ PLANTED = [
         "criterion", "test_reads_and_discards", id="unit-binding-a-tree-read-it-never-uses",
     ),
     pytest.param(
+        {"test_planted.py": """
+            import inspect
+
+            import pytest
+
+            from openspec_graph import parse
+
+
+            @pytest.mark.unit
+            def test_reads_package_source():
+                assert "def parse_spec" in inspect.getsource(parse.parse_spec)
+        """},
+        "criterion", "test_reads_package_source", id="unit-reading-source-through-inspect",
+    ),
+    pytest.param(
+        {"test_planted.py": """
+            from pathlib import Path
+
+            import pytest
+
+            ROOT = Path(__file__).resolve().parent.parent
+
+
+            @pytest.mark.unit
+            def test_counts_a_word():
+                assert (ROOT / "README.md").read_text().count("fixtures") >= 0
+        """},
+        "criterion", "test_counts_a_word", id="unit-whose-labelled-word-is-a-method-argument",
+    ),
+    pytest.param(
+        {"test_planted.py": """
+            from pathlib import Path
+
+            import pytest
+
+            FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+            @pytest.mark.unit
+            def test_climbs_out():
+                assert (FIXTURES.parent.parent / "README.md").name
+        """},
+        "criterion", "test_climbs_out", id="unit-climbing-out-of-fixtures-by-parent",
+    ),
+    pytest.param(
+        {"test_planted.py": """
+            from pathlib import Path
+
+            import pytest
+
+
+            @pytest.mark.unit
+            def test_climbs_out():
+                assert (Path(__file__).parent / "fixtures" / ".." / ".." / "README.md").name
+        """},
+        "criterion", "test_climbs_out", id="unit-climbing-out-of-fixtures-by-dotdot",
+    ),
+    pytest.param(
+        {"test_planted.py": """
+            import pytest
+
+            import tests.support
+
+
+            @pytest.mark.unit
+            def test_spawns(tmp_path):
+                assert tests.support.run_cli(tmp_path, "rules").returncode == 0
+        """},
+        "criterion", "test_spawns", id="unit-spawning-through-an-unaliased-import",
+    ),
+    pytest.param(
+        {"test_planted.py": """
+            import os.path
+
+            import pytest
+
+
+            @pytest.mark.unit
+            def test_spawns():
+                assert os.system("true") == 0
+        """},
+        "criterion", "test_spawns", id="unit-spawning-through-a-dotted-import",
+    ),
+    pytest.param(
+        {"test_planted.py": """
+            import multiprocessing
+
+            import pytest
+
+
+            @pytest.mark.unit
+            def test_spawns():
+                multiprocessing.Process(target=print).start()
+        """},
+        "criterion", "test_spawns", id="unit-starting-a-multiprocessing-process",
+    ),
+    pytest.param(
+        {"../tools/planted_script.py": "def main():\n    return 0\n", "test_planted.py": """
+            import pytest
+
+            from tools import planted_script
+
+
+            @pytest.mark.unit
+            def test_runs_a_script():
+                assert planted_script.main() == 0
+        """},
+        "criterion", "test_runs_a_script", id="unit-running-a-tools-script-in-process",
+    ),
+    pytest.param(
+        {"test_planted.py": """
+            import pytest
+
+
+            class TestHidden:
+                @pytest.mark.unit
+                def test_in_a_class(self):
+                    assert True
+        """},
+        "tiers", "a test class", id="a-test-class",
+    ),
+    pytest.param(
+        {"test_planted.py": """
+            import pytest
+
+
+            @pytest.mark.unit
+            @pytest.mark.parametrize("x", [1, pytest.param(2, marks=pytest.mark.e2e)])
+            def test_param(x):
+                assert x
+        """},
+        "tiers", "pytest.param marks", id="a-tier-inside-pytest-param-marks",
+    ),
+    pytest.param(
         {"test_planted.py": "# a line\n" * (MAX_TEST_MODULE_LINES + 1)},
         "bound", "test_planted.py", id="a-module-over-the-bound",
     ),
@@ -369,7 +503,7 @@ PLANTED = [
 
 def _plant(root: Path, files: dict[str, str]) -> None:
     for relative, text in files.items():
-        target = root / relative
+        target = (root / relative).resolve()
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(textwrap.dedent(text).lstrip("\n"), encoding="utf-8")
 

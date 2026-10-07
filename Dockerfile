@@ -2,7 +2,7 @@
 # `pip install planlint` (or `pip install -e ".[dev]"` for a checkout) is the
 # primary path. This image is not built in CI, so a pyproject change can break
 # it silently; `tests/test_agent_artifacts.py` pins the COPY set it depends on,
-# and `tests/test_workflow_hardening.py` holds the base tag equal to the
+# and `tests/test_workflow_python.py` holds the base tag equal to the
 # workflows' PYTHON_DEFAULT -- the one interpreter version this repository
 # names, for CI sandboxes that want a hermetic, dependency-free CLI invocation.
 # Build:  docker build -t planlint .

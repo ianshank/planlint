@@ -52,8 +52,9 @@ process and reads none of this repository's own files outside the labelled
 corpora under `tests/fixtures/` and `tests/corpus/` — about 13 s when
 `shape-the-test-suite` recorded it, against about 150 s for the whole suite.
 `python -m pytest -m "not unit"` runs the rest: `integration`, which reads the
-repository (the workflow, Makefile, docs and agent-artifact guards, and every
-`tools/` script loaded in-process), and `e2e`, which starts a process
+repository (the workflow, Makefile, docs and agent-artifact guards, every
+`tools/` script run in-process, and package source read through `inspect`),
+and `e2e`, which starts a process
 (`run_cli`, a nested pytest, ruff, mypy, bash). The criterion stops at
 `tests/`: the package's own `git rev-parse HEAD` and `tools/check_secrets.py`'s
 `git ls-files` run inside the code under test, so a few tests in the cheaper

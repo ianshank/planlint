@@ -81,7 +81,7 @@ branch's, #42 — carries the whole package; the three stages (Milestones
 0–3, 4–5, 6–7) are separate commits, each recording the baseline hash and
 collected count; the red runs are recorded here and never committed.
 
-## Milestone 0 — Grounding pass at the branch head
+## Milestone 0 — Grounding pass at the branch head  [DONE]
 
 - Re-run the gate and record its exit code before the first edit:
   `planlint --target . validate --fail-on ERROR`.
@@ -160,7 +160,7 @@ collected count; the red runs are recorded here and never committed.
   `test_detect_speckit.py` present (DEC-TSS-009).
 - **Gate:** `make validate`
 
-## Milestone 1 — Split `test_ci_hardening.py` and `test_gate_scripts.py`, guards seen red first
+## Milestone 1 — Split `test_ci_hardening.py` and `test_gate_scripts.py`, guards seen red first  [DONE]
 
 - `tests/test_suite_shape.py` (new), written before any move and run red
   (R-TSS-1, R-TSS-12, DEC-TSS-004, DEC-TSS-015): `MAX_TEST_MODULE_LINES =
@@ -270,7 +270,7 @@ collected count; the red runs are recorded here and never committed.
   821, `test_workflow_hardening.py` 1237 — the header expected four because it
   counted `test_gate_scripts.py`, whose split is part of this milestone).
 
-## Milestone 2 — Split `test_workflow_hardening.py`
+## Milestone 2 — Split `test_workflow_hardening.py`  [DONE]
 
 - `tests/workflow_support.py` (new, not collected): the readers more than
   one collected module uses (at `f7118a0`, from the helper block at lines
@@ -326,7 +326,7 @@ collected count; the red runs are recorded here and never committed.
   citation test green; the bound guard red on `test_agent_artifacts.py` and
   `test_skill_contract.py` only.
 
-## Milestone 3 — Split `test_agent_artifacts.py` and `test_skill_contract.py`, re-point every pointer
+## Milestone 3 — Split `test_agent_artifacts.py` and `test_skill_contract.py`, re-point every pointer  [DONE]
 
 - `tests/test_release_surface.py` (new) ← `tests/test_agent_artifacts.py`'s
   release workflow (445–554, 2 tests), generated artifacts (554–604, 3) and
@@ -424,7 +424,7 @@ collected count; the red runs are recorded here and never committed.
   citation, skill and suite-shape modules: 330 passed. `make test`: exit 0, wall 166 s, all four scoped floors met (`openspec_graph/` 2276/2292 and 744/762, `tools/` 946/981 and 323/344 — the two extra `tools/` statements are the scope normalisation of #41's review fix, already on `main`).
 - **Gate:** `make docs-check`, then `make test`
 
-## Milestone 4 — Tiers, their guards seen red first
+## Milestone 4 — Tiers, their guards seen red first  [DONE]
 
 - `tests/test_suite_shape.py`, written before any mark and run red
   (R-TSS-5, R-TSS-6, R-TSS-12, DEC-TSS-005, DEC-TSS-007): planned tests,
@@ -580,7 +580,9 @@ collected count; the red runs are recorded here and never committed.
     its `open` events under the checkout: `1604 passed in 159.04s`, 759
     items with any event. `.egg-info/` metadata reads by `importlib.metadata`
     and Hypothesis's `.hypothesis/` state were excluded as tool state. Four
-    items show a runtime signal above their tier, all outside `tests/`:
+    items show a runtime signal above their tier, all outside `tests/` (wrong, as
+    the round-2 review found: this audit excluded `openspec_graph/` and missed
+    two `inspect` reads; see Milestone 7):
     `test_gate_scripts.py::test_fallback_scan_returns_nothing_outside_a_git_repo`
     (`integration`; `git ls-files` inside `tools/check_secrets.py`);
     `test_graft_witness.py::test_current_sha_returns_none_outside_a_git_repo`
@@ -606,7 +608,7 @@ collected count; the red runs are recorded here and never committed.
     committed on its own, so a container restart cannot lose it; the second
     stage's commit is Milestone 5's.
 
-## Milestone 5 — Route the duplicated shapes through `tests/support.py`, guards seen red first
+## Milestone 5 — Route the duplicated shapes through `tests/support.py`, guards seen red first  [DONE]
 
 - `tests/test_suite_shape.py`, written first and run red (R-TSS-8,
   R-TSS-12, DEC-TSS-009): planned tests, named here so AC-TSS-10 and 11
@@ -731,7 +733,7 @@ collected count; the red runs are recorded here and never committed.
     `make pre-pr`, the whole ladder at the second stage's commit: exit 0,
     wall 178 s.
 
-## Milestone 6 — In-process loops, one subprocess each, the durations pair
+## Milestone 6 — In-process loops, one subprocess each, the durations pair  [DONE]
 
 - `tests/test_suite_shape.py`, written first and run red (R-TSS-9,
   R-TSS-12, DEC-TSS-010): `test_the_converted_loops_keep_exactly_one_subprocess`
@@ -860,7 +862,7 @@ collected count; the red runs are recorded here and never committed.
     `tools/` 96.4% (946/981) and 93.9% (323/344); floors unchanged.
     Baseline: 1057 names, sha256 prefix `2f62db0aee56ef40`, unchanged.
 
-## Milestone 7 — Confirm, re-point, and record for the plan
+## Milestone 7 — Confirm, re-point, and record for the plan  [DONE]
 
 - Re-point the stage-only verification lines in
   `specs/test-suite-shape/spec.md` to the tests Milestones 1, 4, 5 and 6
@@ -885,7 +887,7 @@ collected count; the red runs are recorded here and never committed.
   `--change prepare-release-0-3-0` (unedited, must still be clean), then
   the whole tree; record each exit code.
 - Confirm no change-package directory other than this one is in the diff
-  (`git diff --stat f7118a0..HEAD -- openspec/changes | grep -v
+  (`git diff --stat $(git merge-base origin/main HEAD)..HEAD -- openspec/changes | grep -v
   shape-the-test-suite` prints nothing), that `openspec_graph/`,
   `tests/baseline_rules.json`, `Makefile`, `.pre-commit-config.yaml` and
   `[project] dependencies` are absent from it, and that the only hunks
@@ -908,3 +910,100 @@ collected count; the red runs are recorded here and never committed.
   Commit the third stage (Milestones 6–7), recording the baseline hash and
   count, and record PR #42's CI run on it.
 - **Gate:** `make pre-pr`
+  **Recorded (Milestone 7 and the round-2 review, 2026-10-07, on `af5b0b5` + the corrections):**
+  - *Round-2 review.* The spec-adversary's second pass reviewed `3044694`
+    (gate exit 0, every AC selector collecting) and found one high, six
+    medium and five low findings. All were folded in before the third stage.
+    - *Found, then fixed.* A `unit` test whose own code read the tree:
+      `test_parse_spec_dispatch_is_not_dict_based` calls
+      `inspect.getsource(parse.parse_spec)`, which opens
+      `openspec_graph/parse.py`. `test_property_settings_are_derandomized_and_nothing_is_xfailed`
+      reads its own source the same way. The Milestone 4 audit missed the
+      first because it excluded every open under `openspec_graph/`, so its
+      "all outside `tests/`" was wrong. The criterion gained `SOURCE_READERS`
+      (`inspect`'s source readers, `linecache`, `importlib.resources`).
+      Imports now resolve to dotted names, so `import os.path` then
+      `os.system`, and an unaliased `import tests.support`, are seen.
+      `multiprocessing` and `concurrent.futures` joined the process starts.
+      Labelled input is judged by a path's final segments after `.parent` and
+      `..`, so a word in a method argument no longer exempts a read, and
+      climbing out of `fixtures/` counts. The one-tier guard names a test class
+      and a tier inside `pytest.param` marks. Of 1069 test functions exactly
+      the two named tests changed tier, both to `integration`; their modules,
+      `test_parse_speckit.py` and `test_properties.py`, now mark per
+      function. The routing shapes and offenders are unchanged.
+    - *Red against the old engine.* The ten new planted cases ran against
+      the `af5b0b5` engine in a scratch copy. Nine were red: source through
+      `inspect`, a labelled word as a method argument, climbing out by
+      `.parent`, climbing out by `..`, an unaliased import, a dotted import,
+      `multiprocessing`, a test class, and a tier in `pytest.param` marks.
+      The `tools/` script case passed there because that rule already
+      existed; it is the regression case L4 asked for.
+    - *Audit re-run* without the `openspec_graph/` exclusion, excluding only
+      `tests/fixtures`, `tests/corpus`, `.git`, `.pytest_cache`,
+      `.hypothesis`, bytecode and `.egg-info`: `1647 passed in 154.23s`, 707
+      items with any event. It now records `openspec_graph/parse.py` for the
+      `inspect` test. Four items sit above their AST tier, all outside code
+      under `tests/`. Three are process starts by the code under test: the
+      `check_secrets` `git ls-files` and two `_current_sha` `git rev-parse`.
+      The fourth, `test_parse_makefile_is_deterministic_with_sorted_unique_targets`,
+      is Hypothesis harvesting constants from loaded `tools/` modules. The
+      derandomization test's own-source read is invisible to any audit once
+      linecache holds the file; DEC-TSS-017 now says an audit samples and
+      never replaces the criterion. 43 `e2e` items had no runtime process,
+      which errs upward.
+    - *Wording.* The `integration` and `e2e` marker descriptions,
+      `tests/AGENTS.md`'s tier bullet and the CHANGELOG now say "its own code
+      under `tests/`". C-TSS-5, R-TSS-10, DEC-TSS-011 and AC-TSS-14 allow
+      R-TSS-3's nested module path. R-TSS-12 and AC-TSS-7 state the red as it
+      was obtained. R-TSS-4 and R-TSS-8 name sites by module and function
+      instead of line numbers. DEC-TSS-005 and the proposal drop the
+      superseded simulation tallies, and the `test_deprecated_alias_*` count
+      reads four. The proposal's Non-Goal explains the `ActionRun` move. The
+      stale "until it exists" clauses of AC-TSS-1, 6, 7, 8, 10, 11 and 13 are
+      gone, each citing its tests. Milestone 7's diff base is
+      `$(git merge-base origin/main HEAD)`. `test_action_contract.py` is 471
+      lines once marked, not the 446 recorded before its marks.
+  - *Re-pointed.* AC-TSS-1, 6, 7, 8, 10, 11 and 13 cite their tests.
+    `python -m pytest tests/test_spec_test_citations.py -q`: 6 passed, every
+    selector in every spec resolving.
+  - *Validated.* `planlint --target . validate --fail-on ERROR --change X`,
+    exit 0 for `shape-the-test-suite`, `measure-coverage-once`,
+    `harden-ci-workflows`, `select-zero-cost-guards`, `pin-actions-by-sha`
+    and `prepare-release-0-3-0`; the whole tree: exit 0, 51 specs, 0/0/0.
+  - *Boundaries.* `git diff --name-only $(git merge-base origin/main HEAD)`
+    names no other change package and none of `openspec_graph/`,
+    `tests/baseline_rules.json`, `Makefile` or `.pre-commit-config.yaml`.
+    No `dependencies` line moves, and the `.github/` hunks are the four
+    comment lines. The pointer grep for the two removed module names found
+    one live pointer Milestone 3 had missed, the `Dockerfile` comment on the
+    base-tag guard. It now names `tests/test_workflow_python.py`, and R-TSS-4
+    lists it. Every other hit is a "Moved from" docstring,
+    `tests/support.py`'s history sentence, the plan, or a dated review or
+    `docs/next-steps.md` closed-item entry.
+  - *Finished-tree measurements.* `wc -l tests/test_*.py | sort -n | tail
+    -8`: the largest are `test_report.py` 692, `test_suite_shape.py` 689,
+    `test_graft_rules.py` 677 and `test_graft_detection.py` 658; total 20584.
+    Baseline: 1057 names, sha256 prefix `2f62db0aee56ef40`, and 1602
+    collected with `tests/test_suite_shape.py` ignored — equal to Milestone
+    0's; 1647 collected in full. Tally: 573 `unit`, 298 `integration`, 198
+    `e2e` of 1069 test functions; 22 modules carry one `pytestmark` tier and
+    33 mark per function. Fast tier: `-m unit` collects `731/1647 (916
+    deselected)` and `-m "not unit"` `916/1647 (731 deselected)`; `python -m
+    pytest -m unit -q -p no:cacheprovider -o addopts=""` gives `731 passed,
+    916 deselected in 13.06s`, wall 13.5 s. Routing guards: no offender.
+    `tests/AGENTS.md`: 59 lines.
+  - *For the plan's M2 row and §7 table.* The four loops: 3.55 → 0.55 s,
+    1.45–1.52 → 0.50–0.59 s per case, 3.18 → 0.55 s and 1.53 → 0.56 s. The
+    totals were 161.17 s before and 148.80 s after, beside the 149.98–157.68 s
+    spread of three unchanged-tree readings, and are not claimed as a
+    saving. Every test module is at or under 700 lines with the guard
+    holding it. There are three tiers, with the fast tier at 731 items in
+    about 13 s. The four loops keep one subprocess each. Eight records are
+    superseded by name (DEC-TSS-016). The plan's 200 s row was already met
+    at `f7118a0` and is still met.
+  - *Gate.* `make pre-pr` on the finished tree: exit 0, wall 171 s;
+    `openspec_graph/` 99.3% (2276/2292) lines and 97.6% (744/762) branches,
+    `tools/` 96.4% (946/981) and 93.9% (323/344), the four floors unchanged
+    in value. Every criterion is ticked against the evidence recorded above
+    and in Milestones 0–6.

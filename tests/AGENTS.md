@@ -40,8 +40,8 @@ Four things to know before adding a file here:
   `test_spec_test_citations.py` resolves every one by AST; renaming a test
   breaks the spec that cites it.
 - **Every test carries exactly one of `unit`, `integration`, `e2e`**, by what
-  it uses (`shape_support.py`): `e2e` starts a process, `integration` reads
-  this repository. A mixed module marks per function; a wrong tier fails
+  its own code uses (`shape_support.py`): `e2e` starts a process, `integration`
+  reads this repo. A mixed module marks per function; a wrong tier fails
   `test_suite_shape.py`, an unregistered one fails collection.
 
 `corpus/` and `fixtures/` are labelled input to planlint, not documents of this
