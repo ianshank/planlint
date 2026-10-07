@@ -1290,30 +1290,30 @@ still hides a module, which `--no-respect-gitignore` undoes.
 
 ## Acceptance Criteria
 
-- [ ] **AC-TDR-1:** `[tool.mypy]` keeps `strict = true`,
+- [x] **AC-TDR-1:** `[tool.mypy]` keeps `strict = true`,
   `warn_unreachable = true` and `python_version = "3.10"`, and the type gate
   exits 0 on the finished tree with `openspec_graph/`, `tools/` and `tests/`
   checked from `files`, read from the configuration file the recipe names.
   (R-TDR-1, C-TDR-5, DEC-TDR-001, DEC-TDR-002)
   _Verified by:_ `pytest -k "test_typecheck_passes_on_clean_repo or test_mypy_is_strict_and_warns_on_unreachable_code"` · stage: `make typecheck`
 
-- [ ] **AC-TDR-2 (non-success):** under a copy of the new configuration, a
+- [x] **AC-TDR-2 (non-success):** under a copy of the new configuration, a
   bare generic in a `tools/` module is still a `type-arg` error, and a type
   error in a module outside every package base still fails mypy and names its
   file. Neither explicit bases nor the new search path silences either.
   (R-TDR-1, R-TDR-14, DEC-TDR-002, DEC-TDR-011)
   _Verified by:_ `pytest -k "test_a_bare_generic_in_tools_fails_typecheck or test_mypy_fails_on_a_type_error"` · stage: `make typecheck`
 
-- [ ] **AC-TDR-3:** read structurally from the Makefile and `pyproject.toml`:
+- [x] **AC-TDR-3:** read structurally from the Makefile and `pyproject.toml`:
   the `typecheck` recipe is `python -m mypy --config-file pyproject.toml`
   with no path argument; `[tool.mypy]`'s keys are exactly R-TDR-1's six and
   `overrides`; `files` holds the three trees, `explicit_package_bases` is
   true and `mypy_path` names `tools` and nothing else. The guard ran red on
   the unchanged Makefile, as `tasks.md` records. (R-TDR-1, R-TDR-11,
   DEC-TDR-001, DEC-TDR-002, DEC-TDR-016)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_typecheck_reads_its_trees_from_the_mypy_files_list` · stage: `make test`
 
-- [ ] **AC-TDR-4:** loaded through mypy's own `process_options`, every
+- [x] **AC-TDR-4:** loaded through mypy's own `process_options`, every
   module under `tests/` has options that differ from the global options
   only in its disabled codes, and the codes it adds are exactly the listed
   codes. Those sit in at most one entry, spelled exactly `tests.*`, whose
@@ -1321,9 +1321,9 @@ still hides a module, which `--no-respect-gitignore` undoes.
   R-TDR-2's seven and exactly the keys of `MYPY_TESTS_CEILINGS`; with no
   entry, the mapping is empty. An override that changes no test module is
   not judged. (R-TDR-2, R-TDR-4, DEC-TDR-003, DEC-TDR-004, DEC-TDR-015)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_the_tests_override_is_one_entry_listing_exactly_the_ceilinged_codes` · stage: `make test`
 
-- [ ] **AC-TDR-5:** the derived configuration, loaded through mypy, matches
+- [x] **AC-TDR-5:** the derived configuration, loaded through mypy, matches
   `pyproject.toml` but for the tests entry, and leaves every test module's
   options equal to the global options. Run with `files` kept, no path and
   no `MYPYPATH`, mypy's JSON output gives the same errors under `--platform
@@ -1333,9 +1333,9 @@ still hides a module, which `--no-respect-gitignore` undoes.
   that occurs is listed. The guard's call duration is in `tasks.md`.
   (R-TDR-2, R-TDR-4, R-TDR-5, DEC-TDR-004, DEC-TDR-005, DEC-TDR-014,
   DEC-TDR-015)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_every_listed_mypy_code_matches_its_ceiling_on_both_platforms` · stage: `make test`
 
-- [ ] **AC-TDR-6:** none of the codes R-TDR-3 fixes occurs in `tests/` with
+- [x] **AC-TDR-6:** none of the codes R-TDR-3 fixes occurs in `tests/` with
   the override lifted, no error occurs under one platform only, and the
   type gate passes with those codes unlisted. Read at review, the diff of
   every fixed site adds no ignore, no `# mypy:` comment, no stub, no
@@ -1343,14 +1343,14 @@ still hides a module, which `--no-respect-gitignore` undoes.
   and no `noqa`, and removes no assertion. (R-TDR-3, C-TDR-3, DEC-TDR-003)
   _Verified by:_ `pytest -k test_typecheck_passes_on_clean_repo` · stage: `make typecheck`
 
-- [ ] **AC-TDR-7:** `tests/support.py`'s reader selects its TOML module by
+- [x] **AC-TDR-7:** `tests/support.py`'s reader selects its TOML module by
   version and returns an annotated local, and the `tomli` override sets
   only `ignore_missing_imports`. The pyproject guards that read through the
   reader pass on the leg that installs `tomli` and on those that do not.
   (R-TDR-6, C-TDR-5, DEC-TDR-007)
   _Verified by:_ `pytest -k "test_t201_is_selected_with_exactly_the_cli_and_tools_exempt or test_mypy_is_strict_and_warns_on_unreachable_code"` · stage: `make typecheck`
 
-- [ ] **AC-TDR-8:** every inline ignore under `tests/` is a recorded
+- [x] **AC-TDR-8:** every inline ignore under `tests/` is a recorded
   `MYPY_WAIVERS` entry keyed by path, code and waived line, and every entry
   is in the tree, compared as multisets. Each waiver holds exactly one code,
   with `unused-ignore` beside it while the code is listed and without it
@@ -1360,9 +1360,9 @@ still hides a module, which `--no-respect-gitignore` undoes.
   No test module holds a `no_type_check`, `TYPE_CHECKING`, `MYPY`, `PY2`
   or `PY3` name, or a branch test on `sys.version_info` or `sys.platform`
   outside R-TDR-6's one site. (R-TDR-7, DEC-TDR-006, DEC-TDR-016)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_every_inline_ignore_is_a_recorded_waiver or test_no_stub_name_or_condition_hides_code_from_mypy"` · stage: `make test`
 
-- [ ] **AC-TDR-9 (non-success):** on planted inputs, the mypy-side helpers
+- [x] **AC-TDR-9 (non-success):** on planted inputs, the mypy-side helpers
   name each of the following:
   - a stale code, a code occurring but unlisted, a code above its ceiling,
     and a code below its ceiling as one to lower;
@@ -1396,31 +1396,31 @@ still hides a module, which `--no-respect-gitignore` undoes.
   not count a `note` object. They stay quiet on the well-formed shape, and
   on each quiet case R-TDR-11 lists. (R-TDR-1, R-TDR-2, R-TDR-5, R-TDR-7,
   R-TDR-11, R-TDR-16)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_a_planted_ratchet_violation_is_named` · stage: `make test`
 
-- [ ] **AC-TDR-10:** `D100`–`D103` are selected, and no other `D` rule is.
+- [x] **AC-TDR-10:** `D100`–`D103` are selected, and no other `D` rule is.
   Every `D` code in `per-file-ignores` sits either on one concrete file
   under `openspec_graph/` or `tools/`, or on `tests/*`. No `D` code sits in
   `extend-per-file-ignores`, and no comment under `openspec_graph/` or
   `tools/` holds a `noqa` naming a `D` code, read as ruff reads it. The
   `T201` exemptions are exactly R-ZCG-1's two. `make lint` exits 0 and
   offers no escape. (R-TDR-8, R-TDR-14, DEC-TDR-008, DEC-TDR-009)
-  _Verified by:_ `pytest -k "test_t201_is_selected_with_exactly_the_cli_and_tools_exempt or test_lint_is_a_hard_gate"` · stage: `make lint`
+  _Verified by:_ `pytest -k "test_t201_is_selected_with_exactly_the_cli_and_tools_exempt or test_lint_is_a_hard_gate or test_docstring_exemptions_are_file_entries_matching_their_ceilings"` · stage: `make lint`
 
-- [ ] **AC-TDR-11 (non-success):** under a copy of the new ruff
+- [x] **AC-TDR-11 (non-success):** under a copy of the new ruff
   configuration, a `print` in a library module is still a finding and the
   same `print` at the two exempt paths is not. The new selection and
   entries disturb no existing exemption. (R-TDR-8)
   _Verified by:_ `pytest -k test_a_print_in_a_library_module_fails_lint` · stage: `make lint`
 
-- [ ] **AC-TDR-12:** the ratchet entries' pairs equal `DOCSTRING_CEILINGS`'
+- [x] **AC-TDR-12:** the ratchet entries' pairs equal `DOCSTRING_CEILINGS`'
   pairs. With `--isolated`, `--no-respect-gitignore` and `--ignore-noqa`,
   ruff exits 0 with empty stderr, every listed pair's count equals its
   ceiling, with none above, none below and none stale, and every offending
   pair is listed. (R-TDR-9, DEC-TDR-009)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_docstring_exemptions_are_file_entries_matching_their_ceilings or test_every_docstring_exemption_matches_its_ceiling"` · stage: `make test`
 
-- [ ] **AC-TDR-13 (non-success):** on planted inputs, the docstring helpers
+- [x] **AC-TDR-13 (non-success):** on planted inputs, the docstring helpers
   name a pair with no finding, a pair offending but unlisted, a pair above
   its ceiling, a pair below its ceiling as one to lower, a pair without a
   ceiling, a `D` code under a glob key other than `tests/*`, a `D` code on
@@ -1430,9 +1430,9 @@ still hides a module, which `--no-respect-gitignore` undoes.
   occurrence guard's command counts a planted module that an `.ignore`
   file names. They stay quiet on the well-formed shape. (R-TDR-8, R-TDR-9,
   R-TDR-11)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_a_planted_ratchet_violation_is_named or test_every_docstring_exemption_matches_its_ceiling"` · stage: `make test`
 
-- [ ] **AC-TDR-14:** read directly:
+- [x] **AC-TDR-14:** read directly:
   - `pyproject.toml` sets no `pydocstyle` convention;
   - its comment records, with their commands, that no selected rule's
     verdict changes under any convention, and that Google is the best fit;
@@ -1444,34 +1444,34 @@ still hides a module, which `--no-respect-gitignore` undoes.
   - no docstring is added under `openspec_graph/` or `tools/`.
 
   (R-TDR-10, C-TDR-6, DEC-TDR-008, DEC-TDR-010)
-  _Verified by:_ stage: `make lint`
+  _Verified by:_ `pytest -k test_docstring_exemptions_are_file_entries_matching_their_ceilings` · stage: `make lint`
 
-- [ ] **AC-TDR-15:** every collected test carries exactly one tier marker
+- [x] **AC-TDR-15:** every collected test carries exactly one tier marker
   that agrees with the criterion, the new module marks per function and is
   within the line bound, and `tests/` stays flat. (R-TDR-12, C-TDR-3,
   DEC-TDR-012)
   _Verified by:_ `pytest -k "test_every_test_carries_exactly_one_tier_marker or test_every_tier_marker_matches_its_mechanical_criterion or test_no_test_module_exceeds_the_line_bound or test_the_tests_directory_stays_flat"` · stage: `make test`
 
-- [ ] **AC-TDR-16:** the rule inventory, the golden hashes, the public
+- [x] **AC-TDR-16:** the rule inventory, the golden hashes, the public
   imports and the empty runtime-dependency list are unchanged, and no tool
   version is pinned, in a workflow or in the dev extra. (C-TDR-1,
   R-TDR-16)
-  _Verified by:_ `pytest -k "test_rule_set_matches_baseline or test_output_byte_identical or test_public_import_compatibility or test_runtime_dependencies_stay_empty or test_threshold_guard_fails_on_a_pinned_tool_version"` · stage: `make test`
+  _Verified by:_ `pytest -k "test_rule_set_matches_baseline or test_output_byte_identical or test_public_import_compatibility or test_runtime_dependencies_stay_empty or test_threshold_guard_fails_on_a_pinned_tool_version or test_the_dev_extra_floors_mypy_and_pins_nothing"` · stage: `make test`
 
-- [ ] **AC-TDR-17:** `make thresholds` prints PASS. No workflow, action or
+- [x] **AC-TDR-17:** `make thresholds` prints PASS. No workflow, action or
   pre-commit line is in the diff, and the Windows job still runs the type
   gate. The only Makefile hunk is the `typecheck` target's help text and
   its recipe line, `python -m mypy --config-file pyproject.toml`. (C-TDR-2,
   DEC-TDR-001)
   _Verified by:_ `pytest -k "test_ci_workflow_has_a_windows_job or test_threshold_guard_passes_on_a_clean_tree"` · stage: `make thresholds`
 
-- [ ] **AC-TDR-18:** `docs/hooks.md`, `tests/AGENTS.md` and
+- [x] **AC-TDR-18:** `docs/hooks.md`, `tests/AGENTS.md` and
   `.claude/agents/planlint-verifier.md` say what R-TDR-13 requires, with
   `tests/AGENTS.md` within its budget and its precedence clause and links
   intact. No dated record is in the diff. (R-TDR-13)
   _Verified by:_ `pytest -k "test_nested_agents_file_stays_short or test_nested_agents_file_states_its_precedence or test_agent_index_links_resolve"` · stage: `make docs-check`
 
-- [ ] **AC-TDR-19:** `CHANGELOG.md` `[Unreleased]` carries the entry that
+- [x] **AC-TDR-19:** `CHANGELOG.md` `[Unreleased]` carries the entry that
   R-TDR-15 names, with the two superseded passages among it, and every
   versioned section still links to its release tag. `tasks.md` records
   every figure that R-TDR-15 names, with its commit and command. No
@@ -1487,7 +1487,7 @@ still hides a module, which `--no-respect-gitignore` undoes.
   DEC-TDR-005, DEC-TDR-007, DEC-TDR-013)
   _Verified by:_ stage: `make typecheck`
 
-- [ ] **AC-TDR-21 (observed on the CI run on the W6.6 commit):** the lint
+- [x] **AC-TDR-21 (observed on the CI run on the W6.6 commit):** the lint
   gate, and the docstring shape and occurrence guards that the `test` stage
   runs, are green on every Linux leg and on Windows. This is recorded in
   `tasks.md` with that run's id, the head SHA it ran for and the merge SHA
@@ -1495,14 +1495,14 @@ still hides a module, which `--no-respect-gitignore` undoes.
   DEC-TDR-013)
   _Verified by:_ stage: `make lint`
 
-- [ ] **AC-TDR-22:** read through `read_pyproject()` and
+- [x] **AC-TDR-22:** read through `read_pyproject()` and
   `packaging.requirements.Requirement` by a guard: the dev extra's one
   `mypy` entry carries exactly a floor at the first release that accepts
   `-O json`, with a comment naming that release and the guard, and it
   landed in the W6.5 commit. No dev-extra entry's specifier holds `==`,
   and a marker is not read as one. On every leg the occurrence guard's
   `-O json` runs exit 0 or 1. (R-TDR-16, C-TDR-1, DEC-TDR-014)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_the_dev_extra_floors_mypy_and_pins_nothing` · stage: `make test`
 
 ---
 

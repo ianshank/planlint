@@ -702,7 +702,7 @@ mypy runs used `--cache-dir /dev/null`; Python runs used
    built-in exclusion list; and mypy internals that change meaning but not
    name. A later finding inside those gaps is accepted risk.
 
-## Milestone 0 — Grounding pass at the branch head
+## Milestone 0 — Grounding pass at the branch head  [DONE]
 
 - Re-run the gate and record its exit code before the first edit:
   `planlint --target . validate --fail-on ERROR`.
@@ -871,7 +871,7 @@ the floor-release cross-checks recorded below. Every mypy run used
   module/package, files, or command", exit 2). `inspect.signature` on 2.4.0
   gives the four signatures round-3 item 1 records.
 
-## Milestone 1 — The mypy guards, seen red in the working tree (they land in the W6.5 commit)
+## Milestone 1 — The mypy guards, seen red in the working tree (they land in the W6.5 commit)  [DONE]
 
 - Write `tests/test_static_ratchets.py` (new) before any configuration
   change, and run it red (R-TDR-1, R-TDR-2, R-TDR-4, R-TDR-5, R-TDR-7,
@@ -1182,7 +1182,7 @@ The override guard stayed green on that state.
   181, `tests/test_static_ratchets_planted.py` 180, `tests/ratchet_support.py`
   366.
 
-## Milestone 2 — The nine codes and the platform-only errors fixed, the override landed with its ceilings and waivers (the W6.5 commit)
+## Milestone 2 — The nine codes and the platform-only errors fixed, the override landed with its ceilings and waivers (the W6.5 commit)  [DONE]
 
 - Fix the nine codes in `tests/`, each by annotation, narrowing, a typed
   local or a corrected call. A fix is never a new ignore, a `# mypy:`
@@ -1527,7 +1527,7 @@ after the commit it describes.
   - The verdicts are the coordinator's reading of the run, recorded as
     reported. This session pushes nothing and reads no CI.
 
-## Milestone 3 — Docstrings by ratchet, guards seen red first (the W6.6 commit)
+## Milestone 3 — Docstrings by ratchet, guards seen red first (the W6.6 commit)  [DONE]
 
 - Extend `tests/test_static_ratchets.py` before the configuration, and run
   it red (R-TDR-8, R-TDR-9, R-TDR-11, DEC-TDR-008, DEC-TDR-009):
@@ -1789,7 +1789,52 @@ A second run on the committed tree, and this commit's CI run for AC-TDR-21
 (its run id, the head SHA it ran for and the merge SHA it tested, with every
 leg's verdict), are recorded in the documents commit's records.
 
-## Milestone 4 — Documents, records and the verification lines (the documents commit)
+### Recorded (the W6.6 commit after it landed: a second `make pre-pr` and its CI run, AC-TDR-21)
+
+Written in the documents commit.
+
+- **`make pre-pr` on the committed tree**, `f562575`, with the record above
+  in it. It exited 0 in 178 s by `date +%s` (1791360543 → 1791360721). The
+  same "All checks passed!", "Success: no issues found in 107 source files"
+  and four scoped lines were read: `openspec_graph/` line 99.3% (2276/2292)
+  and branch 97.6% (744/762), and `tools/` line 96.4% (946/981) and branch
+  93.9% (323/344), each meeting its unchanged floor.
+- **The CI run.** `f562575` was pushed alone, after the W6.5 run was
+  recorded. Its pull-request run, workflow "CI", was reported by the
+  coordinator, who pushed it and read the run:
+  - run id 37592291940, run number 233, attempt 1, event `pull_request`;
+  - created 2026-10-07T08:13:01Z, updated 08:19:19Z, conclusion
+    **success**;
+  - head SHA `f562575abd607318e90f41690ebb1427514f10bb`;
+  - merge SHA tested `511215fecf205279adee1f42e0f87e0416718398`, base
+    `46ae1b36eafec8c554eb0bc45233d35d4f437010` (`main`).
+- **How the merge SHA was read.** By `git fetch origin refs/pull/44/merge`
+  after the run, as the coordinator states it:
+  - its parents are `46ae1b3` and `f562575`, and its subject is "Merge
+    f562575… into 46ae1b3…";
+  - neither the base nor the head moved between the run and the read;
+  - for the W6.5 run the same method agreed exactly with the `packaging`
+    job's checkout log line (Milestone 2's record).
+- **Every leg's verdict.** All 17 jobs passed:
+  - `test (3.10)` 112696441481, `test (3.11)` 112696441573, `test (3.12)`
+    112696441554, `test (3.13)` 112696441563 and `test (3.14)`
+    112696441449;
+  - `test-windows` 112696441027, 08:13:07 → 08:19:18;
+  - `security`, `docs`, `packaging`, `graph-diff`, `self-validate` and
+    `encoding-stress`;
+  - all five `action-contract` cases.
+- **Why that is AC-TDR-21's evidence.**
+  - Each hard `test` leg and `test-windows` runs `make lint` and `make test`
+    as steps (`ci.yml`). So a green leg is the lint gate green there.
+  - It is also both docstring guards green there:
+    `test_docstring_exemptions_are_file_entries_matching_their_ceilings` and
+    `test_every_docstring_exemption_matches_its_ceiling`. Neither carries a
+    skip condition.
+  - This run is recorded separately from AC-TDR-20's run 37589644256. The
+    verdicts are the coordinator's reading, recorded as reported; this
+    session pushes nothing and reads no CI.
+
+## Milestone 4 — Documents, records and the verification lines (the documents commit)  [DONE]
 
 - `docs/hooks.md:19` becomes: `make typecheck` (mypy) across
   `openspec_graph/`, `tools/`, `tests/`, with `tests/` under a per-code
@@ -1861,3 +1906,184 @@ leg's verdict), are recorded in the documents commit's records.
 - Run `make pre-pr`, and record the exit code. Commit: this is the
   documents commit.
 - **Gate:** `make pre-pr`
+
+### Recorded (Milestone 4, 2026-10-07: the documents commit)
+
+Taken on `f562575` with this milestone's edits. `planlint --target .
+validate --fail-on ERROR` exited 0, 52 specs, 0 / 0 / 0, before each write
+under `openspec/` and before the commit. The W6.6 commit's CI record
+(AC-TDR-21) sits under Milestone 3's record, as the W6.5 one sits under
+Milestone 2's.
+
+**The documents.**
+
+- `docs/hooks.md`'s pre-commit list reads "`make typecheck` (mypy) across
+  `openspec_graph/`, `tools/`, `tests/`, with `tests/` under a per-code
+  baseline in `[[tool.mypy.overrides]]`".
+- `tests/AGENTS.md`'s closing run paragraph carries the R-TDR-13 sentence in
+  its own five lines, by replacing rather than adding: "`make typecheck`
+  covers this directory, and a new occurrence of an exempted mypy code, or a
+  new inline ignore, fails `test_static_ratchets.py`." The `coverage-tools`
+  and `planlint-verifier` sentences fold onto two lines. `wc -l
+  tests/AGENTS.md` reads 59, against `MAX_NESTED_LINES = 60`.
+  **Departure:** its diagram's shared-module node, a single line, now names
+  `ratchet_support.py` beside `action_support.py` and `shape_support.py`,
+  so that the map of uncollected helpers stays true after DEC-TDR-012's
+  split. No line was added.
+- `.claude/agents/planlint-verifier.md`'s `ruff`/`mypy` bullet replaces the
+  stale "pragmatic strictness, not `--strict`". It names the standing
+  configuration: mypy strict over the package and `tools/`, `tests/` under
+  the per-code baseline with `MYPY_TESTS_CEILINGS` and `MYPY_WAIVERS`, and
+  `D100`–`D103` by per-file exemption with `DOCSTRING_CEILINGS` and `tests/`
+  exempt. It also names R-TDR-13's remediation norm, in the shape of the
+  coverage and matcher-floor bullets.
+- Checks, all green:
+  - `python -m pytest tests/test_agent_artifacts.py -q -k "nested_agents or
+    agent_index_links"`: 43 passed;
+  - `tests/test_agent_artifacts.py`, `test_claude_hooks.py`,
+    `test_adopter_urls.py`, `test_ci_workflow.py` and
+    `test_agent_skill_docs.py` together: 341 passed;
+  - `make docs-check` exited 0;
+  - none of the three files is generated, and `python
+    tools/render_rule_catalog.py --check` and `python
+    tools/render_plugin_manifests.py --check` each exited 0, with
+    `tests/test_skill_distribution.py` and `tests/test_release_surface.py`
+    green (26 passed).
+
+**The verification lines.**
+
+- The eleven of the plan's table are re-pointed, each keeping its stage.
+  AC-TDR-10 and AC-TDR-16 keep their existing selectors beside the new one.
+  AC-TDR-14 had only a stage, and gains
+  `test_docstring_exemptions_are_file_entries_matching_their_ceilings`.
+- `python -m pytest tests/test_spec_test_citations.py -q -p
+  no:cacheprovider` passed (6 tests), so every selector in every spec
+  resolves.
+- Each new selector also collects, by `python -m pytest --collect-only -q -k
+  "<selector>"`: 1 test each for AC-TDR-3, 4, 5 and 22; 2 for AC-TDR-8 and
+  AC-TDR-12; 3 for AC-TDR-10; 109 for AC-TDR-9; and 110 for AC-TDR-13.
+
+**AC-TDR-9's names.** AC-TDR-9 asks the planted inputs to name "the names
+R-TDR-7 lists", which are six, and the planted test covered three. **Added
+here:** `no_type_check_decorator`, `PY2` and `PY3`, three cases of the same
+`hidden_code` helper. They were seen red first, with those three names
+removed from `UNCHECKED_NAMES` and restored after: `python -m pytest
+tests/test_static_ratchets_planted.py -k "no-type-check-decorator or
+py2-name or py3-name"` read 3 failed. Restored, both modules read 117
+passed.
+
+**The proposal.** Its What Changes bullet for `tests/test_static_ratchets.py`
+now says where the helpers and the planted test shipped. That is
+DEC-TDR-012's split, taken at the W6.5 commit, so the package describes the
+diff.
+
+**Validation.** `planlint --target . validate --fail-on ERROR --change
+<package>` exited 0, 1 spec, 0 / 0 / 0, for each of:
+
+- `ratchet-test-types-and-docstrings`;
+- `select-zero-cost-guards`, unedited;
+- `shape-the-test-suite`, unedited.
+
+The whole tree exited 0 over 52 specs, and so did `--fail-on WARN`.
+
+**Boundaries**, by `git diff --name-only 46ae1b3` with this commit's edits:
+
+- 28 files, none under `openspec_graph/`, `.github/` or another change
+  package, and no `.pre-commit-config.yaml` hunk;
+- the only Makefile hunk is the `typecheck` target's help text and recipe;
+- the only dev-extra hunk is `"mypy"` → `"mypy>=1.11"`, and `dependencies =
+  []` is unchanged;
+- `CHANGELOG.md`'s one hunk is inside `[Unreleased]`, and no other dated
+  record is in the diff.
+
+`make thresholds` printed PASS. `python tools/stage_citations.py`, whose
+figures include this package's spec, read 52 specs, 16 stages cited, 12 on a
+verification line: `typecheck` 8 mentioned and 5 verified, `lint` 8 and 5,
+`test` 49 and 49, unchanged by the re-pointing, which kept every stage.
+
+**The header's measurements, re-taken on the finished tree.**
+
+- **Per-code counts, override lifted.** The gate's configuration less the
+  tests entry, written by `derive_config` into a scratch INI and run by the
+  scratch runner with `-O json`, no path and `MYPYPATH` unset, gives 166
+  errors under `tests/` under `--platform linux` (6.0 s) and under
+  `--platform win32` (4.5 s). The two sets are equal, none is outside
+  `tests/`, stderr is empty and the exit is 1. The counts are
+  `no-untyped-def` 96, `attr-defined` 18, `arg-type` 17, `type-arg` 16,
+  `no-any-return` 8, `index` 7 and `union-attr` 4, equal to
+  `MYPY_TESTS_CEILINGS`.
+- **Waivers.** `grep -n "type: ignore" tests/*.py` prints 16 lines: the
+  eight waivers, and eight planted strings in
+  `tests/test_static_ratchets_planted.py`. `tokenize` reads exactly eight
+  ignore comments, equal to `MYPY_WAIVERS` as a multiset of keys, each with
+  `unused-ignore` beside its code.
+- **Docstrings.** The docstring occurrence guard's logged per-file counts
+  equal `DOCSTRING_CEILINGS`: 30 files, 40 pairs, 77 findings.
+- **Line counts.** `wc -l` reads `tests/AGENTS.md` 59,
+  `tests/test_static_ratchets.py` 280,
+  `tests/test_static_ratchets_planted.py` 237 and `tests/ratchet_support.py`
+  500.
+- **Durations**, by `--durations=0 --durations-min=0` over the two modules:
+
+  | test | call |
+  |---|---|
+  | `test_every_listed_mypy_code_matches_its_ceiling_on_both_platforms` | 14.5 s here, 9.6–10.9 s in Milestones 2 and 3 |
+  | `test_no_stub_name_or_condition_hides_code_from_mypy` | 0.28 s |
+  | `test_every_docstring_exemption_matches_its_ceiling` | 0.08 s |
+  | `test_every_inline_ignore_is_a_recorded_waiver` | 0.07 s |
+  | `test_docstring_exemptions_are_file_entries_matching_their_ceilings` | 0.02 s |
+  | `test_the_tests_override_is_one_entry_listing_exactly_the_ceilinged_codes` | 0.02 s |
+  | the recipe guard and the dev-extra guard | under 0.005 s each |
+
+**The criteria, ticked against their records.** All 22 are `[x]`. The spec's
+`Status` stays DRAFT.
+
+| criterion | evidence |
+|---|---|
+| AC-TDR-1, 2, 6, 7 | Milestone 2's record: `make typecheck` 107 files, AC-TDR-2's two planted runs, the fixes and the `tomli` override; legs green in AC-TDR-20's run |
+| AC-TDR-3, 4, 5, 8 | the guards green here; their reds in Milestones 1 and 2 |
+| AC-TDR-9 | 109 planted cases green; each red as its section records |
+| AC-TDR-10, 11, 12, 13, 14 | Milestone 3's record |
+| AC-TDR-15 | `tests/test_suite_shape.py`, 68 passed with the routing, decomposition and citation guards |
+| AC-TDR-16, 17 | `make pre-pr` (rule baseline, golden hashes, imports, empty dependencies), the dev-extra guard, `make thresholds` and the boundaries above |
+| AC-TDR-18 | the documents above |
+| AC-TDR-19 | the CHANGELOG entry, the records, the citations and the validation above |
+| AC-TDR-20 | Milestone 2's CI record |
+| AC-TDR-21 | Milestone 3's CI record |
+| AC-TDR-22 | the floor landed in `6649ca1`; the dev-extra guard; every leg's `-O json` run exited 0 or 1 inside the occurrence guard |
+
+One judgement is recorded with its tick. AC-TDR-6 refuses a fix that is "a
+branch mypy treats as unreachable", and `read_pyproject`'s `if
+sys.version_info >= (3, 11):` makes mypy skip the `tomllib` import at
+`python_version = "3.10"`. That check is R-TDR-6's required form and
+DEC-TDR-016's one allowed site, and the `else` branch, which mypy checks,
+holds the rest of the reader's logic. No other fixed site hides code.
+
+**For the plan's §7 rows**, when they are next updated:
+
+- tests under mypy: the `tests.*` override's seven codes at their ceilings
+  above, 166 occurrences in all, in place of the plan's own tally;
+- public symbols without a docstring: 77 in 30 files of the package and
+  `tools/`, held per file and code by `DOCSTRING_CEILINGS`, with `tests/`
+  exempt by policy.
+
+**Hand-off.** The plan names no hand-off for the pull request's
+description. The package closes as every sibling has, with its milestones
+`[DONE]`, its criteria ticked and its `Status` left DRAFT for the
+maintainer.
+
+**`make pre-pr`** ran on this commit's tree before this paragraph was added.
+It exited 0 in 182 s, by `date +%s` before and after (1791361612 →
+1791361794). `make lint` printed "All checks passed!", `make typecheck`
+"Success: no issues found in 107 source files", `make docs-check` "all
+required docs present and linked from README", and `make thresholds` PASS.
+The four scoped floors, unchanged in value, read:
+
+- `openspec_graph/` line 99.3% (2276/2292) against 97%;
+- `openspec_graph/` branch 97.6% (744/762) against 95%;
+- `tools/` line 96.4% (946/981) against 94%;
+- `tools/` branch 93.9% (323/344) against 91%.
+
+A second run on the committed tree, and this commit's CI run, belong to
+whoever records the pull request's merge. No later commit of this package
+is planned to carry them.

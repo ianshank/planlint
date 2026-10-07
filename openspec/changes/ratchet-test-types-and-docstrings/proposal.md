@@ -747,7 +747,11 @@ before the first edit.
   beside their code (DEC-TDR-006). There are eight, by the emulation above
   at `e558eba`.
 - `tests/test_static_ratchets.py` (new), within a budget of 600 lines by
-  `wc -l` at the W6.6 commit (DEC-TDR-012):
+  `wc -l` at the W6.6 commit (DEC-TDR-012). As shipped, the mypy half alone
+  was over that budget, so DEC-TDR-012's split was taken at the W6.5 commit
+  (`tasks.md`, Milestone 1's record): the pure helpers below are in the
+  uncollected `tests/ratchet_support.py`, and the planted-input test is in
+  `tests/test_static_ratchets_planted.py`.
   - `MYPY_TESTS_CEILINGS`, `MYPY_WAIVERS` and `DOCSTRING_CEILINGS`, each
     under the comment stating its rule;
   - the pure helpers, each taking its input as an argument: the recipe and
