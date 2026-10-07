@@ -1677,3 +1677,52 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
     `openspec_graph/` 99.3 % (2276/2292) and 97.6 % (744/762), and `tools/`
     96.4 % (1305/1354) and 94.3 % (434/460), against floors 97/95 and 94/91,
     every one where it was. Neither report ran in it.
+
+  **Recorded (Milestone 5, 2026-10-07, on `6162635` + the AC-RDS-22 tick):**
+  - *Why the branch was rebuilt.* #43, the planning pull request, was
+    merged into #42's branch at `1c6b8b8` after #42 had been squash-merged
+    to `main` as `46ae1b3`, so none of this package reached `main`. The
+    branch was rebuilt as `46ae1b3` plus this package's nine commits,
+    cherry-picked in order, without the merge commit. It was pushed with
+    `--force-with-lease` against `86bad46`.
+  - *The records' commits, mapped.* Each record above names the commit it
+    was taken on. `git rev-parse <old>^{tree} <new>^{tree}` compares the
+    trees, and `git show --format=` with `index` lines dropped, then
+    `diff`, compares the patches:
+
+    | Before the rebuild | After | Tree | Patch |
+    |---|---|---|---|
+    | `114754c` | `7bf7346` | differs | same |
+    | `d8cbcbf` | `4dcc764` | differs | same |
+    | `6679c2a` | `78a9f69` | same | same |
+    | `18b902f` | `cdfa3cc` | same | same |
+    | `b40f9f1` | `991645e` | same | same |
+    | `462aecf` | `a95c0e4` | same | same |
+    | `f6d346b` | `6c9b497` | same | same |
+    | `babb671` | `cb93831` | same | same |
+    | `86bad46` | `6162635` | same | same |
+
+    The two draft commits differ in tree only because their base was #42's
+    branch before its last commit, `92077b5`. `git diff 92077b5 46ae1b3` is
+    empty. So every record taken on `6679c2a` or later describes the same
+    tree as its rebuilt counterpart.
+  - *The implementing pull request is #46,* opened against `main` as a
+    draft. Its description carries the hand-off above word for word, so
+    AC-RDS-22's last clause has its evidence, and the criterion is ticked.
+    An independent verifier ran the full ladder on `6162635` before the
+    pull request was opened:
+    - `make pre-pr` exit 0 in 184 s, 1734 tests passed;
+    - the four scoped coverage lines unchanged from Milestone 5's record;
+    - `planlint --target . validate --fail-on ERROR` exit 0, for the tree
+      and for `--change` of this package;
+    - both reports' outputs identical to the records above, by `diff`.
+  - *`python tools/spec_status.py` after the tick* exits 1. This package's
+    row is now the `draft-but-complete` that Milestone 5 predicted:
+
+    ```
+    report-dead-code-and-spec-status         spec DRAFT                           22/22     milestones 6/6   Unreleased  thresholds, validate        draft-but-complete
+    51 package(s); 11 finding(s): 0 header-unrecognised, 1 headers-disagree, 10 draft-but-complete, 0 settled-but-empty
+    ```
+
+    The header stays `DRAFT`. Settling it is the maintainer's decision at
+    merge, as #46 asks.

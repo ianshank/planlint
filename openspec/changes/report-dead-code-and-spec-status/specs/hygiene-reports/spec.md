@@ -1130,7 +1130,7 @@ into this branch — all the same day. Each command is in the proposal.
   C-RDS-8, DEC-RDS-009)
   _Verified by:_ `pytest -k "test_make_in_command_position_is_an_invocation or test_an_unreadable_workflow_exits_two_rather_than_a_traceback or test_an_unknown_workflow_filter_exits_two or test_common_module_is_stdlib_only"` · stage: `make test`
 
-- [ ] **AC-RDS-22:** `docs/next-steps.md` carries one numbered item for
+- [x] **AC-RDS-22:** `docs/next-steps.md` carries one numbered item for
   `settle-package-status-headers`, which:
   - names the maintainer as its owner;
   - gives its scope — settle each listed header, decide whether the
