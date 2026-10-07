@@ -550,6 +550,11 @@ committed.
   coverage — a test for the uncovered path — never a lower floor (the
   operating contract: floors move up and never down); record the leg, the
   figure and the fix here.
+  **Recorded (this commit):** the pull request's first CI run with the upload steps, run `37553098324`
+  on `78debe0`: every `test` leg (3.10–3.14) and `test-windows` green on the unchanged floors; the
+  `tools/` floors were enforced on Windows and on 3.10 for the first time and held (944/979 lines,
+  323/344 branches on every leg); no fix was needed. The `coverage-tools` job is gone from the run
+  (17 checks, 18 before).
 
 ## Milestone 3 — The per-file minimum, as a report  [DONE]
 
@@ -636,6 +641,8 @@ committed.
   (a leg with no report — died before `make test`, or pytest ended at
   collection — uploads nothing under the action's
   `if-no-files-found` default of `warn`).
+  **Recorded (this commit):** run `37553098324` on `78debe0` (`pull_request`), every `test` leg
+  and `test-windows` green; artifacts coverage-Linux-3.10 11454265218, coverage-Linux-3.11 11453079818, coverage-Linux-3.13 11453641357, coverage-Linux-3.14 11454260553, coverage-Linux-3.12 11453084947, coverage-Windows-3.12 11453892378. No leg's artifact is absent.
 - Download every `coverage.json` artifact into a scratch directory and,
   for each leg, sum `covered_lines`/`num_statements` and
   `covered_branches`/`num_branches` from the per-file `summary` entries
@@ -648,6 +655,18 @@ committed.
   which leg is the minimum for each of the four and whether it is the
   Windows leg (capability-probe skips) or 3.10 (the oldest interpreter) —
   recorded, not assumed (R-MCO-12, DEC-MCO-010).
+  **Recorded (this commit):** the artifact store's host (`*.blob.core.windows.net`) is denied by
+  this environment's egress policy, so the artifacts could not be downloaded here; the counts
+  below are read from each leg's `make test` output — the checkers' own sums of the per-file
+  `summary` entries, the exact `covered/total` and not the rounded percentage — which is the
+  cross-check the step asks for, taken as the source. leg | pkg line | pkg branch | tools line | tools branch
+  Linux-3.10 | 2276/2292 (99.3019 %) | 744/762 (97.6378 %) | 944/979 (96.4249 %) | 323/344 (93.8953 %)
+  Linux-3.11 | 2276/2292 (99.3019 %) | 744/762 (97.6378 %) | 944/979 (96.4249 %) | 323/344 (93.8953 %)
+  Linux-3.12 | 2276/2292 (99.3019 %) | 744/762 (97.6378 %) | 944/979 (96.4249 %) | 323/344 (93.8953 %)
+  Linux-3.13 | 2276/2292 (99.3019 %) | 744/762 (97.6378 %) | 944/979 (96.4249 %) | 323/344 (93.8953 %)
+  Linux-3.14 | 2276/2292 (99.3019 %) | 744/762 (97.6378 %) | 944/979 (96.4249 %) | 323/344 (93.8953 %)
+  Windows-3.12 | 2274/2292 (99.2147 %) | 743/762 (97.5066 %) | 944/979 (96.4249 %) | 323/344 (93.8953 %)
+  Minimum leg: `fail_under` Windows-3.12; `branch_fail_under` Windows-3.12; `tools_line_fail_under` every leg (Linux-3.10, Linux-3.11, Linux-3.12, Linux-3.13, Linux-3.14, Windows-3.12); `tools_branch_fail_under` every leg (Linux-3.10, Linux-3.11, Linux-3.12, Linux-3.13, Linux-3.14, Windows-3.12).
 - Apply the rule, writing the arithmetic here before editing: for each of
   `fail_under` (package line), `branch_fail_under` (package branch),
   `tools_line_fail_under`, `tools_branch_fail_under`: `candidate =
@@ -655,18 +674,27 @@ committed.
   expectation was near 97/95 and 94/91 from this container's 99.3/97.6 and
   96.1/93.2; write what the legs gave. A floor whose candidate is at or
   below its current value does not move, and that is recorded as such.
+  **Recorded (this commit):**
+  `fail_under`: candidate = int(99.2147) − 2 = 97; new = max(90, 97) = 97
+  `branch_fail_under`: candidate = int(97.5066) − 2 = 95; new = max(80, 95) = 95
+  `tools_line_fail_under`: candidate = int(96.4249) − 2 = 94; new = max(90, 94) = 94
+  `tools_branch_fail_under`: candidate = int(93.8953) − 2 = 91; new = max(80, 91) = 91
 - `pyproject.toml`: set the four values (only those that rise), and amend
   the comment above each with "set two points under the minimum green CI
   leg (run <id>, <leg>: <covered/total>, <exact pct>) by
   `measure-coverage-once`; floors move up and never down". No other file
   carries a floor (R-MCO-12). Run `python tools/check_no_hardcoded_thresholds.py`
   and record PASS.
+  **Recorded (this commit):** the four values set as above; `check_no_hardcoded_thresholds.py` → PASS: no hard-coded thresholds in Makefile or workflow YAML.
 - `docs/architecture/c4.md` §2: re-read the paragraph Milestone 2 rewrote
   and confirm it describes two sets of floors that ratchet from their own
   minimum leg without pinning either number; if the Milestone 2 text names
   a value, replace it with the description (R-MCO-8, DEC-MCO-006).
+  **Recorded (this commit):** re-read; the paragraph names no value and describes two sets of
+  floors ratcheting from their own minimum leg. No edit needed.
 - `CHANGELOG.md`: append to this package's entry the four floors' old and
   new values, the run id and the minimum leg for each (R-MCO-14).
+  **Recorded (this commit):** appended to the `measure-coverage-once` entry under `## [Unreleased]`.
 - Push, and record here the next CI run's id and that every `test` leg and
   `test-windows` is green with the new floors — the leg that was the
   minimum included. Check AC-MCO-19 only once both runs are recorded.

@@ -108,7 +108,10 @@ parallel = true
 # scoped_floor, and the locator planlint itself detects. Specs and CI config
 # must reference this locator, never hard-code a number (specgraph rule
 # G003 / C-CH-2).
-fail_under = 90
+# Set two points under the minimum green CI leg (run 37553098324, Windows-3.12:
+# 2274/2292, 99.2147 %) by `measure-coverage-once`; floors move up and
+# never down.
+fail_under = 97
 
 [tool.specgraph]
 # The branch-coverage floor, enforced by tools/check_branch_coverage.py.
@@ -116,7 +119,10 @@ fail_under = 90
 # key — it's specgraph's own gate, read directly from this section.
 # Lower than the line floor: branches are harder to cover, but a module with
 # high line coverage and untested conditional branches must still fail.
-branch_fail_under = 80
+# Set two points under the minimum green CI leg (run 37553098324, Windows-3.12:
+# 743/762, 97.5066 %) by `measure-coverage-once`; floors move up and
+# never down.
+branch_fail_under = 95
 
 # Floors for the `tools/` gate scripts, read from the same one run under
 # `--scope tools` (inside `make test`, and by `make coverage-tools` alone).
@@ -132,8 +138,12 @@ branch_fail_under = 80
 # did exactly that until the tests added alongside these keys. Holding the
 # gate machinery to a lower bar than the code it guards is the argument this
 # project exists to refuse.
-tools_line_fail_under = 90
-tools_branch_fail_under = 80
+# Both set two points under the minimum green CI leg (run 37553098324, where
+# every leg — Linux 3.10–3.14 and Windows 3.12 — read the same 944/979 lines,
+# 96.4249 %, and 323/344 branches, 93.8953 %) by `measure-coverage-once`;
+# floors move up and never down.
+tools_line_fail_under = 94
+tools_branch_fail_under = 91
 
 # The reporting threshold for `check_coverage_floor.py --per-file-min`, read
 # by `make coverage-per-file`. It gates nothing and is composed into neither

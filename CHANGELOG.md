@@ -32,7 +32,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   recording table and suite-run arithmetic, the `ladder` recording of
   `coverage-tools` on exit 0 only (DEC-WCA-006's one sanctioned inference),
   and the run-by-name sites R-WCA-30 / AC-WCA-25 / DEC-WCA-018 with their
-  carve-out — each edit naming the package.
+  carve-out — each edit naming the package. Milestone 4 then set the four
+  floors from the first CI run with per-leg uploads (run 37553098324), two points
+  under the minimum green leg, never down: `fail_under` 90 → 97 and
+  `branch_fail_under` 80 → 95 (minimum leg Windows 3.12: 2274/2292 and 743/762);
+  `tools_line_fail_under` 90 → 94 and `tools_branch_fail_under` 80 → 91 (every leg equal: 944/979 and 323/344).
 
 ## [0.3.0] — 2026-10-07
 
