@@ -36,29 +36,43 @@ the duplicated shapes through `tests/support.py` with guards that keep them
 there, converts the four loops with one subprocess kept each, and records
 the durations command before and after on the same container.
 
-**Evidence:** measured at `731479c`, 2026-10-07; every command is in the
-proposal. `wc -l tests/test_*.py | sort -n | tail -8` reads five modules
-over 700 lines and `test_action_contract.py` at exactly 700; `grep -n
-"^# --- " tests/test_ci_hardening.py` finds twelve seams; `grep -rn
-"pytest.mark\." tests/` finds only `parametrize` and `skipif`;
+**Evidence:** measured at `f7118a0` (`main`, the squash of #41; the tree is
+byte-identical at `bb4e4ad`), 2026-10-07; every command is in the proposal.
+`wc -l tests/test_*.py | sort -n | tail -8` reads five modules over 700
+lines and `test_action_contract.py` at exactly 700; `grep -n "^# --- "
+tests/test_ci_hardening.py` finds twelve seams; `grep -rn "pytest.mark\."
+tests/` finds only `parametrize` and `skipif`, one of them a module-level
+`pytestmark` (`tests/test_spec_discovery_identity.py:28`);
 `[tool.pytest.ini_options]` holds `testpaths` and `addopts = "-q"`; an argv
 list passing `-m openspec_graph.cli` to `subprocess.run` appears in
-`tests/test_decomposition.py:108` (with `--target`) and
+`tests/test_decomposition.py:108–109` (with `--target`) and
 `tests/test_skill_contract.py:657` (`--version`, without); the harness spec
 path is written by hand at `tests/test_e2e_corpus.py:39–43`,
 `tests/test_detect_thresholds.py:257` and `tests/test_decomposition.py:102–105`
 and the SpecKit path at `tests/test_e2e_corpus.py:338` and
-`tests/test_detect_speckit.py:105`; `tests/support.py:261` defers
-`test_agent_artifacts.py`'s `_workflow_jobs` near-copy to W7.4. The
-Appendix A durations command reports 1602 passed in 149.98 s, with
-`test_projections_are_byte_stable_across_runs` at 3.54 s and
-`test_sarif_returns_the_same_exit_code_as_the_text_run` at 2.92 s in the
-top twelve and the other two named tests below it; the plan's figure was
-235 s at `9c4b6e9` and `measure-coverage-once`'s 212.5 s and 210.46 s at
-`5246931`. `tests/test_ci_hardening.py:843`'s `_one_run_violations` names
-every recipe line other than `coverage-run`'s that invokes pytest.
-`openspec_graph/cli.py:980`'s `main(argv)` returns an `int` and is already
-called in-process under `capsys` by `tests/test_cli_surface.py`.
+`tests/test_detect_speckit.py:105`, in modules of which the second already
+imports `write_speckit_spec` and the first does not; `grep -rln
+write_speckit_spec tests/test_*.py` lists nine modules.
+`tests/support.py:261–262` defers `test_agent_artifacts.py`'s
+`_workflow_jobs` near-copy to W7.4. The Appendix A durations command reports
+1602 passed in 149.98 s, 155.74 s and 157.68 s in three sessions on this
+unchanged tree, with `test_projections_are_byte_stable_across_runs` at
+3.54 s and `test_sarif_returns_the_same_exit_code_as_the_text_run` at
+2.92–3.21 s in every top twelve and the other two named tests below it; the
+plan's figure was 235 s at `9c4b6e9` and `measure-coverage-once`'s 212.5 s
+and 210.46 s at `5246931`. `tests/test_ci_hardening.py:843`'s
+`_one_run_violations` names every recipe line other than `coverage-run`'s
+that invokes pytest. `openspec_graph/cli.py:980`'s `main(argv)` returns an
+`int` and is already called in-process under `capsys` by
+`tests/test_cli_surface.py`. In that module the `repo_root` fixture
+(`:480–482`) reads the repository's `pyproject.toml` for
+`test_entry_points_wired_in_pyproject` and the `fixtures` fixture
+(`:471–477`) builds `Path(__file__)`-rooted paths under `fixtures/` for the
+`test_deprecated_alias_*` tests; `tests/test_detect_corpus.py:307` spells a
+root as `Path(detect.__file__)`. Eight shipped records name
+`tests/test_ci_hardening.py` or `tests/test_workflow_hardening.py` as where
+a guard lives: R-ZCG-10 and DEC-ZCG-010, R-HCW-15, R-HCW-16 and
+DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
 
 ---
 
@@ -75,15 +89,18 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   split along its existing `# --- ` section seams into modules each named
   for the subject its sections share. No test function MAY be renamed, and
   no test function MAY be deleted: the sorted set of `def test_*` names
-  across `tests/test_*.py`, read by AST, MUST be identical before and after
-  each split, and the collected count MUST be identical, both recorded in
-  `tasks.md`. A helper MUST move with its only user; a helper two of the
-  resulting modules need MUST move to `tests/support.py` when it is a
-  general test helper or to a non-collected `<subject>_support.py` sibling
-  when it is specific to one subject, never be copied. A fixture a module
-  defines for itself (`test_ci_hardening.py`'s `repo`) MUST move with the
-  tests that use it. Each resulting module's docstring MUST name what it
-  holds and which package's criteria it verifies.
+  read by AST over `tests/test_*.py` excluding `tests/test_suite_shape.py`
+  — the one module this package creates with tests of its own — and the
+  collected count over the same set (`--ignore=tests/test_suite_shape.py`)
+  MUST be identical to Milestone 0's after every split and at every stage
+  commit, both recorded in `tasks.md`. A helper MUST move with its only
+  user; a helper two of the resulting collected modules need MUST move to
+  `tests/support.py` when it is a general test helper or to a non-collected
+  `<subject>_support.py` sibling when it is specific to one subject, never
+  be copied and never be imported from one collected module into another.
+  A fixture a module defines for itself (`test_ci_hardening.py`'s `repo`)
+  MUST move with the tests that use it. Each resulting module's docstring
+  MUST name what it holds and which package's criteria it verifies.
 - R-TSS-3: The splits are these, each resulting module under the bound.
   `tests/test_ci_hardening.py` is removed and its sections go to
   `tests/test_ci_workflow.py` (the claims about the CI configuration; the
@@ -107,8 +124,9 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   `tests/test_workflow_pins.py` (the Dependabot section).
   `tests/test_workflow_hardening.py` is removed and goes to
   `tests/workflow_support.py` (not collected; the readers more than one
-  section uses), `tests/test_workflow_pins.py` (action refs, SHA pins and
-  major floors; the Dockerfile and its update bot; Dependabot),
+  collected module uses, `_uncommented_permission_blocks` among them),
+  `tests/test_workflow_pins.py` (action refs, SHA pins and major floors;
+  the Dockerfile and its update bot; Dependabot),
   `tests/test_workflow_posture.py` (permissions, timeouts, concurrency, the
   thresholds guard's silence, the attestations input) and
   `tests/test_workflow_python.py` (the one Python default; the experimental
@@ -131,7 +149,7 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   names `tests/test_workflow_pins.py`; the SKILL.md arm adds
   `tests/test_skill_distribution.py`), `tests/conftest.py`'s `repo`
   docstring, `tools/_common.py`'s docstring at line 157,
-  `tests/support.py`'s `workflow_job_blocks` docstring,
+  `tests/support.py`'s `workflow_job_blocks` docstring (lines 259–262),
   `tests/test_gate_scripts.py`'s and `tests/test_action_contract.py`'s
   module docstrings, the `pyproject.toml` comments at lines 156 and 200,
   the `.github/dependabot.yml` comments at lines 21 and 35,
@@ -143,10 +161,13 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   MUST stay within `MAX_NESTED_LINES` with its precedence clause, its
   balanced Mermaid block and resolving links. Dated records — `CHANGELOG.md`'s
   released sections, `docs/next-steps.md`, the peer reviews, the plan —
-  MUST NOT be edited, and no file of `measure-coverage-once`,
-  `harden-ci-workflows`, `select-zero-cost-guards` or any other change
-  package MAY be edited: their tests move under their names and their
-  `pytest -k` citations resolve by name.
+  MUST NOT be edited, and no file of any other change package MAY be
+  edited: `measure-coverage-once`'s, `harden-ci-workflows`',
+  `select-zero-cost-guards`', `pin-actions-by-sha`'s and
+  `prepare-release-0-3-0`'s tests move under their names and their
+  `pytest -k` citations resolve by name, and the eight records among them
+  that name a deleted module as a guard's home are superseded by name in
+  DEC-TSS-016.
 - R-TSS-5: `pyproject.toml`'s `[tool.pytest.ini_options]` MUST register
   exactly three markers under `markers` — `unit`, `integration`, `e2e` —
   each with its criterion of R-TSS-6 in the description, and `addopts`
@@ -154,39 +175,53 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   loudly. The markers MUST be registered under `markers`, not only through
   `addopts`, because the Appendix A durations command clears `addopts`.
   `testpaths` MUST be unchanged. Every collected test MUST carry exactly one
-  of the three, counted at the item level: a module-level `pytestmark`
-  applies to every test in the module, so a module whose tests are not all
-  one tier MUST carry no module-level tier mark and MUST mark each test
-  function. `skipif`, `parametrize` and pytest's other built-in marks are
-  not tiers and are unconstrained.
-- R-TSS-6: The tier of a test is decided by what its body, or a
-  module-level helper of the same module that its body calls (resolved
-  transitively within the module), names. A test is `e2e` if and only if
-  it names a process start: `subprocess`, `run_cli`, or a same-module
-  helper that does. A test is `integration` if and only if it is not `e2e`
-  and reads this repository's own tree or runs a `tools/` script
-  in-process: it names `run_tool_main` or `load_tool`, references
-  `__file__` in a body, or names a module-level constant bound — directly
-  or through another such constant — to a path expression containing
-  `__file__` whose chain carries no path segment equal to `fixtures` or
-  `corpus`. A test is `unit` if and only if it names none of those; writing
-  fixtures under `tmp_path` and calling the package — `cli.main` included —
-  in-process does not change its tier. A guard test MUST compute the three
-  signals by AST over `tests/test_*.py` and assert the marker agrees in both
-  directions, and MUST be shown red on planted module texts: an unmarked
-  test, a test carrying two tiers, a `unit`-marked test that calls
-  `run_cli`, an `e2e`-marked test that names no process start, a
-  `unit`-marked test that names a tree constant, and a module over the
-  bound.
+  of the three, counted at the item level: a module-level `pytestmark` —
+  a single mark or a list of marks, the list form where a module already
+  has a `pytestmark` — applies to every test in the module, so a module
+  whose tests are not all one tier MUST carry no module-level tier mark and
+  MUST mark each test function. A tier MUST be written only as a
+  `@pytest.mark.<tier>` decorator or a `pytest.mark.<tier>` entry of
+  `pytestmark`; an alias (`name = pytest.mark.<tier>`, the `needs_bash`
+  pattern) MUST NOT be used for a tier and MUST be named by the guard.
+  `skipif`, `parametrize` and pytest's other built-in marks are not tiers
+  and are unconstrained.
+- R-TSS-6: The tier of a test is decided by what its body names, or what
+  is named by a same-module helper its body calls or a fixture it takes as
+  a parameter — a fixture being a `@pytest.fixture` body in the same module
+  or in `tests/conftest.py` — resolved transitively through both kinds. A
+  test is `e2e` if and only if it names a process start: `subprocess` in a
+  call or an attribute access (not in an annotation), `run_cli`, or a
+  helper or fixture that does. A test is `integration` if and only if it
+  is not `e2e` and reads this repository's own tree or runs a `tools/`
+  script in-process: it names one of the `tests/support.py` tree-readers —
+  an enumerated set kept as one module constant of the guard, at this
+  change `load_tool`, `run_tool_main` and the `read_pyproject` this package
+  adds — or it names `__file__`, as a bare name or as an attribute such as
+  `detect.__file__`, in a path expression whose chain carries no segment
+  equal to `fixtures` or `corpus`, whether that expression is in a body, a
+  fixture, or a module-level constant reached through other constants. A
+  test is `unit` if and only if it names none of those; writing fixtures
+  under `tmp_path`, reading the labelled corpora under `tests/fixtures/`
+  and `tests/corpus/`, and calling the package — `cli.main` included —
+  in-process do not change its tier. A guard test MUST compute the signals
+  by AST over `tests/test_*.py` and `tests/conftest.py` and assert the
+  marker agrees in both directions, and MUST be shown red on planted module
+  texts: an unmarked test, a test carrying two tiers, a `unit`-marked test
+  that calls `run_cli`, an `e2e`-marked test that names no process start, a
+  `unit`-marked test that names a tree constant, a `unit`-marked test that
+  reads the tree through a fixture parameter, a tier written through an
+  alias, and a module over the bound; and MUST be shown quiet on a planted
+  `unit` test whose body builds a `__file__`-rooted path under `fixtures`.
 - R-TSS-7: The fast tier is the command `python -m pytest -m unit`,
   documented in `docs/hooks.md` beside the optional pre-push hook and in
   `tests/AGENTS.md`'s run sentence, with what the tier excludes stated in a
-  sentence. No Make target MAY be added for it: `test_the_suite_runs_once_through_coverage_run`
-  holds that `coverage-run` is the only recipe invoking pytest and MUST
-  stay green unedited. `.pre-commit-config.yaml` MUST NOT change. The
-  tier's collected count (`python -m pytest -m unit --collect-only -q`) and
-  wall time (`python -m pytest -m unit -q -p no:cacheprovider -o
-  addopts=""`) MUST be recorded in `tasks.md`, dated with the commit.
+  sentence. No Make target MAY be added for it: `test_the_suite_runs_once_through_coverage_run`,
+  merged to `main` in #41, holds that `coverage-run` is the only recipe
+  invoking pytest and MUST stay green unedited. `.pre-commit-config.yaml`
+  MUST NOT change. The tier's collected count (`python -m pytest -m unit
+  --collect-only -q`) and wall time (`python -m pytest -m unit -q -p
+  no:cacheprovider -o addopts=""`) MUST be recorded in `tasks.md`, dated
+  with the commit.
 - R-TSS-8: `tests/support.run_cli` MUST be the only place a test module
   passes an argv list containing both `-m openspec_graph.cli` and
   `--target` to `subprocess.run`; `tests/test_decomposition.py`'s inline
@@ -252,16 +287,19 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   `test_read_only_verbs_leave_tree_byte_identical`.
 - R-TSS-11: The Appendix A durations command — `python -m pytest tests/ -p
   no:cacheprovider -q --durations=12 -o addopts=""` — MUST be run on the
-  finished tree in the same container as the before figure and recorded in
-  `tasks.md` beside it, dated with the commit: the total, the twelve
-  slowest, and the per-test call durations of the four named tests before
-  and after (`python -m pytest tests/test_report.py tests/test_sarif.py
+  finished tree in the same container as the before figure, back to back
+  with a before run on the tree immediately preceding the loop conversion,
+  and both recorded in `tasks.md` dated with their commits: each total, each
+  twelve slowest, and the per-test call durations of the four named tests
+  from `python -m pytest tests/test_report.py tests/test_sarif.py
   tests/test_e2e_corpus.py -k "<the four names joined by or>"
-  --durations=0 -p no:cacheprovider -q -o addopts=""`). The after total
-  MUST be at or under the before total and at or under the plan's 200 s,
-  and none of the four MUST appear in the after table's twelve. The
-  figures are recorded as a measurement with its variance stated, never
-  claimed as the plan's 235 s to 200 s.
+  --durations=0 -p no:cacheprovider -q -o addopts=""` before and after.
+  Each of the four per-test figures MUST be lower after than before, and
+  none of the four MUST appear in the after table's twelve. The totals are
+  recorded with their spread stated — the three readings of the unchanged
+  tree in the proposal are the measure of it — and no MUST is placed on a
+  total; the plan's 200 s row is reported in the proposal and `tasks.md`
+  as the plan's figure, never claimed as this package's saving.
 - R-TSS-12: Every guard this spec adds MUST read the file it judges, MUST
   be written and run red before the change it covers — the flatness and
   bound guards red on the unsplit tree, the marker guards red on the
@@ -272,14 +310,17 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
 - R-TSS-13: `CHANGELOG.md`'s `[Unreleased]` section MUST carry a `Changed`
   entry for this package naming the removed and the new modules, the three
   tiers and the strict markers with the fast-tier command, the routing,
-  the four converted loops and the before/after totals with their commits.
+  the four converted loops with the before/after per-test figures and
+  totals with their commits, and the eight superseded records of
+  DEC-TSS-016 by id.
 - R-TSS-14: `tasks.md` MUST record, dated with the commit and naming the
   command: `wc -l tests/test_*.py | sort -n | tail -8` before and after;
-  the AST test-name set's hash and the collected count before and after
-  each split; the red run of every guard; the durations figures of
-  R-TSS-11; the fast tier's count and time of R-TSS-7; `grep -ln
-  "subprocess.run" tests/test_*.py` and the two routing greps before and
-  after; the pointer grep of R-TSS-4 before and after.
+  the AST test-name set's hash and the collected count of R-TSS-2 at
+  Milestone 0, after each split and at each stage commit; the red run of
+  every guard; the durations figures of R-TSS-11; the fast tier's count
+  and time of R-TSS-7; `grep -ln "subprocess.run" tests/test_*.py` and the
+  two routing greps before and after; the pointer grep of R-TSS-4 before
+  and after.
 - C-TSS-1: No change under `openspec_graph/`, no rule, no golden hash, no
   runtime or dev dependency: the `RULES` tuple, `README.md`'s rules table,
   `tests/baseline_rules.json`, the `validate`/`graph`/`rules` hashes,
@@ -313,17 +354,17 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   The seams are the package boundaries the authors already drew — every
   section comment names a package's criteria or a script — so a split
   along them is a move and not a rewrite, and a reviewer can check it as
-  one: the sorted test-name set and the collected count are identical
-  before and after, and every spec citation resolves. The parents go
-  because no section left in either would be "CI hardening" or "workflow
-  hardening" as a subject: both names describe the first package that
-  wrote into them, which is how `test_ci_hardening.py` came to hold the
-  graph tools and the Dependabot config — a module named for history
-  accretes, a module named for a subject refuses. Rejected: a `tests/ci/`
-  package (orphans every test from two gates, #35's lesson); keeping one
-  parent under its old name as the workflow module (every pointer to it
-  would then be half right); renaming any test to fit its new module (the
-  citations).
+  one: the sorted test-name set and the collected count over the
+  pre-existing modules are identical before and after, and every spec
+  citation resolves. The parents go because no section left in either
+  would be "CI hardening" or "workflow hardening" as a subject: both names
+  describe the first package that wrote into them, which is how
+  `test_ci_hardening.py` came to hold the graph tools and the Dependabot
+  config — a module named for history accretes, a module named for a
+  subject refuses. Rejected: a `tests/ci/` package (orphans every test from
+  two gates, #35's lesson); keeping one parent under its old name as the
+  workflow module (every pointer to it would then be half right); renaming
+  any test to fit its new module (the citations).
 - **DEC-TSS-002:** the third module out of `test_ci_hardening.py` is not
   "action". The plan's shorthand was workflow / action / makefile; the
   module measured by section holds three tests about the composite action,
@@ -371,17 +412,29 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   a key in `pyproject.toml` (a second place for a number one test reads);
   a strict `<` (would split a module the plan did not).
 - **DEC-TSS-005:** three tiers, registered under `markers` with
-  `--strict-markers` on, applied as a module-level `pytestmark` where a
-  module is one tier and per function where it is not, with exactly one
-  tier per item counted across both levels. Strict because an unregistered
-  mark is otherwise a silent typo that selects nothing and fails nothing —
-  fail-closed is this repository's posture for every gate. Both levels
-  count because pytest applies a module mark and a function mark
-  cumulatively, so a module-level `e2e` with a function-level `unit`
-  "override" would be an item with two tiers that `-m unit` selects wrongly;
-  the rule that a mixed module carries no module-level tier keeps the
-  source readable as the truth. Registered under `markers` and not only in
-  `addopts` because the durations command passes `-o addopts=""`.
+  `--strict-markers` on, applied per function wherever a module mixes
+  tiers and as a module-level `pytestmark` entry only where it does not,
+  with exactly one tier per item counted across both levels and no alias.
+  Strict because an unregistered mark is otherwise a silent typo that
+  selects nothing and fails nothing — fail-closed is this repository's
+  posture for every gate. Both levels count because pytest applies a
+  module mark and a function mark cumulatively, so a module-level `e2e`
+  with a function-level `unit` "override" would be an item with two tiers
+  that `-m unit` selects wrongly; the rule that a mixed module carries no
+  module-level tier keeps the source readable as the truth. Per-function
+  marks are the expected shape, not the exception: the criterion simulated
+  over `test_report`, `test_sarif` and `test_cli_surface` gives 30 / 2 / 13,
+  8 / 3 / 13 and 8 / 6 / 14 across `unit` / `integration` / `e2e`, so the
+  modules that spawn are mostly in-process tests with a spawning minority,
+  and the fast tier is larger than a module-level view would make it. The
+  list form is required where a `pytestmark` already exists
+  (`tests/test_spec_discovery_identity.py:28` carries a `skipif`), and the
+  guard reads both forms. An alias (`name = pytest.mark.<tier>`) is
+  forbidden for tiers because a reader grepping for `pytest.mark.unit`
+  would miss every test marked through it and the guard would have to
+  resolve module-level names to find them; `needs_bash` stays as it is
+  because `skipif` is not a tier. Registered under `markers` and not only
+  in `addopts` because the durations command passes `-o addopts=""`.
   Rejected: deriving marks at collection in `conftest.py` from the same
   signals (a reviewer could not read a test's tier in its source, and the
   criterion would live in a hook rather than in the file it classifies);
@@ -402,36 +455,55 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   filesystem" (every parser test writes a fixture, so the unit tier would
   be nearly empty); "uses the `repo` fixture" (a conftest fixture that
   writes three files under `tmp_path` is not a boundary).
-- **DEC-TSS-007:** the tier guard is an AST scan over `tests/test_*.py`,
-  non-recursive like the two existing guards, with same-module transitive
-  helper resolution and the signal sets of R-TSS-6, asserting agreement in
-  both directions. Both directions because a stale `e2e` mark on a test
-  that no longer spawns is a test the fast tier is wrongly missing, and a
-  `unit` mark on a test that does spawn is a slow test the fast tier is
-  wrongly paying for; one direction would guard half the property. The
-  spawn names are `subprocess` and `run_cli` because `run_cli` is the one
-  wrapper and every other spawn in the tree calls `subprocess` directly
-  (`grep -ln "subprocess.run"` lists them). The tree signal is
-  `run_tool_main`, `load_tool`, a `__file__` reference in a body, or a
-  module constant bound from `__file__` through any chain of constants
-  without a `fixtures` or `corpus` segment — a resolution over module-level
-  assignments, which is how every repository-reading module in the tree
-  spells its root. Rejected: `request.session.items` from inside a guard
-  (pytest's own deselection hook runs first, so under `-k` or `-m` the
-  guard would see only the selected items and pass on a tree it never
-  checked); `item.iter_markers()` for the same reason.
+- **DEC-TSS-007:** the tier guard is an AST scan over `tests/test_*.py` and
+  `tests/conftest.py`, non-recursive like the two existing guards, with
+  transitive resolution through same-module helpers and through fixture
+  parameters, the signal sets of R-TSS-6, and agreement asserted in both
+  directions. Both directions because a stale `e2e` mark on a test that no
+  longer spawns is a test the fast tier is wrongly missing, and a `unit`
+  mark on a test that does spawn is a slow test the fast tier is wrongly
+  paying for; one direction would guard half the property. Fixture
+  parameters resolve exactly like called helpers because the simulation
+  over `tests/test_cli_surface.py` showed the two failure modes of not
+  doing so: `test_entry_points_wired_in_pyproject` reads the repository's
+  `pyproject.toml` only through its `repo_root` parameter and would be
+  `unit` while reading the tree, and the five `test_deprecated_alias_*`
+  tests take a `fixtures` parameter whose body is `Path(__file__)` under
+  `fixtures/` — the canonical unit case of DEC-TSS-006 — and would be
+  `integration` under a body-level `__file__` rule with no exemption; the
+  same `fixtures` body rooted at `tests/test_skill_contract.py:133`'s
+  `populated_repo` and `tests/test_rules_speckit.py:266` says the exemption
+  must apply to every `__file__`-rooted expression, body-level or constant,
+  not to module constants alone. `__file__` is matched as a name or an
+  attribute because `tests/test_detect_corpus.py:307` spells its root as
+  `Path(detect.__file__)`. The `tests/support.py` tree-readers are an
+  enumerated set kept as one module constant — `load_tool`, `run_tool_main`,
+  and the `read_pyproject` this package adds when `_pyproject()` moves to
+  `support.py` — because a reader that lives in `support.py` names no
+  `__file__` at its call site, so a caller would otherwise be `unit` while
+  reading the repository's `pyproject.toml`; the set is one constant so
+  adding a reader is one line and the guard's docstring says so. The spawn
+  names are `subprocess` and `run_cli` because `run_cli` is the one wrapper
+  and every other spawn in the tree calls `subprocess` directly (`grep -ln
+  "subprocess.run"` lists them); `subprocess` counts only in a call or an
+  attribute access, because `subprocess.CompletedProcess` in a return
+  annotation is a type, not a process. Rejected: `request.session.items`
+  from inside a guard (pytest's own deselection hook runs first, so under
+  `-k` or `-m` the guard would see only the selected items and pass on a
+  tree it never checked); `item.iter_markers()` for the same reason; a
+  criterion that ignores fixtures (the `repo_root` case above).
 - **DEC-TSS-008:** no Make target for the fast tier. `test_the_suite_runs_once_through_coverage_run`
-  — `measure-coverage-once`'s guard, R-MCO-2 and R-MCO-6, shipped on this
-  branch — enumerates every recipe line that invokes pytest other than
+  — `measure-coverage-once`'s guard, R-MCO-2 and R-MCO-6, merged to `main`
+  in #41 — enumerates every recipe line that invokes pytest other than
   `coverage-run`'s and names it, so a `-m unit` recipe is a red test on the
-  day it lands; amending a sibling's shipped guard, and the two
-  requirements behind it, to carve out a convenience is the wrong trade.
-  The ladder's promise in `docs/hooks.md` — a commit cannot bypass what CI
-  checks — is a promise about gates, and a partial suite is not a gate: it
-  is a loop a contributor runs between edits. So the fast tier is the
-  command `python -m pytest -m unit`, written where a contributor looks for
-  it, and this package records its collected count and wall time so a
-  later package that wants a target has the figure that justifies one.
+  day it lands; amending a shipped guard, and the two requirements behind
+  it, to carve out a convenience is the wrong trade. The ladder's promise
+  in `docs/hooks.md` — a commit cannot bypass what CI checks — is a promise
+  about gates, and a partial suite is not a gate: it is a loop a
+  contributor runs between edits. So the fast tier is the command
+  `python -m pytest -m unit`, written where a contributor looks for it, and
+  this package records its collected count and wall time so a later
+  package that wants a target has the figure that justifies one.
   `.pre-commit-config.yaml` stays as it is for the same reason: its hooks
   are the gates. Rejected: a target composed into neither `ci` nor
   `pre-pr` (still a second pytest recipe); a target that calls
@@ -443,9 +515,13 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   that `run_cli` carries for a reason its own comment repeats; routing it
   cannot move a golden hash, because `COVERAGE_PROCESS_START` changes what
   the child measures and not what it prints, and the hash test is the proof.
-  `_harness_spec` is `write_spec` with `cap` fixed; the SpecKit writes are
-  `write_speckit_spec`, which has sat in `support.py` unused. The
-  `_workflow_jobs` near-copy in `test_agent_artifacts.py` is the one
+  `_harness_spec` is `write_spec` with `cap` fixed. The two hand-written
+  SpecKit paths are stragglers behind an established helper, not a helper
+  waiting for a first caller: nine modules already import
+  `write_speckit_spec`, and one of the two sites sits in
+  `tests/test_detect_speckit.py`, which itself calls it fifteen times,
+  while the other sits in `tests/test_e2e_corpus.py`, which never imported
+  it. The `_workflow_jobs` near-copy in `test_agent_artifacts.py` is the one
   DEC-HCW-009 deferred to this item by name. The guards read the two shapes
   by AST — `test_helpers_not_duplicated_inline` forbids a redeclared
   `write_spec`, and a hand-built path with `write_text` is the same drift
@@ -496,46 +572,59 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   nested pytest; the fresh-interpreter tests exist to see an interpreter
   with nothing imported. C-TSS-5 makes the promise checkable: their bodies
   are byte-identical apart from import lines.
-- **DEC-TSS-012:** the saving is recorded as a before/after pair of the
-  same command in the same container, with the per-test figures of the
-  four converted tests, and the plan's absolute target is reported as
-  already met at the measurement commit rather than claimed. The same
-  command read 235 s at `9c4b6e9` (1498 tests), 212.5 s and 210.46 s at
-  `5246931` (1578), and 149.98 s at `731479c` (1602) — the suite grew by a
-  hundred tests while its wall time fell by a third, with no package
-  claiming that drop, which is a container's variance between sessions.
-  An absolute target against that noise would be met or missed by the
-  weather; a pair measured back to back on the finished tree, plus the
-  four per-test figures that the conversion directly moves, is the
-  measurement this package can be held to. The plan's 200 s is kept as a
-  ceiling the after figure must also clear, so the row in §7 can be ticked
-  honestly. Rejected: claiming 235 to 200 (the plan's row describes a
-  different commit on a different day).
+- **DEC-TSS-012:** the saving is held to the four converted tests' own
+  call durations and to their absence from the after table's twelve; the
+  totals are recorded with their spread, and the plan's absolute target is
+  reported as already met at the measurement commit rather than claimed.
+  The same command read 235 s at `9c4b6e9` (1498 tests), 212.5 s and
+  210.46 s at `5246931` (1578), and 149.98 s, 155.74 s and 157.68 s in
+  three sessions on the one tree at `f7118a0`/`bb4e4ad` (1602) — the suite
+  grew by a hundred tests while its wall time fell by a third, with no
+  package claiming that drop, and three readings of an unchanged tree
+  spread over about eight seconds. The four named tests cost about 13.6 s
+  of that total today, and the seven subprocesses the conversion keeps will
+  cost about 2.5 s, so the expected saving is about eleven seconds — of the
+  same order as the spread. A MUST on the total would therefore be met or
+  missed by the weather; a MUST on the per-test figures, which the
+  conversion moves directly and which the spread does not reach, is the
+  measurement this package can be held to, and the pair is taken back to
+  back on the finished tree so the totals are at least comparable. The
+  plan's 200 s row is the plan's figure: met before this package, reported
+  after it, never this package's claim. Rejected: claiming 235 to 200 (the
+  plan's row describes a different commit on a different day); a MUST that
+  the after total is at or under the before total (noise decides it).
 - **DEC-TSS-013:** documents that describe the design are updated; dated
-  records are left; no sibling package is edited. `tests/AGENTS.md`,
+  records are left; no other change package is edited. `tests/AGENTS.md`,
   `docs/architecture/c4.md`, `docs/hooks.md`, the hook script, the
   docstrings and the configuration comments say where a guard lives and
   must say where it lives after this change; `CHANGELOG.md`'s released
   sections, `docs/next-steps.md`, the peer reviews and the plan record what
   was true on a date. `measure-coverage-once`'s `tasks.md` names
   `tests/test_ci_hardening.py` as where its guards were written, which is a
-  record of what happened; its guards move under their names, its
-  `pytest -k` citations resolve by name, and nothing in that package
-  changes — the precedent of DEC-MCO-006 and DEC-ZCG-003, applied to a
-  sibling that needs no reversal, only a note here. `tests/AGENTS.md` is
-  edited by replacing where it can and adding only the one bullet and the
-  one node the shape now needs, because it sits nine lines under its budget
-  and the budget is the point.
-- **DEC-TSS-014:** three pull requests, each a reviewable kind of change.
-  Milestones 0–3 (the splits and the pointers) are pure moves, proven by an
-  unchanged test-name set and collected count, so a review of that pull
-  request is a review of nothing else; Milestones 4–5 (the tiers and the
-  routing) change configuration and three helpers; Milestones 6–7 (the
-  loops and the records) change four test bodies, and the durations
-  comparison of R-TSS-11 must bracket exactly that change to mean anything.
-  Rejected: one pull request (a durations pair across a move cannot
-  attribute its delta); a pull request per split module (seven reviews of
-  one mechanical operation).
+  record of what happened; its guards move under their names and its
+  `pytest -k` citations resolve by name, so that package needs nothing
+  from this one. Where a shipped package's spec requires a guard to live
+  in a module this change deletes, the form is DEC-MCO-006's: the record
+  is superseded by name, with the property it protected and the module
+  that now carries it, and the shipped package is not edited — DEC-TSS-016
+  holds the eight. `tests/AGENTS.md` is edited by replacing where it can
+  and adding only the one bullet and the one node the shape now needs,
+  because it sits nine lines under its budget and the budget is the point.
+- **DEC-TSS-014:** one pull request — this branch's, #42 — with the three
+  stages as separate commits, each recording the test-name hash and the
+  collected count of R-TSS-2. The loop this repository follows is one pull
+  request per package, and a commit boundary already gives the durations
+  comparison what it needs: the before figure of R-TSS-11 is taken on the
+  tree as the second stage leaves it, which is a commit, and the after
+  figure on the third, so the pair brackets exactly the loop conversion
+  whichever pull request the commits ride in. The stages stay distinct
+  because each is a different kind of change to review — moves proven by an
+  unchanged name set and count, then configuration and three helpers, then
+  four test bodies — and a reviewer reads them in that order. Rejected:
+  three pull requests (the first draft's shape; it inverted the loop and
+  bought nothing a commit boundary does not); one undivided commit (a
+  durations pair across a move cannot attribute its delta, and a review of
+  moves mixed with edits is a review of neither).
 - **DEC-TSS-015:** the guards live in one new module, `tests/test_suite_shape.py`,
   rather than beside `test_helpers_not_duplicated_inline` in
   `tests/test_decomposition.py`. That module pins the package's module
@@ -544,7 +633,59 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   itself — flatness, bound, tiers, the two routed shapes, the four loops —
   is a subject, and the capability this package is named for. The existing
   guard stays where it is: a move of a cited test for tidiness is exactly
-  the kind of churn the citation test exists to make unnecessary.
+  the kind of churn the citation test exists to make unnecessary. Because
+  this module is the one place the package adds tests, the baseline of
+  R-TSS-2 excludes it, so every comparison is against Milestone 0's
+  figures and not a moving target.
+- **DEC-TSS-016:** eight records of four shipped packages are superseded by
+  name, each with the property it protected and the module that now
+  carries it, and none of those packages is edited — DEC-MCO-006's form,
+  because each is merged to `main` and a record of what shipped. From
+  `select-zero-cost-guards`: R-ZCG-10 ("Two guard tests in
+  `tests/test_ci_hardening.py` MUST parse `pyproject.toml` structurally")
+  and DEC-ZCG-010 (the guards "live in `tests/test_ci_hardening.py`, in the
+  section headed as claims about the CI configuration itself") — the two
+  guards and that whole section live in `tests/test_ci_workflow.py`, beside
+  `test_lint_is_a_hard_gate` as before, and the structural-parse property
+  is unchanged. From `harden-ci-workflows`: R-HCW-15 ("Every guard this
+  spec adds MUST live in the new module `tests/test_workflow_hardening.py`")
+  and DEC-HCW-008 (a new module "not in `tests/test_ci_hardening.py`"
+  because that module "is 859 lines across five change packages' concerns
+  already") — the guards live in `tests/test_workflow_pins.py`,
+  `tests/test_workflow_posture.py` and `tests/test_workflow_python.py` by
+  section, each under the bound DEC-HCW-008 was reaching for, with the
+  dynamic read-the-file property and the collect-every-offender property
+  unchanged; and R-HCW-16 ("`tests/test_ci_hardening.py` MUST keep
+  `_ci_job_blocks` as an alias") — the alias and its two parser tests live
+  in `tests/test_ci_workflow.py`, and `workflow_job_blocks` stays in
+  `tests/support.py` as DEC-HCW-009 placed it, now with the
+  `test_agent_artifacts.py` copy that decision deferred routed through it.
+  From `pin-actions-by-sha`: R-ASP-8 ("Every guard this spec adds or amends
+  MUST live in `tests/test_workflow_hardening.py`", with the one helper
+  amended outside it, "`tests/test_ci_hardening.py`'s
+  `_dependabot_directories`") — the pin guards live in
+  `tests/test_workflow_pins.py` with their planted counter-examples, and
+  `_dependabot_directories` moves there with the Dependabot section it
+  serves; and R-ASP-11 ("Both readers of that file —
+  `tests/test_workflow_hardening.py::_dependabot_entries` and
+  `tests/test_ci_hardening.py::_dependabot_directories` — MUST read the
+  plural `directories:` list") — both readers live in
+  `tests/test_workflow_pins.py` and the plural-list property is unchanged,
+  which the planted plural entry still shows. From `prepare-release-0-3-0`:
+  DEC-REL-011 ("`tests/test_workflow_hardening.py` is the sibling's alone:
+  this package reads it under `make pre-pr` for C-REL-4's no-pin property
+  and edits no line of it") — the attestations-input guard that package
+  placed in that module's last section lives in
+  `tests/test_workflow_posture.py`, and the merge-hazard sentence describes
+  a merge that has happened. Every one of those packages' `pytest -k`
+  citations resolves by function name after the moves, which is why the
+  records can be superseded without a word of them changing; the
+  supersession is recorded here and in the CHANGELOG entry so the next
+  reader of R-HCW-15 finds the module it names gone and this decision
+  saying why. Rejected: amending the shipped specs in place (the precedent
+  reserves that for an unmerged sibling, and these are merged); leaving the
+  stale records unnamed (a reader would take R-HCW-15 as a requirement this
+  package broke).
 
 ---
 
@@ -558,20 +699,26 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   the stage is the citation. (R-TSS-1, R-TSS-12, DEC-TSS-004)
   _Verified by:_ stage: `make test`
 
-- [ ] **AC-TSS-2:** the sorted AST set of `def test_*` names across
-  `tests/test_*.py` and the collected count are identical before and after
-  each split, recorded in `tasks.md`; every `pytest -k` selector in every
-  spec under `openspec/changes/` still resolves to a test function; no
-  module redeclares `write_spec`. (R-TSS-2, C-TSS-3, DEC-TSS-001)
+- [ ] **AC-TSS-2:** the sorted AST set of `def test_*` names over
+  `tests/test_*.py` excluding `tests/test_suite_shape.py`, and the
+  collected count over the same set, are identical to Milestone 0's after
+  each split and at each stage commit, recorded in `tasks.md`; every
+  `pytest -k` selector in every spec under `openspec/changes/` still
+  resolves to a test function; no module redeclares `write_spec`.
+  (R-TSS-2, C-TSS-3, DEC-TSS-001, DEC-TSS-015)
   _Verified by:_ `pytest -k "test_every_spec_test_citation_resolves_to_a_real_test or test_helpers_not_duplicated_inline"` · stage: `make test`
 
 - [ ] **AC-TSS-3:** `measure-coverage-once`'s guards run under their names
   from `tests/test_ci_makefile.py`, `tests/test_ci_workflow.py` and
-  `tests/test_coverage_checkers.py`, `harden-ci-workflows`' from the three
-  workflow modules, `select-zero-cost-guards`' graph-tool and
-  configuration guards from `tests/test_graph_tools.py` and
-  `tests/test_ci_workflow.py`, and none of those packages' files is in the
-  diff. (R-TSS-3, R-TSS-4, DEC-TSS-003, DEC-TSS-013)
+  `tests/test_coverage_checkers.py`, `harden-ci-workflows`' and
+  `pin-actions-by-sha`'s from the three workflow modules,
+  `select-zero-cost-guards`' graph-tool and configuration guards from
+  `tests/test_graph_tools.py` and `tests/test_ci_workflow.py`, and
+  `prepare-release-0-3-0`'s attestations guard from
+  `tests/test_workflow_posture.py`; none of those packages' files is in the
+  diff, and the eight records DEC-TSS-016 supersedes are named there and
+  in the CHANGELOG entry. (R-TSS-3, R-TSS-4, DEC-TSS-003, DEC-TSS-013,
+  DEC-TSS-016)
   _Verified by:_ `pytest -k "test_the_suite_runs_once_through_coverage_run or test_test_and_coverage_tools_read_the_one_report_scoped or test_every_hooks_ci_table_row_names_a_job_or_workflow or test_scoped_totals_sum_only_the_named_subtree or test_per_file_report_names_each_module_below_the_minimum or test_every_third_party_action_is_pinned_to_a_commit_sha_with_its_release_tag or test_every_job_in_every_workflow_has_a_timeout_inside_the_range or test_no_quoted_python_version_literal_outside_env_and_matrix or test_graph_diff_passes_when_clean or test_render_mermaid_matches_to_mermaid_byte_for_byte or test_t201_is_selected_with_exactly_the_cli_and_tools_exempt or test_lint_is_a_hard_gate"` · stage: `make test`
 
 - [ ] **AC-TSS-4:** the nested pytest of the ambient-coverage test names
@@ -601,22 +748,27 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-TSS-7:** every collected test carries exactly one tier, counted
-  across module-level and function-level marks, and each tier agrees with
-  the mechanical criterion in both directions over the whole tree — the
-  four converted tests among them, which the criterion keeps `e2e` because
-  one process start remains in each. The guards are written with this
-  change and run red on the unmarked tree; until they exist the stage is
-  the citation. (R-TSS-5, R-TSS-6, R-TSS-12, C-TSS-7, DEC-TSS-006,
-  DEC-TSS-007)
+  across module-level marks — single or list form — and function-level
+  marks, written as decorators or `pytestmark` entries and never through an
+  alias, and each tier agrees with the mechanical criterion in both
+  directions over the whole tree, fixture parameters resolved — the four
+  converted tests among them, which the criterion keeps `e2e` because one
+  process start remains in each. The guards are written with this change
+  and run red on the unmarked tree; until they exist the stage is the
+  citation. (R-TSS-5, R-TSS-6, R-TSS-12, C-TSS-7, DEC-TSS-005,
+  DEC-TSS-006, DEC-TSS-007)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-TSS-8 (non-success):** on planted module texts, the guards'
   helpers name an unmarked test, a test carrying two tiers, a `unit` test
   that calls `run_cli`, an `e2e` test that names no process start, a
-  `unit` test that names a tree constant, and a module over the bound; a
-  planted `fixtures`-rooted constant is not a tree signal. The test is
-  written with this change; until it exists the stage is the citation.
-  (R-TSS-6, R-TSS-12, DEC-TSS-007)
+  `unit` test that names a tree constant, a `unit` test that reads the
+  tree only through a fixture parameter, a tier written through an alias,
+  and a module over the bound; and do not name a `unit` test whose body
+  builds a `__file__`-rooted path under `fixtures`, nor a `fixtures`-rooted
+  constant, nor a `subprocess.CompletedProcess` return annotation. The
+  test is written with this change; until it exists the stage is the
+  citation. (R-TSS-6, R-TSS-12, DEC-TSS-007)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-TSS-9:** `python -m pytest -m unit` collects a non-empty
@@ -670,14 +822,15 @@ called in-process under `capsys` by `tests/test_cli_surface.py`.
   hash; the diff is read at review. (R-TSS-10, C-TSS-5, DEC-TSS-011)
   _Verified by:_ `pytest -k "test_common_verbs_do_not_crash_under_ascii_stdout_encoding or test_arbitrary_non_ascii_spec_content_survives_graph_mermaid_under_ascii_encoding or test_matcher_accuracy_tool_runs_headless_and_exits_zero or test_suite_survives_an_ambient_coverage_file or test_the_real_wheel_passes_the_gate or test_the_action_reports_each_fixtures_labelled_status or test_module_is_importable_without_the_rest_of_the_package or test_gate_script_is_runnable_as_a_script or test_read_only_verbs_leave_tree_byte_identical"` · stage: `make test`
 
-- [ ] **AC-TSS-15:** the Appendix A durations command, re-run on the
-  finished tree in the same container, is recorded in `tasks.md` beside
-  the before figure with the commit of each: the after total is at or
-  under the before total and at or under the plan's 200 s, none of the four
-  named tests is in the after table's twelve, and the four per-test
-  figures before and after are recorded from the `--durations=0`
-  selection. Read from the recorded output; no test times a suite.
-  (R-TSS-11, R-TSS-14, DEC-TSS-012)
+- [ ] **AC-TSS-15:** the Appendix A durations command, run back to back on
+  the tree before and after the loop conversion in the same container, is
+  recorded in `tasks.md` with the commit of each: each of the four named
+  tests' call durations from the `--durations=0` selection is lower after
+  than before, none of the four is in the after table's twelve, and both
+  totals are recorded with the spread of the three unchanged-tree readings
+  stated beside them. Read from the recorded output; no test times a
+  suite, and no criterion is placed on a total. (R-TSS-11, R-TSS-14,
+  DEC-TSS-012)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-TSS-16:** the rule inventory, the golden hashes, the public
@@ -720,4 +873,4 @@ spec.
 | Docs | `make docs-check` | AC-TSS-5 — every pointer re-pointed, the agent file within budget, every required document linked |
 | Self-check | `make validate` | AC-TSS-18 — this package, then the whole tree, validate clean; every `pytest -k` selector resolves |
 | Core | `make ci` | the suite, lint and the self-check together on the finished tree |
-| Full | `make pre-pr` | the whole ladder green after each pull request; the durations pair recorded after the third |
+| Full | `make pre-pr` | the whole ladder green at each of the three stage commits; the durations pair recorded with the third |
