@@ -7,6 +7,7 @@ import json
 import logging
 import subprocess
 import textwrap
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -100,11 +101,13 @@ def test_current_sha_is_not_invoked_when_no_witnesses_are_present(
     # the current sha is meaningless with zero witnesses to compare against,
     # so it must be skipped entirely, not just discarded (DEC-WM-008).
     calls: list[object] = []
-    original_run = subprocess.run
+    # Typed as any-arguments so the forwarded call matches: `subprocess.run` is
+    # overloaded, and no overload takes `object` arguments.
+    original_run: Callable[..., object] = subprocess.run
 
     def spy(*args: object, **kwargs: object) -> object:
         calls.append(args)
-        return original_run(*args, **kwargs)  # type: ignore[arg-type]
+        return original_run(*args, **kwargs)
 
     monkeypatch.setattr(detect.subprocess, "run", spy)
     prof = detect.profile(repo)
@@ -165,7 +168,7 @@ def _witness(**overrides: object) -> witness.Witness:
         "recorded_at": "2026-01-01T00:00:00Z",
     }
     fields.update(overrides)
-    return witness.Witness(**fields)  # type: ignore[arg-type]
+    return witness.Witness(**fields)  # type: ignore[arg-type, unused-ignore]
 
 
 @pytest.mark.unit

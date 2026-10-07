@@ -109,7 +109,8 @@ def _rows(root: Path) -> dict[str, Any]:
 
 def _finding(root: Path, name: str) -> str | None:
     tool = _tool()
-    return tool.finding(_rows(root)[name])
+    found: str | None = tool.finding(_rows(root)[name])
+    return found
 
 
 def _main(root: Path) -> int:

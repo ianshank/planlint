@@ -7,6 +7,7 @@ cross-cutting state belongs here.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -16,7 +17,7 @@ from tests.graft_support import CONTRACT, MAKEFILE, PYPROJECT
 
 
 @pytest.fixture(autouse=True)
-def _reset_version_cache() -> None:
+def _reset_version_cache() -> Iterator[None]:
     """Drop the memoized package-version lookup around every test.
 
     ``cli._package_version`` is cached so that one CLI run performs one

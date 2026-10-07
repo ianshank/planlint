@@ -145,6 +145,7 @@ class PackageRow:
     unrun_stages: tuple[str, ...]
 
     def headers_cell(self) -> str:
+        """Each ``spec.md``'s ``Status`` word, then the proposal's status line."""
         if not self.spec_headers:
             cell = "no spec.md"
         else:
@@ -154,6 +155,8 @@ class PackageRow:
         return cell
 
     def tasks_cell(self) -> str:
+        """Milestones ``[DONE]`` of declared, else task boxes ticked of all, else
+        "none recorded"."""
         if self.milestones_declared:
             return f"milestones {self.milestones_done}/{self.milestones_declared}"
         if self.boxes_declared:
@@ -322,6 +325,8 @@ def render(rows: Sequence[PackageRow]) -> tuple[str, int]:
 
 
 def main(argv: Sequence[str]) -> int:
+    """Print the report for ``--root`` (default: this repository) and return
+    its exit code: 0 no finding, 1 a finding, 2 could not run."""
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument(
         "--root", default=None, help="repository to report on (default: this repository)"

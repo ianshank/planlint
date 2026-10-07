@@ -16,7 +16,8 @@ targets CI uses — so a commit can never bypass CI and there is no second set o
 tool-version pins to drift from the dev extras:
 
 - `make lint` (ruff) across `openspec_graph/`, `tests/`, `tools/`
-- `make typecheck` (mypy) across `openspec_graph/`, `tools/`
+- `make typecheck` (mypy) across `openspec_graph/`, `tools/`, `tests/`, with
+  `tests/` under a per-code baseline in `[[tool.mypy.overrides]]`
 - `make security` (gitleaks or fallback)
 - `planlint validate` (self-dogfooding: the tool validates its own specs)
 - `make docs-check` (required docs present + linked from README)

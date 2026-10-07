@@ -331,6 +331,8 @@ def report(root: Path, run: Runner) -> int:
 
 
 def main(argv: Sequence[str], run: Runner = run_vulture) -> int:
+    """Run the report for ``--root`` (default: this repository) and return its
+    exit code: 0 nothing listed, 1 something listed, 2 could not run."""
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument(
         "--root", default=None, help="repository to report on (default: this repository)"

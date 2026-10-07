@@ -112,7 +112,7 @@ def _registration_problems(options: dict[str, object]) -> list[str]:
 
     The names are compared as a list, not a mapping, so a tier registered twice
     is named rather than collapsed into one entry."""
-    entries = [str(entry) for entry in options.get("markers", [])]  # type: ignore[attr-defined]
+    entries = [str(entry) for entry in options.get("markers", [])]  # type: ignore[attr-defined, unused-ignore]
     pairs = [entry.partition(":")[::2] for entry in entries]
     names = [name.strip() for name, _ in pairs]
     problems: list[str] = []
@@ -552,4 +552,5 @@ def test_a_mismarked_or_unmarked_planted_module_is_named(
         assert all(found == [] for found in reports.values()), reports
         return
     found = _report(root, check)
+    assert offender is not None, f"{check} names a planted case with no offender"
     assert any(offender in line for line in found), f"{check} did not name {offender}: {found}"

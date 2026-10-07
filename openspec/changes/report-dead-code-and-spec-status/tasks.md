@@ -1726,3 +1726,25 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
 
     The header stays `DRAFT`. Settling it is the maintainer's decision at
     merge, as #46 asks.
+
+  **Recorded (after #44 merged, 2026-10-07, on `8c45754` merged with `origin/main` at `570a9ed`):**
+  - *Why a merge.* #44 (`ratchet-test-types-and-docstrings`) was squash-merged to `main` as `570a9ed`. It brought `tests/` under mypy with exact per-code ceilings and put `D100`–`D103` over `openspec_graph/` and `tools/` under a per-file ratchet. This branch's code had never run under either. `origin/main` was merged in, rather than rebased, so the pull request's commits stay as reviewed. The one textual conflict was `CHANGELOG.md`'s `[Unreleased]`: both entries are kept, this package's `Added` first.
+  - *What the merged tree reported.*
+    - `make typecheck` printed "Success: no issues found in 111 source files".
+    - `make lint` found four public docstrings missing in this package's new code: `tools/dead_code.py` `main` (`D103`), `tools/spec_status.py` `PackageRow.headers_cell` and `PackageRow.tasks_cell` (`D102`) and `main` (`D103`).
+    - `tests/test_static_ratchets.py` failed two guards. `test_every_docstring_exemption_matches_its_ceiling` named those four as unlisted. `test_every_listed_mypy_code_matches_its_ceiling_on_both_platforms` named `no-any-return: 9 occurrences, above its ceiling of 8`.
+    - The ninth `no-any-return` is `tests/test_spec_status.py:112`, `_finding` returning the untyped `tool.finding(...)`. It was found by running `python -m mypy --config-file <pyproject.toml without the tests.* entry> --cache-dir /dev/null -O json`.
+  - *Fixed in the code, with no ceiling, exemption or waiver touched, as #44's R-TDR-4 and R-TDR-8 require.* The four definitions gain docstrings. `_finding` returns through an annotated local, the form `tests/support.py`'s `read_pyproject` uses. Afterwards:
+    - `make lint` prints "All checks passed!";
+    - `python -m pytest tests/test_static_ratchets.py tests/test_dead_code.py tests/test_spec_status.py -q -o addopts=""` gives 75 passed;
+    - `planlint --target . validate --fail-on ERROR` exits 0.
+  - *Both reports on the merged tree.* `python tools/dead_code.py` exits 1 and lists the same five symbols, with 0 stale whitelist entries. `python tools/spec_status.py` exits 1:
+
+    ```
+    ratchet-test-types-and-docstrings        spec DRAFT                           22/22     milestones 5/5   -           thresholds, validate        draft-but-complete
+    report-dead-code-and-spec-status         spec DRAFT                           22/22     milestones 6/6   Unreleased  thresholds, validate        draft-but-complete
+    52 package(s); 12 finding(s): 0 header-unrecognised, 1 headers-disagree, 11 draft-but-complete, 0 settled-but-empty
+    ```
+
+    #44's package joins the `draft-but-complete` worklist that `settle-package-status-headers` owns. Its CHANGELOG cell reads `-` because its bullet leads with `` **`ratchet-test-types-and-docstrings`: `` with a colon inside the bold. That is neither of the two shapes R-RDS-10 reads, and the CHANGELOG column enters no finding (DEC-RDS-007).
+  - *Gate, before the merge commit.* `make pre-pr` on the merged and fixed tree exited 0 in 287 s of wall time (`date +%s` before and after), ending `pre-pr: all enterprise gates passed`. The four scoped lines are unchanged: `openspec_graph/` 99.3 % (2276/2292) and 97.6 % (744/762), and `tools/` 96.4 % (1305/1354) and 94.3 % (434/460).
