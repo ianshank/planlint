@@ -232,6 +232,28 @@ u004_min_recall_pct = 90
 "github/codeql-action" = 3
 "pypa/gh-action-pypi-publish" = 1
 
+# The branch promotion model (adopt-branch-promotion-model): feature work
+# squashes into the integration branch, which promotes by merge commit to the
+# release-candidate branch, which promotes by merge commit to the production
+# branch -- the only branch a release tag may sit on. Read by
+# tools/check_promotion.py, the one place the topology is interpreted; nothing
+# under tools/ names a branch. The one literal copy GitHub forces on us is
+# ci.yml's `on.push.branches`, which tests/test_ci_workflow.py holds equal to
+# these three values.
+[tool.specgraph.promotion]
+integration_branch = "dev"
+candidate_branch = "qa"
+production_branch = "main"
+# A head branch under this prefix may promote straight to production (an
+# urgent fix); it is back-merged into the integration branch afterwards.
+hotfix_prefix = "hotfix/"
+# "false" until the integration and candidate branches exist on origin: until
+# then every pull request targets production from some other branch, and an
+# enforced route would fail every one of them. The route job still prints each
+# refusal as a WARN. Flipped to "true" in the same change that creates the
+# branches (adopt-branch-promotion-model, DEC-BPM-013); absent means "true".
+enforce_routes = "false"
+
 [project.optional-dependencies]
 # tomli backports stdlib tomllib (3.11+) for coverage.process_startup()'s
 # config-file parsing on the 3.10 leg of the CI matrix; coverage itself

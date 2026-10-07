@@ -8,7 +8,7 @@ added to catch. Three of these did exactly that until
 ```mermaid
 flowchart LR
     cfg["pyproject.toml<br/>fail_under, branch_fail_under<br/>tools_line/branch_fail_under"] --> gates
-    subgraph gates["tools/ — no third-party deps; the 7 gates are stdlib-only"]
+    subgraph gates["tools/ — no third-party deps; the 9 gates are stdlib-only"]
         direction TB
         cov["check_coverage_floor<br/>check_branch_coverage<br/>--scope sums one subtree"]
         sec["check_secrets<br/>gitleaks, else a real fallback"]
@@ -30,7 +30,7 @@ Three things this directory gets wrong if you are not watching:
   fails the build over it, and a governance tool that pins its own numbers
   argues against its own rule.
 - **No third-party dependencies, ever.** Shared helpers go in
-  [`_common.py`](_common.py). The seven gate scripts are additionally
+  [`_common.py`](_common.py). The nine gate scripts are additionally
   **stdlib-only** and run in a bare CI runner before anything is installed;
   the five generators and reports (`matcher_accuracy`, `render_mermaid`,
   `render_plugin_manifests`, `render_rule_catalog`, `stage_citations`) import

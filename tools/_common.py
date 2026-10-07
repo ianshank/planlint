@@ -179,6 +179,37 @@ def read_pyproject_int(pyproject: Path, section: str, key: str) -> int | None:
     return None
 
 
+def read_pyproject_str(pyproject: Path, section: str, key: str) -> str | None:
+    """Read one double-quoted string key out of one ``pyproject.toml`` table.
+
+    The string sibling of :func:`read_pyproject_int`, on the same
+    table-tracking loop and for the same reason: these gate scripts run on the
+    3.10 leg, where ``tomllib`` does not exist. Accepts exactly the shape this
+    repository writes -- ``key = "value"`` on one line, an optional trailing
+    comment -- and nothing richer: no escapes, no single quotes, no multi-line
+    strings. A value outside that shape is not read, so the caller's "absent"
+    path names the key instead of a mangled value going through.
+
+    Returns ``None`` when the file, the table or the key is absent, or the value
+    is empty. Callers treat that as a misconfiguration and fail loudly.
+    """
+    if not pyproject.exists():
+        return None
+    in_section = False
+    pattern = re.compile(rf'{re.escape(key)}\s*=\s*"([^"\\]*)"\s*(?:#.*)?$')
+    for line in pyproject.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]"):
+            in_section = stripped == section
+            continue
+        if not in_section:
+            continue
+        match = pattern.match(stripped)
+        if match:
+            return match.group(1) or None
+    return None
+
+
 def write_or_check(path: Path, expected: str, *, write: bool, label: str) -> int:
     """Regenerate ``path`` from ``expected``, or verify it already matches.
 

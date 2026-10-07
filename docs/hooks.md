@@ -79,7 +79,10 @@ row below still runs every tier.
 | `graph-diff` | PR only | `tools/diff_spec_graph.py` base→head (AC-CH-5/6) |
 | `security` | push + PR | gitleaks + no-hardcoded-thresholds (hard) |
 | `docs` | push + PR | `make docs-check` (hard) |
-| `release` (separate workflow) | `v*` tag | `make pre-pr`, then a clean-venv smoke test of the `planlint` console script, then trusted publishing to PyPI, which uploads PEP 740 attestations for both files |
+| `promotion` | push + PR | `tools/check_promotion.py route`: a PR into the release-candidate branch must come from the integration branch, one into production from the candidate or a hotfix branch, never from a fork; emits whether the run needs the release tier (hard) |
+| `release-tier` | PR into / push to the candidate or production branch | `make pre-pr`, sdist + wheel build, `tools/check_wheel_metadata.py`, and `tools/smoke_wheel.py` — the release workflow's own smoke tool — plus the installed CLI against the `passing` and `failing` action fixtures (hard) |
+| `ci-ok` | push + PR | `tools/check_promotion.py aggregate` over every other job: the **single required status check** for the branch rulesets; fails on any failed, cancelled or wrongly skipped job (hard) |
+| `release` (separate workflow) | `v*` tag | `tools/check_promotion.py tag-ancestry` (the tag must be on the production branch), `make pre-pr`, then `tools/smoke_wheel.py` in a clean venv, then trusted publishing to PyPI, which uploads PEP 740 attestations for both files |
 
 The workflow holds itself to the posture the gates inside it enforce
 (`harden-ci-workflows`; `tests/test_workflow_pins.py`, `tests/test_workflow_posture.py`
@@ -97,7 +100,7 @@ commit listing on a pull request). Every job carries a `timeout-minutes`
 inside the range `[tool.specgraph] ci_job_timeout_minutes_min..max` in
 `pyproject.toml`, so a hung step costs minutes rather than GitHub's six-hour
 default. A `concurrency` group cancels a pull-request run when a newer push to
-the same branch arrives; a push to `main` keys on its SHA, so it is neither
+the same branch arrives; a push to a promotion branch keys on its SHA, so it is neither
 cancelled nor left pending to be superseded. The single-interpreter Python
 version is `env: PYTHON_DEFAULT` at the top of each workflow and nowhere else
 (the `PYTHON_DEFAULT` cells above); a new single-version job reads
@@ -251,6 +254,74 @@ not?). `evaluate_tree()` stays two parallel blocks rather than a registry
 for two instances; revisit that only if a third whole-tree rule arrives
 (`DEC-AD-003`).
 
+## Branching and promotion
+
+`adopt-branch-promotion-model`. Three long-lived branches, named in
+`pyproject.toml` `[tool.specgraph.promotion]` and nowhere else that a tool
+reads (`ci.yml`'s `on.push.branches` is the one literal copy, held equal to the
+table by `test_ci_push_branches_match_the_promotion_config`):
+
+```
+feature/* --squash--> dev --merge commit--> qa --merge commit--> main --tag vX.Y.Z--> PyPI
+                       ^                                          |
+                       +------- sync/main-into-dev (merge) -------+   after each release
+```
+
+| Branch | Holds | Pull requests from | Merge method | CI |
+|---|---|---|---|---|
+| dev (integration) | the next release, integrating | any branch (`feature/*`, `dependabot/*`, `sync/*`) | squash; a merge commit for `sync/*` | every job above; `release-tier` skipped |
+| qa (release candidate) | exactly the bits that will ship | `dev` only | merge commit | every job, `release-tier` included |
+| main (production) | released code only | `qa`, or `hotfix/*` | merge commit | every job, `release-tier` included |
+
+- **`ci-ok` is the only required status check.** Every other job is in its
+  `needs`, and `tools/check_promotion.py aggregate` fails it on any failed,
+  cancelled or wrongly skipped job. A matrix job's check names change with its
+  matrix and a skipped required check reads as passing, so neither is required
+  by name.
+- **The route is enforced in CI, not only by convention.** The `promotion` job
+  fails a pull request into `qa` whose head is not `dev`, one into `main` whose
+  head is neither `qa` nor `hotfix/*`, and any head from a fork into either.
+  Until `dev` and `qa` exist, `[tool.specgraph.promotion] enforce_routes` is
+  `"false"` and a refused route is printed as a `WARN` instead of failing; the
+  change that creates the two branches sets it to `"true"`.
+  Known limit: retargeting an open pull request's base does not re-run CI (the
+  `edited` event is not a trigger, because an all-skipped run would report a
+  passing `ci-ok`); push a commit or re-run the workflow after retargeting.
+- **Promotions are merge commits, never squashes.** A squash gives the target
+  a commit the source does not have, so the branches diverge on every release
+  and the next promotion conflicts. `graph-diff` on a promotion pull request
+  therefore diffs the whole release since the previous promotion, not one
+  feature (an accepted widening of DEC-CH-001).
+- **A release is cut from a release-prep pull request on `dev`**: the version
+  bump, the changelog cut, and every own-action ref flip that the 0.3.0 runbook
+  called the post-tag commit. It then promotes `dev → qa → main` unchanged, so
+  the `release-tier` job has already run the release workflow's gate and smoke
+  test on the exact commit. Tag the `main` merge commit; the release workflow's
+  `gate` refuses a tag on any commit not reachable from `main`. **Nothing is
+  committed to `main` after the tag**; if publishing fails, fix forward with
+  the next patch version.
+- **After every release** open `sync/main-into-dev`, cut from `dev`, and merge
+  `main` into it with a merge commit. `qa` is never back-merged; it catches up
+  at the next promotion.
+- **Hotfix:** `hotfix/*` from `main`, pull request into `main` (the release
+  tier runs because the base is `main`), tag, then the same `sync/` back-merge.
+  Dependabot security updates always target the default branch (`main`) and
+  the route refuses them there: re-open the change as a `hotfix/*` branch.
+- **Rollback:** PyPI versions are immutable. Yank the release, revert the
+  promotion merge with `git revert -m 1` through a pull request, and release
+  the next patch version. Never force-push `main`.
+- **Tags and back-merge pull requests are made by a person or a personal or
+  App token, never `GITHUB_TOKEN`**: events it causes do not start workflows,
+  so its pull request would never report `ci-ok` and its tag would never run
+  `release.yml`.
+- **Owner-only settings, outside this tree:** a ruleset per branch (pull
+  request required, `ci-ok` required, the merge methods above, no force-push
+  or deletion, the owner as the only bypass), a tag ruleset on `v*` (owner
+  creates; no update or delete), and the `pypi` environment limited to `v*`
+  tags. `main` stays the default branch, because the plugin marketplace
+  install, the changelog URL and adopters all resolve it and it holds
+  released code.
+
 ## Releasing
 
 The `.claude-plugin/` manifests carry a `version`, generated from
@@ -271,7 +342,7 @@ to bump rather than three to keep in step by hand.
 The alternative — omitting `version` from the manifests so Claude Code falls
 back to the resolved commit sha — was rejected: the manifests are pinned to the
 package version by `AC-SD-7`, and releases here are already tag-driven, so a
-sha-tracking plugin would refresh on every unrelated commit to `main` while the
+sha-tracking plugin would refresh on every unrelated commit to the default branch while the
 distribution it invokes stayed put.
 
 The release checklist, in order (`prepare-release-0-3-0`): edit `__version__`
@@ -289,6 +360,9 @@ ref in the adopter corpus; then the hand edits no test names -- the SKILL.md
 `[Unreleased]` body moves verbatim under `## [X.Y.Z] — <date>`, the date being
 the day the tag is pushed) and the runbook in `docs/distribution-plan.md` §3.
 A future bump is one literal, one regeneration and one suite run.
+From the release after 0.3.0, that whole list -- including the
+runbook's post-tag ref flip -- lands as one release-prep pull request on
+`dev` and promotes as described under *Branching and promotion* above.
 
 ## Adding a new pure derived-output module
 

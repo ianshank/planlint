@@ -343,6 +343,36 @@ def test_read_json_reports_a_missing_file_by_name(tmp_path: Path) -> None:
         common.read_json(missing)
     assert missing.name in str(excinfo.value)
 
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "line,expected",
+    [
+        ('key = "dev"', "dev"),
+        ('key="hotfix/"   # trailing comment', "hotfix/"),
+        ('key = ""', None),
+        ("key = 'single'", None),
+        ('key = "esc\\aped"', None),
+        ("key = 7", None),
+        ('keyed = "other"', None),
+    ],
+)
+def test_read_pyproject_str_reads_exactly_the_shape_this_repo_writes(
+    tmp_path: Path, line: str, expected: str | None
+) -> None:
+    """adopt-branch-promotion-model: the string reader behind the promotion table.
+
+    Section-aware like ``read_pyproject_int``: the same key under another table
+    is not read, and a value outside the one supported shape is ``None`` -- the
+    caller's misconfiguration path -- never a mangled string.
+    """
+    common = load_tool("common_read_pyproject_str", "_common.py")
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(f'[tool.a]\nkey = "decoy"\n\n[tool.b]\n{line}\n', encoding="utf-8")
+    assert common.read_pyproject_str(pyproject, "[tool.b]", "key") == expected
+    assert common.read_pyproject_str(pyproject, "[tool.a]", "key") == "decoy"
+    assert common.read_pyproject_str(pyproject, "[tool.c]", "key") is None
+    assert common.read_pyproject_str(tmp_path / "absent.toml", "[tool.b]", "key") is None
+
 # --- the executable contract, once rather than per script --------------------
 
 
@@ -356,11 +386,13 @@ def test_read_json_reports_a_missing_file_by_name(tmp_path: Path) -> None:
         "render_mermaid.py",
         "check_docs.py",
         "check_no_hardcoded_thresholds.py",
+        "check_promotion.py",
         "check_secrets.py",
         "check_wheel_metadata.py",
         "matcher_accuracy.py",
         "render_plugin_manifests.py",
         "render_rule_catalog.py",
+        "smoke_wheel.py",
         "stage_citations.py",
     ],
 )

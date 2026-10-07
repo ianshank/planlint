@@ -5,6 +5,32 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — the `dev → qa → main` branch promotion model
+
+- **`adopt-branch-promotion-model`.** Three long-lived branches: `dev`
+  (integration, squash merges), `qa` (release candidate) and `main`
+  (production only), promoted by merge commits, with release tags on `main`
+  merge commits only. The names live in `pyproject.toml`
+  `[tool.specgraph.promotion]`; `tools/_common.py` gains `read_pyproject_str`
+  to read them on the 3.10 leg.
+- **`tools/check_promotion.py`**, a stdlib-only gate: `route` refuses a pull
+  request into `qa` from anything but `dev`, and into `main` from anything but
+  `qa` or `hotfix/*`, and from any fork into either, and decides whether the run
+  needs the release tier (a refusal is a `WARN` while `enforce_routes` is
+  `"false"`, until `dev` and `qa` exist); `aggregate` is the new **`ci-ok`** job, the single
+  required status check, failing on any failed, cancelled or wrongly skipped job;
+  `tag-ancestry` makes the release workflow refuse a tag on a commit not
+  reachable from `main`.
+- **`tools/smoke_wheel.py`**: the clean-venv console-script smoke test, now one
+  tool run by both the release workflow's `build` job and a new `release-tier`
+  CI job on every pull request and push into `qa` or `main`, which also runs
+  `make pre-pr` and the installed CLI against the `passing` and `failing` action
+  fixtures. The release tier now runs before a tag exists, not only after.
+- CI `push` triggers become `[main, qa, dev]`; the unused `master` is dropped.
+  The release workflow's `publish` job restates `contents: read`, which its own
+  `permissions:` block had replaced. The process, back-merge, hotfix and rollback
+  steps are in `docs/hooks.md` under *Branching and promotion*.
+
 ### Changed — the test suite split by concern (M2)
 
 - **`shape-the-test-suite`.** Every test module now sits at or under 700

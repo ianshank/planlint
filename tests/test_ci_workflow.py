@@ -390,3 +390,158 @@ def test_every_action_fixture_has_a_contract_leg() -> None:
         f"fixtures without a contract leg: {sorted(on_disk - declared)}; "
         f"legs without a fixture: {sorted(declared - on_disk)}"
     )
+
+# --- adopt-branch-promotion-model: the promotion jobs, as the workflow states them --
+
+#: The aggregator job, and the flags it reads its conditional jobs from.
+_AGGREGATOR = "ci-ok"
+_CONDITION_FLAGS = ("--pull-request-only", "--release-tier-only")
+_PROMOTION_ROLES = ("integration_branch", "candidate_branch", "production_branch")
+
+
+def _push_branches(workflow_text: str) -> list[str]:
+    """The flow list under ``on.push.branches``, code lines only."""
+    code = "\n".join(line.split("#", 1)[0].rstrip() for line in workflow_text.splitlines())
+    match = re.search(r"^on:\n(?:[ \t]+.*\n)*?\s+push:\n\s+branches:\s*\[([^\]]*)\]", code, re.MULTILINE)
+    return [name.strip().strip("'\"") for name in match.group(1).split(",")] if match else []
+
+
+def _block_list(job_body: str, key: str) -> list[str]:
+    """A job-level block list (``key:`` then ``- item`` lines), code lines only."""
+    items: list[str] = []
+    collecting = False
+    for raw in job_body.splitlines():
+        line = raw.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        if line == f"    {key}:":
+            collecting = True
+            continue
+        if collecting:
+            stripped = line.strip()
+            if line.startswith("      ") and stripped.startswith("- "):
+                items.append(stripped[2:].strip())
+                continue
+            break
+    return items
+
+
+def _jobs_missing_from_aggregator(workflow_text: str) -> list[str]:
+    """Every job the aggregator does not list in ``needs``; ``[]`` when it gates them all."""
+    blocks = _ci_job_blocks(workflow_text)
+    needed = set(_block_list(blocks.get(_AGGREGATOR, ""), "needs"))
+    return sorted(set(blocks) - needed - {_AGGREGATOR})
+
+
+def _conditional_jobs(workflow_text: str) -> dict[str, str]:
+    """Job -> its job-level ``if:``, for every job but the aggregator."""
+    found: dict[str, str] = {}
+    for job, body in _ci_job_blocks(workflow_text).items():
+        for raw in body.splitlines():
+            line = raw.split("#", 1)[0].rstrip()
+            if line.startswith("    if:") and job != _AGGREGATOR:
+                found[job] = line.partition(":")[2].strip()
+    return found
+
+
+@pytest.mark.integration
+def test_ci_push_branches_match_the_promotion_config() -> None:
+    """The one literal copy of the topology equals the configured roles.
+
+    GitHub reads ``on.push.branches`` before any step runs, so it cannot read
+    ``[tool.specgraph.promotion]``; this holds the two together. Read here
+    with a structural TOML parser, independently of the tool's own line
+    scanner, so a reader bug in either cannot make both agree on a wrong value.
+    """
+    promotion = read_pyproject()["tool"]["specgraph"]["promotion"]
+    configured = {promotion[role] for role in _PROMOTION_ROLES}
+    pushed = _push_branches(_ci_workflow_text())
+    assert pushed, "parsed no on.push.branches from ci.yml -- the reader, not the list, is broken"
+    assert set(pushed) == configured and len(pushed) == len(configured), (
+        f"ci.yml pushes run on {pushed}; [tool.specgraph.promotion] names {sorted(configured)}"
+    )
+
+
+@pytest.mark.integration
+def test_ci_ok_needs_every_other_ci_job() -> None:
+    """The single required check gates every job, including one added later.
+
+    A job left out of ``needs`` would run, could fail, and would still let a
+    pull request merge -- the aggregator is the only check the rulesets
+    require by name.
+    """
+    blocks = _ci_job_blocks(_ci_workflow_text())
+    assert _AGGREGATOR in blocks, f"ci.yml defines no {_AGGREGATOR} job"
+    body = blocks[_AGGREGATOR]
+    assert re.search(r"^    if: \$\{\{ always\(\) \}\}$", body, re.MULTILINE), (
+        f"{_AGGREGATOR} must run always(): a skipped required check reads as passing"
+    )
+    assert "tools/check_promotion.py aggregate" in body
+    assert "toJSON(needs)" in body, f"{_AGGREGATOR} must read every needed job's result"
+    assert _jobs_missing_from_aggregator(_ci_workflow_text()) == [], (
+        f"jobs not gated by {_AGGREGATOR}: {_jobs_missing_from_aggregator(_ci_workflow_text())}"
+    )
+
+
+@pytest.mark.unit
+def test_a_job_missing_from_the_aggregator_is_named() -> None:
+    """Non-success for the guard above: a job outside ``needs`` is reported by name."""
+    text = textwrap.dedent(
+        """\
+        jobs:
+          lint:
+            runs-on: ubuntu-latest
+          late:
+            runs-on: ubuntu-latest
+          ci-ok:
+            needs:
+              - lint  # a trailing comment is not a job
+            runs-on: ubuntu-latest
+        """
+    )
+    assert _jobs_missing_from_aggregator(text) == ["late"]
+
+
+@pytest.mark.integration
+def test_every_conditional_ci_job_is_declared_to_the_aggregator() -> None:
+    """A job with an ``if:`` may be skipped, so the aggregator must know when.
+
+    Undeclared, a legitimately skipped job fails every run; declared under the
+    wrong condition, a job that should have run could be skipped silently.
+    The release tier is keyed to the promotion job's output, so a change to the
+    route decision reaches it in one place.
+    """
+    text = _ci_workflow_text()
+    body = _ci_job_blocks(text)[_AGGREGATOR]
+    declared = {
+        flag: set(re.findall(rf"{re.escape(flag)}\s+([\w-]+)", body)) for flag in _CONDITION_FLAGS
+    }
+    conditional = _conditional_jobs(text)
+    assert conditional, "ci.yml has no conditional job; this guard would be vacuous"
+    for job, condition in conditional.items():
+        if "github.event_name == 'pull_request'" in condition:
+            assert job in declared["--pull-request-only"], f"{job} skips off pull requests undeclared"
+        elif "needs.promotion.outputs.release-tier" in condition:
+            assert job in declared["--release-tier-only"], f"{job} skips off the release tier undeclared"
+        else:
+            pytest.fail(f"{job} has a condition the aggregator cannot model: {condition}")
+    stray = (declared["--pull-request-only"] | declared["--release-tier-only"]) - set(conditional)
+    assert not stray, f"declared conditional but unconditional in ci.yml: {sorted(stray)}"
+
+
+@pytest.mark.integration
+def test_release_and_ci_share_one_smoke_tool() -> None:
+    """The release tier is the release: one smoke definition, two callers.
+
+    The candidate's ``release-tier`` job and the release workflow's ``build``
+    job run the same tool, so a smoke check edited in one place is edited for
+    both -- the drift a copied shell block would invite.
+    """
+    ci_tier = _ci_job_blocks(_ci_workflow_text()).get("release-tier", "")
+    release_build = workflow_job_blocks(
+        (REPO_ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    ).get("build", "")
+    for label, body in (("ci.yml release-tier", ci_tier), ("release.yml build", release_build)):
+        assert "python tools/smoke_wheel.py dist" in body, f"{label} does not run the shared smoke tool"
+    assert "make pre-pr" in ci_tier, "the release tier must run the full ladder the release gate runs"
+    assert "needs: promotion" in ci_tier, "the release tier must take its decision from the route job"

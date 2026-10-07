@@ -54,7 +54,11 @@ def test_release_workflow_is_gated_and_uses_trusted_publishing() -> None:
     assert re.search(r"^\s*needs:\s*gate\s*$", build, re.MULTILINE), (
         "the build job must depend on the gate job, not run beside it"
     )
-    assert "python -m venv" in build, (
+    # The clean-venv smoke test lives in one tool both workflows call
+    # (adopt-branch-promotion-model); the tool's own venv creation is pinned
+    # by tests/test_smoke_wheel.py, and ci.yml's use of the same tool by
+    # test_release_and_ci_share_one_smoke_tool.
+    assert "tools/smoke_wheel.py" in build, (
         "the clean-environment console-script smoke test is the wheel's only check"
     )
     assert re.search(r"^\s*needs:\s*build\s*$", publish, re.MULTILINE), (
@@ -71,6 +75,31 @@ def test_release_workflow_is_gated_and_uses_trusted_publishing() -> None:
     assert re.search(r"^permissions:\n\s+contents:\s*read\s*$", text, re.MULTILINE), (
         "the workflow's default permissions must be read-only"
     )
+
+@pytest.mark.integration
+def test_release_gate_checks_tag_ancestry_against_production() -> None:
+    """A tag on a commit that never reached production must stop before the build.
+
+    Pinned in the ``gate`` job, the first link of the chain, so nothing is built
+    -- let alone published -- from a commit that skipped the release-candidate
+    tier. The step is conditional on a tag so a ``workflow_dispatch`` dry run
+    on a branch still builds; and it names no branch, because the production
+    branch is read from ``pyproject.toml`` by the tool.
+    """
+    text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
+    gate = "\n".join(code for _, code in _code_lines(workflow_job_blocks(text)["gate"]))
+    assert "tools/check_promotion.py tag-ancestry" in gate, (
+        "the release gate no longer checks that the tag is on the production branch"
+    )
+    step = gate.split("tools/check_promotion.py tag-ancestry", 1)[0].rsplit("- name:", 1)[1]
+    assert "github.ref_type == 'tag'" in step, (
+        "the ancestry check must run on tag pushes only, so a dispatch dry run still builds"
+    )
+    assert gate.index("check_promotion.py tag-ancestry") < gate.index("make pre-pr"), (
+        "the ancestry check must run before the slow gate, not after it"
+    )
+    for branch in ("origin/main", "--branch"):
+        assert branch not in gate, f"the release gate names a branch ({branch!r}); read it from config"
 
 @pytest.mark.integration
 def test_every_workflow_is_scanned_by_the_threshold_guard() -> None:

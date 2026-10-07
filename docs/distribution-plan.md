@@ -176,6 +176,15 @@ sitting will slip, the option is one follow-up commit on `main` that points
 the README's `git+` line at the merge SHA — a later commit can name the merge
 commit — and the tag then goes on that commit.
 
+**After 0.3.0 — the promotion model.** This runbook is the 0.3.0 release, run
+on trunk before `dev` and `qa` exist (`adopt-branch-promotion-model`). From
+the next release on, steps (1), (4)'s changelog date and (8) move into one
+release-prep pull request on `dev`, the release promotes `dev → qa → main` by
+merge commits, steps (3)–(7) run against the `main` merge commit, and nothing
+is committed to `main` after the tag. The release workflow's `gate` refuses a
+tag not reachable from `main`. The full procedure, the back-merge, hotfixes
+and rollback are in `docs/hooks.md` under *Branching and promotion*.
+
 **First foreign CI adopter (after the tag, or on the SHA until then).** Copy
 `templates/spec-gate.yml` into `ianshank/Agents` at `fail-on: ERROR`. A live
 scan of that clone at this writing is exit 0 with four G009 WARNs — keep

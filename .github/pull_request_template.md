@@ -22,6 +22,15 @@ make pre-pr
 - [ ] Reproduced the defect **before** the fix, and showed the same check passing after (for a fix)
 - [ ] New or changed behaviour has a test that **fails without the change**
 
+## Branch
+
+<!-- The promotion model (docs/hooks.md, "Branching and promotion"). The
+     `promotion` CI job refuses any other route, so pick the base before you
+     open the pull request rather than after: retargeting does not re-run CI. -->
+
+- [ ] Base is `dev` for a feature, fix or `sync/main-into-dev` back-merge; `qa` only for a `dev` promotion; `main` only for a `qa` promotion or a `hotfix/*` branch
+- [ ] A promotion or back-merge is merged with a **merge commit**, never squashed
+
 ## Scope
 
 - [ ] Behaviour change is covered by an OpenSpec change package under `openspec/changes/`, and its `spec.md` — not only its `proposal.md` — matches what shipped

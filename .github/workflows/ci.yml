@@ -1,8 +1,13 @@
 name: CI
 
+# The three long-lived branches of the promotion model
+# (adopt-branch-promotion-model): integration, release candidate, production.
+# Their names live in pyproject.toml [tool.specgraph.promotion]; GitHub reads
+# this list before any step runs, so it is the one literal copy, held equal to
+# that table by tests/test_ci_workflow.py.
 on:
   push:
-    branches: [main, master]
+    branches: [main, qa, dev]
   pull_request:
 
 # Every job runs with a read-only token unless its own block says otherwise;
@@ -13,7 +18,7 @@ permissions:
 
 # A re-push to a pull request supersedes the run it replaces, so pull
 # requests group by ref and cancel in progress. Everything else -- a push to
-# main above all -- groups by SHA: in a shared group GitHub keeps the
+# a promotion branch above all -- groups by SHA: in a shared group GitHub keeps the
 # in-progress run but drops a *pending* one when the next push queues, and a
 # merge commit could end with no run at all.
 concurrency:
@@ -416,3 +421,123 @@ jobs:
           python-version: ${{ env.PYTHON_DEFAULT }}
       - run: pip install -e ".[dev]"
       - run: make docs-check
+
+  promotion:
+    # The branch promotion model, decided once per run by
+    # tools/check_promotion.py from pyproject.toml [tool.specgraph.promotion]:
+    # may this pull request's head target its base, and does this run need the
+    # release tier? No branch is named here. Always runs, so it can never be
+    # the skipped job that reads as a pass.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      release-tier: ${{ steps.route.outputs.release-tier }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_DEFAULT }}
+
+      # Every value arrives through the environment, never interpolated into
+      # the script: a head branch name is chosen by whoever opened the pull
+      # request.
+      - id: route
+        name: Check the promotion route and choose the tier (hard gate)
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+          REF: ${{ github.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: >-
+          python tools/check_promotion.py route
+          --event "$EVENT" --base "$BASE_REF" --head "$HEAD_REF" --ref "$REF"
+          --head-repo "$HEAD_REPO" --base-repo "$BASE_REPO"
+
+  release-tier:
+    # The release workflow's gate and wheel smoke test, run BEFORE a tag rather
+    # than after one: on every pull request and push into the release-candidate
+    # or production branch, as the promotion job decides. The smoke test is the
+    # same tool release.yml's build job runs, so a candidate that passed here is
+    # the artifact the release will publish. The installed console script is
+    # also run against two labelled fixtures, so it is shown to fail a failing
+    # tree, not merely to start.
+    needs: promotion
+    if: needs.promotion.outputs.release-tier == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_DEFAULT }}
+
+      - name: Install (with dev extras)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Full enterprise gate (hard gate)
+        run: make pre-pr
+
+      - name: Build sdist and wheel
+        run: python -m build --outdir dist
+
+      - name: Confirm the wheel carries its declared licence
+        run: python tools/check_wheel_metadata.py dist
+
+      - name: Smoke-test the console script in a clean environment (hard gate)
+        run: >-
+          python tools/smoke_wheel.py dist
+          --expect tests/fixtures/action/passing=0
+          --expect tests/fixtures/action/failing=1
+
+  ci-ok:
+    # The single required status check for the branch rulesets. GitHub counts
+    # a skipped required check as passing, and a matrix job's check names
+    # change with its matrix, so no other job is required by name: this one
+    # runs always and fails unless every job in `needs` succeeded. A job may be
+    # skipped only when the condition declared for it below was false on this
+    # run. tests/test_ci_workflow.py holds `needs` equal to every other job in
+    # this file, so a job added later cannot escape the gate.
+    if: ${{ always() }}
+    needs:
+      - test
+      - test-windows
+      - encoding-stress
+      - self-validate
+      - packaging
+      - graph-diff
+      - action-contract
+      - security
+      - docs
+      - promotion
+      - release-tier
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ env.PYTHON_DEFAULT }}
+
+      - name: Every job green, or skipped by its own condition (hard gate)
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          EVENT: ${{ github.event_name }}
+          RELEASE_TIER: ${{ needs.promotion.outputs.release-tier }}
+        run: >-
+          printf '%s' "$NEEDS" | python tools/check_promotion.py aggregate --needs -
+          --event "$EVENT" --release-tier "$RELEASE_TIER"
+          --pull-request-only graph-diff
+          --release-tier-only release-tier
