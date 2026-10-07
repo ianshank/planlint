@@ -992,7 +992,11 @@ collected count; the red runs are recorded here and never committed.
     deselected)` and `-m "not unit"` `916/1647 (731 deselected)`; `python -m
     pytest -m unit -q -p no:cacheprovider -o addopts=""` gives `731 passed,
     916 deselected in 13.06s`, wall 13.5 s. Routing guards: no offender.
-    `tests/AGENTS.md`: 59 lines.
+    `tests/AGENTS.md`: 59 lines. A cwd-relative read (`Path("pyproject.toml")`)
+    is outside the criterion; none exists, and from a scratch directory
+    `PYTHONPATH=<checkout> python -m pytest <checkout>/tests -m unit -q -p
+    no:cacheprovider -o addopts=""` gives `731 passed, 916 deselected in
+    14.21s`.
   - *For the plan's M2 row and §7 table.* The four loops: 3.55 → 0.55 s,
     1.45–1.52 → 0.50–0.59 s per case, 3.18 → 0.55 s and 1.53 → 0.56 s. The
     totals were 161.17 s before and 148.80 s after, beside the 149.98–157.68 s
