@@ -1,0 +1,570 @@
+# Tasks: shape-the-test-suite
+
+Measured at `731479c` (`claude/m2-measure-cheaper`, the head carrying
+`measure-coverage-once`'s Milestones 1–4), 2026-10-07. Every line number
+below is re-checked against the branch head before the milestone that uses
+it; a sibling package landing first may move a line without moving the fact.
+Every number here names the command that produced it. At `731479c`: the gate
+(`planlint --target . validate --fail-on ERROR`) exits 0 before the first
+write under `openspec/` (50 specs, 0 error / 0 warn / 0 info); `wc -l
+tests/test_*.py | sort -n | tail -8` reads `test_graft_rules.py` 684,
+`test_action_contract.py` 700, `test_skill_contract.py` 821,
+`test_agent_artifacts.py` 836, `test_gate_scripts.py` 839,
+`test_workflow_hardening.py` 1237, `test_ci_hardening.py` 1378, 19712 total,
+over the 45 modules `ls tests/test_*.py | wc -l` counts; `grep -c "def
+test_"` reads 60, 47, 52, 28, 38 and 25 for `test_ci_hardening`,
+`test_workflow_hardening`, `test_gate_scripts`, `test_agent_artifacts`,
+`test_skill_contract` and `test_action_contract`; `grep -n "^# --- "
+tests/test_ci_hardening.py` finds seams at lines 40, 100, 231, 395, 452,
+512, 530, 662, 766, 1133, 1195 and 1261; `grep -rn "pytest.mark\." tests/ |
+cut -d: -f3 | sort | uniq -c` lists only `parametrize` and `skipif` forms;
+`grep -n "markers\|strict" pyproject.toml` matches only `[tool.mypy]`
+(lines 296, 298, 303, 306) and `[tool.pytest.ini_options]` at line 82 holds
+`testpaths = ["tests"]` and `addopts = "-q"`; `grep -ln "subprocess.run"
+tests/test_*.py` lists 16 modules and `grep -ln '"openspec_graph.cli"'
+tests/test_*.py` two (`test_decomposition.py:108` with `--target`,
+`test_skill_contract.py:657` without); `grep -L "from tests.support\|from
+tests import support\|import tests.support" tests/test_*.py` lists 15
+modules; `wc -l tests/AGENTS.md` reads 51 against `MAX_NESTED_LINES = 60`
+(`tests/test_agent_artifacts.py:702`). The Appendix A durations command
+(`python -m pytest tests/ -p no:cacheprovider -q --durations=12 -o
+addopts=""`) reports **1602 passed in 149.98 s** on this four-core container
+(load average 0.02 at the end of the run); the twelve slowest, call phase:
+`test_read_only_verbs_leave_tree_byte_identical` 6.71 s,
+`test_projections_are_byte_stable_across_runs` 3.54 s,
+`test_sarif_returns_the_same_exit_code_as_the_text_run` 2.92 s,
+`test_suite_survives_an_ambient_coverage_file` 1.95 s,
+`test_the_real_wheel_passes_the_gate` 1.94 s,
+`test_common_verbs_do_not_crash_under_ascii_stdout_encoding` 1.82 s,
+`test_annotation_paths_resolve_from_the_repository_root` 1.72 s,
+`test_the_action_reports_each_fixtures_labelled_status[passing]` 1.65 s,
+`test_a_nested_target_is_scanned_at_its_own_root` 1.63 s,
+`test_a_failing_run_populates_the_whole_evidence_bundle` 1.55 s,
+`test_the_action_reports_each_fixtures_labelled_status[failing]` 1.54 s,
+`test_the_evidence_directory_is_outside_the_scanned_tree` 1.54 s. The same
+command read 1498 passed in 235 s at `9c4b6e9` (the plan) and 1578 passed in
+212.5 s and 210.46 s at `5246931` (`measure-coverage-once`'s two sessions):
+the plan's 200 s ceiling is already met at this head, by container variance
+and not by any package's saving (DEC-TSS-012). Order (DEC-TSS-014): measure,
+then the splits as pure moves with the flatness and bound guards seen red
+first, then the pointers, then the tiers with their guards seen red, then the
+routing with its guards seen red, then the loops with their guard seen red
+and the durations pair bracketing exactly that change, then the records.
+Milestones 0–3 land in one pull request, 4–5 in a second, 6–7 in a third; the
+red runs are recorded here and never committed.
+
+## Milestone 0 — Grounding pass at the branch head
+
+- Re-run the gate and record its exit code before the first edit:
+  `planlint --target . validate --fail-on ERROR`.
+- Re-take the measurements in the header and record what moved:
+  `git rev-parse --short HEAD`; `wc -l tests/test_*.py | sort -n | tail -8`;
+  `grep -c "def test_"` over the six modules; `grep -n "^# --- "` over the
+  five over-bound modules; the marker, `pyproject.toml`, `subprocess.run`,
+  `"openspec_graph.cli"`, `"spec.md"` and helper-less greps; `wc -l
+  tests/AGENTS.md`.
+- Record the two baselines every split is checked against, as the commands
+  Milestones 1–3 re-run: the sorted test-name set,
+  `python - <<'PY'` over `ast` collecting every `FunctionDef` named
+  `test_*` across `tests/test_*.py`, printed sorted and hashed with
+  `sha256sum`; and the collected count, `python -m pytest tests/
+  --collect-only -q -o addopts="" | tail -1`.
+- Record the pointer set R-TSS-4 re-points, as the grep Milestone 3 re-runs:
+  `grep -rn "test_ci_hardening\|test_workflow_hardening\|test_gate_scripts\.py\|test_agent_artifacts\.py\|test_skill_contract\.py" --include=*.py --include=*.md --include=*.sh --include=*.yml --include=*.toml . | grep -v "^./.git/\|^./openspec/changes/\|^./docs/reflection-plan\|^./build/"`.
+  At `731479c` the live pointers are `tests/conftest.py:48`,
+  `tools/_common.py:157`, `tests/support.py:259–261`,
+  `tests/test_gate_scripts.py:11`, `tests/test_action_contract.py:14`,
+  `tests/test_workflow_hardening.py:83`, `tests/test_detect_corpus.py:48`,
+  `tests/test_agent_artifacts.py:565`, `tests/test_claude_hooks.py:42–44`,
+  `.claude/hooks/nudge_rule_registry.sh:43` (and the arms at 51, 55),
+  `tests/AGENTS.md:16–20, 32`, `docs/architecture/c4.md:81, 217–221`,
+  `docs/hooks.md:64, 131, 142, 199`, `docs/aqa.md:48, 108`,
+  `docs/distribution-plan.md:88, 210–212`, `pyproject.toml:156, 200`,
+  `.github/dependabot.yml:21, 35`, `.github/workflows/ci.yml:10`,
+  `.github/workflows/release.yml:24`, `skills/AGENTS.md:13, 27`,
+  `evals/AGENTS.md:13`, `README.md:350, 354`, `openspec_graph/cli.py:60,
+  94`, `.claude/agents/planlint-verifier.md:21, 22, 24` and the two skills
+  under `.claude/skills/`; the dated records are `CHANGELOG.md:73, 95, 929,
+  986`, `docs/peer-review-2026-09.md:220`, `docs/next-steps.md:232, 298, 396`
+  and `docs/eval-corpus-plan.md:233`, which stay.
+- Confirm the facts the loop conversion rests on: `openspec_graph/cli.py:980`
+  `main(argv)` returns `int(args.func(args))` after reconfiguring the
+  streams; `tests/test_cli_surface.py:240–281` call `main_deprecated` under
+  `capsys`; `tests/test_e2e_corpus.py:245–255` `_findings` is called by
+  `test_a_waived_g010_still_fails_a_fail_on_info_run` too; the four bodies
+  are at `tests/test_report.py:528` and `:605`, `tests/test_sarif.py:306`,
+  `tests/test_e2e_corpus.py:257`.
+- Confirm `tests/test_ci_hardening.py:843` `_one_run_violations` still
+  names every pytest recipe other than `coverage-run`'s (DEC-TSS-008 rests
+  on it), and that `tests/support.py` still has `write_speckit_spec` with
+  no caller (`grep -rn write_speckit_spec tests/`).
+- **Gate:** `make validate`
+
+## Milestone 1 — Split `test_ci_hardening.py` and `test_gate_scripts.py`, guards seen red first
+
+- `tests/test_suite_shape.py` (new), written before any move and run red
+  (R-TSS-1, R-TSS-12, DEC-TSS-004, DEC-TSS-015): `MAX_TEST_MODULE_LINES =
+  700` with a comment naming the plan item and the `wc -l` command; planned
+  tests, named here so AC-TSS-1 can be re-pointed when they exist:
+  `test_the_tests_directory_stays_flat` (no `test_*.py` under any
+  subdirectory of `tests/`, through a recursive glob compared with the flat
+  one) and `test_no_test_module_exceeds_the_line_bound` (every
+  `tests/test_*.py` has at most the bound's lines, the offenders named with
+  their counts). Run the module and record the red: the bound test names
+  the five modules of the header; the flatness test is green from the
+  start, which is the expected shape, and its planted half — a
+  `tests/<dir>/test_x.py` under a temporary copy — is red in
+  `test_a_mismarked_or_unmarked_planted_module_is_named` (Milestone 4).
+- Create the new modules with a docstring naming what each holds and whose
+  criteria it verifies (R-TSS-2), then move the sections of
+  `tests/test_ci_hardening.py` by seam, bodies untouched, imports pruned to
+  what each module uses (at `731479c`, tests per seam from the `awk` count
+  in the proposal): `tests/test_ci_workflow.py` ← the CI-configuration
+  claims (lines 530–662, 6 tests: `test_t201_is_selected_with_exactly_the_cli_and_tools_exempt`,
+  `test_mypy_is_strict_and_warns_on_unreachable_code`,
+  `test_a_print_in_a_library_module_fails_lint`,
+  `test_a_bare_generic_in_tools_fails_typecheck`, `test_lint_is_a_hard_gate`,
+  `test_graph_diff_artifact_uploaded`, with `_pyproject()`), the five
+  `ci.yml` and hooks-table tests of the two-track section (662–766:
+  `test_ci_job_blocks_returns_empty_when_jobs_key_is_absent`,
+  `test_ci_job_blocks_ignores_comments_mentioning_jobs`,
+  `test_ci_workflow_has_a_windows_job`,
+  `test_ci_workflow_has_an_encoding_stress_job`,
+  `test_hooks_ci_table_lists_every_ci_job`, with the `_ci_job_blocks`
+  alias), the four workflow and hooks tests of the one-run section
+  (1038–1133: `test_every_job_running_the_suite_uploads_its_coverage_report`,
+  `test_a_suite_job_without_a_coverage_upload_is_named`,
+  `test_every_hooks_ci_table_row_names_a_job_or_workflow`,
+  `test_a_hooks_row_naming_no_job_is_named`, with
+  `_suite_jobs_without_coverage_upload` and `_hooks_rows_naming_no_job`),
+  and `test_ci_workflow_has_an_action_contract_job` and
+  `test_every_action_fixture_has_a_contract_leg` (1133–1188);
+  `tests/test_ci_makefile.py` ← `test_makefile_has_e2e_live_target`,
+  `test_makefile_has_matcher_accuracy_report_target`, the four Makefile
+  tests of the one-run section (766–1038:
+  `test_the_suite_runs_once_through_coverage_run`,
+  `test_test_and_coverage_tools_read_the_one_report_scoped`,
+  `test_a_recipe_that_pins_a_cov_source_or_skips_the_run_dependency_is_named`,
+  `test_makefile_has_coverage_per_file_report_target`, with
+  `_makefile_text`, `_make_targets`, `_recipe_lines`, `_prerequisites`,
+  `_one_run_violations` and their constants) and
+  `test_the_contract_job_is_not_wired_into_a_make_target`;
+  `tests/test_coverage_checkers.py` ← the branch-floor section (40–100, 4
+  tests) and the line-floor section (100–231, 8 tests, including
+  `test_coverage_floor_fails_below_threshold_pytest`,
+  `test_coverage_floor_passes_at_threshold`,
+  `test_suite_survives_an_ambient_coverage_file` — whose nested path at
+  line 197 becomes `tests/test_coverage_checkers.py` — and
+  `test_env_without_coverage_strips_every_coverage_variable`);
+  `tests/test_graph_tools.py` ← graph-diff (231–395, 7 tests) and
+  `render_mermaid.py` (395–452, 4 tests) with the module's own `repo`
+  fixture and `_graph_json` helpers; `tests/test_threshold_guard.py` ← the
+  threshold guard's own coverage (1261–1378, 6 tests);
+  `tests/test_gate_scripts.py` ← `test_gate_script_is_runnable_as_a_script`
+  (452–512) with its parametrize list; `tests/test_rule_registry_docs.py` ←
+  `test_rule_set_matches_baseline` (512–530); `tests/test_workflow_pins.py`
+  (created in Milestone 2; hold the Dependabot section, 1195–1261, 3 tests,
+  in `tests/test_ci_workflow.py` until then and move it in Milestone 2) —
+  then delete `tests/test_ci_hardening.py`.
+- `tests/test_gate_scripts.py`: move its scoped-floor section (428–582, 9
+  tests), one-run section (582–721, 6 tests) and per-file section
+  (721–819, 5 tests) with `_pyproject(path, **keys)`,
+  `_pyproject_with_sources` and the report writers into
+  `tests/test_coverage_checkers.py`; move its
+  `check_no_hardcoded_thresholds.py` section (323–428, 9 tests) into
+  `tests/test_threshold_guard.py`; a helper both halves need goes to
+  `tests/support.py` once (R-TSS-2). Update the comment
+  `measure-coverage-once` rewrote above the scoped-floor tests to sit above
+  them in their new module; update the module docstring's pointer at line
+  11.
+- Re-run the two baselines and record: the test-name hash equal to
+  Milestone 0's, the collected count equal; `python -m pytest
+  tests/test_ci_workflow.py tests/test_ci_makefile.py
+  tests/test_coverage_checkers.py tests/test_graph_tools.py
+  tests/test_threshold_guard.py tests/test_gate_scripts.py
+  tests/test_rule_registry_docs.py -q` green; `python -m pytest
+  tests/test_spec_test_citations.py -q` green; `wc -l` of each new module
+  under the bound; the bound guard still red on the four remaining
+  over-bound modules.
+- **Gate:** `make test`
+
+## Milestone 2 — Split `test_workflow_hardening.py`
+
+- `tests/workflow_support.py` (new, not collected): the readers more than
+  one section uses (at `731479c`, from the helper block at lines 70–576:
+  `_rel`, `_code_lines`, `_indent`, `_top_level_block`, `_ci_text`,
+  `_pyproject`, `_job_level_keys`, the `WORKFLOWS`, `CI`, `RELEASE`,
+  `PYPROJECT`, `DOCKERFILE` and `DEPENDABOT` path constants), each keeping
+  its docstring; a reader one section uses moves with that section. Note
+  in its docstring that it is the pattern of `tests/graft_support.py`.
+- `tests/test_workflow_pins.py` ← action refs agree, every ref is a pinned
+  SHA with its tag comment, every action at or above its major floor
+  (576–754, 12 tests, with `_uses_refs`, `_pin_offenders`,
+  `_ref_disagreements`, `_major`, `_action_major_floors`,
+  `_floor_offenders`); the Dockerfile and its update bot (1036–1121, 8
+  tests, with `_dockerfile_from`, `_dockerfile_tag_version`,
+  `_dockerfile_offenders`, `_user_override_offenders`, `_dependabot_entries`,
+  `_docker_watch_offenders`); and the Dependabot section held in
+  `tests/test_ci_workflow.py` since Milestone 1
+  (`test_dependabot_config_exists_and_watches_github_actions`,
+  `test_every_composite_action_directory_is_watched_by_dependabot`,
+  `test_dependabot_does_not_add_a_pip_ecosystem`).
+- `tests/test_workflow_posture.py` ← least privilege (754–824, 6 tests,
+  with `_job_permission_blocks`, `_write_permissions`,
+  `_uncommented_permission_blocks`), timeouts (824–857, 4, with
+  `_timeout_range`, `_timeout_offenders`), concurrency (857–894, 3, with
+  `_concurrency_offenders`), the thresholds guard's silence (1121–1174, 2)
+  and the attestations input (1174–1237, 1).
+- `tests/test_workflow_python.py` ← one Python default (894–961, 5, with
+  `_quoted_version_literals`, `_matrix_versions`, `_workflow_env`,
+  `_action_input_default`) and the experimental leg, classifiers and docs
+  (961–1036, 6, with `_experimental_leg_offenders`, `_classifier_versions`,
+  `_hooks_test_row_bounds`; this is where
+  `test_hooks_test_row_names_the_matrix_bounds` lives). Then delete
+  `tests/test_workflow_hardening.py`.
+- Re-run the two baselines and record equality; `python -m pytest
+  tests/test_workflow_pins.py tests/test_workflow_posture.py
+  tests/test_workflow_python.py tests/test_ci_workflow.py -q` green;
+  `wc -l` of each under the bound; the bound guard red on the two
+  remaining modules.
+- **Gate:** `make test`
+
+## Milestone 3 — Split `test_agent_artifacts.py` and `test_skill_contract.py`, re-point every pointer
+
+- `tests/test_release_surface.py` (new) ← `tests/test_agent_artifacts.py`'s
+  release workflow (445–554, 2 tests), generated artifacts (554–604, 3) and
+  packaging surface (604–682, 3) sections; its `_workflow_jobs` (448) and
+  `_uncommented` (477) helpers are replaced by
+  `tests.support.workflow_job_blocks` and the posture module's
+  `_uncommented_permission_blocks` reader where the body is the same, the
+  release-specific assertion kept (R-TSS-8, DEC-HCW-009's deferral closed).
+  `test_agent_artifacts.py` keeps evals (150–319), `context7.json`
+  (319–355), `llms.txt` (355–445), the nested `AGENTS.md` contract
+  (682–791) and the cited-command check (791–836), with `_ids`,
+  `_frontmatter*`, `_readme_tables` and `_index_id`.
+- `tests/test_skill_distribution.py` (new) ← `tests/test_skill_contract.py`'s
+  generated catalog (474–552, 5 tests, with `RENDERER` and `_run_renderer`),
+  manifest agreement (552–575, 1), shipped CI asset (575–599, 2), packaging
+  and gate coverage (625–740, 7) and distribution rename (740–821, 3).
+  `test_skill_contract.py` keeps the read-only claim (149–298, with
+  `READ_ONLY_INVOCATIONS` and `populated_repo`), the exit-code contract
+  (298–363), the exit-2 remainder (363–474) and the boundaries (599–625).
+- Re-run the two baselines and record equality; `wc -l tests/test_*.py |
+  sort -n | tail -8` with every module at or under the bound;
+  `test_no_test_module_exceeds_the_line_bound` green for the first time —
+  record it.
+- Re-point every live pointer of Milestone 0's grep to the module that now
+  holds the guard it names, and record the after-grep: `tests/conftest.py:48`
+  → `tests/test_graph_tools.py`; `tools/_common.py:157` →
+  `tests/test_coverage_checkers.py`; `tests/support.py:259–261` → the alias
+  lives in `tests/test_ci_workflow.py`, and the sentence deferring
+  `test_agent_artifacts.py`'s near-copy to W7.4 is replaced by one saying
+  it was routed here; `tests/test_gate_scripts.py:11` → the contract is
+  local; `tests/test_action_contract.py:14` → `tests.support.workflow_job_blocks`;
+  `tests/test_detect_corpus.py:48` and `tests/test_agent_artifacts.py:565`
+  → unchanged if the named test stayed, else the new module;
+  `.claude/hooks/nudge_rule_registry.sh:43` → `pytest
+  tests/test_workflow_pins.py -k dependabot`; the arm at 51 adds
+  `tests/test_skill_distribution.py` after `tests/test_skill_contract.py`
+  (the `NUDGED` remedy substring in `tests/test_claude_hooks.py:42–43`
+  still matches); `docs/hooks.md:64` → the three workflow modules, and the
+  remedies at 131 and 142 add `tests/test_skill_distribution.py` and
+  `tests/test_release_surface.py` where the test they point at moved;
+  `docs/aqa.md:48` → `tests/test_workflow_python.py`, `:108` adds
+  `tests/test_release_surface.py`; `pyproject.toml:156, 200` and
+  `.github/dependabot.yml:21, 35` → `tests/test_workflow_pins.py`;
+  `.github/workflows/ci.yml:10` → `tests/test_workflow_posture.py`;
+  `.github/workflows/release.yml:24` → `tests/test_workflow_python.py`;
+  `skills/AGENTS.md:13, 27` → `tests/test_skill_distribution.py` for the
+  catalog and manifests; `README.md:354` → adds `tests/test_release_surface.py`
+  for the release workflow; `.claude/agents/planlint-verifier.md:21` →
+  `tests/test_skill_distribution.py::test_rule_catalog_is_fresh` and
+  `tests/test_release_surface.py::test_generated_artifacts_are_fresh`,
+  `:22, 24` → unchanged if the named tests stayed;
+  `docs/distribution-plan.md:88, 210–212` → likewise; the two
+  `.claude/skills/` checklists likewise. Only comment lines change under
+  `.github/` (C-TSS-2); `README.md:350`, `evals/AGENTS.md:13` and
+  `openspec_graph/cli.py:60, 94` stay true and are not touched. Dated
+  records are not edited (R-TSS-4, DEC-TSS-013).
+- `tests/AGENTS.md`: in the diagram, add `ws["workflow_support.py<br/>workflow
+  readers, never asserting"]` under "shared, not collected" and
+  `s["test_suite_shape.py<br/>flat, bounded, tiered"]` under "split by
+  subject" (the gate_scripts node's text stays true); the sentence at line
+  32 keeps its fact; Milestone 4 adds the tier bullet and the run sentence.
+  `wc -l tests/AGENTS.md` after, against `MAX_NESTED_LINES`.
+- `docs/architecture/c4.md`: §4's `tests/*` row names
+  `test_coverage_checkers.py` for the two checkers, `test_gate_scripts.py`
+  for the scripts no other module tests, `test_suite_shape.py` for the
+  shape; §4b's diagram adds a `checkers["test_coverage_checkers.py<br/>both
+  floors, scoped reads, per-file"]` node feeding `covrun` beside
+  `gatetests`, and the "Why in-process" paragraph keeps
+  `test_gate_script_is_runnable_as_a_script` by name. Run `python -m pytest
+  tests/test_rule_registry_docs.py -q` (it reads §4's module map, not this
+  row) and record green.
+- `CHANGELOG.md`, under `## [Unreleased]`: `### Changed — the test suite
+  split by concern (M2)` with a `shape-the-test-suite` entry naming the two
+  removed modules and the ten new ones; Milestones 4, 5 and 7 extend it
+  (R-TSS-13).
+- Run `make docs-check`, `python -m pytest tests/test_agent_artifacts.py
+  tests/test_claude_hooks.py tests/test_adopter_urls.py -q` and the
+  citation test; record green. Open the first pull request (Milestones
+  0–3) and record its first CI run's id and that every leg is green.
+- **Gate:** `make docs-check`, then `make test`
+
+## Milestone 4 — Tiers, their guards seen red first
+
+- `tests/test_suite_shape.py`, written before any mark and run red
+  (R-TSS-5, R-TSS-6, R-TSS-12, DEC-TSS-005, DEC-TSS-007): planned tests,
+  named here so AC-TSS-6, 7 and 8 can be re-pointed when they exist —
+  `test_pytest_registers_exactly_the_three_tier_markers_strictly`
+  (`[tool.pytest.ini_options].markers` parsed with `tomllib`/`tomli`
+  through the `_pyproject()` reader — moved to `tests/support.py` as
+  `read_pyproject()` now that two modules need it — holds exactly `unit`,
+  `integration`, `e2e` by name, each description non-empty; `addopts`
+  contains `--strict-markers`; `testpaths == ["tests"]`);
+  `test_an_unregistered_marker_fails_collection_under_strict_markers` (a
+  planted module with `@pytest.mark.nonsuch` under a copied
+  `pyproject.toml`, `python -m pytest --collect-only -q` in a subprocess
+  under `env_without_coverage()`, non-zero exit naming the mark — an `e2e`
+  test by its own criterion); `test_every_test_carries_exactly_one_tier_marker`
+  (AST over `tests/test_*.py`: module-level `pytestmark` tiers ∪ decorator
+  tiers per `def test_*`, exactly one, offenders named with their tiers);
+  `test_every_tier_marker_matches_its_mechanical_criterion` (per test, the
+  spawn signal — `subprocess`, `run_cli`, or a same-module helper that
+  names one, resolved transitively over module-level `FunctionDef`s — and
+  the tree signal — `run_tool_main`, `load_tool`, `__file__` in a body, or
+  a module constant bound from `__file__` through other constants with no
+  `fixtures`/`corpus` segment — then `e2e` ⇔ spawn, `integration` ⇔ tree
+  and not spawn, `unit` ⇔ neither; disagreements named with the signal
+  found); `test_a_mismarked_or_unmarked_planted_module_is_named` (the
+  helpers over planted texts: an unmarked test; a test with two tiers; a
+  `unit` test calling `run_cli`; an `e2e` test naming no spawn; a `unit`
+  test naming a `__file__`-bound constant; a `fixtures`-rooted constant
+  not a signal; a module over the bound; a `tests/<dir>/test_x.py` under
+  a temporary copy named by the flatness helper). Record the red: the
+  registration test red on the unchanged `pyproject.toml`; the exactly-one
+  test naming every test in the tree; the criterion test idle until marks
+  exist and red on the first module marked wrongly, if any — record which.
+- `pyproject.toml` `[tool.pytest.ini_options]`: `markers = [...]` with the
+  three entries, each `"<tier>: <criterion in one sentence>"` as R-TSS-6
+  states it; `addopts = "-q --strict-markers"`; `testpaths` unchanged; a
+  comment above saying the tiers are cost signals, that both levels count,
+  that a mixed module marks per function, and that `tests/test_suite_shape.py`
+  holds the guards (DEC-TSS-005, DEC-TSS-006).
+- Apply the marks, module by module, letting the criterion guard decide:
+  `pytestmark = pytest.mark.<tier>` under the imports where the guard
+  reports one tier for every test in the module; per-function
+  `@pytest.mark.<tier>` where it reports a mix, with no module-level tier.
+  Expected shape at `731479c`, to be confirmed by the guard and recorded:
+  `e2e` for the modules that import `run_cli` or call `subprocess`
+  throughout (`test_graft_cli`, `test_e2e_corpus`, `test_report`,
+  `test_sarif`, `test_cli_surface`, `test_action_contract`,
+  `test_wheel_metadata`, `test_claude_hooks`, among others);
+  `integration` for the repository-reading guards (the three workflow
+  modules, `test_ci_workflow`, `test_ci_makefile`, `test_threshold_guard`,
+  `test_agent_artifacts`, `test_release_surface`, `test_adopter_urls`,
+  `test_rule_registry_docs`, `test_spec_test_citations`,
+  `test_suite_shape`'s AST guards, among others); `unit` for the parser,
+  rule, graph, ledger, mermaid, dialect-card and property modules; mixed
+  for `test_decomposition`, `test_skill_contract`, `test_gate_scripts`,
+  `test_coverage_checkers` and `test_graph_tools`, where the in-process
+  script tests are `integration` and the spawning ones `e2e`. Record the
+  tally the guard prints per tier.
+- Record the fast tier (R-TSS-7): `python -m pytest -m unit --collect-only
+  -q -o addopts="" | tail -1` and `python -m pytest -m unit -q -p
+  no:cacheprovider -o addopts=""`'s last line, with the commit; and
+  `python -m pytest -m "not unit" --collect-only -q -o addopts="" | tail -1`
+  so the two sum to the collected count.
+- `docs/hooks.md`: after the optional pre-push section, a paragraph headed
+  as the fast local loop: `python -m pytest -m unit` runs the tier that
+  starts no process and reads none of this repository's own files, in the
+  time Milestone 4 recorded; what `-m "not unit"` adds; why it is a command
+  and not a Make target (DEC-TSS-008, naming the one-run guard); the CI
+  table and the `test` row untouched. `tests/AGENTS.md`: a fourth "thing to
+  know" — every test carries exactly one of `unit`, `integration`, `e2e`
+  by the criterion `tests/test_suite_shape.py` checks, so a new test
+  without a mark fails collection — and the run sentence gains "`python -m
+  pytest -m unit` is the fast tier" before `make test`; replace where
+  possible, `wc -l` after against the budget; run `python -m pytest
+  tests/test_agent_artifacts.py -q -k "nested_agents or agent_index_links"`
+  and record green.
+- `CHANGELOG.md`: extend the entry with the tiers, the strict markers and
+  the fast-tier command.
+- **Gate:** `make test` — the suite green under `--strict-markers`, the
+  four guards green on the tree and red on their planted texts, the floors
+  held; then `make lint`.
+
+## Milestone 5 — Route the duplicated shapes through `tests/support.py`, guards seen red first
+
+- `tests/test_suite_shape.py`, written first and run red (R-TSS-8,
+  R-TSS-12, DEC-TSS-009): planned tests, named here so AC-TSS-10 and 11
+  can be re-pointed — `test_no_test_module_spawns_the_cli_outside_support`
+  (AST: a `subprocess.run` call whose first argument is a list holding the
+  constants `-m`, `openspec_graph.cli` and `--target`, in any module other
+  than `tests/support.py`, named); `test_no_test_module_writes_a_spec_path_by_hand`
+  (AST: a `.write_text` call whose receiver, resolved through local
+  assignments in the same function, is a path chain holding the constants
+  `openspec`, `changes`, `specs` and `spec.md`, or `specs` and `spec.md`
+  under a root with no `openspec` segment, in any module other than
+  `tests/support.py`, named; `mkfifo`, `mkdir` and bare comparisons are not
+  writes); `test_a_planted_inline_spawn_or_hand_written_spec_is_named` (the
+  helpers over planted texts: the `run_cli` shape named; a `--version`
+  spawn without `--target` not named; a harness `write_text` named; a
+  SpecKit `write_text` named; a FIFO at a spec path not named; an
+  `assert ... .exists()` on a spec path not named). Record the red: the
+  spawn guard naming `tests/test_decomposition.py`; the writer guard naming
+  `tests/test_e2e_corpus.py` (two sites), `tests/test_detect_thresholds.py`,
+  `tests/test_decomposition.py` and `tests/test_detect_speckit.py`, and
+  whatever else it finds — route or exempt each with its reason here.
+- `tests/test_decomposition.py`: `_run_cli(root, *args)` becomes
+  `run_cli(root, *args).stdout` from `tests.support` (keeping the UTF-8
+  comment's fact, which `run_cli` carries); the fixture writer at 102–105
+  becomes `write_spec(root, change, cap, (FX / fname).read_text(...))`;
+  `_EXPECTED_HASHES` must not move — run `python -m pytest
+  tests/test_decomposition.py -q` and record green, which is the proof of
+  DEC-TSS-009's claim about the coverage variable.
+- `tests/test_e2e_corpus.py`: `_harness_spec(repo, body, change="c1")`
+  becomes a one-line wrapper over `write_spec(repo, change, "cap", body)` or
+  is inlined at each call; the SpecKit write at 338 becomes
+  `write_speckit_spec`. `tests/test_detect_thresholds.py:257` → `write_spec`;
+  `tests/test_detect_speckit.py:105` → `write_speckit_spec`. The bare
+  `tmp_path / "spec.md"` writes, the FIFO, the path assertions and the
+  `Finding` paths stay, named here as having nothing to route; the `-c`
+  script spawns (`test_findings_envelope.py:283`,
+  `test_detect_thresholds.py:338`, `test_report.py:641`), the `tools/`
+  script spawns (`test_skill_contract.py:482`, `test_e2e_corpus.py:201`,
+  `test_enterprise.py`), `make` (`test_e2e_corpus.py:213`), `git`
+  (`test_gate_scripts.py:109–111`, `test_graft_witness.py`,
+  `test_agent_artifacts.py:714`), bash (`test_claude_hooks.py`,
+  `test_action_contract.py`), `python -m build` (`test_wheel_metadata.py`)
+  and `python -m pytest`/`mypy`/`ruff` (`test_coverage_checkers.py`,
+  `test_ci_workflow.py`, `test_enterprise.py`) stay too, and
+  `test_skill_contract.py:657`'s `--version` without `--target` stays
+  (R-TSS-8). Of the 15 helper-less modules, `test_decomposition` and
+  `test_detect_thresholds` now import from `tests/support.py`; the other
+  thirteen have nothing to route.
+- `tests/test_agent_artifacts.py` / `tests/test_release_surface.py`:
+  confirm `_workflow_jobs` is gone (Milestone 3) and `grep -rn
+  "def _workflow_jobs\|def _ci_job_blocks" tests/` finds only the alias in
+  `tests/test_ci_workflow.py`.
+- Re-run `grep -ln "subprocess.run" tests/test_*.py`, `grep -ln
+  '"openspec_graph.cli"' tests/test_*.py` and `grep -L "from
+  tests.support\|from tests import support\|import tests.support"
+  tests/test_*.py`; record the after lists beside the header's.
+- `CHANGELOG.md`: extend the entry with the routing. Open the second pull
+  request (Milestones 4–5) and record its first CI run.
+- **Gate:** `make test`, then `make lint`
+
+## Milestone 6 — In-process loops, one subprocess each, the durations pair
+
+- `tests/test_suite_shape.py`, written first and run red (R-TSS-9,
+  R-TSS-12, DEC-TSS-010): `test_the_converted_loops_keep_exactly_one_subprocess`
+  (AST over the four named bodies: exactly one `Call` whose function is
+  `run_cli`, and at least one reference to `main` — `cli.main` or an
+  imported `main`; a planted body with two `run_cli` calls and one with
+  none are each named). Record the red: nine, four, eight and four
+  `run_cli` calls at `731479c`.
+- Take the immediate before figure on the tree as it stands after
+  Milestone 5, in this container: the Appendix A durations command and
+  `python -m pytest tests/test_report.py tests/test_sarif.py
+  tests/test_e2e_corpus.py -k "test_projections_are_byte_stable_across_runs
+  or test_an_unprojectable_file_exits_two_with_an_empty_stdout or
+  test_sarif_returns_the_same_exit_code_as_the_text_run or
+  test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict"
+  --durations=0 -p no:cacheprovider -q -o addopts=""`; record the total,
+  the twelve, and each named test's call duration with the commit
+  (R-TSS-11).
+- `tests/test_report.py` `test_projections_are_byte_stable_across_runs`:
+  build the envelope through `cli.main(["--target", str(FIXTURES /
+  "failing"), "validate", "--format", "json"])` and `capsys.readouterr().out`;
+  for each of the four formats run `report` twice through `cli.main`,
+  reading stdout between, and assert the two equal; keep one
+  `run_cli(tmp_path, "report", "--findings", ..., "--format", "sarif")`
+  and assert its stdout equals the in-process first run for `sarif` — the
+  entry-point check tied on the same property. Add `capsys` to the
+  signature.
+- `tests/test_report.py` `test_an_unprojectable_file_exits_two_with_an_empty_stdout`:
+  for each format, `code = cli.main([... "report", "--findings",
+  str(saved), "--format", fmt])`, `out, err = capsys.readouterr()`, assert
+  `code == 2`, `out.strip() == ""` and a non-empty diagnostic (`err`, or if
+  the handler binding makes `err` order-dependent, `captured_logger` on the
+  package logger — DEC-TSS-010); keep one `run_cli` for the first format
+  per parametrised case and assert `returncode == 2`, empty stdout,
+  non-empty stderr, equal to the in-process verdict.
+- `tests/test_sarif.py` `test_sarif_returns_the_same_exit_code_as_the_text_run`:
+  for each repository and each of the three forms, the exit code through
+  `cli.main` (reading and discarding `capsys` between runs), the three
+  equal; the two outcome assertions (`failing` is 1, `clean` is 0)
+  in-process; keep one `run_cli(failing, "validate", "--fail-on", "ERROR",
+  "--format", "sarif")` and assert its `returncode` equals the in-process
+  SARIF code for `failing`.
+- `tests/test_e2e_corpus.py` `test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict`:
+  the three thresholds through `cli.main`, asserting 0, 0, 1; the findings
+  from an in-process `validate --fail-on INFO --json` parsed from
+  `capsys.readouterr().out` (a sibling `_findings_in_process(capsys,
+  repo, *args)` if a second caller appears; `_findings` itself unchanged),
+  `G010` present and `G004` absent; keep one `run_cli(tmp_path,
+  "validate", "--fail-on", "INFO")` and assert its `returncode` equals the
+  in-process code, 1.
+- Confirm C-TSS-5 by diff: `git diff <before Milestone 6>..HEAD --
+  tests/test_cli_surface.py tests/test_wheel_metadata.py
+  tests/test_action_contract.py tests/test_coverage_checkers.py
+  tests/test_gate_scripts.py tests/test_skill_contract.py
+  tests/test_findings_envelope.py tests/test_detect_thresholds.py` prints
+  nothing, and `test_module_is_importable_without_the_rest_of_the_package`
+  in `tests/test_report.py` is outside the hunk.
+- Take the after figure the same way, back to back with the before, and
+  record both: the total at or under the before total and at or under 200
+  s; none of the four in the twelve; each of the four per-test figures
+  beside its before. Run `make test` and record the four scoped checker
+  lines — the in-process loops raise the package's measured lines, never
+  lower them — with the floors unchanged.
+- `CHANGELOG.md`: extend the entry with the four tests, the one-subprocess
+  shape and the before/after totals with their commits.
+- **Gate:** `make test`
+
+## Milestone 7 — Confirm, re-point, and record for the plan
+
+- Re-point the stage-only verification lines in
+  `specs/test-suite-shape/spec.md` to the tests Milestones 1, 4, 5 and 6
+  named, now that they exist, keeping each stage: AC-TSS-1 →
+  `test_the_tests_directory_stays_flat` and
+  `test_no_test_module_exceeds_the_line_bound`; AC-TSS-6 →
+  `test_pytest_registers_exactly_the_three_tier_markers_strictly` and
+  `test_an_unregistered_marker_fails_collection_under_strict_markers`;
+  AC-TSS-7 → `test_every_test_carries_exactly_one_tier_marker` and
+  `test_every_tier_marker_matches_its_mechanical_criterion`; AC-TSS-8 →
+  `test_a_mismarked_or_unmarked_planted_module_is_named`; AC-TSS-10 adds
+  `test_no_test_module_spawns_the_cli_outside_support` and
+  `test_no_test_module_writes_a_spec_path_by_hand`; AC-TSS-11 →
+  `test_a_planted_inline_spawn_or_hand_written_spec_is_named`; AC-TSS-13 →
+  `test_the_converted_loops_keep_exactly_one_subprocess`. Run `python -m
+  pytest tests/test_spec_test_citations.py -q` and record that every
+  selector in every spec resolves.
+- Confirm this package validates clean under the repository's own rules
+  (`planlint --target . validate --fail-on ERROR --change shape-the-test-suite`),
+  then `--change measure-coverage-once`, `--change harden-ci-workflows` and
+  `--change select-zero-cost-guards` (unedited, must still be clean), then
+  the whole tree; record each exit code.
+- Confirm no change-package directory other than this one is in the diff
+  (`git diff --stat <base>..HEAD -- openspec/changes | grep -v
+  shape-the-test-suite` prints nothing), that `openspec_graph/`,
+  `tests/baseline_rules.json`, `Makefile`, `.pre-commit-config.yaml` and
+  `[project] dependencies` are absent from it, and that the only hunks
+  under `.github/` are the comment lines (C-TSS-1, C-TSS-2, C-TSS-3).
+- Re-take the header's measurements on the finished tree and record them
+  beside the before figures: `wc -l tests/test_*.py | sort -n | tail -8`;
+  the test-name hash and collected count (equal to Milestone 0's); the
+  marker tally; the three routing greps; the pointer grep; `wc -l
+  tests/AGENTS.md`.
+- Tick each criterion only against its recorded evidence; AC-TSS-15 only
+  once the Milestone 6 pair is recorded.
+- Record for the plan's M2 row and §7 table, when they are next updated:
+  the ladder's wall time moved by the loop conversion as the Milestone 6
+  pair says, not as the plan's 235 s row says; every test module at or
+  under the bound with the guard holding it; three tiers with the fast
+  tier's count and time; the four loops at one subprocess each; the plan's
+  200 s row already met at `731479c` before this package and still met
+  after it. Open the third pull request (Milestones 6–7) and record its
+  first CI run.
+- **Gate:** `make pre-pr`
