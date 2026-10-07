@@ -230,7 +230,7 @@ def test_an_unreadable_workflow_exits_two_rather_than_a_traceback(
     def refuse(self: Path, *args: object, **kwargs: object) -> str:
         if self.name == "ci.yml":
             raise PermissionError(13, "Permission denied")
-        return original(self, *args, **kwargs)  # type: ignore[arg-type]
+        return original(self, *args, **kwargs)  # type: ignore[arg-type, unused-ignore]
 
     monkeypatch.setattr(Path, "read_text", refuse)
     assert run_tool_main("stage_citations", TOOL, "--root", str(labelled)) == 2

@@ -326,7 +326,7 @@ def test_annotation_tier_matches_the_whole_marker_only() -> None:
     assert negation_matches("non-success", "x") == ("annotated_non_success", "non_success")
     assert negation_matches(" (negative) ", "x") == ("annotated_non_success",)
     assert "annotated_non_success" not in negation_matches("WHEN a negative number is formatted", "")
-    assert negation_matches(None, None) == ()  # type: ignore[arg-type]
+    assert negation_matches(None, None) == ()  # type: ignore[arg-type, unused-ignore]
 
     _reqs, crits = parse_upstream(
         "## ADDED Requirements\n\n### Requirement: Formatting\n\n"

@@ -319,7 +319,11 @@ def test_section_body_still_returns_only_the_span_text() -> None:
     result = section_body(HARNESS, "Requirements")
     assert isinstance(result, str)
     assert result == body
-    assert not isinstance(result, tuple)
+    # Checked on the result widened to `object`: `section_body` is declared to
+    # return `str`, so on the narrow type mypy would judge the check unreachable,
+    # while what it guards is the runtime shape of the return.
+    returned: object = result
+    assert not isinstance(returned, tuple)
     assert origin >= 1
     assert section_body(HARNESS, "No Such Section") == ""
     assert section_span(HARNESS, "No Such Section") == (0, "")

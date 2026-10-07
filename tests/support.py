@@ -79,13 +79,20 @@ def read_pyproject() -> dict[str, Any]:
     the ``tomli`` backport the dev extra already installs for coverage's own
     startup hook. Shared by the CI-configuration and workflow guards, which
     each carried a copy until ``shape-the-test-suite`` (R-TSS-8).
+
+    The module is chosen by ``sys.version_info``, which mypy reads, rather than
+    by catching the import error, and the result goes through an annotated
+    local: so mypy's verdict here is the same on the leg that installs
+    ``tomli`` and on the legs that do not (``ratchet-test-types-and-docstrings``
+    R-TDR-6; ``[[tool.mypy.overrides]]`` ``tomli`` covers the missing case).
     """
-    try:
+    if sys.version_info >= (3, 11):
         import tomllib as toml_reader
-    except ModuleNotFoundError:  # pragma: no cover - 3.10 leg only
-        import tomli as toml_reader  # type: ignore[import-not-found,no-redef]
+    else:  # pragma: no cover - 3.10 leg only
+        import tomli as toml_reader
     with _PYPROJECT.open("rb") as handle:
-        return toml_reader.load(handle)
+        parsed: dict[str, Any] = toml_reader.load(handle)
+    return parsed
 
 
 def load_tool(name: str, filename: str) -> ModuleType:

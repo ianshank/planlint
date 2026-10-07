@@ -27,7 +27,7 @@ def test_empty_graph_renders_a_valid_header_with_no_nodes_or_edges() -> None:
 
 
 def test_node_ids_are_sanitized_to_synthetic_identifiers() -> None:
-    node = {"id": "spec:openspec/changes/x/specs/y/spec.md", "type": "spec", "path": "openspec/changes/x/specs/y/spec.md"}
+    node: dict[str, object] = {"id": "spec:openspec/changes/x/specs/y/spec.md", "type": "spec", "path": "openspec/changes/x/specs/y/spec.md"}
     out = mermaid.to_mermaid(_graph([node], []))
     assert "n0[" in out
     # the real, slash-containing id never appears as a bare Mermaid identifier
@@ -43,13 +43,13 @@ def test_node_label_uses_name_when_present() -> None:
 
 
 def test_node_label_combines_ident_and_text_for_requirement_nodes() -> None:
-    node = {"id": "R-DMO-1", "type": "requirement", "text": "The system MUST attest every write.", "kind": "functional"}
+    node: dict[str, object] = {"id": "R-DMO-1", "type": "requirement", "text": "The system MUST attest every write.", "kind": "functional"}
     out = mermaid.to_mermaid(_graph([node], []))
     assert 'n0["R-DMO-1: The system MUST attest every write."]' in out
 
 
 def test_node_label_escapes_embedded_quotes() -> None:
-    node = {"id": "R-DMO-1", "type": "requirement", "text": 'A "quoted" requirement.'}
+    node: dict[str, object] = {"id": "R-DMO-1", "type": "requirement", "text": 'A "quoted" requirement.'}
     out = mermaid.to_mermaid(_graph([node], []))
     assert "&quot;quoted&quot;" in out
     # no unescaped quote breaks the label's own bracket syntax

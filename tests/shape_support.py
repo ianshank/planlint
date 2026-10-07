@@ -587,7 +587,7 @@ class Program:
         return _Facts(tuple(spawns), tuple(reads), tuple(self._references(module, nodes, own)))
 
     def _class_facts(self, module: _Module, cls: ast.ClassDef) -> _Facts:
-        nodes: list[ast.AST] = list(cls.bases) + list(cls.decorator_list)
+        nodes: list[ast.AST] = [*cls.bases, *cls.decorator_list]
         methods: list[tuple[str, Node]] = []
         for statement in cls.body:
             if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
