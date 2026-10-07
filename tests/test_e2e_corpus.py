@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.support import normalize_root, run_cli
+from tests.support import normalize_root, run_cli, write_spec, write_speckit_spec
 
 pytestmark = pytest.mark.e2e
 
@@ -39,10 +39,7 @@ def _card(repo: Path) -> dict[str, object]:
 
 
 def _harness_spec(repo: Path, body: str, change: str = "c1") -> Path:
-    spec = repo / "openspec" / "changes" / change / "specs" / "cap" / "spec.md"
-    spec.parent.mkdir(parents=True, exist_ok=True)
-    spec.write_text(body, encoding="utf-8")
-    return spec
+    return write_spec(repo, change, "cap", body)
 
 
 # --- detect, over every labelled shape, through the CLI --------------------
@@ -327,8 +324,6 @@ def test_g010_is_projected_to_sarif_without_a_bogus_region(tmp_path: Path) -> No
 def test_s005_reaches_the_cli_carrying_the_dropped_bullet_locus(tmp_path: Path) -> None:
     """S005's contract is that the locus is the token the author must move."""
     (tmp_path / "Makefile").write_text("test:\n\t@echo t\n", encoding="utf-8")
-    feature = tmp_path / "specs" / "001-demo"
-    feature.mkdir(parents=True)
     body = (
         "# Feature Specification: Demo\n\n"
         "## Requirements *(mandatory)*\n\n"
@@ -337,7 +332,7 @@ def test_s005_reaches_the_cli_carrying_the_dropped_bullet_locus(tmp_path: Path) 
         "## Success Criteria *(mandatory)*\n\n"
         "- **SC-001**: It completes quickly.\n"
     )
-    (feature / "spec.md").write_text(body, encoding="utf-8")
+    write_speckit_spec(tmp_path, "001-demo", body)
     expected_line = next(
         i for i, ln in enumerate(body.splitlines(), 1) if ln.startswith("- **FR-001**")
     )

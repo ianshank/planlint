@@ -81,9 +81,10 @@ def _rel(path: Path) -> str:
 def _code_lines(text: str) -> list[tuple[int, str]]:
     """``(line number, line without its comment)`` for every line with content.
 
-    The posture of ``_uncommented`` in test_release_surface.py, keeping the
-    line numbers so an offender can be named: a comment that merely mentions
-    a token must satisfy nothing and trip nothing (R-HCW-15).
+    The one comment stripper of the workflow guards -- test_release_surface.py
+    joins it for its release job blocks (R-TSS-8) -- keeping the line numbers
+    so an offender can be named: a comment that merely mentions a token must
+    satisfy nothing and trip nothing (R-HCW-15).
     """
     kept: list[tuple[int, str]] = []
     for number, line in enumerate(text.splitlines(), 1):

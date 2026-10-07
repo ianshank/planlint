@@ -102,9 +102,7 @@ def test_filter_speckit_by_feature_narrows_to_one_feature(repo: Path) -> None:
 
 
 def test_speckit_discovery_never_returns_plan_or_tasks_md(repo: Path) -> None:
-    feature_dir = repo / "specs" / "001-demo-capability"
-    feature_dir.mkdir(parents=True)
-    (feature_dir / "spec.md").write_text(GOOD_SPECKIT, encoding="utf-8")
+    feature_dir = write_speckit_spec(repo, "001-demo-capability", GOOD_SPECKIT).parent
     (feature_dir / "plan.md").write_text("# Plan\n\nFR-001 implementation plan.", encoding="utf-8")
     (feature_dir / "tasks.md").write_text("# Tasks\n\n- [ ] Task 1", encoding="utf-8")
     found = detect.find_speckit_spec_files(repo / "specs")

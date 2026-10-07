@@ -37,6 +37,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   from `test_graft_rules.py` to `test_rule_registry_docs.py`, and the Action
   contract's runner simulator to the uncollected `tests/action_support.py`;
   `read_pyproject()` in `tests/support.py` replaces two private copies.
+- **Routing.** `tests/support.run_cli` is now the only place a test spawns the
+  CLI against a target, and `write_spec` / `write_speckit_spec` the only
+  writers of the harness and SpecKit spec paths. `test_decomposition.py`'s
+  inline spawn and fixture writer, `test_e2e_corpus.py`'s harness and SpecKit
+  writes, and the hand-written specs in `test_detect_thresholds.py`,
+  `test_detect_speckit.py` and `test_skill_contract.py` route through them,
+  with the golden hashes unmoved. The release-workflow test reads its jobs
+  through `workflow_job_blocks` and its code through `_code_lines`, closing
+  `harden-ci-workflows` DEC-HCW-009's deferral. Two guards read each helper's
+  shape from its own body and name any copy.
 
 ### Changed — one suite run measures both trees (M2)
 

@@ -12,12 +12,13 @@ import ast
 import hashlib
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import pytest
+
+from tests.support import run_cli, write_spec
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PKG = REPO_ROOT / "openspec_graph"
@@ -101,23 +102,17 @@ def _build_repo(root: Path) -> None:
         ("c1", "cap", "good_harness.md"),
         ("c2", "cap2", "good_upstream.md"),
     ]:
-        sp = root / "openspec" / "changes" / change / "specs" / cap / "spec.md"
-        sp.parent.mkdir(parents=True)
-        sp.write_text((FX / fname).read_text(encoding="utf-8"))
+        write_spec(root, change, cap, (FX / fname).read_text(encoding="utf-8"))
 
 
 def _run_cli(root: Path, *args: str) -> str:
-    r = subprocess.run(
-        [sys.executable, "-m", "openspec_graph.cli", "--target", str(root), *args],
-        # Decode as UTF-8 explicitly: cli.main() forces its own stdout to UTF-8
-        # (Defect D fix), so the platform default is wrong on any host whose
-        # codepage isn't UTF-8 -- notably the GitHub windows-latest runner
-        # (cp1252), where the absolute `target` path's escaped backslashes
-        # decode-then-reencode to different bytes and only the `validate` hash
-        # (the one verb carrying that path) drifts off golden. run_cli() in
-        # tests/support.py already pins UTF-8 for the same reason.
-        capture_output=True, text=True, encoding="utf-8", check=False,
-    )
+    # Through tests.support.run_cli (shape-the-test-suite R-TSS-8), which
+    # decodes as UTF-8 because cli.main() forces its own stdout to UTF-8
+    # (Defect D fix): the platform default is wrong on any host whose codepage
+    # isn't UTF-8 -- notably the GitHub windows-latest runner (cp1252), where
+    # the absolute `target` path's escaped backslashes decode-then-reencode to
+    # different bytes and only the `validate` hash drifts off golden.
+    r = run_cli(root, *args)
     assert r.returncode == 0, f"{' '.join(args)} failed: {r.stderr}"
     # Normalize the machine/build-state fields at the JSON level, not by
     # string-replacing the path. The CLI emits Path(args.target).resolve(),

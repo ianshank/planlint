@@ -14,7 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from tests.support import load_tool
+from tests.support import load_tool, workflow_job_blocks
+from tests.workflow_support import _code_lines
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -25,47 +26,6 @@ _load_tool = load_tool
 
 # --- release workflow -------------------------------------------------------
 
-
-def _workflow_jobs(text: str) -> dict[str, str]:
-    """Split a workflow's ``jobs:`` mapping into one text block per job.
-
-    A crude split, but scoped: a top-level ``jobs:`` key, then each two-space
-    indented ``<name>:`` starts a block that runs to the next one. That is
-    enough to ask "does *this* job declare that dependency" instead of "does
-    this string appear anywhere in the file", which a comment or an unrelated
-    job would satisfy just as well.
-
-    No YAML parser is used because this project declares no runtime
-    dependencies and none is available to the test suite either.
-    """
-    body = text.split("\njobs:\n", 1)[1] if "\njobs:\n" in text else ""
-    assert body, "release.yml has no top-level jobs: mapping"
-    jobs: dict[str, str] = {}
-    current: str | None = None
-    for line in body.splitlines():
-        header = re.match(r"^  ([A-Za-z_][\w-]*):\s*$", line)
-        if header:
-            current = header.group(1)
-            jobs[current] = ""
-            continue
-        if line and not line.startswith("  ") and not line.startswith("\t"):
-            break  # dedented out of jobs: entirely
-        if current:
-            jobs[current] += line + "\n"
-    return jobs
-
-def _uncommented(block: str) -> str:
-    """Strip comment-only lines and trailing comments before matching.
-
-    Without this, every assertion below is satisfiable by a comment that
-    merely mentions the token it is looking for.
-    """
-    kept = []
-    for line in block.splitlines():
-        stripped = line.split("#", 1)[0]
-        if stripped.strip():
-            kept.append(stripped)
-    return "\n".join(kept)
 
 @pytest.mark.integration
 def test_release_workflow_is_gated_and_uses_trusted_publishing() -> None:
@@ -78,13 +38,17 @@ def test_release_workflow_is_gated_and_uses_trusted_publishing() -> None:
     exactly that.
     """
     text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
-    jobs = _workflow_jobs(text)
+    jobs = workflow_job_blocks(text)
+    assert jobs, "release.yml has no top-level jobs: mapping"
     assert {"gate", "build", "publish"} <= set(jobs), (
         f"release.yml defines jobs {sorted(jobs)}; the gate/build/publish chain is "
         "what makes publishing safe"
     )
 
-    gate, build, publish = (_uncommented(jobs[n]) for n in ("gate", "build", "publish"))
+    # Code only: a comment that merely mentions a token must satisfy nothing.
+    gate, build, publish = (
+        "\n".join(code for _, code in _code_lines(jobs[n])) for n in ("gate", "build", "publish")
+    )
 
     assert "make pre-pr" in gate, "the gate job must run the full ladder"
     assert re.search(r"^\s*needs:\s*gate\s*$", build, re.MULTILINE), (

@@ -342,9 +342,9 @@ def test_missing_target_directory_exits_two(tmp_path: Path) -> None:
 def test_a_real_finding_still_exits_one(populated_repo: Path) -> None:
     """The other half of AC-SD-6: exit 1 still means findings, unchanged."""
     spec = populated_repo / "openspec/changes/c1/specs/cap/spec.md"
-    spec.write_text(
+    write_spec(
+        populated_repo, "c1", "cap",
         spec.read_text(encoding="utf-8").replace("make regression", "make nope"),
-        encoding="utf-8",
     )
     result = run_cli(populated_repo, "validate", "--fail-on", "ERROR")
     assert result.returncode == 1

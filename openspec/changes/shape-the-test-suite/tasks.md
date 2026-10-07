@@ -676,6 +676,60 @@ collected count; the red runs are recorded here and never committed.
   Milestone 0's with `tests/test_suite_shape.py` excluded — and record PR
   #42's CI run on it.
 - **Gate:** `make test`, then `make lint`
+  **Recorded (Milestone 5, 2026-10-07, on `3044694` + the Milestone 5 tree):**
+  - *Red first.* Both guards read each helper's shape from its own body in
+    `tests/support.py`: `run_cli`'s `subprocess.run` argv literals (`-m`,
+    `openspec_graph.cli`, `--target`) and the path chains of `write_spec`
+    (`openspec/changes/<change>/specs/<capability>/spec.md`) and
+    `write_speckit_spec` (`specs/<feature>/spec.md`), so no shape is
+    restated in the guard. Before routing, `python -m pytest
+    tests/test_suite_shape.py -q -o addopts=""`: 2 failed. The spawn guard
+    named `test_decomposition.py:110`. The writer guard named
+    `test_decomposition.py:106`, `test_detect_speckit.py:107`,
+    `test_detect_thresholds.py:278`, `test_e2e_corpus.py:44` and `:340`, and
+    one site this list did not foresee: `test_skill_contract.py:345`, which
+    rewrote a fixture-written spec in place by hand. It is routed through
+    `write_spec` like the rest; nothing was exempted. The seven planted
+    routing cases passed from their first run, including a main-spec path
+    (`openspec/specs/<cap>/spec.md`) that no routed writer owns and that
+    must stay unnamed.
+  - *Routed.* `test_decomposition.py`'s `_run_cli` spawns through `run_cli`
+    and keeps its JSON normalisation; its fixture writer is `write_spec`;
+    `python -m pytest tests/test_decomposition.py -q`: 9 passed, the golden
+    hashes unmoved, which is DEC-TSS-009's claim about the coverage
+    variable shown. `test_e2e_corpus.py`'s `_harness_spec` is a one-line
+    wrapper over `write_spec` and its SpecKit write is `write_speckit_spec`;
+    `test_detect_thresholds.py`, `test_detect_speckit.py` and
+    `test_skill_contract.py` write through the helpers. The five routed
+    modules: 168 passed. `test_release_surface.py` reads the release jobs
+    through `workflow_job_blocks`, with the missing-`jobs:` assertion at
+    the call site, and strips comments through `_code_lines`; `grep -rn
+    "def _workflow_jobs\|def _ci_job_blocks" tests/` finds nothing, the
+    alias in `tests/test_ci_workflow.py` being an assignment
+    (`_ci_job_blocks = workflow_job_blocks`).
+  - *After-greps,* beside the header's at `f7118a0`. `subprocess.run`: 17
+    modules. `test_decomposition` left by the routing; `test_action_contract`
+    left when its simulator moved to `tests/action_support.py`;
+    `test_ci_hardening` and the spawning halves of `test_skill_contract`
+    and `test_agent_artifacts` moved by the splits to `test_ci_workflow`,
+    `test_coverage_checkers`, `test_skill_distribution` and
+    `test_release_surface`; `test_suite_shape` holds the nested collection
+    and the planted texts. `"openspec_graph.cli"`: `test_skill_distribution.py`
+    (the `--version` spawn without `--target`, moved from
+    `test_skill_contract.py` in Milestone 3) and `test_suite_shape.py` (planted
+    texts). `write_speckit_spec`: 11 modules, the nine plus
+    `test_e2e_corpus.py` and `test_suite_shape.py`. Helper-less: 14 modules,
+    `test_decomposition` and `test_detect_thresholds` now importing from
+    `tests/support.py`, and `test_agent_artifacts` helper-less since its
+    release half moved out in Milestone 3; the others have nothing to route.
+  - *Gate.* `make test`: exit 0, wall 174 s; `openspec_graph/` 99.3% (2276/2292)
+    lines and 97.6% (744/762) branches, `tools/` 96.4% (946/981) and 93.9%
+    (323/344). `make lint`: exit 0. The criterion's tally with the three
+    routing guards added: 575 `unit`, 294 `integration`, 198 `e2e` of 1067.
+    Baseline: 1057 names, sha256 prefix `2f62db0aee56ef40`, 1602 collected
+    with `tests/test_suite_shape.py` ignored — equal to Milestone 0's.
+    `make pre-pr`, the whole ladder at the second stage's commit: exit 0,
+    wall 178 s.
 
 ## Milestone 6 — In-process loops, one subprocess each, the durations pair
 

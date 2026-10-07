@@ -25,9 +25,13 @@ from pathlib import Path
 import pytest
 
 from tests.shape_support import (
+    SUPPORT_MODULE,
     TIERS,
     Program,
     criterion_disagreements,
+    hand_written_specs,
+    inline_cli_spawns,
+    routed_shapes,
     tier_count_violations,
     tier_tally,
 )
@@ -395,3 +399,90 @@ def test_a_mismarked_or_unmarked_planted_module_is_named(
         return
     found = _report(root, check)
     assert any(offender in line for line in found), f"{check} did not name {offender}: {found}"
+
+
+# --- Milestone 5: the duplicated shapes route through tests/support.py (R-TSS-8) ---
+
+
+@pytest.mark.integration
+def test_no_test_module_spawns_the_cli_outside_support() -> None:
+    """R-TSS-8: `run_cli` is the one place a test spawns the CLI against a
+    target; the shape is read from `run_cli` itself, so a copy that drifts
+    from it -- the UTF-8 decode, the coverage hand-off -- is named."""
+    shapes = routed_shapes(TESTS_DIR / SUPPORT_MODULE)
+    inline = inline_cli_spawns(TESTS_DIR, shapes)
+    assert inline == [], f"spawn the CLI through tests.support.run_cli, not inline: {inline}"
+
+
+@pytest.mark.integration
+def test_no_test_module_writes_a_spec_path_by_hand() -> None:
+    """R-TSS-8: `write_spec` and `write_speckit_spec` are the only writers of
+    the harness and SpecKit spec paths; a FIFO, a directory or an assertion at
+    such a path is not a write."""
+    shapes = routed_shapes(TESTS_DIR / SUPPORT_MODULE)
+    by_hand = hand_written_specs(TESTS_DIR, shapes)
+    assert by_hand == [], f"write specs through the tests.support writers: {by_hand}"
+
+
+_PLANTED_ROUTING = {
+    "inline-cli-spawn": ("""
+        import subprocess
+        import sys
+
+
+        def test_spawns(tmp_path):
+            subprocess.run(
+                [sys.executable, "-m", "openspec_graph.cli", "--target", str(tmp_path), "validate"],
+                check=False,
+            )
+    """, "spawn", True),
+    "version-spawn-without-target": ("""
+        import subprocess
+        import sys
+
+
+        def test_version():
+            subprocess.run([sys.executable, "-m", "openspec_graph.cli", "--version"], check=False)
+    """, "spawn", False),
+    "harness-write-through-a-local": ("""
+        def test_writes(tmp_path):
+            spec = tmp_path / "openspec" / "changes" / "c1" / "specs" / "cap" / "spec.md"
+            spec.parent.mkdir(parents=True)
+            spec.write_text("# Spec", encoding="utf-8")
+    """, "write", True),
+    "speckit-write-through-two-locals": ("""
+        def test_writes(tmp_path):
+            features = tmp_path / "specs"
+            feature = features / "001-demo"
+            (feature / "spec.md").write_text("# Spec", encoding="utf-8")
+    """, "write", True),
+    "fifo-at-a-spec-path": ("""
+        import os
+
+
+        def test_fifo(tmp_path):
+            os.mkfifo(tmp_path / "specs" / "001-demo" / "spec.md")
+    """, "write", False),
+    "assertion-on-a-spec-path": ("""
+        def test_exists(tmp_path):
+            assert not (tmp_path / "specs" / "001-demo" / "spec.md").exists()
+    """, "write", False),
+    "main-spec-path-no-writer-routes": ("""
+        def test_writes(tmp_path):
+            (tmp_path / "openspec" / "specs" / "cap" / "spec.md").write_text("x")
+    """, "write", False),
+}
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("case", sorted(_PLANTED_ROUTING))
+def test_a_planted_inline_spawn_or_hand_written_spec_is_named(tmp_path: Path, case: str) -> None:
+    """R-TSS-8: each routing guard names its planted shape and stays quiet on
+    a spawn without `--target`, a FIFO, an assertion and a path no routed
+    writer owns."""
+    text, guard, named = _PLANTED_ROUTING[case]
+    root = tmp_path / TESTS_DIR.name
+    _plant(root, {"test_planted.py": text})
+    shapes = routed_shapes(TESTS_DIR / SUPPORT_MODULE)
+    found = inline_cli_spawns(root, shapes) if guard == "spawn" else hand_written_specs(root, shapes)
+    assert bool(found) is named, f"{case}: {found}"

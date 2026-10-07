@@ -278,8 +278,8 @@ def workflow_job_blocks(text: str) -> dict[str, str]:
     alias now lives in ``tests/test_ci_workflow.py``) when
     ``tests/test_workflow_hardening.py`` became its second user; both
     modules were split by concern in ``shape-the-test-suite``.
-    ``tests/test_release_surface.py`` still carries its own near-copy,
-    which that package routes here (R-TSS-8, closing DEC-HCW-009's deferral).
+    ``tests/test_release_surface.py``'s near-copy was routed here by that
+    package (R-TSS-8), closing DEC-HCW-009's deferral.
     """
     lines = text.splitlines()
     try:

@@ -22,6 +22,7 @@ import pytest
 from openspec_graph import delta, detect
 from openspec_graph.parse import parse_spec
 from openspec_graph.parse_semantics import threshold_values
+from tests.support import write_spec
 
 TABLE = detect.COVERAGE_REPORT_TABLE
 
@@ -273,16 +274,16 @@ def test_g003_does_not_flag_a_criterion_that_cites_the_exact_fractional_floor(
 
     (tmp_path / "Makefile").write_text("test:\n\t@echo t\n", encoding="utf-8")
     (tmp_path / "pyproject.toml").write_text("[tool.coverage.report]\nfail_under = 85.5\n")
-    spec = tmp_path / "openspec" / "changes" / "c1" / "specs" / "cap" / "spec.md"
-    spec.parent.mkdir(parents=True)
-    spec.write_text(
+    spec = write_spec(
+        tmp_path,
+        "c1",
+        "cap",
         "# Spec\n\n## Requirements\n\n- R-XY-1: Coverage holds.\n\n"
         "## Acceptance Criteria\n\n"
         "- [ ] **AC-XY-1:** Line coverage is >= 85.5% as pyproject.toml gates it. (R-XY-1)\n"
         "  _Verified by:_ `pytest -k test_x` · stage: `make test`\n"
         "- [ ] **AC-XY-2 (non-success):** A drop below the floor fails `make test`. (R-XY-1)\n"
         "  _Verified by:_ `pytest -k test_y` · stage: `make test`\n",
-        encoding="utf-8",
     )
     profile = detect.profile(tmp_path)
     findings = rules.evaluate(parse_spec(spec, "harness"), profile)

@@ -30,6 +30,11 @@ test that starts a process or reads the tree never lands on ``unit``.
 Debugging a disputed tier: ``python -m pytest tests/test_suite_shape.py -k
 criterion -o log_cli=true --log-cli-level=DEBUG`` logs every test's tier with
 the chain of names that decided it.
+
+The routing half (R-TSS-8) finds a test module that spawns the CLI in
+``run_cli``'s shape or writes a spec at ``write_spec``'s or
+``write_speckit_spec``'s path by hand. Each shape is read from the helper's
+own body in ``tests/support.py``, so the guard follows the helper if it moves.
 """
 
 from __future__ import annotations
@@ -660,3 +665,173 @@ def tier_tally(program: Program) -> str:
         f"total {'/'.join(TIERS)}: {'/'.join(str(total[t]) for t in TIERS)} of {sum(total.values())}"
     )
     return "\n".join(lines)
+
+
+# -- routing (R-TSS-8) -----------------------------------------------------------
+
+#: The shared module the routed helpers live in, and the helpers whose shapes
+#: no other module under ``tests/`` may repeat by hand.
+SUPPORT_MODULE = "support.py"
+ROUTED_SPAWN = "run_cli"
+ROUTED_WRITERS = ("write_spec", "write_speckit_spec")
+WRITE_METHOD = "write_text"
+
+
+@dataclass(frozen=True)
+class RoutedShapes:
+    """What a hand-rolled copy of a routed helper looks like, read from the helper."""
+
+    spawn_module: str
+    spawn_function: str
+    spawn_literals: frozenset[str]
+    writers: dict[str, tuple[str, ...]]
+
+
+def _locals(function: ast.AST) -> dict[str, ast.expr]:
+    return {
+        target.id: node.value
+        for node in ast.walk(function)
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+
+
+def path_segments(
+    expression: ast.AST, assigned: dict[str, ast.expr], depth: int = 0
+) -> list[str]:
+    """The literal segments of a path expression, in order, locals substituted."""
+    if depth > len(assigned) + 1:
+        return []
+    if isinstance(expression, ast.Constant) and isinstance(expression.value, str):
+        return [s for s in expression.value.replace("\\", "/").split("/") if s]
+    if isinstance(expression, ast.BinOp) and isinstance(expression.op, ast.Div):
+        return path_segments(expression.left, assigned, depth) + path_segments(
+            expression.right, assigned, depth
+        )
+    if isinstance(expression, ast.Name):
+        value = assigned.get(expression.id)
+        return path_segments(value, assigned, depth + 1) if value is not None else []
+    if isinstance(expression, ast.Attribute):
+        inner = path_segments(expression.value, assigned, depth)
+        return inner[:-1] if expression.attr == "parent" else inner
+    if isinstance(expression, ast.Call):
+        if isinstance(expression.func, ast.Attribute):
+            return path_segments(expression.func.value, assigned, depth)
+        return [s for arg in expression.args for s in path_segments(arg, assigned, depth)]
+    return []
+
+
+def _process_start(call: ast.Call) -> tuple[str, str] | None:
+    func = call.func
+    if (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and func.attr in PROCESS_STARTS.get(func.value.id, frozenset())
+    ):
+        return func.value.id, func.attr
+    return None
+
+
+def _argv(call: ast.Call) -> ast.expr | None:
+    if call.args:
+        return call.args[0]
+    return next((kw.value for kw in call.keywords if kw.arg == "args"), None)
+
+
+def _string_constants(expression: ast.AST | None) -> list[str]:
+    if expression is None:
+        return []
+    return [
+        sub.value
+        for sub in ast.walk(expression)
+        if isinstance(sub, ast.Constant) and isinstance(sub.value, str)
+    ]
+
+
+def routed_shapes(support: Path) -> RoutedShapes:
+    """Read the routed helpers' shapes from their bodies in ``support``."""
+    tree = ast.parse(support.read_text(encoding="utf-8"), filename=str(support))
+    functions = {
+        node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
+    }
+    spawn = functions[ROUTED_SPAWN]
+    call = next(
+        node for node in ast.walk(spawn) if isinstance(node, ast.Call) and _process_start(node)
+    )
+    module, function = _process_start(call) or ("", "")
+    writers: dict[str, tuple[str, ...]] = {}
+    for name in ROUTED_WRITERS:
+        writer = functions[name]
+        write = next(
+            node
+            for node in ast.walk(writer)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == WRITE_METHOD
+        )
+        assert isinstance(write.func, ast.Attribute)
+        writers[name] = tuple(path_segments(write.func.value, _locals(writer)))
+    return RoutedShapes(module, function, frozenset(_string_constants(_argv(call))), writers)
+
+
+def _routed_modules(root: Path) -> list[Path]:
+    return sorted(path for path in root.glob("*.py") if path.name != SUPPORT_MODULE)
+
+
+def _functions_and_module(tree: ast.Module) -> list[ast.AST]:
+    return [tree, *(n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)))]
+
+
+def inline_cli_spawns(root: Path, shapes: RoutedShapes) -> list[str]:
+    """Every spawn under ``root`` with ``run_cli``'s argv literals, outside the helper."""
+    found: list[str] = []
+    for path in _routed_modules(root):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or _process_start(node) != (
+                shapes.spawn_module,
+                shapes.spawn_function,
+            ):
+                continue
+            if shapes.spawn_literals <= set(_string_constants(_argv(node))):
+                found.append(f"{path.name}:{node.lineno}")
+    return found
+
+
+def _writer_for(segments: list[str], shapes: RoutedShapes) -> str | None:
+    """The routed writer whose path ``segments`` spell, if any.
+
+    A shape matches when its literals appear in order and the path carries no
+    literal that only another, longer shape has: ``openspec/specs/<cap>/spec.md``
+    holds ``specs`` and ``spec.md`` but also ``openspec``, so it is no SpecKit
+    path, and no writer exists for it.
+    """
+    every = {literal for shape in shapes.writers.values() for literal in shape}
+    for name, shape in shapes.writers.items():
+        remaining = iter(segments)
+        in_order = all(literal in remaining for literal in shape)
+        foreign = (every - set(shape)) & set(segments)
+        if in_order and not foreign:
+            return name
+    return None
+
+
+def hand_written_specs(root: Path, shapes: RoutedShapes) -> list[str]:
+    """Every ``write_text`` under ``root`` at a routed writer's path, named with it."""
+    found: list[str] = []
+    for path in _routed_modules(root):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for scope in _functions_and_module(tree):
+            assigned = _locals(scope)
+            for node in ast.walk(scope):
+                if not (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == WRITE_METHOD
+                ):
+                    continue
+                writer = _writer_for(path_segments(node.func.value, assigned), shapes)
+                if writer is not None:
+                    found.append(f"{path.name}:{node.lineno} ({writer})")
+    return sorted(set(found))
