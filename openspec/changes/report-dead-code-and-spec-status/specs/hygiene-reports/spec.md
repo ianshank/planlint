@@ -41,10 +41,13 @@ Third, setting headers "to what shipped" is a decision this repository
 reserves to a human. It also edits the record of packages that are on `main`,
 and it needs a header value that means "shipped", which today's two values —
 `DRAFT` and `APPROVED`, the latter meaning approved after review — do not
-provide.
+provide. So this package builds the report and names the owner of the rest: a
+follow-up package, `settle-package-status-headers`, in which the maintainer
+settles the headers the report lists and decides the vocabulary.
 
 **Evidence:** measured at `1c8917c` (the head of `claude/m2-report-targets`,
-stacked on PR #42), 2026-10-07; each command is in the proposal.
+stacked on PR #42), 2026-10-07, and for the round-1 corrections at `114754c`,
+the same day; each command is in the proposal.
 
 - **vulture's output.** `python -m vulture openspec_graph tools
   --min-confidence 80` prints nothing (exit 0). At 60 it prints 12 findings
@@ -52,20 +55,32 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   the 7 under the two trees are `has_selector`, `speckit_section_body`,
   `speckit_subsection_body`, `precision_pct`, `recall_pct`,
   `whitespace_split` and `commenters`.
+- **vulture at its edges.** From the root at `114754c`: `python -m vulture`
+  with no path prints "Please pass at least one file or directory" and exits
+  2; over a directory with no `.py` file it prints nothing and exits 0; over
+  an absent path it exits 1. `ast.parse`, which vulture parses with, writes a
+  `SyntaxWarning` for an invalid escape to stderr and still succeeds.
 - **The version facts.** vulture 2.16 is installed and is the latest on the
   index. Its changelog dates exit code 3 for dead code to 2.9 and Python 3.14
   support to 2.15.
 - **The headers.** 25 of 51 `spec.md` headers read `DRAFT` and 26
   `APPROVED`, in one shape. Four proposals carry a status line of their own
   in another shape.
+- **The header reader.** `parse_spec` takes the status from `STATUS`
+  (`openspec_graph/parse_semantics.py:16`), searched unanchored over the raw
+  text and upper-cased (`openspec_graph/parse.py:156`, `:168`). Rule H005
+  reads that value.
+- **The packages.** `detect.profile(root).change_dirs`
+  (`openspec_graph/detect.py:707–715`) counts a symlinked alias of a package
+  once, by real-path identity, and keeps a package with no `spec.md`.
 - **The comparison.** A one-off reading of this spec's definitions finds 9
   all-`DRAFT` packages with every milestone `[DONE]` and every criterion
   ticked, none all-`APPROVED` with neither, one whose proposal and spec
   headers disagree, and none unrecognised.
-- **The guards.** The two report-target guards check direct prerequisites
-  only and repeat one another. docs/hooks.md documents no report target, and
-  its one table is read by a helper that would read any second table as CI
-  rows.
+- **The guards.** The two report-target tests and `_one_run_violations` each
+  check direct prerequisites only, and repeat one another. docs/hooks.md
+  documents no report target, and its one table is read by a helper that
+  would read any second table as CI rows.
 
 ---
 
@@ -74,30 +89,35 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
 - R-RDS-1: `pyproject.toml`'s `dev` extra MUST gain `vulture` with a lower
   bound and no upper bound or exact pin, at the release DEC-RDS-001 names,
   under a comment giving the floor's reasons. `[project] dependencies` MUST
-  stay `[]`, and no other extra MAY be added. No workflow, Makefile recipe or
-  Dependabot entry MAY pin or install vulture on its own.
-- R-RDS-2: `pyproject.toml` MUST carry a `[tool.vulture]` table holding
-  `min_confidence`, set to the confidence vulture assigns an unused function,
-  method, class, property, attribute or variable (DEC-RDS-002). Its comment
-  MUST say that it is a reporting threshold read by `tools/dead_code.py` and
-  by vulture itself when run from the repository root, and that it gates
-  nothing. No key vulture applies to a run's findings on its own — `exclude`,
-  `ignore_names`, `ignore_decorators`, or a whitelist among `paths` — MAY be
-  added there. No recipe line, workflow line or script MAY carry the number.
+  stay `[]`, and no other extra MAY be added. No file under `.github/` —
+  workflow or Dependabot configuration — and no `Makefile` recipe line MAY
+  name vulture: the dev extra installs it, and `tools/dead_code.py` runs it.
+- R-RDS-2: `pyproject.toml`'s `[tool.specgraph]` table MUST gain
+  `dead_code_min_confidence`, set to the confidence vulture assigns an unused
+  function, method, class, property, attribute or variable (DEC-RDS-002),
+  beside `per_file_line_min`, the reporting threshold DEC-MCO-009 put there.
+  Its comment MUST say that it is a reporting threshold read by
+  `tools/dead_code.py`, which passes it to vulture on the command line, and
+  that it gates nothing. `pyproject.toml` MUST NOT carry a `[tool.vulture]`
+  table: vulture reads one from its working directory and would apply its
+  keys to the report's own run. No recipe line, workflow line or script MAY
+  carry the number.
 - R-RDS-3: `tools/dead_code.py` MUST import no third-party module and not
   `openspec_graph`, and MUST follow `tools/_common.py`'s conventions: its
-  `logger`; a root resolved at call time; `read_pyproject_int`;
-  `coverage_sources`; and argparse with the program name first in `argv`, as
-  `stage_citations.py` takes it. It MUST accept `--root` (default: the
-  repository root). It MUST produce its report from exactly one vulture
-  process: `sys.executable -m vulture`, with the root as working directory,
-  over every tree `[tool.coverage.run] source` declares (the reported trees)
-  and over `tests/` when that directory exists, at `min_confidence` passed on
-  the command line, and without the whitelist. `tests/` MUST count as a user
-  of the code and MUST NOT be reported.
-- R-RDS-4: Each line of that process's output MUST be read in vulture's
-  shape — a path, a line number, a message, and a parenthesised confidence —
-  with the path's separators normalised to `/`. The script MUST:
+  `logger`; a root resolved at call time; `read_pyproject_int` over
+  `[tool.specgraph]`; `coverage_sources`; and argparse with the program name
+  first in `argv`, as `stage_citations.py` takes it. It MUST accept `--root`
+  (default: the repository root). It MUST produce its report from exactly one
+  vulture process: `sys.executable -m vulture`, with the root as working
+  directory, over every tree `[tool.coverage.run] source` declares (the
+  reported trees) and over `tests/` when that directory exists, at
+  `dead_code_min_confidence` passed on the command line, and without the
+  whitelist. `tests/` MUST count as a user of the code and MUST NOT be
+  reported.
+- R-RDS-4: The script MUST read findings from vulture's stdout and from
+  nothing else. Each stdout line MUST be read in vulture's shape — a path, a
+  line number, a message, and a parenthesised confidence — with the path's
+  separators normalised to `/`. The script MUST:
   - keep only findings under a reported tree;
   - take a symbol name only from a message of the form `unused <kind>
     '<name>'`;
@@ -117,21 +137,31 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   with a message naming the cause and never a traceback, when it cannot run:
   - vulture is not installed, decided by `importlib.util.find_spec` before
     any process starts, so no import-error text reaches stderr;
+  - `dead_code_min_confidence` is absent, or `source` declares no tree;
+  - a tree `source` declares is not a directory holding at least one `.py`
+    file, decided before any process starts, because vulture reads an empty
+    tree as clean;
+  - `pyproject.toml` or the whitelist exists but cannot be read (`OSError`)
+    or decoded (`UnicodeDecodeError`), with the message naming the file. The
+    script MUST translate these from its own reads, including the ones it
+    makes through `_common`'s readers, which raise them unchanged;
   - vulture exits with anything other than 0 or 3;
-  - a line of vulture's output has neither shape;
-  - `min_confidence` is absent, or `source` declares no tree;
+  - a line of vulture's stdout has neither shape;
   - a whitelist line is malformed.
 
   Vulture's own exit code 3 MUST be read as "findings" and MUST NOT reach the
-  caller.
+  caller. Vulture's stderr MUST go to the script's logger at DEBUG, and MUST
+  decide nothing when vulture exits 0 or 3: a `SyntaxWarning` there is not a
+  failure. When vulture exits 1 or 2, the exit-2 message MUST carry that exit
+  code and vulture's stderr.
 - R-RDS-6: The whitelist MUST be `tools/dead_code_whitelist.txt`. Each line
   that is neither blank nor a comment is one Python identifier, whitespace,
   `#`, and a non-empty reason. It is read only by `tools/dead_code.py` and
   never passed to vulture, and an absent file is an empty whitelist. An entry
   MAY be added only for a reported name that is used by code vulture does not
-  read — at drafting, the shlex lexer attributes `tools/stage_citations.py`
-  assigns for the standard library to read. It MUST NOT be added for a symbol
-  that nothing uses.
+  read — at drafting, the shlex lexer attributes the workflow lexer assigns
+  for the standard library to read, which R-RDS-24 moves into
+  `tools/_common.py`. It MUST NOT be added for a symbol that nothing uses.
 - R-RDS-7: `tools/dead_code.py` MUST expose a function that returns every
   whitelist entry no reported tree binds. A binding is a function, class or
   method name, an assignment target (a name, or an attribute's name), an
@@ -145,19 +175,23 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   has no prerequisites, has help text that begins `Report` and says it is a
   report and not a gate, and has the recipe `python tools/dead_code.py` and
   nothing else.
-- R-RDS-9: `tools/spec_status.py` MUST import no third-party module. It MUST
-  read each spec's `Status` header and verification lines through
-  `openspec_graph`'s own parse (`parse_spec`, under the dialect
+- R-RDS-9: `tools/spec_status.py` MUST import no third-party module, and from
+  `tools/` only `_common`. It MUST read verification lines through
+  `openspec_graph`'s own parse — `parse_spec`, under the dialect
   `detect.profile` reports, with `MAKE_REF` over each criterion's
-  `verified_by`), and the stages each workflow runs through
-  `stage_citations.workflow_stages`. Criterion checkboxes, milestone headings,
-  task checkboxes, a proposal's status line and CHANGELOG entries, which no
-  parser in the package reads, MUST be read with the standard library's `re`.
-  It MUST accept `--root` (default: the repository root), with the program
-  name first in `argv`.
-- R-RDS-10: For every directory under `openspec/changes/` — each one a
-  package, as `detect` counts them — the script MUST print one row, sorted by
-  package name, giving:
+  `verified_by` — and MUST use `parse_spec` for nothing else. It MUST read the
+  `Status` header as R-RDS-23 requires, and the stages each workflow runs
+  through `_common.workflow_stages`, passing `MAKE_REF` as the stage grammar
+  (R-RDS-24). Criterion checkboxes, milestone headings, task checkboxes, a
+  proposal's status line and CHANGELOG entries, which no parser in the
+  package reads, MUST be read with the standard library's `re`. It MUST
+  accept `--root` (default: the repository root), with the program name first
+  in `argv`.
+- R-RDS-10: The packages MUST be `detect.profile(root).change_dirs` — every
+  directory under `openspec/changes/`, a symlinked alias counted once by
+  real-path identity, and a package with no `spec.md` kept — and never a
+  separate glob or listing of that directory. For each, the script MUST print
+  one row, sorted by package name, giving:
   - the package name;
   - the `Status` header of each `spec.md`, and the proposal's status line when
     one is present;
@@ -180,6 +214,11 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   - spec `DRAFT` is draft, and spec `APPROVED` is settled;
   - proposal `proposed` is draft, and proposal `implemented` is settled.
 
+  `VOCABULARY` in `tools/spec_status.py` MUST be the one place the spec
+  vocabulary is written; it is where the follow-up of R-RDS-22 amends it.
+  Words are matched case-sensitively, so any other word — a lower-case
+  `draft`, or `IMPLEMENTED` — is unrecognised until the vocabulary names it.
+
   A package MUST carry at most one finding, chosen in this order:
   - `header-unrecognised`: a `spec.md` with no status header or a word outside
     the vocabulary, a proposal status line with such a word, or no `spec.md`
@@ -197,11 +236,17 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   finding.
 - R-RDS-12: `tools/spec_status.py` MUST exit 1 when any package carries a
   finding, and 0, with a line saying none does, otherwise. It MUST exit 2,
-  with a message naming the cause and never a traceback, when the root has no
-  `openspec/changes/` directory, or when a `spec.md`, `proposal.md`,
-  `tasks.md`, `CHANGELOG.md` or workflow file exists but cannot be read. An
-  absent `CHANGELOG.md`, `proposal.md`, `tasks.md` or workflow directory is
-  not a failure: its column reads as empty.
+  with a message naming the cause and the file and never a traceback, when:
+  - the root has no `openspec/changes/` directory;
+  - a `spec.md`, `proposal.md`, `tasks.md`, `CHANGELOG.md` or workflow file
+    exists but cannot be read (`OSError`);
+  - one of those, a workflow file excepted, cannot be decoded
+    (`UnicodeDecodeError`). A workflow file is read as `stage_citations` reads
+    it, with undecodable bytes replaced.
+
+  The script MUST translate these from its own reads, or catch them in
+  `main`. An absent `CHANGELOG.md`, `proposal.md`, `tasks.md` or workflow
+  directory is not a failure: its column reads as empty.
 - R-RDS-13: The `Makefile` MUST gain a `spec-status` target with the shape
   R-RDS-8 gives `dead-code`, and the recipe `python tools/spec_status.py` and
   nothing else.
@@ -209,9 +254,19 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   helper in `tests/test_ci_makefile.py` MUST define a report target: a
   documented target whose help text begins `Report`, which is in `.PHONY` and
   is not reachable from `ci` or `pre-pr` through prerequisites, followed
-  transitively. The two existing report-target tests MUST delegate to the
-  helper and keep their names and assertions, because shipped specs cite
-  them. A new test MUST run the helper over every report target in the real
+  transitively. Every check of that property in the module MUST go through
+  the helper:
+  - `test_makefile_has_matcher_accuracy_report_target` and
+    `test_makefile_has_coverage_per_file_report_target` MUST delegate to it
+    and keep their names and every property they assert, because shipped
+    specs cite them;
+  - `_one_run_violations` MUST delegate its aggregate check to it. Its planted
+    Makefile's report target MUST have help text that begins `Report`, so the
+    planted baseline stays clean. The helper's message for a reachable report
+    target MUST keep the words `pre-pr composes`, so the existing planted case
+    is named unedited.
+
+  A new test MUST run the helper over every report target in the real
   `Makefile`, requiring the `dead-code` and `spec-status` targets among them.
 - R-RDS-15: `docs/hooks.md` MUST gain a reports section with one table row
   per report target. Each row's first cell is the backticked command, followed
@@ -231,6 +286,8 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   clause and resolving links. `docs/aqa.md` MUST describe both reports beside
   the stage-citation paragraph. Dated records — `CHANGELOG.md`'s released
   sections, the peer reviews, the plan — MUST NOT be edited.
+  `docs/next-steps.md` is a living document, not a dated record, and gains the
+  one item R-RDS-22 names.
 - R-RDS-17: `CHANGELOG.md`'s `[Unreleased]` section MUST carry an `Added`
   entry led by the bold backticked name of this package, in the shape
   R-RDS-10 reads. It MUST name:
@@ -239,19 +296,24 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   - the confidence key and why it is not the plan's D4 figure;
   - the whitelist and its two stale checks;
   - the four finding kinds;
-  - that no header was edited.
+  - that no header was edited, and the follow-up that owns them.
 - R-RDS-18: Every new test MUST carry exactly one of the registered tiers,
   the one `tests/shape_support.py`'s criterion computes. An in-process test of
   either script loads a `tools/` script and is therefore at least
   `integration`, and a process the script itself starts does not count
   (DEC-TSS-017). Every new or edited test module MUST stay within
   `MAX_TEST_MODULE_LINES`. Both scripts MUST join
-  `test_gate_script_is_runnable_as_a_script`'s list. Every `spec.md` a test
+  `test_gate_script_is_runnable_as_a_script`'s list, and that test MUST gain
+  `assert (TOOLS / script).is_file()` before it starts the process — an
+  addition, with its name and every other assertion kept — so a listed script
+  that does not exist is red, not an accepted exit 2. Every `spec.md` a test
   plants MUST be written through `tests/support.py`'s `write_spec`.
 - R-RDS-19: Every guard this spec adds MUST read the file it judges, and MUST
   be written and run red against the tree before the change it covers, with
   the red run recorded in `tasks.md` and never committed as a tree state. Each
-  MUST also be shown red on a planted counter-example:
+  script's entry in the runnable-as-a-script list MUST be run red before that
+  script exists, by the presence assertion of R-RDS-18. Each guard MUST also
+  be shown red on a planted counter-example:
   - a `Makefile` text whose `pre-pr` composes a report target directly;
   - one that composes it through an intermediate target;
   - one whose report target is missing from `.PHONY`;
@@ -260,29 +322,80 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   - one whose second table would be read as CI rows;
   - a whitelist entry naming no binding;
   - a `pyproject.toml` whose dev extra pins vulture exactly, or lists it
-    under `[project] dependencies`.
+    under `[project] dependencies`;
+  - a script text carrying the configured confidence as a numeric literal;
+  - a workflow text, and a `Makefile` recipe line, naming vulture.
 - R-RDS-20: `tasks.md` MUST record, each dated with its commit and naming
   its command:
   - both reports' complete output at the branch head after the change;
   - the installed vulture version;
   - vulture's output at the plan's figure and at the configured one, before
     the change;
-  - the stage-citation report after the change.
+  - the stage-citation report after the change;
+  - the stage-citation output before and after the lexer move of R-RDS-24,
+    and their diff.
 
   The record MUST say that its figures include this package's own spec. The
-  spec-status output so recorded is the worklist for the header follow-up
-  DEC-RDS-008 describes.
+  spec-status output so recorded is the worklist for the follow-up of
+  R-RDS-22.
 - R-RDS-21: The dead-code report MUST NOT delete, rename, deprecate or
   privatise any symbol, and this package MUST NOT either. Every symbol the
   report lists at landing stays for M4's W5.1–3, and is recorded there as
   this package's measurement.
+- R-RDS-22: The rest of W8.5 MUST have a named owner: the follow-up package
+  `settle-package-status-headers`, which is the maintainer's.
+  `docs/next-steps.md` MUST carry one item for it, in that file's numbered
+  item shape. The item MUST say:
+  - that in it the maintainer settles each header the spec-status report
+    lists;
+  - that the maintainer decides whether the vocabulary gains a value meaning
+    "shipped";
+  - that the maintainer amends `VOCABULARY` in `tools/spec_status.py`, the
+    one place the vocabulary is written;
+  - that the spec-status report stays non-zero until the follow-up lands,
+    and the quiet quarter before any package may make it a gate starts only
+    then.
+
+  This package's own `Status` header MUST stay `DRAFT` when its milestones
+  close. The pull request MUST ask the maintainer to settle it at merge.
+- R-RDS-23: `tools/spec_status.py` MUST read each spec's `Status` header with
+  `re`, anchored at the start of a line that begins `> **Status:** `, matched
+  case-sensitively, within the header block — the lines before the first `## `
+  heading — with the word kept as written. It MUST NOT take the header from
+  `parse_spec`, whose `STATUS` pattern is unanchored, searched over the raw
+  text, and upper-cased. None of these MUST be read as the header:
+  - a status line carried by a waiver comment above the header;
+  - a lower-case header word, which is read as written and is outside the
+    vocabulary;
+  - a `**Status:**` phrase anywhere after the header block, in prose or in a
+    code example.
+
+  A test in `make test` MUST assert that, on every `spec.md` in the real
+  tree, this reading equals `parse_spec(...).status`. Rule H005 reads the
+  unanchored value and has the same leak. Fixing it changes an
+  `openspec_graph/` module, which C-RDS-1 excludes, so it MUST be recorded for
+  the follow-up and MUST NOT be fixed here.
+- R-RDS-24: `workflow_stages` and the stdlib lexer it uses MUST move from
+  `tools/stage_citations.py` into `tools/_common.py`, which MUST stay
+  stdlib-only. The lexer is the `run:` reader, the shell tokeniser, the
+  invocation readers, `WORKFLOW_DIR` and `ReportError`.
+  - The lexer MUST take the grammar of a stage as a parameter — a compiled
+    pattern in `MAKE_REF`'s shape — rather than import it. Each caller MUST
+    pass `openspec_graph`'s `MAKE_REF`, so the grammar has one copy.
+  - `tools/stage_citations.py` MUST import them from `_common` and keep its
+    public names with their call shapes, so `tests/test_stage_citations.py`
+    passes unedited.
+  - Its output MUST be byte-identical before and after the move. That MUST
+    be shown by a recorded diff of `python tools/stage_citations.py` output,
+    as text and as JSON, captured on one tree immediately before and after.
 - C-RDS-1: No change to any rule, golden hash, `openspec_graph/` module or
   runtime dependency: the `RULES` tuple, `README.md`'s rules table and
   `tests/baseline_rules.json` are untouched, the `validate`/`graph`/`rules`
   hashes are unmoved, and `[project] dependencies` stays empty.
 - C-RDS-2: `make thresholds` MUST print PASS at every milestone. The
-  confidence lives only in `pyproject.toml`, and no recipe or workflow line
-  carries a numeric literal for it.
+  confidence lives only in `pyproject.toml`'s `[tool.specgraph]`, and no
+  recipe line, workflow line or new script carries a numeric literal equal to
+  it.
 - C-RDS-3: Neither target MAY be composed into `ci`, `pre-pr` or any CI
   workflow job. The `ci:` and `pre-pr:` lines MUST be byte-identical, and no
   file under `.github/` MAY change.
@@ -301,10 +414,10 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
 - C-RDS-7: Neither script MAY emit JSON or declare a `schema_version`. Their
   text output is a report read by a person or an agent, not a stored output
   under `docs/policies.md`'s schema-integer rule.
-- C-RDS-8: `tools/dead_code.py` MUST NOT import vulture or `openspec_graph`,
-  and `tools/spec_status.py` MUST NOT import any module outside the standard
-  library, `openspec_graph` and `tools/`. `tools/_common.py` stays
-  stdlib-only.
+- C-RDS-8: `tools/dead_code.py` MUST NOT import vulture, `openspec_graph` or
+  any `tools/` module but `_common`. `tools/spec_status.py` MUST NOT import
+  any module outside the standard library, `openspec_graph` and `_common`.
+  `tools/_common.py` stays stdlib-only, with the moved lexer in it.
 
 ---
 
@@ -331,8 +444,8 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   separate extra (the plan names the dev extra, and the planted-tree test
   needs vulture on every leg that installs `dev`).
 - **DEC-RDS-002:** the confidence is vulture's unused-definition level, 60,
-  read from `[tool.vulture] min_confidence`. This supersedes the plan's D4
-  figure of 80, by measurement.
+  read from `[tool.specgraph] dead_code_min_confidence`. This supersedes the
+  plan's D4 figure of 80, by measurement.
   - At 80, vulture reports nothing over `openspec_graph` and `tools` at
     `1c8917c`. Vulture's own table rates every unused function, method,
     class, property, attribute and variable at 60, imports at 90, and
@@ -344,28 +457,44 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   - D4's worry was that a *gate* at 60 would fail on shlex attribute
     assignments vulture cannot see. That is answered by the whitelist D4
     itself prescribes, and by this being a report.
-  - The key sits in `[tool.vulture]` rather than `[tool.specgraph]` because
-    vulture reads that table itself, so a contributor's bare vulture run from
-    the root agrees with the report without being told. The script passes
-    the same number explicitly, so its run does not depend on the working
-    directory.
-  - The table carries nothing vulture would apply on its own (R-RDS-2),
-    because the report's one run must see every finding to compute staleness
-    (DEC-RDS-004).
+  - The key sits in `[tool.specgraph]`, beside `per_file_line_min`, following
+    DEC-MCO-009: that table holds this repository's reporting thresholds,
+    each read by the script that reports and gating nothing. The first draft
+    put it in `[tool.vulture]`, so that a bare vulture run from the root would
+    agree with the report. That was false. Vulture takes its trees from the
+    command line or from a `paths` key the table did not hold, and
+    `python -m vulture` from the root with no path exits 2 asking for one. A
+    contributor who names the trees and `tests/` names the confidence too.
+  - No `[tool.vulture]` table is added at all (R-RDS-2). Vulture reads that
+    table from its working directory, which is the root for the report's one
+    run. Any key there — `exclude`, `ignore_names`, `paths` — would act on
+    the run that must see every finding to compute staleness (DEC-RDS-004).
+    The script passes the confidence on the command line.
 
   Rejected: 80 (blind to the target's purpose, as measured); 100
   (unreachable code only); a number on the recipe line (the threshold guard
-  would fail it, rightly).
+  would fail it, rightly); `[tool.vulture] min_confidence` (the first draft:
+  its rationale was false, and the table would sit one key away from
+  filtering the report's own run).
 - **DEC-RDS-003:** `tests/` counts as a user of the code and is never a
   reported tree, and the reported trees are `[tool.coverage.run] source`'s
   entries.
-  - A symbol a test calls is referenced. That is the measure behind the
-    plan's §1.2 "0 refs" (repository-wide), and the plan treats test-only
-    public API as a separate question with its own decision (W5.2).
-  - Without `tests/`, the 60 run lists five live symbols a test calls —
-    `main_deprecated`, `filter_speckit_by_feature`, `section_body`,
-    `suppressions` and `duplicate_scoped_floor_keys` — which would have to be
-    whitelisted, hiding them from every later reading.
+  - Tests count as a user because the plan's §7 metric this target answers
+    to, "Unreferenced symbols", counts references repository-wide. Its three
+    are the symbols with "0 refs" anywhere, tests included (§1.2), and its
+    companion count — "0 of 405 top-level symbols … unreferenced" — is
+    repository-wide too.
+  - A symbol only a test uses is therefore invisible to this report, by
+    design. At drafting those are:
+    - `filter_speckit_by_feature`, `section_body` and `suppressions`, which
+      are the plan's separate "Test-only public API" row, decided by W5.2;
+    - `duplicate_scoped_floor_keys`, which only tests call.
+
+    They are W5.2's question, not this report's.
+  - `main_deprecated` leaves the list because a test calls it
+    (`tests/test_cli_surface.py`), and it is live in any case: it is the
+    `specgraph` console script (`pyproject.toml:69`), an entry point vulture
+    cannot see.
   - Reporting `tests/` would list pytest fixtures, which pytest injects by
     name and vulture cannot see.
   - The reported trees come from `source` because that list is this
@@ -373,7 +502,8 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
     added there is reported without a second edit.
 
   Rejected: a list of trees in the script (two places for one fact); the two
-  trees alone (the five live symbols above).
+  trees alone (a report that reads test-only symbols as unreferenced would
+  count by a different measure from the §7 row it answers to).
 - **DEC-RDS-004:** the whitelist is `tools/dead_code_whitelist.txt`. The
   script applies it by name to one run made without it, and its staleness is
   caught in two halves.
@@ -388,9 +518,9 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
     vulture's `_.name` idiom is an undefined name and a useless expression.
   - **Not at the root.** That would be a new kind of root file that nothing
     lints and nobody looks at.
-  - **Not `[tool.vulture] ignore_names`.** Vulture would apply it to the
-    report's own run, and its glob patterns can hide more than the name they
-    were added for.
+  - **Not `ignore_names` in a `[tool.vulture]` table.** Vulture would apply
+    it to the report's own run, and its glob patterns can hide more than the
+    name they were added for.
   - **Two halves of staleness.**
     - An entry that names no binding — the symbol was deleted or renamed —
       is caught deterministically in `make test` by `ast`, without vulture.
@@ -413,6 +543,24 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
     contract, and planlint's own contract all speak 0, 1 and 2.
   - `sys.executable -m vulture`, never a bare `vulture` on `PATH`, so the
     report reads the vulture installed beside the interpreter that runs it.
+  - **stdout is the report, stderr is a log.** Vulture writes findings to
+    stdout and its complaints to stderr. `ast.parse`, which vulture parses
+    with, writes a `SyntaxWarning` for an invalid escape to stderr and still
+    succeeds. So stderr beside exit 0 or 3 is a warning about a file vulture
+    read, not a failure. It goes to the logger at DEBUG, where
+    `PLANLINT_LOG_LEVEL` shows it, and it reaches the message only when the
+    exit code says vulture could not run.
+  - **An empty tree is not a clean tree.** Measured from the root, vulture
+    over a directory with no `.py` file prints nothing and exits 0, and over
+    an absent path it exits 1. The first would read as "nothing to report"
+    for a tree the report never read. So the script checks each declared tree
+    before the process starts, and the second case gets its own message
+    rather than vulture's.
+  - **A read failure is "could not run".** `read_pyproject_int` and
+    `coverage_sources` call `Path.read_text` and raise `OSError` or
+    `UnicodeDecodeError` unchanged, which the seven gates sharing them rely
+    on. So this script, not `_common`, turns those into its exit 2, naming the
+    file, as it does for the whitelist.
   - The planted-tree test runs the real process. It is `integration` and not
     `e2e`, because the process is started by the code under test, not by the
     test (DEC-TSS-017).
@@ -448,46 +596,78 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
     criterion, and that package may require both. This one only reports.
   - `header-unrecognised` exists so that a new header word, or a spec
     without a header, is a finding rather than a silent pass.
-- **DEC-RDS-008:** the headers are not set in this package. The report's
-  output is the worklist, recorded in `tasks.md`, and the follow-up is a
-  maintainer's. Four reasons:
+- **DEC-RDS-008:** this package sets no other package's header, and names the
+  owner of the rest of W8.5: the follow-up package
+  `settle-package-status-headers`, which is the maintainer's. The report's
+  output is its worklist, recorded in `tasks.md`. Four reasons:
   1. **Promotion is a human decision.** `.claude/agents/spec-drafter.md`
      says `APPROVED` is "a human decision after review", and
-     `lint-empty-speckit-requirements`' `tasks.md` says the same.
+     `lint-empty-speckit-requirements`' `tasks.md` says the same. The two
+     packages that promoted their own header in their implementing pull
+     request did it in the maintainer's own commits: `3bc3321`
+     (`parse-repo-machinery-structurally`) and `49cb9ed` (`harden-ci-gates`).
+     So an agent implementing this package leaves its own header `DRAFT`, and
+     the pull request asks the maintainer to settle it at merge, as those two
+     show the maintainer doing.
   2. **The records are not edited.** The packages the report flags are on
      `main` or on this branch's unmerged base. This repository's convention
      is that a later package names a shipped package's record and does not
      edit it (DEC-MCO-006, DEC-ZCG-003 and R-ZCG-13, DEC-TSS-016). The one
      in-place amendment, DEC-ASP-007, was of a sibling on the same unmerged
      branch, and that was a plan, not a header.
-  3. **No value means shipped.** The header has two values, `DRAFT` and
-     `APPROVED`, and `APPROVED` means approved after review — rule H005 reads
-     it as "not `DRAFT`". Writing "what shipped" needs either `APPROVED` to
-     change meaning or a third value, which is a convention change for the
-     scaffold template, the drafter and the rule. It is not a hygiene edit.
+  3. **No value means shipped.** Within today's two-value vocabulary,
+     `APPROVED` is the only settled value, and it means approved after review
+     — rule H005 reads it as "not `DRAFT`". So a `draft-but-complete`
+     finding is fixed by the maintainer's choice between `APPROVED` and the
+     value the follow-up may add. Adding one is a convention change, not a
+     hygiene edit: it touches the scaffold template, the drafter, H005, and
+     `VOCABULARY` in `tools/spec_status.py`, the named edit point. Until the
+     follow-up amends `VOCABULARY`, a header carrying such a word — the
+     planted `IMPLEMENTED` case included — is `header-unrecognised`.
   4. **The number is not mechanical.** The plan's "18" was a count of
      `DRAFT` headers, and it is not recoverable mechanically. 25 of 51 read
      `DRAFT` at `1c8917c`, and the evidence is unanimous for only some.
 
-  This package squares with the convention by editing no other package
-  (C-RDS-6). The follow-up has to decide, in writing, the vocabulary and the
-  exception for one `Status` line of a shipped record, or a supersession-style
-  record of status. It closes the plan's end-state row. This package makes
-  the row measurable.
-- **DEC-RDS-009:** `tools/spec_status.py` imports `openspec_graph` and its
-  sibling `stage_citations`. The plan's direction that the script be
-  stdlib-only is read as `tools/AGENTS.md`'s actual rule — no third-party
-  dependency — and is followed in its other half: whatever no parser in the
-  package reads is read with `re` alone.
-  - The status header and verification lines are read by the same parse the
-    rules use, because a second reader would count something else — the
-    reason `stage_citations.py`'s docstring gives for importing the package.
-  - The workflow invocations come from the one lexer that already answers
-    "which stages does CI run by name", with its quoting and comment handling.
-  - The import is through `tools/` on `sys.path`, as `_common` is imported.
+  Consequences, stated so nobody reads a red report as a defect:
+  - The spec-status report exits non-zero until the follow-up lands, and the
+    quiet quarter before any package may make it a gate starts only then
+    (guardrail 7).
+  - This package's own row becomes a finding once its milestones close:
+    `DRAFT`, every milestone `[DONE]` and every criterion ticked is
+    `draft-but-complete`. That is the report working as designed, and
+    settling it is the maintainer's call at merge.
+  - The follow-up decides, in writing, the vocabulary and the exception for
+    one `Status` line of a shipped record, or a supersession-style record of
+    status. It is named in `docs/next-steps.md` (R-RDS-22), and not in the
+    plan, which is a dated record. It closes the plan's end-state row; this
+    package makes the row measurable.
+- **DEC-RDS-009:** `tools/spec_status.py` imports `openspec_graph` and
+  `_common`, and no sibling script. `tools/AGENTS.md`'s rule is "No
+  third-party dependencies, ever. Shared helpers go in `_common.py`", and
+  every script in `tools/` today imports only `_common` among its siblings.
+  - The workflow lexer becomes a helper two scripts share, so it moves into
+    `_common.py` (R-RDS-24). That is the one lexer answering "which stages
+    does CI run by name", with its quoting and comment handling, now in the
+    place the rule names.
+  - `_common` stays stdlib-only, because the seven gate scripts import it in
+    a bare runner (`test_common_module_is_stdlib_only`). The lexer decides
+    what a stage is through `MAKE_REF`, which lives in `openspec_graph`. So
+    the grammar becomes a parameter, and both callers pass `MAKE_REF`: one
+    grammar, and no `openspec_graph` import in `_common`.
+  - `stage_citations.py` imports the lexer and binds `MAKE_REF` under its
+    existing names and call shapes, so its tests run unedited and its output
+    is byte-identical, which the recorded diff shows.
+  - Verification lines are read by the same parse the rules use, because a
+    second reader would count something else — the reason
+    `stage_citations.py`'s docstring gives for importing the package. The
+    status header is the exception, for DEC-RDS-014's reason.
 
-  Rejected: a stdlib-only reimplementation of both (two answers to one
-  question); dropping the workflow column (the plan names it as evidence).
+  Rejected: importing `stage_citations` (the first draft — no script in
+  `tools/` imports a sibling, and the rule names `_common.py` as the place for
+  shared helpers); a copy of `MAKE_REF`'s pattern in `_common` (two grammars
+  that would drift); a stdlib-only reimplementation of both (two answers to
+  one question); dropping the workflow column (the plan names it as
+  evidence).
 - **DEC-RDS-010:** the reports table lives in docs/hooks.md, and the CI-table
   reader is scoped to its section. `_hooks_ci_table_cells` reads every
   backticked first cell of every table row in the file, while its docstring
@@ -501,16 +681,25 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   before a pull request — is documented, so it is where "what is
   deliberately outside the ladder" belongs.
 - **DEC-RDS-011:** the report-target guard is extended through one helper,
-  and reachability is transitive. Today two tests repeat the same three
-  assertions, and both check only `ci`'s and `pre-pr`'s direct
-  prerequisites, so a report composed into `test` would slip into the ladder
-  unseen. One helper defines a report target, and reachability follows
-  prerequisites to a fixed point. The definition is a documented target whose
-  help text begins "Report", in `.PHONY` and unreachable from the aggregates —
-  the shape every existing report target already has. The two existing tests
-  keep their names and assertions, because AC-PM-14 and AC-MCO-17 cite them,
-  and delegate. The new test requires `dead-code` and `spec-status` by name,
-  so that it is red before they exist.
+  and reachability is transitive. Today the module checks the property three
+  times: the two report-target tests and `_one_run_violations`' aggregate
+  check. All three check only `ci`'s and `pre-pr`'s direct prerequisites, so
+  a report composed into `test` would slip into the ladder unseen.
+  - One helper defines a report target, and reachability follows
+    prerequisites to a fixed point. The definition is a documented target
+    whose help text begins "Report", in `.PHONY` and unreachable from the
+    aggregates — the shape every existing report target already has. All
+    three checks delegate to it.
+  - The two tests keep their names and every property they assert, because
+    AC-PM-14 and AC-MCO-17 cite them: documented, `.PHONY` and not composed
+    by `ci` or `pre-pr`, plus, for the per-file target, its prerequisite and
+    recipe. What changes is that "not composed" now means "not reachable".
+  - `_one_run_violations` keeps its contract of naming each way back to two
+    runs. Its planted Makefile gives its report target help text that begins
+    "Report", and the helper's message for a reachable target keeps the
+    words `pre-pr composes`, so the existing planted case is unedited.
+  - The new test requires `dead-code` and `spec-status` by name, so that it
+    is red before they exist.
 - **DEC-RDS-012:** the report lists and does not act, and what it found
   beyond the plan is recorded for M4. `has_selector`, `precision_pct` and
   `recall_pct` stay for W5.1, under guardrail 1's deprecation window.
@@ -536,6 +725,45 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   - Planted packages are written through `write_spec`; their `proposal.md`,
     `tasks.md` and `CHANGELOG.md` are not spec paths and are written
     directly.
+  - An unreadable file is produced by injecting `PermissionError` into
+    `Path.read_text`, as `tests/test_stage_citations.py` and
+    `tests/test_repo_io.py` already do, never by `chmod`: as root, a mode of
+    000 still reads. A planted symlink is skipped under
+    `support.supports_symlinks()`.
+  - A planted `spec.md` is never undecodable: `write_spec` encodes UTF-8,
+    and R-RDS-18 routes every planted spec through it. The undecodable case
+    is planted in the files written directly, and a `spec.md` read failure
+    by the injected `PermissionError`, which the same `except` clause
+    handles.
+- **DEC-RDS-014:** the `Status` header is read anchored and case-sensitively,
+  not through `parse_spec`.
+  - `STATUS` (`openspec_graph/parse_semantics.py:16`) is unanchored, and
+    `parse_spec` searches it over the raw text and upper-cases the match
+    (`openspec_graph/parse.py:156`, `:168`). So the first `**Status:**`
+    anywhere decides:
+    - a waiver comment above the header carrying `**Status:** APPROVED`
+      turns a `DRAFT` spec into an `APPROVED` one;
+    - a spec with no header, but the phrase in its prose or in a code
+      example, reads as having one;
+    - `> **Status:** draft` reads as `DRAFT`.
+
+    A report whose purpose is to compare headers cannot use a reader a
+    comment can set.
+  - The fix reads only the header block — the lines before the first `## `
+    heading — and only a line that begins `> **Status:** `, keeping the word
+    as written. Each case above then gets its honest reading: `DRAFT`,
+    `header-unrecognised`, `header-unrecognised`.
+  - A test holds that on the real tree the two readers agree, so the report
+    and the rules read the same headers wherever the leak does not bite.
+    Verification lines stay with `parse_spec`, because they are what the
+    rules read.
+  - H005 has the same leak, through the same value. Fixing it changes an
+    `openspec_graph/` module and a rule's behaviour, which C-RDS-1 excludes,
+    so it is recorded for the follow-up and not fixed here.
+
+  Rejected: `parse_spec(...).status` (the leak above); stripping waiver
+  comments and then searching the raw text (prose, code examples and lower
+  case would still read as a header).
 
 ---
 
@@ -543,15 +771,25 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
 
 - [ ] **AC-RDS-1:** `pyproject.toml`'s dev extra lists vulture with a lower
   bound and no exact pin or upper bound, `[project] dependencies` is still
-  empty, and Dependabot has no pip ecosystem. The planned dev-extra test also
-  names a planted file with an exact pin or a runtime entry; until it exists
-  the stage covers it. (R-RDS-1, R-RDS-19, C-RDS-1, DEC-RDS-001)
+  empty, and Dependabot has no pip ecosystem. No file under `.github/` and no
+  `Makefile` recipe line names vulture. Two planned tests show these red on
+  planted files:
+  - the dev-extra test names a planted file with an exact pin or a runtime
+    entry;
+  - the `.github/`-and-recipe test names a planted workflow and a planted
+    recipe line that name vulture.
+
+  Until they exist the stage covers them. (R-RDS-1, R-RDS-19, C-RDS-1,
+  DEC-RDS-001)
   _Verified by:_ `pytest -k "test_runtime_dependencies_stay_empty or test_dependabot_does_not_add_a_pip_ecosystem or test_threshold_guard_fails_on_a_pinned_tool_version"` · stage: `make test`
 
-- [ ] **AC-RDS-2:** `[tool.vulture] min_confidence` is set at vulture's
-  unused-definition level and is the only key in that table. The threshold
-  guard prints PASS on the finished tree at every milestone and still fails
-  on a planted literal in a recipe. (R-RDS-2, C-RDS-2, DEC-RDS-002)
+- [ ] **AC-RDS-2:** `[tool.specgraph] dead_code_min_confidence` is set at
+  vulture's unused-definition level, and `pyproject.toml` has no
+  `[tool.vulture]` table. Neither new script carries a numeric literal equal
+  to the configured value; a planned test holds that and names a planted
+  script text that does. The threshold guard prints PASS on the finished tree
+  at every milestone and still fails on a planted literal in a recipe.
+  (R-RDS-2, R-RDS-19, C-RDS-2, DEC-RDS-002)
   _Verified by:_ `pytest -k "test_threshold_guard_passes_on_a_clean_tree or test_threshold_guard_fails_on_a_hard_coded_coverage_floor"` · stage: `make thresholds`
 
 - [ ] **AC-RDS-3:** against canned vulture output on a planted root:
@@ -563,7 +801,8 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   - a path written with Windows separators names the same tree;
   - the first line names the trees, the confidence, the vulture version and
     the entry count;
-  - the script imports neither vulture nor `openspec_graph`.
+  - the script imports nothing from `tools/` but `_common`, and neither
+    vulture nor `openspec_graph`.
 
   The tests are planned in `tasks.md`; until they exist the stage is the
   citation. (R-RDS-3, R-RDS-4, C-RDS-8, DEC-RDS-003, DEC-RDS-004)
@@ -573,14 +812,20 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   message and no traceback, when:
   - vulture is not installed (with no process started and no import-error
     text on stderr);
-  - `min_confidence` is absent, or `source` declares no tree;
-  - vulture exits 1 or 2;
-  - its output carries a line in neither shape;
+  - `dead_code_min_confidence` is absent, or `source` declares no tree;
+  - a declared tree is absent, or holds no `.py` file (with no process
+    started);
+  - `pyproject.toml` or the whitelist cannot be decoded, or `pyproject.toml`
+    cannot be read (an injected `PermissionError`), with the file named;
+  - vulture exits 1 or 2, with its exit code and stderr in the message;
+  - its stdout carries a line in neither shape;
   - a whitelist line is malformed.
 
-  It exits 1, never 3, on findings, and 0 with the saying-so line on none.
-  The tests are planned; until they exist the stage is the citation.
-  (R-RDS-5, DEC-RDS-005, DEC-RDS-006)
+  Vulture's stderr carrying a `SyntaxWarning` beside exit 0 or 3 changes
+  neither the list nor the exit code. The script exits 1, never 3, on
+  findings, and 0 with the saying-so line on none. The tests are planned;
+  until they exist the stage is the citation. (R-RDS-3, R-RDS-5, DEC-RDS-005,
+  DEC-RDS-006)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-RDS-5 (non-success):** every entry of the real whitelist names a
@@ -606,12 +851,22 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
     with no milestone heading;
   - `settled-but-empty`;
   - `headers-disagree` — a proposal's `proposed` against a spec's `APPROVED`;
-  - `header-unrecognised` — a missing header, an unknown word, a package
-    with no `spec.md`.
+  - `header-unrecognised`, in each of these cases:
+    - a missing header;
+    - an unknown word, `IMPLEMENTED` among them;
+    - a lower-case `draft`;
+    - a package with no `spec.md`;
+    - no header, but `**Status:** APPROVED` in prose;
+    - no header, but `**Status:** DRAFT` in a body code example.
 
-  It prints one text row per package with every column, and exits 1. The
-  tests are planned; until they exist the stage is the citation. (R-RDS-9,
-  R-RDS-10, R-RDS-11, R-RDS-12, C-RDS-7, DEC-RDS-007, DEC-RDS-009)
+  A `DRAFT` header beneath a waiver comment carrying `**Status:** APPROVED`
+  reads `DRAFT`. On every real spec, the header reader agrees with
+  `parse_spec(...).status`. A symlinked alias of a planted package gives one
+  row, where the filesystem supports symlinks. The script prints one text row
+  per package with every column, exits 1, and imports nothing from `tools/`
+  but `_common`. The tests are planned; until they exist the stage is the
+  citation. (R-RDS-9, R-RDS-10, R-RDS-11, R-RDS-12, R-RDS-23, C-RDS-7,
+  C-RDS-8, DEC-RDS-007, DEC-RDS-009, DEC-RDS-014)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-RDS-8 (non-success):** none of these raises a finding:
@@ -620,19 +875,23 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   - a package named in a CHANGELOG sentence that is not an entry.
 
   Each is listed with its columns, and the script exits 0 when nothing else
-  is found. The script exits 2, with no traceback, when the root has no
-  `openspec/changes/` or a package file exists but cannot be read; an absent
-  `CHANGELOG.md` or workflow directory does not change the exit code. The
-  tests are planned; until they exist the stage is the citation. (R-RDS-11,
-  R-RDS-12, DEC-RDS-006, DEC-RDS-007)
+  is found. The script exits 2, with the file named and no traceback, when:
+  - the root has no `openspec/changes/`;
+  - a `proposal.md`, `tasks.md` or `CHANGELOG.md` cannot be decoded;
+  - a `spec.md` or a `tasks.md` cannot be read (an injected
+    `PermissionError`).
+
+  An absent `CHANGELOG.md` or workflow directory does not change the exit
+  code. The tests are planned; until they exist the stage is the citation.
+  (R-RDS-11, R-RDS-12, DEC-RDS-006, DEC-RDS-007, DEC-RDS-013)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-RDS-9:** the workflow column lists a verification-line stage that
   no planted workflow runs, and omits one a planted workflow runs in command
   position. The reused reader's own behaviour — `run:` scripts read, other
-  YAML fields ignored, a filter honoured — stays green unedited. The
-  column's own test is planned; until it exists the stage covers it.
-  (R-RDS-9, R-RDS-10, DEC-RDS-009)
+  YAML fields ignored, a filter honoured — stays green unedited after the
+  reader moves into `_common`. The column's own test is planned; until it
+  exists the stage covers it. (R-RDS-9, R-RDS-10, R-RDS-24, DEC-RDS-009)
   _Verified by:_ `pytest -k "test_run_block_commands_are_scanned_but_yaml_fields_are_not or test_the_workflow_filter_restricts_who_is_credited or test_a_repository_without_workflows_credits_nobody"` · stage: `make test`
 
 - [ ] **AC-RDS-10:** read from the `Makefile`:
@@ -641,15 +900,18 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
     their script;
   - every report target is unreachable from `ci` and `pre-pr` through
     prerequisites;
-  - the two existing report-target tests pass unedited in name and
-    assertion;
+  - the two existing report-target tests pass, with their names and every
+    property they assert kept, delegating to the one helper;
+  - `_one_run_violations` delegates its aggregate check to the same helper,
+    and its planted case that composes the report into `pre-pr` is still
+    named, unedited;
   - no recipe but `coverage-run`'s invokes pytest;
   - the `ci:` and `pre-pr:` lines are unchanged.
 
   The new test is planned; until it exists the existing tests and the stage
   are the citation. (R-RDS-8, R-RDS-13, R-RDS-14, C-RDS-3, DEC-RDS-006,
   DEC-RDS-011)
-  _Verified by:_ `pytest -k "test_makefile_has_matcher_accuracy_report_target or test_makefile_has_coverage_per_file_report_target or test_the_suite_runs_once_through_coverage_run"` · stage: `make test`
+  _Verified by:_ `pytest -k "test_makefile_has_matcher_accuracy_report_target or test_makefile_has_coverage_per_file_report_target or test_the_suite_runs_once_through_coverage_run or test_a_recipe_that_pins_a_cov_source_or_skips_the_run_dependency_is_named"` · stage: `make test`
 
 - [ ] **AC-RDS-11 (non-success):** through the same helper, each of these
   planted `Makefile` texts is named, with the target and the path by which
@@ -682,7 +944,9 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
 - [ ] **AC-RDS-14:** `python tools/dead_code.py` and `python
   tools/spec_status.py`, run from a throwaway cwd with no arguments, reach
   their own exit path with 0, 1 or 2 and no load-failure marker on stderr.
-  (R-RDS-5, R-RDS-12, R-RDS-18, DEC-RDS-005)
+  The test first asserts that each listed script is a file, so each entry was
+  red before its script existed, and the red runs are recorded. (R-RDS-5,
+  R-RDS-12, R-RDS-18, R-RDS-19, DEC-RDS-005)
   _Verified by:_ `pytest -k test_gate_script_is_runnable_as_a_script` · stage: `make test`
 
 - [ ] **AC-RDS-15:** every new test carries exactly the tier the criterion
@@ -721,6 +985,8 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
     configured one;
   - both reports' complete output at the branch head after the change;
   - the installed vulture version;
+  - the stage-citation output before and after the lexer move, and their
+    empty diff;
   - the stage-citation report after, noting that its figures include this
     spec.
 
@@ -736,6 +1002,27 @@ stacked on PR #42), 2026-10-07; each command is in the proposal.
   C-RDS-5)
   _Verified by:_ stage: `make pre-pr`
 
+- [ ] **AC-RDS-21:** `tools/_common.py` holds `workflow_stages` and its
+  lexer, takes the stage grammar as a parameter, and stays stdlib-only.
+  `tools/stage_citations.py` imports them and passes `MAKE_REF`, and its
+  tests pass unedited. Its text and JSON output are byte-identical across the
+  move, by the recorded diff. (R-RDS-24, C-RDS-8, DEC-RDS-009)
+  _Verified by:_ `pytest -k "test_make_in_command_position_is_an_invocation or test_an_unreadable_workflow_exits_two_rather_than_a_traceback or test_an_unknown_workflow_filter_exits_two or test_common_module_is_stdlib_only"` · stage: `make test`
+
+- [ ] **AC-RDS-22:** `docs/next-steps.md` carries one numbered item for
+  `settle-package-status-headers`, which:
+  - names the maintainer as its owner;
+  - gives its scope — settle each listed header, decide whether the
+    vocabulary gains a "shipped" value, amend `VOCABULARY`;
+  - says the spec-status report stays non-zero until it lands, and the quiet
+    quarter starts only then.
+
+  This package's own header is `DRAFT` when its milestones close, and the
+  pull request asks the maintainer to settle it at merge. No dated record is
+  edited. The item and the header are read directly; the docs gate confirms
+  the file is present and linked. (R-RDS-16, R-RDS-22, DEC-RDS-008)
+  _Verified by:_ stage: `make docs-check`
+
 ---
 
 ## Invariants Touched
@@ -747,8 +1034,8 @@ spec.
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Focused | `make test` | AC-RDS-1, 3..12, 14..18 — both scripts' behaviour on planted roots and on the installed vulture, the whitelist binding guard, the report-target and reports-table guards green on the real tree and red on their planted counter-examples, every new test in its computed tier |
-| Threshold guard | `make thresholds` | AC-RDS-2 — PASS at every milestone; the confidence only in `pyproject.toml` |
-| Docs | `make docs-check` | AC-RDS-13 — both scripts described, the agent file within budget, every required document linked |
+| Focused | `make test` | AC-RDS-1, 3..12, 14..18, 21 — both scripts' behaviour on planted roots and on the installed vulture, the whitelist binding guard, the report-target and reports-table guards green on the real tree and red on their planted counter-examples, the lexer in `_common` with `stage_citations`' tests unedited, every new test in its computed tier |
+| Threshold guard | `make thresholds` | AC-RDS-2 — PASS at every milestone; the confidence only in `[tool.specgraph]` |
+| Docs | `make docs-check` | AC-RDS-13, AC-RDS-22 — both scripts described, the agent file within budget, the follow-up's item in the living backlog, every required document linked |
 | Self-check | `make validate` | AC-RDS-19 — this package, then the whole tree, validate clean |
 | Full | `make pre-pr` | AC-RDS-20 — the ladder green with no floor moved and neither report in it |
