@@ -52,9 +52,10 @@ lines cite 12 distinct stages at HEAD. One of them, `matcher-accuracy`, is
 cited exactly once (`fix-heading-regex-newline-span` AC-HNS-12), and that
 citation is being re-pointed to `make test` in that package because
 `DEC-PM-011` (`fix-prose-matcher-precision`) makes the target a report, not
-a gate; the set this change must prove is therefore 11. Five run in `ci.yml`
-under their make-target name (`test`, `lint`, `typecheck`, `coverage-tools`,
-`docs-check`); three run as bare commands under another name
+a gate; the set this change must prove is therefore 11. Four run in `ci.yml`
+under their make-target name (`test`, `lint`, `typecheck`, `docs-check`);
+`coverage-tools` is built by `make pre-pr` and runs in no job of its own (amended by `measure-coverage-once`);
+three run as bare commands under another name
 (`self-validate` at `ci.yml:115`, `security` at `:332`, `packaging` at
 `:152-155`); three never run on a pull request at all (`ci`, `pre-pr`,
 `security`; `make pre-pr` runs only in `release.yml:42` on a tag). The
@@ -187,7 +188,10 @@ never asks for them and no spec needs editing on their account.
   `errexit`, runs the stage, captures `$?` into a step output, and exits with
   that code; the recorder step carries `if: always()` so a failing stage is
   recorded as a failing witness rather than not at all; recorder and gate
-  MUST check out the same ref.
+  MUST check out the same ref. The `ladder` job's `coverage-tools` recorder
+  is the one exception: it is conditional on the `pre-pr` step's exit 0 and
+  records nothing on red, because that exit code cannot attribute a red
+  `pre-pr` to the stage (R-WCA-28, DEC-WCA-006; amended by `measure-coverage-once`).
 
 ### Templates
 
@@ -224,14 +228,21 @@ never asks for them and no spec needs editing on their account.
   `if: always()` and an `artifact-name` unique per job, matrix leg and stage,
   exactly the stages it ran, by name: the `test` legs → `lint`, `typecheck`,
   `test`; `self-validate` → `validate`; `encoding-stress` → `e2e-live`;
-  `coverage-tools` → `coverage-tools`; `docs` → `docs-check`; `security` →
-  `thresholds` and `security`; `packaging` → `wheel-check`. Each recorded
+  `docs` → `docs-check`; `security` → `thresholds` and `security`;
+  `packaging` → `wheel-check` — `coverage-tools` has no job of its own and
+  is recorded by `ladder` under R-WCA-28 (amended by `measure-coverage-once`). Each recorded
   stage step MUST carry `if: always()`, so every stage runs and is recorded
   whatever an earlier step did, and MUST capture its exit code with the idiom
-  of R-WCA-22 and exit with it.
+  of R-WCA-22 and exit with it; the `coverage-tools` recorder of R-WCA-28 is
+  the one recorder that is not `if: always()` (amended by `measure-coverage-once`).
 - R-WCA-28: A new `ladder` job MUST run `make ci` and `make pre-pr`, each as
   its own recorded step, and MUST NOT run any other make target
-  (`DEC-WCA-025`).
+  (`DEC-WCA-025`). The `make pre-pr` step also records `coverage-tools`,
+  which that invocation builds as a prerequisite of `pre-pr`, and records it
+  only when the invocation exited 0 — a red `pre-pr` proves nothing about
+  whether `coverage-tools` was reached, so nothing is recorded for it and
+  W001 reports the stage with no witness at the current commit, not as a
+  failing run (DEC-WCA-006; amended by `measure-coverage-once`).
 - R-WCA-29: A new `witness-gate` job MUST list every recording job and
   `ladder` in `needs:`, carry `if: always()`, download every
   `planlint-witness-*` artifact merged into `${{ runner.temp }}/planlint-witnesses`,
@@ -241,8 +252,10 @@ never asks for them and no spec needs editing on their account.
   `fail-on: ERROR`, under a read-only token with no secret.
 - R-WCA-30: A test MUST derive the W001-enforced stage set from this
   repository's own specs — every criterion's `verified_by` through the
-  package's parser and `MAKE_REF` — and assert that `ci.yml` runs each stage
-  as `make <stage>`.
+  package's parser and `MAKE_REF` — and assert that each stage appears as
+  `make <stage>` in `ci.yml`, or is a prerequisite of an aggregate the
+  `ladder` job runs and is recorded under DEC-WCA-006's one sanctioned
+  inference (amended by `measure-coverage-once`).
 - R-WCA-31: `docs/hooks.md`'s CI table MUST gain rows for `ladder` and
   `witness-gate`, and the `self-validate`, `security` and `packaging` rows
   MUST name the make targets those jobs now run.
@@ -365,7 +378,14 @@ never asks for them and no spec needs editing on their account.
   "guess which mention is the real one" class of heuristic this project has
   already paid for once. The consequence is accepted directly: the aggregate
   targets specs cite must be run by name, which is what the `ladder` job
-  does.
+  does. One inference is sanctioned, and only this one: `coverage-tools` is
+  a prerequisite of the very `make pre-pr` invocation the `ladder` job runs,
+  so the two share one exit code, and Make reaches `pre-pr`'s own recipe
+  only after every prerequisite succeeded — an exit 0 is evidence from that
+  process that `coverage-tools` ran and passed, not a reading of the
+  Makefile's graph. A red `pre-pr` is not evidence either way, so the step
+  records `coverage-tools` on exit 0 only and otherwise records nothing for
+  it (amended by `measure-coverage-once`).
 - **DEC-WCA-007:** the scan action downloads nothing; the consumer workflow
   downloads into `runner.temp` and passes the path. This is `DEC-GA-008`'s
   shape applied to the other direction of the same artifact store. A
@@ -464,10 +484,13 @@ never asks for them and no spec needs editing on their account.
   running them, and the release workflow already
   runs `make pre-pr` on every tag, so this is the same gate moved earlier,
   not a new one. The cost, stated as a multiplier rather than waved at:
-  `ci.yml` already runs the suite six times per pull request (four matrix
-  legs, `test-windows`, `coverage-tools`); `ladder` adds three — `make ci`
-  runs `test`, `make pre-pr` runs `ci` and therefore `test` again, and
-  `make pre-pr` runs `coverage-tools` — for nine. The alternative was leaving
+  `ci.yml` already runs the suite once per `test` matrix leg and once on
+  `test-windows` — the leg count regenerated by
+  `grep -c "run: make test" .github/workflows/ci.yml` — and one `make pre-pr`
+  invocation issues one pytest run (`make -n pre-pr | grep -c "python -m
+  pytest"` prints 1 since `measure-coverage-once`); `ladder` adds two —
+  `make ci` runs `test`, and `make pre-pr`, a separate Make invocation, runs
+  it again (amended by `measure-coverage-once`). The alternative was leaving
   the two aggregate citations permanently unproven.
 - **DEC-WCA-017:** `test-windows`, `graph-diff` and `action-contract` do not
   record. `graph-diff` checks out the pull request's head sha, a different
@@ -481,8 +504,10 @@ never asks for them and no spec needs editing on their account.
 - **DEC-WCA-018:** a W001 finding on the first hosted `witness-gate` run is a
   citation to fix, never a witness to record by hand. The mechanical form of
   that expectation ships as a local test (`R-WCA-30`): derive the stage set
-  from the specs with the package's own parser and assert `ci.yml` runs each
-  by name — so the hosted job is expected to find nothing the local suite
+  from the specs with the package's own parser and assert each appears as
+  `make <stage>` in `ci.yml` or is a prerequisite of an aggregate the
+  `ladder` job runs and is recorded under DEC-WCA-006's one sanctioned
+  inference (amended by `measure-coverage-once`) — so the hosted job is expected to find nothing the local suite
   did not already enforce, and if it does, the test was wrong and the hosted
   finding is the correction.
 - **DEC-WCA-019:** no CI recorder passes `--coverage` in this change, so
@@ -745,8 +770,10 @@ never asks for them and no spec needs editing on their account.
   jobs run `make validate`, `make thresholds` + `make security`, and
   `make wheel-check`; every recorded stage step carries `if: always()` and
   every recording job records its stages through the recorder with artifact
-  names unique across the workflow; `ladder` runs exactly two recorded steps,
-  `make ci` and `make pre-pr`; `witness-gate` lists every recording job in
+  names unique across the workflow; `ladder` runs two stage steps, `make ci`
+  and `make pre-pr`, and three recorder steps, the third recording
+  `coverage-tools` conditional on the `pre-pr` step's exit 0 (amended by `measure-coverage-once`);
+  `witness-gate` lists every recording job in
   `needs:`, carries `if: always()`, downloads the merged artifacts into
   `runner.temp`, fails with a named `::error` before the scan when the
   directory holds no `*.json`, runs the local scan action with
@@ -759,7 +786,9 @@ never asks for them and no spec needs editing on their account.
 - [ ] **AC-WCA-25:** every stage any criterion in this repository's own
   specs cites on its verification line — collected from
   `Criterion.verified_by` through the package's parser, not from a hand-kept
-  list — appears in `ci.yml` as `make <stage>`. (R-WCA-30, DEC-WCA-018)
+  list — appears in `ci.yml` as `make <stage>`, or is a prerequisite of an
+  aggregate the `ladder` job runs and is recorded under DEC-WCA-006's one
+  sanctioned inference (amended by `measure-coverage-once`). (R-WCA-30, DEC-WCA-018)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-WCA-26:** `docs/hooks.md`'s CI table has a row for every job in

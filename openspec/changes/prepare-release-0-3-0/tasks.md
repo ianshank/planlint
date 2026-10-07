@@ -323,6 +323,12 @@ its bullets are filled in after the fact with what was observed.
   `main` that only sets the changelog date (DEC-REL-002) — or, if the
   interim-window option of DEC-REL-007 was taken, the follow-up that also
   points the README's `git+` line at the merge SHA.
+  **Recorded (2026-10-07, from the `measure-coverage-once` branch):** `pin-actions-by-sha`,
+  `write-down-policies` and Milestones 1–2 of this package reached `main` together as
+  the squash merge `5246931` (PR #39); `main` CI run #202 on that commit
+  (`actions/runs/37547872906`) succeeded with every job green. The tag, the trusted
+  publisher and the post-tag flip remain the maintainer's steps below; nothing here
+  claims them done.
 - `docs/distribution-plan.md` §0: re-run every row on the merge commit and
   replace the branch-head dry-run results with these, recording the merge
   commit's SHA beside them; this edit rides in the post-tag commit of step

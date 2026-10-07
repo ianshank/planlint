@@ -40,10 +40,13 @@ Milestones 1 to 3 land in one pull request; Milestone 4 is a second, after
 that pull request's first CI run; the red runs are recorded here and never
 committed.
 
-## Milestone 0 — Grounding pass at the branch head
+## Milestone 0 — Grounding pass at the branch head  [DONE]
 
 - Re-run the gate and record its exit code before the first edit under
   `openspec/`: `planlint --target . validate --fail-on ERROR`.
+  **Recorded:** exit 0 (50 specs, 0 error / 0 warn / 0 info) at `92acd04` before the round-2
+  corrections, at `f8951ef` before the `add-witness-ci-artifacts` amendment, and again
+  before these records were written.
 - Re-measure the two-run figures and the ladder before anything moves,
   into a scratch directory so the tree's own reports are untouched:
   `TIMEFORMAT='%R s'; time make pre-pr` for the ladder's wall time (the
@@ -60,17 +63,40 @@ committed.
   at the branch head and confirm the per-scope sums still equal the two-run
   figures; record both sets side by side (AC-MCO-9's before half,
   DEC-MCO-001's premise).
+  **Recorded (`92acd04`, 2026-10-06T23:46Z):** `make pre-pr` exit 0 in 465 s wall, 2 `python -m pytest`
+  invocations in its log, printing total 98.89 %, `tools/` 96.1 % (842/876) and 93.2 %
+  (276/296). The `test` recipe's pytest line alone: 231 s, 2276/2292 lines and 744/762
+  branches under `openspec_graph/` (30 files, no `tools/` entry). The `coverage-tools`
+  recipe's line alone: 225 s, 842/876 and 276/296 under `tools/` (43 files). The combined
+  run (`--cov=openspec_graph --cov=tools --cov-branch --cov-fail-under=0`, scratch
+  `COVERAGE_FILE` and report): 222 s, per-scope sums `openspec_graph/` 2276/2292 and
+  744/762, `tools/` 842/876 and 276/296, unscoped totals 3118/3168 and 1020/1058 —
+  equal to the two-run figures to the line and branch (the before half of AC-MCO-9).
 - Record today's checker behaviour against the two-run reports:
   `python tools/check_coverage_floor.py coverage.json --scope openspec_graph`
   and the branch checker both exit 2 naming `openspec_graph_line_fail_under`
   / `openspec_graph_branch_fail_under`; the unscoped line checker on the
   combined report reads its diluted total (98.4 % at `5246931`). Record
   `python tools/check_no_hardcoded_thresholds.py` → PASS.
+  **Recorded (`92acd04`, 2026-10-06T23:46Z):** both checkers exit 2 under `--scope openspec_graph` — "no line floor set in
+  pyproject.toml [tool.specgraph] openspec_graph_line_fail_under" and "no
+  openspec_graph_branch_fail_under set in pyproject.toml [tool.specgraph]"; unscoped on
+  `coverage.json`: 99.3 % (2276/2292) and 97.6 % (744/762), exit 0; `--scope tools` on
+  `coverage-tools.json`: 96.1 % and 93.2 %, exit 0; the unscoped line checker on
+  `coverage-tools.json` reads the diluted 90.0 % (2850/3168) and exits 1 below 90 —
+  the figure a combined gate would have enforced; `check_no_hardcoded_thresholds.py` PASS.
 - Record the per-file list at the branch head at the plan's 85, by summing
   each file's `summary` under its scope prefix in the two reports: at
   `5246931`, `openspec_graph/` none below (lowest `openspec_graph/sarif.py`
   89.1 %, 41/46); `tools/` one below, `tools/check_branch_coverage.py`
   84.2 % (32/38).
+  **Recorded (`92acd04`, 2026-10-06T23:46Z):** `coverage.json` (30 files): none below 85, lowest `openspec_graph/sarif.py`
+  89.1 % (41/46). `coverage-tools.json` (43 files): eight below — `openspec_graph/`
+  `rules_witness.py` 50.0 % (20/40), `witness.py` 57.3 % (63/110), `repo_io.py` 71.4 %
+  (15/21), `thresholds.py` 76.5 % (104/136), `rules_generic.py` 81.3 % (61/75),
+  `rules_speckit.py` 82.1 % (32/39), `scaffold_templates.py` 83.3 % (10/12), and
+  `tools/check_branch_coverage.py` 84.2 % (32/38); the seven package modules because
+  that run reached `openspec_graph/` only through what the gate scripts' tests import.
 - Confirm the subprocess-hook facts DEC-MCO-008 rests on, against the
   installed packages: `ls` the `site-packages` directory for `*.pth` files
   (at `5246931`: only coverage.py's `a1_coverage.pth`, keyed on
@@ -80,6 +106,13 @@ committed.
   `tests/support.run_cli` passes no `cwd`; `test_gate_script_is_runnable_as_a_script`
   uses `cwd=tmp_path` and `env=env_without_coverage()`. Record what each
   says.
+  **Recorded (`92acd04`, 2026-10-06T23:46Z):** site-packages holds `a1_coverage.pth` (coverage 7.16.2), the editable-install
+  `.pth` and `distutils-precedence.pth` — no pytest-cov `.pth`; pytest-cov 7.1.0's METADATA:
+  "`pytest-cov 6.3` and older were using a `.pth` file to enable coverage measurements in
+  subprocesses. This was removed in `pytest-cov 7`"; `tests/support.run_cli` passes no
+  `cwd` (`tests/support.py:205-212` is the cwd helper the gate-script tests use instead);
+  `test_gate_script_is_runnable_as_a_script` uses `cwd=tmp_path` and
+  `env=env_without_coverage()`. DEC-MCO-008 stands as written.
 - Re-check `add-witness-ci-artifacts`' status: `Status: DRAFT`;
   `grep -c "^- \[ \] \*\*AC-WCA"` over its spec (34 at `5246931`) and the
   `[x]` form (0); `ls .github/actions/` (only `planlint`);
@@ -89,6 +122,11 @@ committed.
   are a plan and which are a record. Run `grep -n coverage-tools` over its
   spec and tasks and record every site, so Milestone 2 amends the set it
   finds and not a remembered list.
+  **Recorded (`92acd04`, 2026-10-06T23:46Z):** `Status: DRAFT`; 34 unchecked and 0 checked `AC-WCA`; `.github/actions/` holds
+  `planlint` only; no `witness_dir` or `ladder:` in `ci.yml`, `detect.py` or `cli.py`.
+  `grep -n coverage-tools`: spec 56, 227, 468, 470; tasks 249; proposal 66 and 75 (not
+  edited). The run-by-name sites the grep cannot find (R-WCA-30, AC-WCA-25, DEC-WCA-018,
+  AC-WCA-24, R-WCA-22) are the ones the second review added to R-MCO-10.
 - Re-check the line numbers the proposal cites: `Makefile` 9, 14–37, 71;
   `pyproject.toml` 86–127; `ci.yml` 43, 63, 99, 156, 230, 384–403;
   `docs/hooks.md` 52–53, 60, 93–100; `docs/architecture/c4.md` 44–54,
@@ -97,9 +135,14 @@ committed.
   `tools/check_coverage_floor.py` 31–66; `tools/check_branch_coverage.py`
   36–58; `add-witness-ci-artifacts` spec 56, 227, 359, 468–470 and tasks
   249. Note here any that moved.
+  **Recorded (`92acd04`, 2026-10-06T23:46Z):** every cited line matched (`Makefile` 9, 14, 26, 71; `pyproject.toml` 86,
+  126–127; `ci.yml` 43, 63, 99, 156, 230, 384–403; `docs/hooks.md` 52–53, 60, 93;
+  `c4.md` 44; `tests/AGENTS.md` 23, 43; `.gitignore` 43, 45; `test_gate_scripts.py` 430;
+  `_common.py` 146, 231–273; `check_coverage_floor.py` 31; `check_branch_coverage.py`
+  36; the R7 sites as listed). None moved.
 - **Gate:** `make validate`
 
-## Milestone 1 — The mapping rule, its guards seen red first
+## Milestone 1 — The mapping rule, its guards seen red first  [DONE]
 
 - `tests/test_gate_scripts.py`, written before the code and run red
   (R-MCO-13, DEC-MCO-011): extend the module's `_pyproject(path, **keys)`
@@ -144,6 +187,15 @@ committed.
   record here which of these are red and with what message; the
   duplicate-key test is green on the real tree from the start and red only
   on its planted half, which is the expected shape.
+  **Recorded (this commit):** all red before the code — the fallback test `(2, 2) == (1, 1)`
+  (both checkers still exit 2 for the first entry); the scoped-key test and the sources
+  test `AttributeError: module … has no attribute 'duplicate_scoped_floor_keys' /
+  'coverage_sources'`; the not-first test's stderr naming the scoped keys but not the first
+  entry; and the duplicate-key test `AttributeError` on `coverage_sources` on the real
+  tree too — its real half could not be green before the helper existed, so the shape
+  expected above was not what happened, and this is what did. The sixth test,
+  `test_the_first_source_without_its_unscoped_floor_is_named_as_absent`, was red the
+  same way.
 - `tools/_common.py`: add `normalize_scope(name: str) -> str` — strip a
   leading `./` and a trailing `/`, the one spelling `--scope` and `source`
   compare in — and `coverage_sources(pyproject: Path) -> list[str]`
@@ -192,6 +244,17 @@ committed.
   (its `source` has one entry, which is therefore the first) and record that
   it reads `fail_under` and passes — the fallback working on today's config
   before the run changes.
+  **Recorded (this commit):** `tests/test_gate_scripts.py tests/test_ci_hardening.py`
+  125 passed, every pre-existing checker test unedited; `ruff check` and `mypy tools`
+  clean. On the unchanged `pyproject.toml` (one `source` entry) `--scope openspec_graph`
+  printed `openspec_graph/ line coverage 99.3% (2276/2292) meets floor 90%` and
+  `openspec_graph/ branch coverage 97.6% (744/762) meets floor 80%`, exit 0 both;
+  `--scope openspec_graph/` the same (label `openspec_graph//`, cosmetic and prior);
+  `--scope ./openspec_graph` finds the floor but `coverage_totals`, unchanged by the
+  Non-Goals, matches no file under `./openspec_graph/` and exits 2 loudly — the bare
+  name or the trailing slash is the spelling that works end to end. The planted
+  first-entry-without-`fail_under` case prints "… openspec_graph_line_fail_under, and
+  [tool.coverage.report] fail_under -- the first source entry's floor -- is absent too".
 - **Gate:** `make test`
 
 ## Milestone 2 — One run, its guards seen red first, and the records
@@ -250,6 +313,14 @@ committed.
   test red on the unchanged tree with their messages, the planted tests red
   until the helpers exist, the reverse hooks test red between the job's
   removal and the row's.
+  **Recorded (this commit):** red on the unchanged Makefile and workflow —
+  `coverage-run missing from .PHONY`; `one run over ['openspec_graph']: nothing to read
+  scoped`; `['test', 'test-windows'] == []` (no upload steps). The planted tests landed
+  with their helpers and were green from the start; the reverse hooks test was green on
+  the unchanged tree, and because the job and the row were removed in one edit its
+  intermediate red was not observed — `test_a_hooks_row_naming_no_job_is_named` proves
+  that failure mode on a planted table instead. `test_makefile_has_coverage_per_file_report_target`
+  was written with Milestone 3 and was red until that target existed.
 - `pyproject.toml`: `source = ["openspec_graph", "tools"]` at line 87 with
   the comment above it saying the one run measures both trees, each is
   read scoped, and the first entry is the tree whose floors are
@@ -269,6 +340,9 @@ committed.
   need not be equal — keeping its sentence on why the gate machinery is
   held to a bar. Floor values untouched (C-MCO-3). `make thresholds` is not
   affected by comments; run it anyway and record PASS.
+  **Recorded (this commit):** `PASS: no hard-coded thresholds in Makefile or workflow YAML`;
+  the four floor values unchanged; `planlint --target . detect` still reports the
+  `[tool.coverage.report].fail_under` locator.
 - `Makefile`: add `coverage-run: ## Run the suite once, measuring both
   trees into coverage.json (no floor of its own; test and coverage-tools
   read it scoped)` whose recipe is `python -m coverage erase` with the
@@ -289,11 +363,20 @@ committed.
   Confirm `make -n pre-pr | grep -c "python -m pytest"` prints 1 and record
   it; confirm `make help` lists `coverage-run` (the `##` grep picks it up)
   (R-MCO-6, R-MCO-15).
+  **Recorded (this commit):** `make -n pre-pr | grep -c "python -m pytest"` prints 1
+  (2 at `5246931`); `make help` lists `coverage-run`, `test` and `coverage-tools` with the
+  text above; the `ci:` and `pre-pr:` lines are byte-identical to `5246931`'s; the erase
+  comment no longer spells `--cov=`, which the guard forbids anywhere in the file.
 - Run `make test` once on the branch head and record the four scoped lines
   the checkers print beside Milestone 0's two-run figures; they must be
   equal to the line and branch (AC-MCO-9). Then `TIMEFORMAT='%R s'; time
   make pre-pr` and record the wall time beside Milestone 0's before figure
   (R-MCO-15, DEC-MCO-012).
+  **Recorded (this commit, 2026-10-07; measured on the finished tree over `f8951ef`):** `make test` exit 0 in 160 s wall, printing
+  `openspec_graph/ line coverage 99.3% (2276/2292) meets floor 90%`; `openspec_graph/ branch coverage 97.6% (744/762) meets floor 80%`; `tools/ line coverage 96.4% (944/979) meets floor 90%`; `tools/ branch coverage 93.9% (323/344) meets floor 80%` — against Milestone 0's two-run figures of `openspec_graph/`
+  2276/2292 and 744/762 and `tools/` 842/876 and 276/296: `openspec_graph/` equal to the line and branch (that tree is byte-identical between the two measurements); `tools/` differs because this package added code under `tools/` between them (`_common.py`'s helpers and the per-file report), so the like-for-like comparison is the old `coverage-tools` recipe's pytest line re-run on this tree into a scratch report (`--cov=tools`, scratch `COVERAGE_FILE`, exit 0, 159 s): it reads `tools/` 944/979 lines and 323/344 branches, equal to the one run's 944/979 and 323/344 to the line and branch.
+  `make pre-pr` exit 0 in 158 s wall against 465 s before, with
+  1 `python -m pytest` invocation(s) in its log against 2.
 - `.github/workflows/ci.yml`: delete the `coverage-tools` job (lines
   384–403 at `5246931`, comment included). In the `test` job, after the
   `make test` step, add `- uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1`
@@ -311,6 +394,12 @@ committed.
   and record green — the pin-agreement, floor, timeout, permission and
   Python-literal guards all read the new lines, and the reverse hooks test
   is red until the next bullet.
+  **Recorded (this commit):** `test_ci_hardening.py`, `test_workflow_hardening.py`,
+  `test_agent_artifacts.py`, `test_rule_registry_docs.py` and `test_gate_scripts.py`
+  together 233 passed after every Milestone 2 edit; the upload steps are
+  `coverage-${{ runner.os }}-${{ matrix.python-version }}` and
+  `coverage-${{ runner.os }}-${{ env.PYTHON_DEFAULT }}` under `if: always()`, the job at
+  384–403 and its blank line removed, nothing else changed.
 - `docs/hooks.md`: delete the `coverage-tools` row (line 60); the `test`
   row's gate cell becomes "`make lint` + `make typecheck` + `make test`
   (both trees' floors, read scoped from one report; the leg's
@@ -325,6 +414,8 @@ committed.
   `make docs-check` and `python -m pytest tests/test_ci_hardening.py
   tests/test_workflow_hardening.py -k "hooks" -q`; the reverse hooks test is
   green from here.
+  **Recorded (this commit):** `docs-check: all required docs present and linked from
+  README`; `-k hooks` 3 passed; the `test` row's first cell is byte-identical.
 - `docs/architecture/c4.md`: §2's paragraph at 44–54 becomes "Two trees,
   two sets of floors, one run" — the first-entry rule in one sentence, the
   reason the floors stay separate keys, and in place of "the same numbers
@@ -339,6 +430,7 @@ committed.
   stay. Run `python -m pytest tests/test_rule_registry_docs.py -q` (it reads
   §4's module map, which this does not touch) and record green. Milestone 4
   re-reads §2 once the numbers move.
+  **Recorded (this commit):** green (in the 233 above); §2 names no floor value.
 - `tests/AGENTS.md`: the node at line 23 becomes "make test — both trees'
   floors, read scoped<br/>make coverage-tools — tools/ only, same report";
   lines 43–44 become "Run `make test`; it measures both trees in one run and
@@ -346,6 +438,8 @@ committed.
   regression. `make coverage-tools` re-reads `tools/` from the same report."
   Replace, do not add; `wc -l tests/AGENTS.md` read 50 at `5246931` against
   `MAX_NESTED_LINES = 60`. Run `python -m pytest tests/test_agent_artifacts.py -q -k "nested_agents or agent_index_links"`.
+  **Recorded (this commit):** `wc -l tests/AGENTS.md` reads 51; the nested-agents and
+  index-link tests green (in the 233 above).
 - `tests/test_gate_scripts.py`: the comment at 430–432 above the
   scoped-floor tests becomes "`make test` gates both trees from one report
   through the same two checkers under `--scope`, and `make coverage-tools`
@@ -403,6 +497,13 @@ committed.
   `:51–52`, not its proposal. Run
   `planlint --target . validate --fail-on ERROR --change add-witness-ci-artifacts`
   and record exit 0.
+  **Recorded (this commit):** tree gate exit 0 before the edit; eleven amended sites in
+  the spec (`:56`, R-WCA-22, R-WCA-27 twice, R-WCA-28, R-WCA-30, DEC-WCA-006,
+  DEC-WCA-016, DEC-WCA-018, AC-WCA-24, AC-WCA-25) and four in its tasks (the
+  recording-job list, the `ladder` bullet, the two planned tests), each ending
+  "(amended by `measure-coverage-once`)"; `--change add-witness-ci-artifacts` exit 0
+  (G006 and G009 skipped as tree-wide); the whole tree exit 0; its proposal and the
+  dated count at `:51–52` untouched.
 - `CHANGELOG.md`, under `## [Unreleased]`: `### Changed — one suite run
   measures both trees (M2)` with a `measure-coverage-once` entry naming: the
   one run through `coverage-run` with the total disabled and four scoped
@@ -414,11 +515,33 @@ committed.
   `per_file_line_min` key and target (added in Milestone 3 — write the
   entry once, after Milestone 3, or amend it then); and the amendment of
   `add-witness-ci-artifacts`. Milestone 4 appends the floor move (R-MCO-14).
+  **Recorded (this commit):** written once, after Milestone 3, under
+  `## [Unreleased]` as `### Changed — one suite run measures both trees (M2)`.
 - Run `make stage-citations` and record the output here, saying that the
   figures include this package's own spec: `coverage-tools` must now appear
   in the set invoked by no scanned workflow with its mentioned and verified
   counts as the header's with-draft figures read, and no other stage must
   have moved (R-MCO-15).
+  **Recorded (this commit, 2026-10-07; measured on the finished tree over `f8951ef`):** `make stage-citations` (figures include this package's own spec):
+  stage             mentioned  verified  run directly by
+  ----------------  ---------  --------  --------------
+  ci                       14         7  -
+  coverage-tools            3         2  -
+  docs-check               15        15  ci.yml
+  e2e-live                  2         1  ci.yml
+  lint                      6         3  ci.yml
+  matcher-accuracy          4         0  -
+  pre-pr                   45        12  release.yml
+  security                  2         1  -
+  skill-catalog             1         0  -
+  skill-manifests           2         0  -
+  stage-citations           4         0  -
+  test                     47        47  ci.yml
+  thresholds                7         4  -
+  typecheck                 7         4  ci.yml
+  validate                 20        10  -
+  wheel-check               3         2  -
+  50 spec(s); 16 stage(s) cited; 12 on a verification line; 6 of those invoked by no scanned workflow: ci, coverage-tools, security, thresholds, validate, wheel-check
 - **Gate:** `make pre-pr` — the ladder runs the suite once (one pytest line
   in `make -n pre-pr`), all four scoped checks pass with the floors
   unchanged, `make thresholds` PASS; then the pull request's first CI run,
@@ -428,7 +551,7 @@ committed.
   operating contract: floors move up and never down); record the leg, the
   figure and the fix here.
 
-## Milestone 3 — The per-file minimum, as a report
+## Milestone 3 — The per-file minimum, as a report  [DONE]
 
 - `tests/test_gate_scripts.py`, written first and run red (R-MCO-13,
   DEC-MCO-009): planned tests, named here so AC-MCO-16 can be re-pointed —
@@ -449,6 +572,14 @@ committed.
   the first positional as the path and drops the rest — and given the flag
   first takes it as the path and exits 2, file not found; both recorded,
   neither changed). Record the red run.
+  **Recorded (this commit):** red before the code — the flag was taken as a positional and
+  the script gated normally (`tools/ line coverage 76.7% (23/30) below floor 90%`, exit 1
+  where the report's lines were expected), the no-key test exit 1 instead of 2, the
+  scope test's output the gate line, `Makefile has no documented coverage-per-file
+  target`; `test_per_file_flag_leaves_the_argv_contract_alone` was green before the code
+  because the gate's exit 1 on the planted report coincides with the report's exit 1 and
+  the branch checker already drops a trailing flag — its value is the branch-checker
+  half, and the path and scope reaching the parser is what the other four prove.
 - `pyproject.toml`, `[tool.specgraph]`: `per_file_line_min = 85` under a
   comment — the reporting threshold for `check_coverage_floor.py
   --per-file-min`, read by the `coverage-per-file` target; it gates nothing
@@ -479,11 +610,16 @@ committed.
   the line) and that `make help` lists it; its seventeen-character name
   overruns the help's `%-14s` column by three — accepted rather than
   widening the column and moving every row.
+  **Recorded (this commit):** `make thresholds` PASS; `make help` lists `coverage-per-file`
+  (overrunning the column as accepted); `make -n pre-pr` still prints one pytest line;
+  the fourteen per-file and Makefile tests green; `ruff` and `mypy tools` clean.
 - Run `make coverage-per-file` at the branch head and record its output
   here beside Milestone 0's list; at `5246931` the expected list is the one
   module `tools/check_branch_coverage.py` (84.2 %, 32/38), which Milestone
   1's edit to that file may have moved — record what it prints, not what
   was expected.
+  **Recorded (this commit, 2026-10-07; measured on the finished tree over `f8951ef`):** `make coverage-per-file` exit 0:
+  `modules in every measured tree below 85% line coverage (per_file_line_min):`; `no module below 85% line coverage`
 - **Gate:** `make test` — the per-file tests green on their planted
   reports; then `make thresholds` PASS.
 
@@ -557,6 +693,9 @@ committed.
   AC-MCO-18 adds `test_per_file_flag_leaves_the_argv_contract_alone`. Run
   `python -m pytest tests/test_spec_test_citations.py -q` and confirm every
   selector in every spec resolves.
+  **Recorded (this commit):** re-pointed as listed, each stage kept; AC-MCO-2 also cites
+  `test_the_first_source_without_its_unscoped_floor_is_named_as_absent`;
+  `tests/test_spec_test_citations.py`: ......                                                                   [100%].
 - Confirm this package validates clean under the repository's own rules
   (`planlint --target . validate --fail-on ERROR --change measure-coverage-once`),
   then `--change add-witness-ci-artifacts`, then `--change gate-tools-coverage`

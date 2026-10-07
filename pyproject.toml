@@ -84,20 +84,30 @@ testpaths = ["tests"]
 addopts = "-q"
 
 [tool.coverage.run]
-source = ["openspec_graph"]
+# One run (`make coverage-run`) measures both trees; `make test` and
+# `make coverage-tools` read the one report scoped (`--scope openspec_graph`,
+# `--scope tools`). The FIRST entry is the tree whose floors are the
+# unscoped `fail_under` and `branch_fail_under` below; every later entry has
+# its own `[tool.specgraph] <entry>_*_fail_under` keys (measure-coverage-once,
+# R-MCO-3).
+source = ["openspec_graph", "tools"]
 branch = true
-# Activates pytest-cov's own auto-installed subprocess-coverage hook (a
-# .pth file it drops into site-packages that calls coverage.process_startup()
-# on every interpreter start whenever COVERAGE_PROCESS_START is set --
-# tests/support.py's run_cli() sets it) to track the real CLI subprocesses
-# run_cli() launches -- without this, every line reachable only through
-# a subprocess invocation is
+# Activates coverage.py's own subprocess hook: the `a1_coverage.pth` it
+# installs into site-packages calls coverage.process_startup() on every
+# interpreter start whenever COVERAGE_PROCESS_START is set --
+# tests/support.py's run_cli() sets it -- so the real CLI subprocesses
+# run_cli() launches are measured. (pytest-cov 7 removed its own .pth, so
+# the earlier attribution of this hook to pytest-cov was stale; DEC-MCO-008.)
+# Without this, every line reachable only through a subprocess invocation is
 # structurally invisible to the coverage report, no matter how well tested.
 parallel = true
 
 [tool.coverage.report]
-# The line-coverage floor for this repo. Specs and CI config must reference
-# this locator, never hard-code a number (specgraph rule G003 / C-CH-2).
+# The package's line-coverage floor: the first `source` entry's, read under
+# `--scope openspec_graph` by the first-entry fallback of tools/_common.py's
+# scoped_floor, and the locator planlint itself detects. Specs and CI config
+# must reference this locator, never hard-code a number (specgraph rule
+# G003 / C-CH-2).
 fail_under = 90
 
 [tool.specgraph]
@@ -108,23 +118,29 @@ fail_under = 90
 # high line coverage and untested conditional branches must still fail.
 branch_fail_under = 80
 
-# Floors for the `tools/` gate scripts, enforced by the same two checkers via
-# `--scope tools` (`make coverage-tools`). Separate from the floors above
-# because they measure a different tree: `tools/` is the gate machinery, not
-# the product, and a single combined number would let a regression in either
-# hide behind the other's headroom.
+# Floors for the `tools/` gate scripts, read from the same one run under
+# `--scope tools` (inside `make test`, and by `make coverage-tools` alone).
+# Separate keys because `tools/` is a different tree with a different
+# reading: it is the gate machinery, not the product, and one combined
+# number would let a regression in either hide behind the other's headroom.
+# The two sets of floors each ratchet from their own tree's minimum CI leg
+# and need not be equal (measure-coverage-once).
 #
 # The scripts under `tools/` are what `make pre-pr` and every workflow
 # actually run, so a gate script whose failing path is untested is worse than
 # no gate: it reports PASS on the thing it was added to catch. Three of them
-# did exactly that until the tests added alongside these keys.
-#
-# Set to the same numbers as the package rather than to today's measurement.
-# Holding the gate machinery to a lower bar than the code it guards is the
-# argument this project exists to refuse, and a floor pinned at the current
-# reading is a floor at the measurement, not a bar to clear.
+# did exactly that until the tests added alongside these keys. Holding the
+# gate machinery to a lower bar than the code it guards is the argument this
+# project exists to refuse.
 tools_line_fail_under = 90
 tools_branch_fail_under = 80
+
+# The reporting threshold for `check_coverage_floor.py --per-file-min`, read
+# by `make coverage-per-file`. It gates nothing and is composed into neither
+# `ci` nor `pre-pr` (DEC-PM-011's posture): the list it printed when it landed
+# is in measure-coverage-once's tasks.md, and a gate on it is a later package
+# once the list is empty on every leg.
+per_file_line_min = 85
 
 # Bounds for every `timeout-minutes` literal in `.github/workflows/*.yml`,
 # enforced by tests/test_workflow_hardening.py through

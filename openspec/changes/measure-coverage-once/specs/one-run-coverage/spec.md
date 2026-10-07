@@ -662,7 +662,7 @@ module is below: `tools/check_branch_coverage.py` at 84.2 %.
 
 ## Acceptance Criteria
 
-- [ ] **AC-MCO-1:** against a planted `pyproject.toml` declaring `source =
+- [x] **AC-MCO-1:** against a planted `pyproject.toml` declaring `source =
   ["openspec_graph", "tools"]` with `fail_under`, `branch_fail_under` and the
   `tools_*` keys and no `openspec_graph_*` key, both checkers under
   `--scope openspec_graph` — and under `--scope openspec_graph/`, which
@@ -674,9 +674,9 @@ module is below: `tools/check_branch_coverage.py` at 84.2 %.
   exists to forbid). The tests are written with this change; until they
   exist the stage is the citation. (R-MCO-3, R-MCO-5, DEC-MCO-002,
   DEC-MCO-003)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_the_first_source_without_a_scoped_key_reads_the_unscoped_floors or test_a_scoped_key_on_the_first_source_is_honoured_and_is_the_misconfiguration_the_guard_rejects"` · stage: `make test`
 
-- [ ] **AC-MCO-2 (non-success):** `--scope tools` on a planted file that
+- [x] **AC-MCO-2 (non-success):** `--scope tools` on a planted file that
   declares `tools` second in `source` and carries no `tools_*` key exits 2
   from both checkers, as does a scope absent from `source`, with a message
   naming the scoped key and the first entry the unscoped locators belong
@@ -688,16 +688,16 @@ module is below: `tools/check_branch_coverage.py` at 84.2 %.
   error and the Windows separators behave as before. The message assertions
   are new tests; until they exist the stage covers them. (R-MCO-4,
   C-MCO-5)
-  _Verified by:_ `pytest -k "test_scoped_gate_fails_loudly_when_its_floor_is_not_configured or test_a_scope_matching_nothing_fails_the_gate_rather_than_passing or test_scoped_totals_normalize_windows_separators or test_coverage_argv_parses_every_accepted_shape or test_coverage_argv_rejects_a_scope_without_a_value or test_scoped_gate_reports_a_usage_error_as_exit_2"` · stage: `make test`
+  _Verified by:_ `pytest -k "test_a_declared_scope_that_is_not_first_still_exits_2_without_its_key or test_the_first_source_without_its_unscoped_floor_is_named_as_absent or test_scoped_gate_fails_loudly_when_its_floor_is_not_configured or test_a_scope_matching_nothing_fails_the_gate_rather_than_passing or test_scoped_totals_normalize_windows_separators or test_coverage_argv_parses_every_accepted_shape or test_coverage_argv_rejects_a_scope_without_a_value or test_scoped_gate_reports_a_usage_error_as_exit_2"` · stage: `make test`
 
-- [ ] **AC-MCO-3 (non-success):** the real `pyproject.toml`'s first `source`
+- [x] **AC-MCO-3 (non-success):** the real `pyproject.toml`'s first `source`
   entry carries no scoped key, and a planted `pyproject.toml` carrying one
   for its first entry is named by the guard's helper. The test is written
   with this change; until it exists the stage is the citation. (R-MCO-1,
   R-MCO-5, DEC-MCO-002)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_the_first_source_declares_no_duplicate_scoped_floor_key` · stage: `make test`
 
-- [ ] **AC-MCO-4:** `coverage_sources` reads an inline array and a
+- [x] **AC-MCO-4:** `coverage_sources` reads an inline array and a
   multi-line array under `[tool.coverage.run]`, normalises `./tools/` and
   `tools/` to `tools`, ignores a `source` key under another table, does not
   read the dotted `[tool.coverage] run.source` form or `source_pkgs`, and
@@ -705,15 +705,15 @@ module is below: `tools/check_branch_coverage.py` at 84.2 %.
   `normalize_scope` maps `openspec_graph/`, `./openspec_graph` and
   `openspec_graph` to one name. The test is written with this change; until
   it exists the stage is the citation. (R-MCO-3, DEC-MCO-003)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_coverage_sources_reads_the_run_table_array_and_nothing_else` · stage: `make test`
 
-- [ ] **AC-MCO-5:** the scoped sum, the unscoped totals read, the
+- [x] **AC-MCO-5:** the scoped sum, the unscoped totals read, the
   scoped-versus-unscoped dilution case and the unscoped checkers' own
   floors, misconfiguration and nothing-measured exits are unchanged — every
   existing checker test passes without an edit. (R-MCO-3, R-MCO-4, C-MCO-5)
   _Verified by:_ `pytest -k "test_scoped_totals_sum_only_the_named_subtree or test_scoped_gate_fails_below_its_own_floor_and_passes_at_it or test_cov_floor_fails_below_threshold or test_cov_floor_passes_at_or_above or test_cov_floor_fails_loud_when_floor_not_configured or test_cov_floor_threshold_is_read_from_pyproject_not_hardcoded or test_branch_check_fails_below_floor or test_branch_check_passes_at_or_above_floor or test_branch_check_fails_when_no_branches_measured or test_branch_check_fails_when_floor_not_configured"` · stage: `make test`
 
-- [ ] **AC-MCO-6:** read from the Makefile: `coverage-run` is `.PHONY` and
+- [x] **AC-MCO-6:** read from the Makefile: `coverage-run` is `.PHONY` and
   documented and holds the erase and the single pytest line with a bare
   `--cov`, `--cov-branch`, `--cov-fail-under=$(NO_FLOOR)` and the JSON
   report, with no `--cov=` anywhere in the file; `test`, `coverage-tools`
@@ -724,24 +724,24 @@ module is below: `tools/check_branch_coverage.py` at 84.2 %.
   prints one pytest invocation, recorded in `tasks.md`. The tests are
   written with this change; until they exist the stage is the citation.
   (R-MCO-2, R-MCO-6, C-MCO-6, DEC-MCO-001, DEC-MCO-004)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_the_suite_runs_once_through_coverage_run or test_test_and_coverage_tools_read_the_one_report_scoped"` · stage: `make test`
 
-- [ ] **AC-MCO-7 (non-success):** through the same helpers, a planted
+- [x] **AC-MCO-7 (non-success):** through the same helpers, a planted
   Makefile text with `--cov=openspec_graph` on the pytest line, one with a
   literal floor on it, one with two pytest lines, one whose `coverage-tools`
   or `test` lacks the `coverage-run` prerequisite, and one whose `pre-pr`
   composes the report target are each named. The tests are written with
   this change; until they exist the stage is the citation. (R-MCO-13,
   DEC-MCO-011)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_a_recipe_that_pins_a_cov_source_or_skips_the_run_dependency_is_named` · stage: `make test`
 
-- [ ] **AC-MCO-8:** `tools/check_no_hardcoded_thresholds.py` prints PASS on
+- [x] **AC-MCO-8:** `tools/check_no_hardcoded_thresholds.py` prints PASS on
   the finished tree at every milestone, and still fails on a planted floor
   literal in a recipe and in a workflow while ignoring `$(...)` spans and
   comments. (C-MCO-2)
   _Verified by:_ `pytest -k "test_threshold_guard_passes_on_a_clean_tree or test_threshold_guard_fails_on_a_hard_coded_coverage_floor or test_threshold_guard_fails_on_a_floor_pinned_in_a_workflow or test_threshold_guard_ignores_comments_and_make_expansions"` · stage: `make thresholds`
 
-- [ ] **AC-MCO-9:** on the first run of the new `test` target at the branch
+- [x] **AC-MCO-9:** on the first run of the new `test` target at the branch
   head, the four scoped figures the checkers print equal the two-run figures
   measured in Milestone 0 to the line and branch, and all four checks exit
   0 with the floors unchanged; the comparison is recorded in `tasks.md`
@@ -750,7 +750,7 @@ module is below: `tools/check_branch_coverage.py` at 84.2 %.
   C-MCO-3, DEC-MCO-001, DEC-MCO-012)
   _Verified by:_ stage: `make test`
 
-- [ ] **AC-MCO-10:** `ci.yml` has no `coverage-tools` job, `docs/hooks.md`'s
+- [x] **AC-MCO-10:** `ci.yml` has no `coverage-tools` job, `docs/hooks.md`'s
   table still lists every job that remains and — once the planned reverse
   guard exists — every row of it names a job in `ci.yml` or a workflow under
   `.github/workflows/`; every third-party `uses:` in the file — the new
@@ -759,24 +759,24 @@ module is below: `tools/check_branch_coverage.py` at 84.2 %.
   permission, and no artifact name carries a pasted version literal. The
   reverse guard is cited by stage until it exists. (R-MCO-7, R-MCO-8,
   R-MCO-13, DEC-MCO-005)
-  _Verified by:_ `pytest -k "test_hooks_ci_table_lists_every_ci_job or test_every_reference_to_one_action_agrees_on_one_ref or test_every_third_party_action_is_pinned_to_a_commit_sha_with_its_release_tag or test_every_job_in_every_workflow_has_a_timeout_inside_the_range or test_no_write_permission_anywhere_in_ci or test_no_quoted_python_version_literal_outside_env_and_matrix"` · stage: `make test`
+  _Verified by:_ `pytest -k "test_every_hooks_ci_table_row_names_a_job_or_workflow or test_hooks_ci_table_lists_every_ci_job or test_every_reference_to_one_action_agrees_on_one_ref or test_every_third_party_action_is_pinned_to_a_commit_sha_with_its_release_tag or test_every_job_in_every_workflow_has_a_timeout_inside_the_range or test_no_write_permission_anywhere_in_ci or test_no_quoted_python_version_literal_outside_env_and_matrix"` · stage: `make test`
 
-- [ ] **AC-MCO-11 (non-success):** every job block that runs `make test`
+- [x] **AC-MCO-11 (non-success):** every job block that runs `make test`
   uploads `coverage.json` under `if: always()`, and a planted job block that
   runs `make test` and uploads nothing is named with the job id; a planted
   `docs/hooks.md` table row naming no job in any workflow is named by the
   reverse guard's helper. The tests are written with this change; until
   they exist the stage is the citation. (R-MCO-7, R-MCO-13, DEC-MCO-005,
   DEC-MCO-010)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_every_job_running_the_suite_uploads_its_coverage_report or test_a_suite_job_without_a_coverage_upload_is_named or test_a_hooks_row_naming_no_job_is_named"` · stage: `make test`
 
-- [ ] **AC-MCO-12:** the Windows job still runs `make lint`, `make
+- [x] **AC-MCO-12:** the Windows job still runs `make lint`, `make
   typecheck` and `make test` — the same three gates as the matrix — so its
   leg gates both trees and uploads its report like every other. (R-MCO-7,
   C-MCO-6)
   _Verified by:_ `pytest -k test_ci_workflow_has_a_windows_job` · stage: `make test`
 
-- [ ] **AC-MCO-13:** `docs/hooks.md` (its `test` row's version-range cell
+- [x] **AC-MCO-13:** `docs/hooks.md` (its `test` row's version-range cell
   intact), `docs/architecture/c4.md` §2 and §4b, the `pyproject.toml`
   comments — the hook attributed to coverage.py's own `.pth` — the
   `Makefile` comments and the `tests/test_gate_scripts.py` comment describe
@@ -788,14 +788,14 @@ module is below: `tools/check_branch_coverage.py` at 84.2 %.
   DEC-MCO-008, DEC-MCO-013)
   _Verified by:_ `pytest -k "test_nested_agents_file_stays_short or test_nested_agents_file_states_its_precedence or test_agent_index_links_resolve or test_hooks_test_row_names_the_matrix_bounds"` · stage: `make docs-check`
 
-- [ ] **AC-MCO-14:** the six superseded GTC ids are named in this spec and
+- [x] **AC-MCO-14:** the six superseded GTC ids are named in this spec and
   in the CHANGELOG entry, `gate-tools-coverage`'s files are absent from the
   diff, and every `pytest -k` selector in every spec under
   `openspec/changes/` — that package's included — still resolves to a test
   function. (R-MCO-9, C-MCO-7, DEC-MCO-006)
   _Verified by:_ `pytest -k test_every_spec_test_citation_resolves_to_a_real_test` · stage: `make test`
 
-- [ ] **AC-MCO-15:** `add-witness-ci-artifacts`' spec and tasks carry the
+- [x] **AC-MCO-15:** `add-witness-ci-artifacts`' spec and tasks carry the
   amendments R-MCO-10 describes — every site naming the job, the recording
   sites (R-WCA-28, the `ladder` bullet, AC-WCA-24, R-WCA-22, R-WCA-27), the
   run-by-name sites (R-WCA-30, AC-WCA-25, DEC-WCA-018 and the planned test)
@@ -807,32 +807,32 @@ module is below: `tools/check_branch_coverage.py` at 84.2 %.
   DEC-MCO-007)
   _Verified by:_ stage: `make validate`
 
-- [ ] **AC-MCO-16 (non-success):** `check_coverage_floor.py --per-file-min`
+- [x] **AC-MCO-16 (non-success):** `check_coverage_floor.py --per-file-min`
   against a planted report with one module below `per_file_line_min` prints
   that module with its percentage and `covered/total`, in ascending order
   when there are two, and exits 1; with none below it prints the saying-so
   line and exits 0; with the key absent it exits 2; and under `--scope` it
   lists only that subtree. The tests are written with this change; until
   they exist the stage is the citation. (R-MCO-11, R-MCO-13, DEC-MCO-009)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_per_file_report_names_each_module_below_the_minimum or test_per_file_report_exits_zero_when_no_module_is_below or test_per_file_report_fails_loudly_without_its_key or test_per_file_report_respects_the_scope"` · stage: `make test`
 
-- [ ] **AC-MCO-17:** the per-file report target is `.PHONY`, help-documented,
+- [x] **AC-MCO-17:** the per-file report target is `.PHONY`, help-documented,
   lists `coverage-run` as its prerequisite and is composed into neither `ci`
   nor `pre-pr`, read from the Makefile in the shape of the existing
   report-target test; its output at the branch head is recorded in
   `tasks.md`. The new test is written with this change; until it exists the
   existing report-target test and the stage are the citation. (R-MCO-11,
   DEC-MCO-009)
-  _Verified by:_ `pytest -k test_makefile_has_matcher_accuracy_report_target` · stage: `make test`
+  _Verified by:_ `pytest -k "test_makefile_has_coverage_per_file_report_target or test_makefile_has_matcher_accuracy_report_target"` · stage: `make test`
 
-- [ ] **AC-MCO-18:** `parse_coverage_argv` returns the same `(path, scope)`
+- [x] **AC-MCO-18:** `parse_coverage_argv` returns the same `(path, scope)`
   pair for every accepted shape it accepted before, the per-file flag is
   consumed by `check_coverage_floor.main` before it, and
   `check_branch_coverage.py` given a trailing `--per-file-min` ignores it
   and gates normally, exactly as it does today. The last clause is a new
   test; until it exists the existing argv test and the stage are the
   citation. (R-MCO-11, DEC-MCO-009)
-  _Verified by:_ `pytest -k test_coverage_argv_parses_every_accepted_shape` · stage: `make test`
+  _Verified by:_ `pytest -k "test_per_file_flag_leaves_the_argv_contract_alone or test_coverage_argv_parses_every_accepted_shape"` · stage: `make test`
 
 - [ ] **AC-MCO-19 (observed after the first CI run):** the source run's
   `make test` step was green on every leg, so no leg is excluded; the
@@ -845,23 +845,23 @@ module is below: `tools/check_branch_coverage.py` at 84.2 %.
   runs are recorded. (R-MCO-12, C-MCO-2, C-MCO-3, DEC-MCO-010)
   _Verified by:_ stage: `make pre-pr`
 
-- [ ] **AC-MCO-20:** the rule inventory, the golden `validate`/`graph`/`rules`
+- [x] **AC-MCO-20:** the rule inventory, the golden `validate`/`graph`/`rules`
   hashes and the empty runtime-dependency list are unchanged. (C-MCO-1)
   _Verified by:_ `pytest -k "test_rule_set_matches_baseline or test_output_byte_identical or test_runtime_dependencies_stay_empty"` · stage: `make test`
 
-- [ ] **AC-MCO-21:** both edited scripts still run as `python tools/<script>.py`
+- [x] **AC-MCO-21:** both edited scripts still run as `python tools/<script>.py`
   from a throwaway cwd without a load-failure marker, and the nested
   `pytest --cov` tests and the ambient-`COVERAGE_FILE` test still reach
   their verdicts with the wider `source` in place. (R-MCO-1, C-MCO-5)
   _Verified by:_ `pytest -k "test_gate_script_is_runnable_as_a_script or test_coverage_floor_fails_below_threshold_pytest or test_coverage_floor_passes_at_threshold or test_suite_survives_an_ambient_coverage_file"` · stage: `make test`
 
-- [ ] **AC-MCO-22:** `CHANGELOG.md` `[Unreleased]` carries this package's
+- [x] **AC-MCO-22:** `CHANGELOG.md` `[Unreleased]` carries this package's
   `Changed` entry with the items R-MCO-14 names, and every versioned section
   still links to its release tag. The entry is read directly; the test holds
   the link shape. (R-MCO-14)
   _Verified by:_ `pytest -k test_every_changelog_version_links_to_its_release_tag` · stage: `make test`
 
-- [ ] **AC-MCO-23:** `tasks.md` records, dated with the commit and naming
+- [x] **AC-MCO-23:** `tasks.md` records, dated with the commit and naming
   the command, the before and after of `make -n pre-pr`'s pytest count and
   of `time make pre-pr`, the Appendix A durations figure as W7.6's baseline
   with both sessions' measurements, and the stage-citation report after the

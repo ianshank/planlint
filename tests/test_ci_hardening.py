@@ -763,6 +763,373 @@ def test_makefile_has_matcher_accuracy_report_target() -> None:
 
 
 
+# --- measure-coverage-once: one suite run, two scoped reads ------------------
+#
+# `make coverage-run` runs the suite once over every tree in
+# `[tool.coverage.run] source`; `make test` and `make coverage-tools` depend
+# on it and read the one coverage.json under `--scope`. These guards hold
+# that shape -- no `--cov=` pin, no floor literal, one pytest line, both
+# aggregates on the run -- and hold every CI job that runs the suite to
+# uploading its report, which is what the floor ratchet reads (R-MCO-6,
+# R-MCO-7, R-MCO-12, R-MCO-13).
+
+#: A rule line: `target: prerequisites ## help`. Variable assignments
+#: (`NAME := value`, `NAME:=value`) and `.PHONY` are not rules.
+_MAKE_RULE = re.compile(r"^([A-Za-z][\w.-]*):(?![=:])\s*(.*)$")
+_COV_SOURCE_PIN = re.compile(r"--cov=\S+")
+_COV_FLOOR_LITERAL = re.compile(r"--cov-fail-under=\d+")
+_PYTEST_INVOCATION = "python -m pytest"
+_SUITE_RUN_TARGET = "coverage-run"
+_SUITE_READERS = ("test", "coverage-tools")
+_REPORT_TARGET = "coverage-per-file"
+_GATE_AGGREGATES = ("ci", "pre-pr")
+_SUITE_STEP = "make test"
+_COVERAGE_REPORT = "coverage.json"
+_UPLOAD_ACTION = "upload-artifact"
+_CHECKERS = ("check_coverage_floor.py", "check_branch_coverage.py")
+
+
+def _makefile_text() -> str:
+    return (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+
+
+def _make_targets(makefile_text: str) -> list[str]:
+    """Every rule's target, in file order."""
+    targets: list[str] = []
+    for line in makefile_text.splitlines():
+        match = _MAKE_RULE.match(line)
+        if match:
+            targets.append(match.group(1))
+    return targets
+
+
+def _prerequisites(makefile_text: str, target: str) -> list[str]:
+    """The targets `target` depends on, from its rule line, help text dropped."""
+    for line in makefile_text.splitlines():
+        match = _MAKE_RULE.match(line)
+        if match and match.group(1) == target:
+            return match.group(2).split("##", 1)[0].split()
+    return []
+
+
+def _recipe_lines(makefile_text: str, target: str) -> list[str]:
+    """`target`'s recipe: the tab-indented lines up to the next rule, `@#` and
+    `#` comment lines dropped, backslash continuations joined into one line."""
+    lines = makefile_text.splitlines()
+    start = next(
+        (i for i, ln in enumerate(lines) if (m := _MAKE_RULE.match(ln)) and m.group(1) == target),
+        None,
+    )
+    if start is None:
+        return []
+    recipe: list[str] = []
+    pending = ""
+    for line in lines[start + 1 :]:
+        if not line.startswith("\t"):
+            if line.strip():
+                break  # the next rule, variable or comment block
+            continue
+        body = line[1:].strip()
+        if body.startswith(("@#", "#")):
+            continue
+        if body.endswith("\\"):
+            pending += body[:-1].strip() + " "
+            continue
+        recipe.append((pending + body).strip())
+        pending = ""
+    return recipe
+
+
+def _one_run_violations(makefile_text: str) -> list[str]:
+    """Every way a Makefile could quietly return to two runs or a pinned floor, named."""
+    found: list[str] = []
+    pins = sorted(set(_COV_SOURCE_PIN.findall(makefile_text)))
+    if pins:
+        found.append(f"--cov pins a source instead of reading [tool.coverage.run] source: {pins}")
+    literals = sorted(set(_COV_FLOOR_LITERAL.findall(makefile_text)))
+    if literals:
+        found.append(f"a floor literal on the pytest line: {literals}")
+    pytest_lines = [
+        (target, line)
+        for target in _make_targets(makefile_text)
+        for line in _recipe_lines(makefile_text, target)
+        if _PYTEST_INVOCATION in line
+    ]
+    if [target for target, _ in pytest_lines] != [_SUITE_RUN_TARGET]:
+        where = [target for target, _ in pytest_lines]
+        found.append(
+            f"{len(pytest_lines)} pytest lines ({where}); the suite runs once, in {_SUITE_RUN_TARGET}"
+        )
+    for target in _SUITE_READERS:
+        if _SUITE_RUN_TARGET not in _prerequisites(makefile_text, target):
+            found.append(f"{target} does not depend on {_SUITE_RUN_TARGET}")
+    for gate in _GATE_AGGREGATES:
+        if _REPORT_TARGET in _prerequisites(makefile_text, gate):
+            found.append(f"{gate} composes the {_REPORT_TARGET} report")
+    return found
+
+
+def test_the_suite_runs_once_through_coverage_run() -> None:
+    """R-MCO-6: `coverage-run` is the one place the suite runs -- in `.PHONY`,
+    documented, its recipe the erase and exactly one pytest line carrying a
+    bare `--cov` (the trees come from `[tool.coverage.run] source`), the
+    disabled total and the JSON report. No other recipe runs pytest."""
+    makefile = _makefile_text()
+    phony = next(line for line in makefile.splitlines() if line.startswith(".PHONY"))
+    assert _SUITE_RUN_TARGET in phony.split(), f"{_SUITE_RUN_TARGET} missing from .PHONY"
+    assert re.search(rf"^{_SUITE_RUN_TARGET}:.*?## ", makefile, re.MULTILINE), (
+        f"Makefile has no documented `{_SUITE_RUN_TARGET}` target"
+    )
+    recipe = _recipe_lines(makefile, _SUITE_RUN_TARGET)
+    assert len(recipe) == 2 and recipe[0] == "python -m coverage erase", recipe
+    tokens = recipe[1].split()
+    assert tokens[:4] == ["python", "-m", "pytest", "tests/"], recipe[1]
+    for required in (
+        "--cov",
+        "--cov-branch",
+        "--cov-fail-under=$(NO_FLOOR)",
+        f"--cov-report=json:{_COVERAGE_REPORT}",
+    ):
+        assert required in tokens, f"{required!r} missing from {recipe[1]!r}"
+    assert "--cov=" not in makefile, "a `--cov=` pin bypasses [tool.coverage.run] source"
+    assert _one_run_violations(makefile) == []
+
+
+def test_test_and_coverage_tools_read_the_one_report_scoped() -> None:
+    """R-MCO-6: both aggregates depend on the run and read its one report
+    scoped -- `test` for every declared tree, `coverage-tools` for `tools/`
+    alone -- through the same two checkers; `pre-pr` still composes
+    `coverage-tools` and `ci` is unchanged."""
+    makefile = _makefile_text()
+    common = load_tool("common_mco_sources", "_common.py")
+    sources = common.coverage_sources(REPO_ROOT / "pyproject.toml")
+    assert len(sources) >= 2, f"one run over {sources}: nothing to read scoped"
+    for target in _SUITE_READERS:
+        assert _SUITE_RUN_TARGET in _prerequisites(makefile, target), (
+            f"{target} must depend on {_SUITE_RUN_TARGET}"
+        )
+    expected_test = {
+        f"python tools/{script} {_COVERAGE_REPORT} --scope {scope}"
+        for scope in sources
+        for script in _CHECKERS
+    }
+    assert set(_recipe_lines(makefile, "test")) == expected_test
+    expected_tools = {line for line in expected_test if line.endswith("--scope tools")}
+    assert set(_recipe_lines(makefile, "coverage-tools")) == expected_tools
+    assert "coverage-tools" in _prerequisites(makefile, "pre-pr")
+    assert _prerequisites(makefile, "ci") == ["test", "lint", "validate"]
+
+
+_ONE_RUN_MAKEFILE = textwrap.dedent(
+    """\
+    .PHONY: coverage-run test coverage-tools coverage-per-file ci pre-pr
+    NO_FLOOR := 0
+    coverage-run: ## the one run
+    \tpython -m coverage erase
+    \tpython -m pytest tests/ --cov --cov-branch --cov-fail-under=$(NO_FLOOR) \\
+    \t\t--cov-report=json:coverage.json -q
+    test: coverage-run ## both trees
+    \tpython tools/check_coverage_floor.py coverage.json --scope openspec_graph
+    coverage-tools: coverage-run ## tools alone
+    \tpython tools/check_coverage_floor.py coverage.json --scope tools
+    coverage-per-file: coverage-run ## a report
+    \tpython tools/check_coverage_floor.py coverage.json --per-file-min
+    ci: test lint validate ## core
+    \t@echo ci
+    pre-pr: ci coverage-tools ## full
+    \t@echo pre-pr
+    """
+)
+
+
+@pytest.mark.parametrize(
+    ("label", "before", "after", "expected"),
+    [
+        ("a pinned source", "--cov ", "--cov=openspec_graph ", "--cov pins a source"),
+        ("a floor literal", "--cov-fail-under=$(NO_FLOOR)", "--cov-fail-under=90", "floor literal"),
+        (
+            "two pytest lines",
+            "\tpython -m coverage erase\n",
+            "\tpython -m coverage erase\n\tpython -m pytest tests/ -q\n",
+            "2 pytest lines",
+        ),
+        ("test off the run", "test: coverage-run", "test:", "test does not depend"),
+        (
+            "coverage-tools off the run",
+            "coverage-tools: coverage-run",
+            "coverage-tools:",
+            "coverage-tools does not depend",
+        ),
+        (
+            "pre-pr composing the report",
+            "pre-pr: ci coverage-tools",
+            "pre-pr: ci coverage-tools coverage-per-file",
+            "pre-pr composes",
+        ),
+    ],
+)
+def test_a_recipe_that_pins_a_cov_source_or_skips_the_run_dependency_is_named(
+    label: str, before: str, after: str, expected: str
+) -> None:
+    """R-MCO-13: each way back to two runs or a pinned floor is named on a
+    planted Makefile whose unmutated form is clean."""
+    assert _one_run_violations(_ONE_RUN_MAKEFILE) == [], "the planted baseline must be clean"
+    assert _ONE_RUN_MAKEFILE.count(before) == 1, f"{label}: anchor {before!r} not unique"
+    found = _one_run_violations(_ONE_RUN_MAKEFILE.replace(before, after))
+    assert any(expected in item for item in found), f"{label}: {found}"
+
+
+def test_makefile_has_coverage_per_file_report_target() -> None:
+    """`make coverage-per-file` is a report, not a gate (DEC-MCO-009): documented,
+    `.PHONY`, depending on the run and not on `test` so it can be read while a
+    floor is red, and composed into neither `ci` nor `pre-pr`."""
+    makefile = _makefile_text()
+    assert re.search(rf"^{_REPORT_TARGET}:.*?## ", makefile, re.MULTILINE), (
+        f"Makefile has no documented `{_REPORT_TARGET}` target"
+    )
+    phony = next(line for line in makefile.splitlines() if line.startswith(".PHONY"))
+    assert _REPORT_TARGET in phony.split(), f"{_REPORT_TARGET} missing from .PHONY"
+    assert _prerequisites(makefile, _REPORT_TARGET) == [_SUITE_RUN_TARGET]
+    assert _recipe_lines(makefile, _REPORT_TARGET) == [
+        f"python tools/check_coverage_floor.py {_COVERAGE_REPORT} --per-file-min"
+    ]
+    for gate in _GATE_AGGREGATES:
+        assert _REPORT_TARGET not in _prerequisites(makefile, gate), (
+            f"{gate} must not compose the report target"
+        )
+
+
+def _workflow_steps(job_body: str) -> list[str]:
+    """A job's `steps:` list, one text per step, comment lines dropped."""
+    steps: list[list[str]] = []
+    in_steps = False
+    for line in job_body.splitlines():
+        if re.match(r"^    steps:\s*$", line):
+            in_steps = True
+            continue
+        if not in_steps or line.lstrip().startswith("#"):
+            continue
+        if re.match(r"^      - ", line):
+            steps.append([line])
+        elif steps:
+            steps[-1].append(line)
+    return ["\n".join(step) for step in steps]
+
+
+def _uploads_report_always(step: str, report: str) -> bool:
+    return (
+        _UPLOAD_ACTION in step
+        and re.search(r"^\s*if:\s*always\(\)\s*$", step, re.MULTILINE) is not None
+        and re.search(rf"^\s*path:\s*{re.escape(report)}\s*$", step, re.MULTILINE) is not None
+    )
+
+
+def _suite_jobs_without_coverage_upload(workflow_text: str) -> list[str]:
+    """Every job that runs `make test` and does not, under `if: always()`,
+    upload `coverage.json` through the upload-artifact action."""
+    return sorted(
+        name
+        for name, body in workflow_job_blocks(workflow_text).items()
+        if _SUITE_STEP in body
+        and not any(_uploads_report_always(step, _COVERAGE_REPORT) for step in _workflow_steps(body))
+    )
+
+
+def test_every_job_running_the_suite_uploads_its_coverage_report() -> None:
+    """R-MCO-7: each leg's coverage.json is what the floor ratchet reads
+    (R-MCO-12), so every job that runs `make test` uploads it under
+    `if: always()` -- a red leg's report is uploaded on purpose and excluded
+    by the ratchet, never lost."""
+    text = _ci_workflow_text()
+    suite_jobs = [name for name, body in _ci_job_blocks(text).items() if _SUITE_STEP in body]
+    assert suite_jobs, f"no ci.yml job runs `{_SUITE_STEP}`"
+    assert _suite_jobs_without_coverage_upload(text) == []
+
+
+_PLANTED_SUITE_JOBS = textwrap.dedent(
+    """\
+    jobs:
+      silent:
+        steps:
+          - run: make test
+      sometimes:
+        steps:
+          - run: make test
+          - uses: actions/upload-artifact@0000000000000000000000000000000000000000 # v7.0.1
+            with:
+              name: coverage-x
+              path: coverage.json
+      recorded:
+        steps:
+          - run: make test
+          # the per-leg report, uploaded red or green
+          - uses: actions/upload-artifact@0000000000000000000000000000000000000000 # v7.0.1
+            if: always()
+            with:
+              name: coverage-y
+              path: coverage.json
+      unrelated:
+        steps:
+          - run: make lint
+    """
+)
+
+
+def test_a_suite_job_without_a_coverage_upload_is_named() -> None:
+    """R-MCO-13: a job running the suite with no upload step is named by id,
+    and so is one whose upload step would be skipped on a red leg."""
+    assert _suite_jobs_without_coverage_upload(_PLANTED_SUITE_JOBS) == ["silent", "sometimes"]
+
+
+def _hooks_ci_table_cells(hooks_text: str) -> list[str]:
+    """The backticked first cell of every row in docs/hooks.md's CI hooks table."""
+    return re.findall(r"^\|\s*`([\w-]+)`", hooks_text, re.MULTILINE)
+
+
+def _workflow_job_and_file_names() -> tuple[set[str], set[str]]:
+    jobs: set[str] = set()
+    files: set[str] = set()
+    for workflow in sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml")):
+        files.add(workflow.stem)
+        jobs.update(workflow_job_blocks(workflow.read_text(encoding="utf-8")))
+    return jobs, files
+
+
+def _hooks_rows_naming_no_job(
+    hooks_text: str, job_names: set[str], workflow_names: set[str]
+) -> list[str]:
+    """Rows whose first cell is neither a job id in any workflow nor a workflow
+    file's stem -- which is how the `release` row, naming `release.yml`, is
+    allowed."""
+    return sorted(
+        cell
+        for cell in _hooks_ci_table_cells(hooks_text)
+        if cell not in job_names and cell not in workflow_names
+    )
+
+
+def test_every_hooks_ci_table_row_names_a_job_or_workflow() -> None:
+    """R-MCO-7 / AC-MCO-10: the reverse of `test_hooks_ci_table_lists_every_ci_job`
+    -- a row for a job that no longer exists is a stale promise, named here."""
+    hooks = (REPO_ROOT / "docs" / "hooks.md").read_text(encoding="utf-8")
+    assert _hooks_ci_table_cells(hooks), "docs/hooks.md has no CI hooks table rows"
+    jobs, files = _workflow_job_and_file_names()
+    assert _hooks_rows_naming_no_job(hooks, jobs, files) == []
+
+
+def test_a_hooks_row_naming_no_job_is_named() -> None:
+    """R-MCO-13: a planted row for a job no workflow has is named; the row for
+    a separate workflow file is not."""
+    jobs, files = _workflow_job_and_file_names()
+    planted = (
+        "| Job | Trigger | Gate |\n|---|---|---|\n"
+        "| `test` (3.10 to 3.14) | push + PR | x |\n"
+        "| `gone-job` | push + PR | x |\n"
+        "| `release` (separate workflow) | `v*` tag | x |\n"
+    )
+    assert _hooks_rows_naming_no_job(planted, jobs, files) == ["gone-job"]
+
+
 # --- add-github-action-contract: the composite action is actually executed ----
 
 

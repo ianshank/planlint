@@ -6,8 +6,8 @@ untested conditional branches still fails the gate (AC-CH-3).
 
 Usage::
 
-    coverage run ... && coverage json -o coverage.json
-    python tools/check_branch_coverage.py [coverage.json]
+    python -m pytest --cov --cov-branch --cov-report=json:coverage.json
+    python tools/check_branch_coverage.py [coverage.json] [--scope NAME]
 
 The floor is read from ``[tool.specgraph].branch_fail_under`` in pyproject.toml
 — never hard-coded here or in the Makefile (rule G003 / C-CH-2). It lives in
@@ -15,6 +15,13 @@ this project's own table rather than ``[tool.coverage.report]`` so coverage.py
 does not warn about an option it does not recognize; the function below and
 this gate's own failure message have always said so, and only this docstring
 disagreed.
+
+One run writes ``coverage.json`` for every tree in ``[tool.coverage.run]
+source``; this script reads that one report under ``--scope`` for each
+measured tree. The floor for a scope is its own ``<scope>_branch_fail_under``
+key or, for the FIRST ``source`` entry without one, ``branch_fail_under`` — the
+key that has always gated it (measure-coverage-once, R-MCO-3). Every later
+entry needs its own key and exits 2 without it.
 """
 
 from __future__ import annotations
@@ -26,10 +33,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from _common import (
     SCOPED_FLOOR_SECTION,
+    UNSCOPED_FLOOR_LOCATORS,
     coverage_totals,
+    missing_floor_message,
     parse_coverage_argv,
     read_pyproject_int,
-    scoped_floor_key,
+    scoped_floor,
 )
 
 
@@ -37,10 +46,13 @@ def _read_branch_floor(pyproject: Path, scope: str | None = None) -> int | None:
     """Read the branch floor for ``scope``, or the repo-wide one if None.
 
     Both are specgraph's own gate keys, kept out of ``[tool.coverage.*]`` so
-    coverage.py doesn't warn about an unknown option.
+    coverage.py doesn't warn about an unknown option. The first
+    ``[tool.coverage.run] source`` entry without a scoped key falls back to
+    ``branch_fail_under``; see :func:`_common.scoped_floor` for the rule.
     """
-    key = "branch_fail_under" if scope is None else scoped_floor_key(scope, "branch")
-    return read_pyproject_int(pyproject, SCOPED_FLOOR_SECTION, key)
+    if scope is None:
+        return read_pyproject_int(pyproject, *UNSCOPED_FLOOR_LOCATORS["branch"])
+    return scoped_floor(pyproject, scope, "branch")
 
 
 def branch_coverage(cov_path: Path, scope: str | None = None) -> tuple[float, int, int]:
@@ -61,8 +73,12 @@ def main(argv: list[str]) -> int:
         # A repo that turns this gate on MUST configure branch_fail_under.
         # Missing it is a misconfiguration, not a skip — fail loud so CI never
         # passes silently on a gate it claims to enforce.
-        key = "branch_fail_under" if scope is None else scoped_floor_key(scope, "branch")
-        print(f"no {key} set in pyproject.toml {SCOPED_FLOOR_SECTION}", file=sys.stderr)
+        if scope is None:
+            key = UNSCOPED_FLOOR_LOCATORS["branch"][1]
+            print(f"no {key} set in pyproject.toml {SCOPED_FLOOR_SECTION}", file=sys.stderr)
+        else:
+            where = missing_floor_message(Path("pyproject.toml"), scope, "branch")
+            print(f"no branch floor set in pyproject.toml {where}", file=sys.stderr)
         return 2
 
     if not cov_path.exists():

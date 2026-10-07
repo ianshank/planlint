@@ -5,6 +5,35 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed — one suite run measures both trees (M2)
+
+- **`measure-coverage-once`.** The suite runs once: `make coverage-run`
+  measures every tree in `[tool.coverage.run] source` (`openspec_graph`,
+  `tools`) into one `coverage.json` with pytest-cov's diluted total disabled,
+  and `make test` reads that report through the two checkers under
+  `--scope openspec_graph` and `--scope tools` — four scoped checks, one run.
+  `make coverage-tools` keeps its name and its floors, depends on the run, and
+  re-reads `tools/` alone. The floor for a scope is its own
+  `[tool.specgraph] <scope>_*_fail_under` key or, for the first `source`
+  entry without one, the unscoped `fail_under` / `branch_fail_under`
+  (`tools/_common.py`'s `scoped_floor`, with `coverage_sources` and
+  `normalize_scope` beside it); every later entry still exits 2 without its
+  keys, with a message naming both places a floor could have lived. The
+  `coverage-tools` CI job is gone — the stage is reached as a prerequisite of
+  `make pre-pr` — and every leg that runs the suite uploads its
+  `coverage.json` as `coverage-<os>-<python>`, red or green, which is what
+  the floors are set from (two points under the minimum green leg, never
+  down). `check_coverage_floor.py --per-file-min` reports every module below
+  `[tool.specgraph] per_file_line_min`, through `make coverage-per-file` — a
+  report, composed into neither `ci` nor `pre-pr`. This supersedes
+  `gate-tools-coverage`'s R-GTC-9, C-GTC-4, R-GTC-12, DEC-GTC-009,
+  DEC-GTC-013 and the first half of DEC-GTC-010 (recorded here, that package
+  being on `main`), and amends `add-witness-ci-artifacts` — its stage list,
+  recording table and suite-run arithmetic, the `ladder` recording of
+  `coverage-tools` on exit 0 only (DEC-WCA-006's one sanctioned inference),
+  and the run-by-name sites R-WCA-30 / AC-WCA-25 / DEC-WCA-018 with their
+  carve-out — each edit naming the package.
+
 ## [0.3.0] — 2026-10-07
 
 > `v0.3.0` is the first tag pushed under the `planlint` name and the first

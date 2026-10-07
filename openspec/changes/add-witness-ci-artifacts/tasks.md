@@ -246,7 +246,8 @@
   `make wheel-check` replaces the `python -m build` +
   `check_wheel_metadata.py` pair.
 - Every recording job (`test` legs, `self-validate`, `encoding-stress`,
-  `coverage-tools`, `docs`, `security`, `packaging`): each stage step gets an
+  `docs`, `security`, `packaging`; `coverage-tools` has no job of its own —
+  amended by `measure-coverage-once`): each stage step gets an
   `id`, `if: always()`, `set +e`, `code=$?`,
   `echo "exit-code=$code" >> "$GITHUB_OUTPUT"`, `exit $code`; each is
   followed by a recorder step `if: always()` using
@@ -255,7 +256,9 @@
   `if: always()` on the stage step is what keeps `typecheck` and `test`
   running and recorded when `lint` fails (`DEC-WCA-024`).
 - New `ladder` job (3.12): `make ci` and `make pre-pr`, each a recorded step
-  as above — and nothing else; `make matcher-accuracy` is a report target
+  as above — the `make pre-pr` step's recorder also records `coverage-tools`,
+  conditional on that step's exit 0 and recording nothing on red
+  (DEC-WCA-006; amended by `measure-coverage-once`) — and nothing else; `make matcher-accuracy` is a report target
   (`DEC-PM-011`, `DEC-WCA-025`) and does not belong here.
 - New `witness-gate` job: `needs:` lists every recording job and `ladder`;
   `if: always()`; `permissions: contents: read` (add `actions: read` only if
@@ -273,11 +276,14 @@
   `test_ci_witness_recorders_use_unique_artifact_names`,
   `test_ci_recorded_stage_steps_carry_always`,
   `test_ci_witness_gate_refuses_an_empty_store_before_scanning`,
-  `test_ci_ladder_runs_only_the_two_aggregates`,
+  `test_ci_ladder_runs_only_the_two_aggregates` (counting `run: make` steps,
+  not recorder steps — amended by `measure-coverage-once`),
   `test_ci_runs_every_w001_enforced_stage_by_its_make_target_name` (parse
   every `openspec/changes/*/specs/*/spec.md` with the package's own parser,
   collect `MAKE_REF.findall(crit.verified_by)` over every criterion, and
-  assert each stage appears as `make <stage>` in `ci.yml`),
+  assert each stage appears as `make <stage>` in `ci.yml`, or is a
+  prerequisite of an aggregate the `ladder` job runs and is recorded under
+  DEC-WCA-006's one sanctioned inference — amended by `measure-coverage-once`),
   `test_no_ci_step_runs_the_witness_verb_outside_the_recorder`.
 - `docs/hooks.md`: rows `| `ladder` | push + PR | `make ci` + `make pre-pr`,
   each recorded as a witness (hard) |` and `| `witness-gate` | push + PR |

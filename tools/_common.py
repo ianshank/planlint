@@ -236,6 +236,129 @@ def scoped_floor_key(scope: str, kind: str) -> str:
     return f"{scope}_{kind}_fail_under"
 
 
+#: Where the unscoped floors live, by kind. The FIRST entry of
+#: ``[tool.coverage.run] source`` is the tree these have always gated, so a
+#: scoped read of that tree with no scoped key of its own falls back here;
+#: every later entry needs its own ``<scope>_<kind>_fail_under`` key. One
+#: mapping, read by both checkers, so they cannot disagree about either kind
+#: (measure-coverage-once, R-MCO-3, DEC-MCO-002).
+UNSCOPED_FLOOR_LOCATORS: dict[str, tuple[str, str]] = {
+    "line": ("[tool.coverage.report]", "fail_under"),
+    "branch": (SCOPED_FLOOR_SECTION, "branch_fail_under"),
+}
+COVERAGE_RUN_SECTION = "[tool.coverage.run]"
+_SOURCE_ARRAY = re.compile(r"^source\s*=\s*\[(.*)$", re.S)
+_SOURCE_ENTRY = re.compile(r"""["']([^"']+)["']""")
+
+
+def normalize_scope(name: str) -> str:
+    """``"./tools/"`` -> ``"tools"``: the one spelling ``--scope`` and ``source`` compare in."""
+    name = name.strip().replace("\\", "/")
+    if name.startswith("./"):
+        name = name[2:]
+    return name.rstrip("/")
+
+
+def coverage_sources(pyproject: Path) -> list[str]:
+    """The entries of ``[tool.coverage.run] source``, in order, normalized.
+
+    Hand-rolled on the same table-tracking loop as :func:`read_pyproject_int`
+    and for the same reason: these gate scripts run on the 3.10 leg, where
+    ``tomllib`` does not exist. Accepts exactly the shape this repository
+    writes -- the literal ``[tool.coverage.run]`` header and a
+    ``source = [...]`` array, on one line or several -- and strips a leading
+    ``./`` and a trailing ``/`` from each entry so it compares equal to a
+    ``--scope`` name. The dotted ``[tool.coverage]`` / ``run.source`` form and
+    the separate ``source_pkgs`` key are not read: a tree declared that way
+    finds no entry here and surfaces as the checkers' exit-2 message naming
+    both places a floor could have lived, never as a silent pass
+    (DEC-MCO-003). An absent file, table or key is ``[]``.
+    """
+    if not pyproject.exists():
+        return []
+    in_section = False
+    array_text: str | None = None
+    for line in pyproject.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("[") and stripped.endswith("]") and array_text is None:
+            in_section = stripped == COVERAGE_RUN_SECTION
+            continue
+        if not in_section:
+            continue
+        if array_text is None:
+            match = _SOURCE_ARRAY.match(stripped)
+            if match:
+                array_text = match.group(1)
+        else:
+            array_text += "\n" + stripped
+        if array_text is not None and "]" in array_text:
+            break
+    if array_text is None:
+        return []
+    body = array_text.split("]", 1)[0]
+    return [normalize_scope(entry) for entry in _SOURCE_ENTRY.findall(body)]
+
+
+def scoped_floor(pyproject: Path, scope: str, kind: str) -> int | None:
+    """The ``kind`` (``"line"`` or ``"branch"``) floor for one measured tree.
+
+    In this order (R-MCO-3): the tree's own ``[tool.specgraph]
+    <scope>_<kind>_fail_under`` key; else, when ``scope`` is the FIRST entry of
+    ``[tool.coverage.run] source``, the unscoped locator in
+    :data:`UNSCOPED_FLOOR_LOCATORS`; else ``None``, which the caller turns into
+    exit 2 naming both places. Only the first entry falls back, for D2's two
+    reasons: its floors have lived in the unscoped locators since the gate
+    existed (``planlint detect`` reports that locator, and the threshold guard
+    anchors on it), and a scoped twin of them would be two places for one
+    number -- which is why :func:`duplicate_scoped_floor_keys` forbids one on
+    this repository's own ``pyproject.toml``. Every later entry keeps
+    R-GTC-11 as written: no key, no gate, exit 2.
+    """
+    own = read_pyproject_int(pyproject, SCOPED_FLOOR_SECTION, scoped_floor_key(scope, kind))
+    if own is not None:
+        return own
+    if normalize_scope(scope) in coverage_sources(pyproject)[:1]:
+        section, key = UNSCOPED_FLOOR_LOCATORS[kind]
+        logger.debug(
+            "scoped_floor: %s is the first coverage source; reading %s %s", scope, section, key
+        )
+        return read_pyproject_int(pyproject, section, key)
+    return None
+
+
+def missing_floor_message(pyproject: Path, scope: str, kind: str) -> str:
+    """Both places a scoped floor could have lived, for the checkers' exit-2 line."""
+    section, key = UNSCOPED_FLOOR_LOCATORS[kind]
+    where = f"{SCOPED_FLOOR_SECTION} {scoped_floor_key(scope, kind)}"
+    sources = coverage_sources(pyproject)
+    first = sources[0] if sources else None
+    if first is not None and normalize_scope(scope) == first:
+        return f"{where}, and {section} {key} -- the first source entry's floor -- is absent too"
+    return (
+        f"{where}; the unscoped {key} applies only to the first {COVERAGE_RUN_SECTION} source "
+        f"entry ({first if first is not None else 'none declared'})"
+    )
+
+
+def duplicate_scoped_floor_keys(pyproject: Path) -> list[str]:
+    """Scoped floor keys that duplicate the first source entry's unscoped floors.
+
+    The first entry's floors are the unscoped locators; a
+    ``<first>_<kind>_fail_under`` beside them is two places for one threshold,
+    the drift ``make thresholds`` exists to prevent (R-MCO-5). Returns the
+    offending keys, in kind order, or ``[]``.
+    """
+    sources = coverage_sources(pyproject)
+    if not sources:
+        return []
+    first = sources[0]
+    return [
+        scoped_floor_key(first, kind)
+        for kind in UNSCOPED_FLOOR_LOCATORS
+        if read_pyproject_int(pyproject, SCOPED_FLOOR_SECTION, scoped_floor_key(first, kind)) is not None
+    ]
+
+
 def coverage_totals(
     cov_path: Path, covered_key: str, total_key: str, scope: str | None = None
 ) -> tuple[int, int]:

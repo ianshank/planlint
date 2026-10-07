@@ -20,7 +20,7 @@ flowchart TD
         g["test_gate_scripts.py<br/>each tools/ gate FIRES"]
     end
     shared --> subject
-    subject --> floors["make test — package floors<br/>make coverage-tools — tools/ floors"]
+    subject --> floors["make test — both trees' floors, read scoped<br/>make coverage-tools — tools/ only, same report"]
     corpus["corpus/ + fixtures/phrasing/<br/>labelled input, not documents"] --> subject
 ```
 
@@ -40,8 +40,9 @@ Three things to know before adding a file here:
 `corpus/` and `fixtures/` are labelled input to planlint, not documents of this
 repository — the agent-artifact gates exclude them by prefix for that reason.
 
-Run `make test` for the package floors and `make coverage-tools` for `tools/`;
-they are separate runs because one combined number would dilute both. The
+Run `make test`; it measures both trees in one run and reads each floor
+scoped, so one tree's headroom never hides the other's regression.
+`make coverage-tools` re-reads `tools/` from the same report. The
 `planlint-verifier` subagent runs the whole ladder.
 
 Precedence: where this disagrees with the operating contract in
