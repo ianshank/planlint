@@ -340,8 +340,17 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
     `spec.md` with R-RDS-23's reader. No header block holds a comment, and
     the scoped comparison agrees on all 52.
   - AC-RDS-22 lists what the item says, so it gains (a)–(c) with R-RDS-22.
+- *After the edit*, with all three files revised, at 2026-10-07:
+  - `planlint --target . validate --fail-on ERROR`: exit 0, 52 specs, 0 / 0
+    / 0;
+  - the same with `--change report-dead-code-and-spec-status`: exit 0, 1
+    spec, 0 / 0 / 0;
+  - `python -m pytest tests/test_spec_test_citations.py -q -p
+    no:cacheprovider`: exit 0;
+  - the anchored header grep still prints 26 `DRAFT` and 26 `APPROVED` over
+    52 specs.
 
-## Milestone 0 — Grounding pass at the branch head
+## Milestone 0 — Grounding pass at the branch head [DONE]
 
 - Re-run the gate and record its exit code before the first edit under
   `openspec/`: `planlint --target . validate --fail-on ERROR`. The drafting
@@ -421,6 +430,89 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   scoped lines the checkers print.
 - Record `make help` and `make stage-citations` before the change.
 - **Gate:** `make validate`
+  **Recorded (Milestone 0, 2026-10-07, on `6679c2a`):**
+  - *The gate, before the first edit under `openspec/`.*
+    `planlint --target . validate --fail-on ERROR`: exit 0, 52 specs, 0 error
+    / 0 warn / 0 info. `planlint --target . detect`: 51 change packages, 23
+    make targets, coverage floor 97 from
+    `pyproject.toml:[tool.coverage.report].fail_under`. `make validate`: exit
+    0, the same 52 / 0 / 0 / 0.
+  - *vulture, before the change* (the "before" figures of R-RDS-20), from the
+    root:
+    - `python -m vulture --version`: `vulture 2.16`, exit 0.
+      `python -m pip index versions vulture` reached the index:
+      `INSTALLED: 2.16`, `LATEST: 2.16`.
+    - `python -m vulture openspec_graph tools --min-confidence 80`: no
+      output, exit 0. The same at `--min-confidence 100`: no output, exit 0.
+    - `python -m vulture openspec_graph tools --min-confidence 60`: 12
+      lines, exit 3 — `cli.py:1017` `main_deprecated`, `detect.py:596`
+      `filter_speckit_by_feature`, `parse_model.py:58` `has_selector`,
+      `parse_semantics.py:501` `section_body`, `:510`
+      `speckit_section_body`, `:546` `speckit_subsection_body`, `:735`
+      `suppressions`, `tools/_common.py:353` `duplicate_scoped_floor_keys`,
+      `tools/matcher_accuracy.py:119` `precision_pct`, `:123` `recall_pct`,
+      `tools/stage_citations.py:160` `whitespace_split`, `:161`
+      `commenters`. The drafting list, unchanged.
+    - `python -m vulture openspec_graph tools tests --min-confidence 60`: 9
+      lines, exit 3. Under the two reported trees, the drafting seven:
+      `has_selector`, `speckit_section_body`, `speckit_subsection_body`,
+      `precision_pct`, `recall_pct`, `whitespace_split`, `commenters`. Under
+      `tests/`: `tests/conftest.py:18` `_reset_version_cache` (60 %) and
+      `tests/test_graft_detection.py:43` `target_is_directory` (100 %).
+      DEC-RDS-002, DEC-RDS-003 and R-RDS-6 stand as written.
+    - The edges: `python -m vulture` prints "Please pass at least one file or
+      directory", exit 2; `python -m vulture docs --min-confidence 60` prints
+      nothing, exit 0 (`find docs -name "*.py" | wc -l` prints 0);
+      `python -m vulture no_such_tree --min-confidence 60` prints "Error:
+      /home/user/planlint/no_such_tree could not be found.", exit 1.
+  - *The named symbols.* `grep -rnw
+    "has_selector\|precision_pct\|recall_pct\|STATUSES\|STATUS_ERROR\|FindingRecord\|speckit_section_body\|speckit_subsection_body"
+    --include=*.py openspec_graph tools tests`: 21 hits, the drafting set.
+    `has_selector`, `precision_pct` and `recall_pct` hit their definitions
+    only. `STATUSES`, `STATUS_ERROR` and `FindingRecord` hit
+    `openspec_graph/report.py` only. The two `speckit_*_body` readers hit
+    their definitions and comments or docstrings (`parse_semantics.py:106`,
+    `:547`, `:556`, `:649`; `parse_speckit.py:33`;
+    `tests/test_parse_speckit.py:92`). No reference in code appeared since
+    drafting.
+  - *The status evidence.* The anchored header grep prints 26 for `DRAFT`
+    and 26 for `APPROVED`, over 52 specs (`ls
+    openspec/changes/*/specs/*/spec.md | wc -l`) in 51 packages, this
+    package's own `DRAFT` spec among them. `grep -n "^> \*\*Status:"
+    openspec/changes/*/proposal.md`: the four drafting proposals, each on
+    line 3. The `[DONE]` count: 136. The CHANGELOG grep: 10 entries, five
+    bullets (`shape-the-test-suite`, `measure-coverage-once`,
+    `harden-ci-workflows`, `select-zero-cost-guards`, `pin-actions-by-sha`)
+    and five headings (`add-finding-line-hits`, `add-github-action-contract`,
+    `fix-detect-corpus-defects`, `fix-prose-matcher-precision`,
+    `add-parser-property-tests`). `grep -l "(BLOCKING)"
+    openspec/changes/*/specs/*/spec.md` prints nothing. No spec's or
+    proposal's header block holds an HTML comment (a one-off read-only
+    script, not committed, reading the lines before the first `## `), and
+    `openspec/changes/` holds no `archive/` directory.
+  - *The sites.* Every line named above holds at `6679c2a`, `MAX_NESTED_LINES
+    = 60` at `tests/test_agent_artifacts.py:454` and `MAX_TEST_MODULE_LINES =
+    700` at `tests/test_suite_shape.py:44` among them. `docs/next-steps.md`
+    has items 20–23 at lines 309–336 and no item 24; `## Skills / agents` is
+    line 338. `wc -l tools/AGENTS.md tests/test_ci_makefile.py
+    tests/test_ci_workflow.py tests/test_gate_scripts.py`: 59, 300, 392, 404.
+    One fact found here that the plan does not name: besides the two CI-table
+    tests, `test_a_hooks_row_naming_no_job_is_named`
+    (`tests/test_ci_workflow.py:326–337`, cited by AC-MCO) runs
+    `_hooks_ci_table_cells` over a planted table that has no `## CI hooks`
+    heading; Milestone 1 records what scoping the reader does to it.
+  - *Coverage before the change,* from one `make test` (exit 0, 2 min 55 s):
+    `openspec_graph/ line coverage 99.3% (2276/2292) meets floor 97%`,
+    `openspec_graph/ branch coverage 97.6% (744/762) meets floor 95%`,
+    `tools/ line coverage 96.4% (946/981) meets floor 94%`,
+    `tools/ branch coverage 93.9% (323/344) meets floor 91%`.
+  - *`make help`*, exit 0: 22 documented targets (`e2e-live` is a target
+    the help pattern does not match), with `coverage-per-file`,
+    `matcher-accuracy`, `stage-citations`, `skill-manifests` and
+    `skill-artifacts` overflowing the fourteen-character column. *`make stage-citations`*, exit 0: `52
+    spec(s); 16 stage(s) cited; 12 on a verification line; 6 of those
+    invoked by no scanned workflow: ci, coverage-tools, security, thresholds,
+    validate, wheel-check`.
 
 ## Milestone 1 — The report-target guard extended and the CI-table reader scoped, seen red first
 
