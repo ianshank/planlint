@@ -140,6 +140,30 @@ Note that `tools/check_no_hardcoded_thresholds.py` scans **every** file under
 `.github/workflows/`, not a named one — a workflow added later would otherwise
 escape the guard while it still printed PASS.
 
+## Reports, not gates
+
+What is deliberately outside the ladder: each target below lists something
+for a person or an agent to read, and none decides a build.
+
+| Target | Reads | Exit |
+|---|---|---|
+| `make coverage-per-file` | the one run's `coverage.json`, against `[tool.specgraph] per_file_line_min` | 0 no module below it, 1 a module listed, 2 cannot run |
+| `make matcher-accuracy` | `tests/fixtures/phrasing/`, scoring G002 and U004 per pattern against the `[tool.specgraph]` accuracy floors | 0 every floor met, 1 a floor missed |
+| `make stage-citations` | every spec's `make` citations and the workflows under `.github/workflows/` | 0 whatever it counts, 2 cannot run |
+| `make dead-code` | the `[tool.coverage.run] source` trees, through vulture as a process at `[tool.specgraph] dead_code_min_confidence`, with `tests/` counted as a user and `tools/dead_code_whitelist.txt` applied by name | 0 nothing listed, 1 an unreferenced symbol or a stale whitelist entry, 2 cannot run (vulture absent among the causes) |
+| `make spec-status` | each change package's `Status` headers beside its criteria, milestones, CHANGELOG entries and unrun verification stages | 0 no finding, 1 a finding, 2 cannot run; stays red until `settle-package-status-headers` lands |
+
+None of these is composed into `ci`, `pre-pr` or a CI job, and the report
+targets in the `Makefile` are held to that by
+`test_every_report_target_stays_out_of_the_ladder`, through prerequisites
+followed transitively. Each becomes a gate only through a package of its own,
+after a quarter of an empty report. `make dead-code` needs the dev extra,
+which installs vulture, and exits 2 without it. `make spec-status` never
+edits a header, and it stays red, exiting non-zero, until
+`settle-package-status-headers` lands
+([`next-steps.md`](next-steps.md) item 24); its quiet quarter starts only
+then.
+
 ## Claude Code hooks (`.claude/hooks/`)
 
 A third, distinct layer from pre-commit/CI above: a

@@ -166,6 +166,19 @@ tools_branch_fail_under = 91
 # once the list is empty on every leg.
 per_file_line_min = 85
 
+# The reporting threshold for `make dead-code`: vulture's confidence for an
+# unused function, method, class, property, attribute or variable. Read by
+# `tools/dead_code.py`, which passes it to vulture on the command line; it is
+# a reporting threshold and gates nothing (DEC-PM-011's posture, as
+# `per_file_line_min` above). Not the reflection plan's 80: vulture rates
+# every unused definition at this level, imports at 90 and only unreachable
+# code and unused arguments at 100, so at 80 the report lists nothing over
+# `openspec_graph/` and `tools/` (report-dead-code-and-spec-status,
+# DEC-RDS-002). There is deliberately no `[tool.vulture]` table: vulture reads
+# one from its working directory and would apply its keys to the report's own
+# run, which must see every finding to say which whitelist entry is stale.
+dead_code_min_confidence = 60
+
 # Bounds for every `timeout-minutes` literal in `.github/workflows/*.yml`,
 # enforced by tests/test_workflow_posture.py through
 # `_common.read_pyproject_int` -- one integer per key, which is why two keys
@@ -241,6 +254,17 @@ u004_min_recall_pct = 90
 # `[project] dependencies` stays empty (see its own comment), and a property
 # test is a contributor/CI tool, never something an adopter installing the CLI
 # should be made to carry.
+#
+# `vulture` is run by `tools/dead_code.py` (`make dead-code`), as a process,
+# and is dev-only like `hypothesis`. It is floored, not pinned, and not bare
+# (report-dead-code-and-spec-status, DEC-RDS-001): exit code 3 means "dead
+# code found" only from 2.9 (before it, dead code and invalid input both exit
+# 1, so the report would read every finding as "could not run"), and Python
+# 3.14, in the support window, is supported from 2.15. `pip install -e
+# ".[dev]"` leaves an installed package that satisfies a bare requirement
+# alone, so a bare entry lets an old install stay old; a floor still resolves
+# the latest release on every fresh install and, unlike a pin, needs no
+# update bot.
 dev = [
     "pytest",
     "pytest-cov",
@@ -251,6 +275,7 @@ dev = [
     "mypy>=1.11",
     "build",
     "hypothesis",
+    "vulture>=2.15",
     "tomli; python_version < \"3.11\"",
 ]
 

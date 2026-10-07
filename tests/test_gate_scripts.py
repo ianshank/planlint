@@ -362,6 +362,8 @@ def test_read_json_reports_a_missing_file_by_name(tmp_path: Path) -> None:
         "render_plugin_manifests.py",
         "render_rule_catalog.py",
         "stage_citations.py",
+        "dead_code.py",
+        "spec_status.py",
     ],
 )
 def test_gate_script_is_runnable_as_a_script(script: str, tmp_path: Path) -> None:
@@ -381,6 +383,10 @@ def test_gate_script_is_runnable_as_a_script(script: str, tmp_path: Path) -> Non
     with no arguments: what matters is that the interpreter got far enough to
     reach the script's own argument handling, not which verdict it reached.
     """
+    # Before the process starts: `python tools/missing.py` exits 2 with "can't
+    # open file", an accepted code below, so a listed script that does not
+    # exist would otherwise pass (report-dead-code-and-spec-status, R-RDS-18).
+    assert (TOOLS / script).is_file(), f"{script} is listed but absent"
     result = subprocess.run(
         [sys.executable, str(TOOLS / script)],
         cwd=tmp_path, capture_output=True, text=True, check=False,

@@ -1,4 +1,4 @@
-.PHONY: help coverage-run test coverage-tools coverage-per-file lint typecheck security validate graph graph-mermaid e2e-live ci pre-pr docs-check thresholds matcher-accuracy stage-citations wheel-check skill-catalog skill-manifests skill-artifacts clean
+.PHONY: help coverage-run test coverage-tools coverage-per-file lint typecheck security validate graph graph-mermaid e2e-live ci pre-pr docs-check thresholds matcher-accuracy stage-citations dead-code spec-status wheel-check skill-catalog skill-manifests skill-artifacts clean
 
 # pytest-cov's own --cov-fail-under is disabled on the one run in
 # `coverage-run`: its total is the diluted figure for everything measured,
@@ -93,6 +93,12 @@ matcher-accuracy: ## Report G002/U004 precision + recall per pattern; floors rea
 
 stage-citations: ## Report each cited make stage: specs mentioning it, specs verifying with it, workflows running it
 	python tools/stage_citations.py
+
+dead-code: ## Report unreferenced code under the coverage source trees (vulture) — a report, not a gate
+	python tools/dead_code.py
+
+spec-status: ## Report each change package's Status header beside its evidence — a report, not a gate
+	python tools/spec_status.py
 
 wheel-check: ## Build the wheel and confirm it carries its declared SPDX licence
 	python -m build --wheel --outdir dist
