@@ -50,8 +50,8 @@ coverage-per-file: coverage-run ## Report every module below [tool.specgraph] pe
 lint: ## Ruff check across the package, tests, and tools — a hard gate
 	python -m ruff check openspec_graph tests tools
 
-typecheck: ## mypy with config from pyproject.toml — a hard gate
-	python -m mypy openspec_graph tools
+typecheck: ## mypy over the trees [tool.mypy] files names, config from pyproject.toml — a hard gate
+	python -m mypy --config-file pyproject.toml
 
 security: ## Secret scan (gitleaks if installed, deterministic fallback otherwise)
 	python tools/check_secrets.py

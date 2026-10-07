@@ -116,7 +116,9 @@ def test_graph_covers_every_parsed_spec_when_multiple(repo: Path) -> None:
     write_spec(repo, "c2", "cap2", GOOD_HARNESS.replace("AC-DMO", "AC-DM2").replace("R-DMO", "R-DM2"))
     graph = graph_module.build_graph(detect.profile(repo))
     assert graph["specs"] == 2
-    assert sum(1 for n in graph["nodes"] if n["type"] == "spec") == 2
+    nodes = graph["nodes"]
+    assert isinstance(nodes, list), nodes
+    assert sum(1 for n in nodes if n["type"] == "spec") == 2
 
 
 # --- AC-GR-2: no openspec/ tree -> non-zero exit, names missing directory ----

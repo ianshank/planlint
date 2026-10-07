@@ -44,7 +44,7 @@ def _witness(**overrides: object) -> Witness:
         "recorded_at": "2026-01-01T00:00:00Z",
     }
     fields.update(overrides)
-    return Witness(**fields)  # type: ignore[arg-type]
+    return Witness(**fields)  # type: ignore[arg-type, unused-ignore]
 
 
 def _write_raw(root: Path, data: dict[str, object]) -> Path:
@@ -92,7 +92,7 @@ def test_write_witness_is_atomic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
         calls.append((Path(src).read_bytes(), Path(dst).exists()))
         real_replace(src, dst)
 
-    monkeypatch.setattr(witness.os, "replace", spy_replace)  # type: ignore[attr-defined]
+    monkeypatch.setattr(witness.os, "replace", spy_replace)  # type: ignore[attr-defined, unused-ignore]
     path = witness.write_witness(tmp_path, w)
     assert len(calls) == 1
     payload_at_rename_time, target_existed_before = calls[0]
@@ -107,7 +107,7 @@ def test_write_witness_cleans_up_the_temp_file_and_reraises_on_write_failure(
     def boom(src: object, dst: object) -> None:
         raise OSError("simulated rename failure")
 
-    monkeypatch.setattr(witness.os, "replace", boom)  # type: ignore[attr-defined]
+    monkeypatch.setattr(witness.os, "replace", boom)  # type: ignore[attr-defined, unused-ignore]
     with pytest.raises(OSError, match="simulated rename failure"):
         witness.write_witness(tmp_path, _witness())
     directory = tmp_path / witness.WITNESS_DIR_NAME

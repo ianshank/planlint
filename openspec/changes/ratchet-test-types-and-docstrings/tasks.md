@@ -780,6 +780,97 @@ mypy runs used `--cache-dir /dev/null`; Python runs used
     still read as quoted, and so does `shape-the-test-suite`'s C-TSS-6.
 - **Gate:** `make validate`
 
+### Recorded (Milestone 0, 2026-10-07, at `bac03e5`)
+
+Taken at `bac03e5`, the head of `claude/m2-tests-under-mypy` (`46ae1b3` plus
+this package's three spec commits), before the first edit, in a worktree with
+`PYTHONPATH` set to it (`python -c "import openspec_graph;
+print(openspec_graph.__file__)"` printed the worktree's path). The container
+had four cores (`nproc`) and ran Python 3.13.16, mypy 2.4.0, ruff 0.16.10,
+pytest 9.1.1, hypothesis 6.168.5 and `packaging` 26.3; `python -c "import
+tomli"` raised `ModuleNotFoundError`. A scratch virtual environment outside the
+worktree, `pip install "mypy==1.11.0" pytest packaging`, holds mypy 1.11.0 for
+the floor-release cross-checks recorded below. Every mypy run used
+`--cache-dir /dev/null`.
+
+- **The gate.** `planlint --target . validate --fail-on ERROR` exited 0, 52
+  specs, 0 error / 0 warn / 0 info, before the first edit, and again before
+  the first write under `openspec/` (after Milestones 1 and 2's edits under
+  `tests/` and to the configuration). `make validate` exited 0.
+- **Nothing moved.** Every header figure re-took to the same value:
+  - `python -m mypy tests --explicit-package-bases` reports "Found 185 errors
+    in 32 files (checked 61 source files)", with the sixteen codes at the
+    header's counts by the `error:`-line grep; without explicit bases it
+    stops at "Source file found twice under different module names", exit 2;
+  - the gate-shaped JSON run (a scratch INI holding `python_version`,
+    `strict`, `warn_unreachable`, `files = openspec_graph, tools, tests`,
+    `explicit_package_bases` and `mypy_path = tools`; no path; `MYPYPATH`
+    unset; `-O json`; counted by `code` over `severity == "error"` objects
+    under `tests/`, blank lines skipped) gives 184 under `--platform linux`
+    and 188 under `--platform win32`, none outside `tests/`, stderr empty,
+    exit 1 for both, in 4.9 s and 4.2 s. The win32-only errors are the four
+    `attr-defined` on `os.mkfifo` at `tests/test_detect_thresholds.py:250`,
+    `:251`, `:406` and `:425`; none is Linux-only;
+  - `python -m mypy openspec_graph tools --explicit-package-bases` reports 19
+    errors in 12 files, and with `MYPYPATH=tools` "Success: no issues found
+    in 43 source files", under the default platform and `--platform win32`;
+  - `python -m mypy --config-file pyproject.toml` reports "Success: no issues
+    found in 43 source files", exit 0;
+  - `process_options(["--config-file", "pyproject.toml"],
+    require_targets=False)` writes nothing to stderr, and none of the 61
+    `tests.<stem>` modules' `clone_for_module` snapshots differs from the
+    global one (0.01 s);
+  - the per-file distribution of the seven codes is the proposal's;
+  - ruff reads 52 findings in 18 files of `openspec_graph/`, 25 in 12 of
+    `tools/` and 584 in 47 of `tests/`; the per-file list over
+    `openspec_graph` and `tools` is the proposal's; the guard's command
+    prints 77 findings in 30 files, 40 pairs, exit 0, stderr empty;
+  - the sorted `D100`–`D103` concise output has one SHA-256 digest
+    (`c1c0fe5a…`), 661 findings, under no convention and each of `google`,
+    `numpy` and `pep257`; the wider family reads 37 under Google and 67 under
+    the other two;
+  - `make thresholds` prints PASS; `make stage-citations` reads 52 specs,
+    `typecheck` mentioned in 8, verified by 5 and run by `ci.yml`;
+  - `wc -l` reads `tests/AGENTS.md` 59, `tests/test_detect_thresholds.py`
+    476, and the four largest test modules 647, 658, 677 and 692;
+  - `grep -n "type: ignore" tests/*.py` lists the ten ignores; their keys,
+    read with `tokenize`, are distinct, and no waived line's text recurs in
+    its file;
+  - `grep -rn "mypy:" tests/` finds none; `find openspec_graph tools tests
+    -name '*.pyi'` finds none; no `NAME` token under `tests/` is one of the
+    six; no branch test refers to `sys.version_info` or `sys.platform`, the
+    one reference being `tests/test_claude_hooks.py:100`'s `skipif`;
+  - the `noqa` comment tokens under `openspec_graph/` and `tools/` are
+    `openspec_graph/detect.py:668` (`S607`) and `openspec_graph/report.py:59`
+    (file-level `S105`), neither naming a `D` code; `find . -name .ignore
+    -not -path './.git/*'` finds none;
+  - `[tool.mypy]`'s keys, read with `tomllib`, are `files`,
+    `python_version`, `strict` and `warn_unreachable`.
+- **The code split**, re-derived from that run: all seven of R-TDR-2's codes
+  still occur, the nine others are the proposal's sites, and the four
+  `os.mkfifo` errors are the only platform-only ones. No sibling added a
+  code, a stub, a name or a branch.
+- **The cold type gate before:** `TIMEFORMAT='%R s'; time python -m mypy
+  openspec_graph tools --cache-dir /dev/null` read 0.84, 0.88 and 0.92 s.
+- **The facts the decisions rest on** hold: the recipe is `python -m mypy
+  openspec_graph tools` (`Makefile:53–54`); the pre-commit typecheck hook has
+  `types: [python]` and `pass_filenames: false`; `ci.yml` runs `make
+  typecheck` at line 60 (the `test` matrix, `ubuntu-latest`) and line 108
+  (`test-windows`, `windows-latest`), every other job is on `ubuntu-latest`,
+  and it runs on `pull_request` and on `push` to `main` and `master`;
+  `tomli` is the dev extra's `python_version < "3.11"` entry;
+  `_pytest/py.typed` and `hypothesis/py.typed` exist; the dev extra's `mypy`
+  is unfloored; the eight ignores carry `arg-type` or `attr-defined` with the
+  proposal's texts; and R-ZCG-3 (`zero-cost-guards/spec.md:67`), DEC-ZCG-004
+  (`:188`), C-ZCG-2 (`:143`), DEC-ZCG-012 (`:309`) and C-TSS-6
+  (`shape-the-test-suite`'s spec, `:394`) read as quoted. The installed mypy
+  accepts `-O json`: `python -m mypy --strict -O json --cache-dir /dev/null
+  -c 'x: int = 1' | od -c` reads a lone `\n`, exit 0, on 2.4.0 and 1.11.0.
+  That probe runs from a scratch directory: inside the worktree mypy reads
+  `[tool.mypy] files` and refuses `-c` ("May only specify one of:
+  module/package, files, or command", exit 2). `inspect.signature` on 2.4.0
+  gives the four signatures round-3 item 1 records.
+
 ## Milestone 1 — The mypy guards, seen red in the working tree (they land in the W6.5 commit)
 
 - Write `tests/test_static_ratchets.py` (new) before any configuration
@@ -998,6 +1089,99 @@ mypy runs used `--cache-dir /dev/null`; Python runs used
 - **Gate:** `make test`. Exactly this milestone's red guards fail; that is
   recorded here, and the tree is not committed in that state.
 
+### Recorded (Milestone 1, 2026-10-07, on `bac03e5`'s tree)
+
+The guards were written before any configuration change, on `bac03e5`'s tree
+with only the new files added. Two departures from the plan, each for the
+reason given:
+
+- **The DEC-TDR-012 split, taken in this commit.** Written as one module,
+  the mypy half alone read 622 lines by `wc -l tests/test_static_ratchets.py`,
+  already over the 600-line budget before Milestone 3 adds the docstring half.
+  DEC-TDR-012 says a draft over budget does not raise the budget, and names
+  the split. So it is taken now rather than at the W6.6 commit, which then
+  adds to three files rather than moving code: the guards on the tree, with
+  `MYPY_TESTS_CEILINGS` and `MYPY_WAIVERS` (R-TDR-4, R-TDR-7), stay in
+  `tests/test_static_ratchets.py`; the planted-input test moves to
+  `tests/test_static_ratchets_planted.py`; and the helpers both use move to
+  the uncollected `tests/ratchet_support.py`, which roots no path at
+  `__file__`. The budget is re-read at the W6.6 commit.
+- **The tests-entry helper is `listed_codes`.** The first run reported
+  `ERROR tests/test_static_ratchets.py::tests_entry`: pytest collects any
+  function whose name starts with `test`.
+
+The red run, `python -m pytest tests/test_static_ratchets.py
+tests/test_static_ratchets_planted.py -q -o addopts="" -p no:cacheprovider`:
+3 failed, 76 passed, in 2.5 s. The failures, quoted:
+
+- `test_typecheck_reads_its_trees_from_the_mypy_files_list`:
+  `typecheck recipe ['python -m mypy openspec_graph tools'] is not ['python -m
+  mypy --config-file pyproject.toml']`; `'python -m mypy openspec_graph tools'
+  names no configuration file; a stray mypy.ini or .mypy.ini would win`;
+  `… passes paths ['openspec_graph', 'tools'], which override [tool.mypy]
+  files`; `[tool.mypy] lacks explicit_package_bases`; `[tool.mypy] lacks
+  mypy_path`; `[tool.mypy] files ['openspec_graph', 'tools'] lacks
+  ['tests']`; `[tool.mypy] mypy_path is None, not 'tools' alone`;
+  `[tool.mypy] explicit_package_bases is None, not True`.
+- `test_every_inline_ignore_is_a_recorded_waiver`: all ten ignores as
+  `unrecorded waiver`, each with its key, for example
+  `tests/test_witness.py:95: unrecorded waiver ('tests/test_witness.py',
+  'attr-defined', 'monkeypatch.setattr(witness.os, "replace",
+  spy_replace)')`; and `tests/support.py:86: an ignore holding 2 codes
+  besides unused-ignore: ['import-not-found', 'no-redef']`.
+- `test_the_dev_extra_floors_mypy_and_pins_nothing`: `'mypy' is not floored
+  exactly '>=1.11' (-O json)`.
+
+Green from the first run, as expected:
+
+- `test_the_tests_override_is_one_entry_listing_exactly_the_ceilinged_codes`,
+  because no override and no ceiling is R-TDR-2's clean end state;
+- `test_no_stub_name_or_condition_hides_code_from_mypy`, as Milestone 0
+  predicts;
+- all 73 cases of `test_a_planted_ratchet_violation_is_named`, whose helpers
+  were written with it. The same command under the scratch mypy 1.11.0
+  interpreter gives the same 3 failed, 76 passed.
+
+**A third departure: the occurrence guard's red.**
+`test_every_listed_mypy_code_matches_its_ceiling_on_both_platforms` passes
+on the unchanged tree. Under R-TDR-5 the count is the gate's own run less
+the tests entry, and the unchanged gate's `files` does not name `tests`, so
+no error there is counted. With no ceiling, that is green. The plan's
+expected red ("names every occurring code as unlisted") predates round 3's
+move from a run over `tests` to the gate's run. So the red was taken against
+a planted working-tree state: R-TDR-1's three keys (`files` with `tests`,
+`explicit_package_bases = true`, `mypy_path = "tools"`) written into
+`pyproject.toml` and nothing else, reverted from a copy afterwards. The
+command was `python -m pytest tests/test_static_ratchets.py -q -o addopts=""
+-p no:cacheprovider -k "test_every_listed_mypy_code_matches_its_ceiling_on_both_platforms
+or test_the_tests_override_is_one_entry"`: 1 failed, 1 passed, in 11.2 s.
+It named:
+
+- `platform-only (win32): tests/test_detect_thresholds.py:250 [attr-defined];
+  fix it, never list it`, and the same for `:251`, `:406` and `:425`;
+- `arg-type occurs 18 times under tests/ and is not listed`, and likewise
+  `assignment` 1, `attr-defined` 19, `call-overload` 2, `import-not-found` 1,
+  `index` 7, `list-item` 3, `misc` 2, `no-any-return` 9, `no-untyped-def` 96,
+  `operator` 2, `type-arg` 16, `union-attr` 4, `unreachable` 1,
+  `unused-ignore` 2 and `var-annotated` 1.
+
+The override guard stayed green on that state.
+
+- **The gate.** `make test` exited 2, with exactly the three failures above
+  and nothing else failing (2 min 52 s). The tree was not committed in that
+  state.
+- **Tiers.** `python -m pytest tests/test_suite_shape.py
+  tests/test_suite_routing.py tests/test_decomposition.py
+  tests/test_spec_test_citations.py -q -o addopts="" -p no:cacheprovider`:
+  68 passed. With `-k criterion -o log_cli=true --log-cli-level=DEBUG`, the
+  criterion reads `test_static_ratchets.py` as five `integration`, among them
+  the override and dev-extra guards, and one `e2e`, the occurrence guard
+  (`subprocess.run`). It reads the planted test as `unit`. Each agrees with
+  its mark.
+- **Line counts**, by `wc -l` at the W6.5 commit: `tests/test_static_ratchets.py`
+  181, `tests/test_static_ratchets_planted.py` 180, `tests/ratchet_support.py`
+  366.
+
 ## Milestone 2 — The nine codes and the platform-only errors fixed, the override landed with its ceilings and waivers (the W6.5 commit)
 
 - Fix the nine codes in `tests/`, each by annotation, narrowing, a typed
@@ -1130,6 +1314,174 @@ mypy runs used `--cache-dir /dev/null`; Python runs used
   ceiling. The exception is DEC-TDR-004's case of a mypy release that
   changes a count, and that edit names the release.
 - **Gate:** `make pre-pr`
+
+### Recorded (Milestone 2, 2026-10-07: the W6.5 commit)
+
+**The nine codes, fixed at their sites**, each by annotation, narrowing, a
+typed local or a corrected call, with no assertion removed:
+
+- `tests/support.py` `read_pyproject`: `if sys.version_info >= (3, 11):`
+  imports `tomllib`, `else:` imports `tomli`, with no inline ignore, and the
+  table returns through `parsed: dict[str, Any]` (R-TDR-6). This clears
+  `import-not-found`, the `unused-ignore` and `:88`'s `no-any-return`.
+- `tests/conftest.py`: `_reset_version_cache` returns `Iterator[None]`.
+- `tests/shape_support.py:590`: `nodes: list[ast.AST] = [*cls.bases,
+  *cls.decorator_list]`.
+- `tests/test_mermaid.py:31`, `:47` and `:53`: each node is annotated
+  `dict[str, object]` where it is built. The plan's other option, retyping
+  `_graph`'s parameters as a `Sequence` of `Mapping`, would also have cleared
+  seven of that module's ten listed `arg-type`, which is the shrink's work and
+  not this commit's.
+- `tests/test_dialect_card.py`: `old` and `new` are annotated
+  `dict[str, object]`.
+- `tests/test_suite_shape.py`: `assert offender is not None` before the `in`.
+- `tests/test_cli_surface.py` and `tests/test_action_contract.py`: the
+  captured `env` is bound, then `assert isinstance(env, dict)` narrows it
+  before the `in` and the `set(...)`.
+- `tests/test_graph.py`: `graph["nodes"]` is bound, then `assert
+  isinstance(nodes, list)` narrows it before the generator.
+- `tests/test_finding_line_hits.py`: `returned: object = result`, then `assert
+  not isinstance(returned, tuple)`, under a comment saying why.
+- `tests/test_graft_witness.py` `spy`: the stale `arg-type` ignore is
+  removed. **Departure:** the plan types the spy's parameters so that the
+  forwarded call matches an overload. `subprocess.run` is overloaded and no
+  overload takes `object` arguments, so that would take `Any` parameters or a
+  copy of one overload's keywords. Instead the forwarded callee is a typed
+  local, `original_run: Callable[..., object] = subprocess.run`, under a
+  comment, and the spy keeps `*args: object, **kwargs: object -> object`. That
+  form, and the `object` local above, were each probed clean by `python -m
+  mypy --strict --warn-unreachable --python-version 3.10` from a scratch
+  file, on mypy 2.4.0 and 1.11.0.
+- `tests/test_wheel_metadata.py`'s `check_wheel_metadata` import resolves
+  through `mypy_path`, with no edit.
+
+Three listed-code occurrences sat on the fixed lines and went with them:
+
+- `no-any-return` at `tests/support.py:88`, which the proposal anticipated;
+- `attr-defined` at `tests/test_graph.py:119`, `"object" has no attribute
+  "__iter__"`, on the same line as the `misc`;
+- `arg-type` at `tests/test_dialect_card.py:51`, the `diff_cards(old, new)`
+  call whose first argument was the unannotated `old`.
+
+**The platform-only errors.** `tests/test_detect_thresholds.py` gains a
+module-level `_MKFIFO: Callable[[Path], None] | None = getattr(os, "mkfifo",
+None)`. The three tests `assert _MKFIFO is not None` before their four calls,
+and their `skipif` reads `_MKFIFO is None`, with the reason unchanged. `wc -l`
+reads 486.
+
+**The gate's shape with nothing listed, re-measured by hand** with the scratch
+INI of Milestone 0 plus a `[mypy-tomli]` `ignore_missing_imports` section:
+
+- the same 166 errors under `tests/` with `--platform linux` (4.3 s) and with
+  `--platform win32` (4.4 s);
+- the two error sets equal, none outside `tests/`, stderr empty, exit 1;
+- none of the nine codes occurs;
+- the seven read `no-untyped-def` 96, `attr-defined` 18, `arg-type` 17,
+  `type-arg` 16, `no-any-return` 8, `index` 7, `union-attr` 4.
+
+**The configuration, then the ceilings.** `pyproject.toml` gained
+`files = ["openspec_graph", "tools", "tests"]`, `explicit_package_bases`,
+`mypy_path = "tools"` and the `tomli` override, each under its comment, and
+`"mypy>=1.11"`. The `typecheck` recipe became `python -m mypy --config-file
+pyproject.toml`. With `MYPY_TESTS_CEILINGS` still empty and no tests entry,
+the occurrence guard named each code with its count, from `arg-type occurs 17
+times under tests/ and is not listed` to `union-attr occurs 4 times …`, and
+the constant was filled from those messages. The override guard then ran red,
+as R-TDR-11 requires, with seven lines, from `MYPY_TESTS_CEILINGS holds
+arg-type, which the override does not list` to `… holds union-attr …`.
+
+**The override.** With the `tests.*` entry added, `make typecheck` reported
+the eight expected `unused-ignore`, R-TDR-7's red: `tests/test_witness.py:47`,
+`:95` and `:110`, `tests/test_suite_shape.py:115`,
+`tests/test_rules_speckit.py:149`, `tests/test_matcher_accuracy.py:329`,
+`tests/test_stage_citations.py:233` and `tests/test_graft_witness.py:171`
+(`:168` before the spy's three added lines). It ended "Found 8 errors in 6
+files (checked 107 source files)". Each comment kept its code and gained
+`unused-ignore`. `make typecheck` then reported "Success: no issues found in
+107 source files", exit 0, and so did `python -m mypy --config-file
+pyproject.toml --platform win32`. The waiver guard named the eight as
+unrecorded, with keys equal to the proposal's table, and `MYPY_WAIVERS` was
+filled from those messages.
+
+**The two constants at the W6.5 commit**, as
+`tests/test_static_ratchets.py` holds them:
+
+- `MYPY_TESTS_CEILINGS`: `arg-type` 17, `attr-defined` 18, `index` 7,
+  `no-any-return` 8, `no-untyped-def` 96, `type-arg` 16, `union-attr` 4. The
+  occurrence guard logs the same per-code counts under `-o log_cli=true
+  --log-cli-level=INFO`, with the Linux and Windows error sets equal.
+- `MYPY_WAIVERS`, as (path, code, waived line):
+  - `tests/test_graft_witness.py`, `arg-type`, `return
+    witness.Witness(**fields)`;
+  - `tests/test_matcher_accuracy.py`, `arg-type`, `assert
+    negation_matches(None, None) == ()`;
+  - `tests/test_rules_speckit.py`, `arg-type`, `return
+    parse_model.ParsedSpec(**defaults)`;
+  - `tests/test_stage_citations.py`, `arg-type`, `return original(self,
+    *args, **kwargs)`;
+  - `tests/test_suite_shape.py`, `attr-defined`, `entries = [str(entry) for
+    entry in options.get("markers", [])]`;
+  - `tests/test_witness.py`, `arg-type`, `return Witness(**fields)`;
+  - `tests/test_witness.py`, `attr-defined`,
+    `monkeypatch.setattr(witness.os, "replace", spy_replace)`;
+  - `tests/test_witness.py`, `attr-defined`,
+    `monkeypatch.setattr(witness.os, "replace", boom)`.
+
+**Green.** `python -m pytest tests/test_static_ratchets.py
+tests/test_static_ratchets_planted.py tests/test_ci_workflow.py
+tests/test_enterprise.py tests/test_threshold_guard.py -q -o addopts="" -p
+no:cacheprovider --durations=0`: 153 passed in 22.3 s. Among the tests it
+ran:
+
+- `test_a_bare_generic_in_tools_fails_typecheck` and
+  `test_mypy_fails_on_a_type_error` (AC-TDR-2). Run by hand under the new
+  configuration, the first planted file reports `Missing type arguments for
+  generic type "dict" [type-arg]`, and the second, a module outside every
+  package base, reports `Incompatible return value type … [return-value]`
+  and names `broken.py`, each with exit 1;
+- `test_typecheck_passes_on_clean_repo`, which now checks `tests/`
+  (AC-TDR-1);
+- `test_the_dev_extra_floors_mypy_and_pins_nothing`, with the floor in place
+  (AC-TDR-22);
+- `test_threshold_guard_fails_on_a_pinned_tool_version`, unchanged.
+
+**Durations.** Call durations from `--durations=0 --durations-min=0` over the
+two new modules:
+
+| test | call |
+|---|---|
+| `test_every_listed_mypy_code_matches_its_ceiling_on_both_platforms` | 9.6–10.9 s, two cold mypy runs |
+| `test_no_stub_name_or_condition_hides_code_from_mypy` | 0.28 s |
+| `test_every_inline_ignore_is_a_recorded_waiver` | 0.07–0.11 s |
+| `test_the_tests_override_is_one_entry_listing_exactly_the_ceilinged_codes` | 0.01 s |
+| `test_typecheck_reads_its_trees_from_the_mypy_files_list` | under 0.005 s |
+| `test_the_dev_extra_floors_mypy_and_pins_nothing` | under 0.005 s |
+| `test_a_planted_ratchet_violation_is_named`, 73 cases | 0.01 s in all |
+
+`test_typecheck_passes_on_clean_repo` took 0.26 s against the repository's
+warm `.mypy_cache`.
+
+**The cold type gate after:** `TIMEFORMAT='%R s'; time python -m mypy
+--config-file pyproject.toml --cache-dir /dev/null` read 4.48, 4.35 and
+4.21 s, against 0.84–0.92 s before. It checks 107 source files: 43 before,
+plus the 61 test modules and the three new ones.
+
+The `CHANGELOG.md` `[Unreleased]` entry carries the W6.5 half.
+
+**`make pre-pr`** ran on this commit's tree before this paragraph was added.
+It exited 0 in 181 s, by `date +%s` before and after (1791358828 →
+1791359009). `make typecheck` read "Success: no issues found in 107 source
+files", `make thresholds` printed PASS, and the four scoped floors, unchanged
+in value, read:
+
+- `openspec_graph/ line coverage 99.3% (2276/2292) meets floor 97%`;
+- `openspec_graph/ branch coverage 97.6% (744/762) meets floor 95%`;
+- `tools/ line coverage 96.4% (946/981) meets floor 94%`;
+- `tools/ branch coverage 93.9% (323/344) meets floor 91%`.
+
+A second run on the committed tree, and the CI run on this commit
+(AC-TDR-20: its run id, the head SHA it ran for and the merge SHA it tested,
+with every leg's verdict), are recorded in the next commit's records.
 
 ## Milestone 3 — Docstrings by ratchet, guards seen red first (the W6.6 commit)
 

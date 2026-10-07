@@ -5,6 +5,60 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed — tests under mypy, public docstrings by ratchet (M2)
+
+- **`ratchet-test-types-and-docstrings`: `tests/` under mypy (W6.5).** `make
+  typecheck` is now `python -m mypy --config-file pyproject.toml` with no
+  path, so `[tool.mypy] files` is the one list of checked trees, and it names
+  `openspec_graph`, `tools` and `tests`. Naming the file keeps a stray
+  `mypy.ini` or `.mypy.ini`, which mypy reads ahead of `pyproject.toml`, from
+  replacing the configuration. `explicit_package_bases` lets mypy name the
+  two non-package directories at all, and `mypy_path = "tools"` is the static
+  form of how the gate scripts run, so `from _common import` and
+  `tests/test_wheel_metadata.py`'s `check_wheel_metadata` import both resolve.
+  The package and `tools/` stay strict with no per-module option.
+- **A per-code baseline.** One `[[tool.mypy.overrides]]` entry, `module =
+  "tests.*"`, disables the seven codes too numerous to fix in one change,
+  each held to an exact count in `MYPY_TESTS_CEILINGS`: `no-untyped-def` 96,
+  `attr-defined` 18, `arg-type` 17, `type-arg` 16, `no-any-return` 8, `index`
+  7, `union-attr` 4, as
+  `test_every_listed_mypy_code_matches_its_ceiling_on_both_platforms` counts
+  them. That guard runs the gate's own configuration less the entry, under
+  `--platform linux` and `--platform win32` with `-O json`, and fails when a
+  count moves either way: up is new debt, down is `lower <code> from A to B`.
+  mypy itself, through `process_options` and `clone_for_module`, says what
+  every override does to every test module, so no other spelling of an
+  override reaches them unseen. Every other code is enforced in `tests/` from
+  this commit.
+- **Fixed, not listed.** The nine codes with a few occurrences each
+  (`assignment`, `call-overload`, `import-not-found`, `list-item`, `misc`,
+  `operator`, `unreachable`, `unused-ignore`, `var-annotated`) are fixed at
+  their sites by annotation, narrowing or a typed local, with every assertion
+  kept. So are the four `attr-defined` errors on `os.mkfifo` in
+  `tests/test_detect_thresholds.py` that only mypy's Windows view reported:
+  the tests read a module-level `_MKFIFO` through `getattr`. `read_pyproject`
+  picks `tomllib` or `tomli` by `sys.version_info`, and a `module = "tomli"`
+  override with `ignore_missing_imports` keeps that import's verdict the same
+  with and without the backport.
+- **Waivers.** The eight inline ignores the override makes redundant keep
+  their code and gain `unused-ignore`, and every inline ignore under `tests/`
+  is a recorded waiver in `MYPY_WAIVERS`, keyed by the line it waives and
+  allowed only to shrink. A `# mypy:` comment or line, a stub, `no_type_check`,
+  `TYPE_CHECKING` and the other names mypy takes as constant, and a branch on
+  `sys.version_info` or `sys.platform` outside `read_pyproject`'s one check
+  are each named.
+- **The mypy floor.** The dev extra's `mypy` becomes `mypy>=1.11`, the first
+  release with `-O json`, which the occurrence guard reads. It is a floor,
+  not a pin, and a guard holds both.
+- **The guards** live in `tests/test_static_ratchets.py`, with their helpers in
+  the uncollected `tests/ratchet_support.py` and their planted inputs in
+  `tests/test_static_ratchets_planted.py`.
+- **Superseded by name.** `select-zero-cost-guards`' R-ZCG-3 clause that
+  `[tool.mypy]` "MUST keep … `files = ["openspec_graph", "tools"]`", and the
+  sentence of its DEC-ZCG-004 that "the table that remains is
+  `python_version`, `strict`, `warn_unreachable`, `files`". The rest of
+  R-ZCG-3 stands, and that package is not edited.
+
 ### Changed — the test suite split by concern (M2)
 
 - **`shape-the-test-suite`.** Every test module now sits at or under 700

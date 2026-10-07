@@ -245,7 +245,10 @@ dev = [
     "pytest",
     "pytest-cov",
     "ruff",
-    "mypy",
+    # A floor, never a pin: 1.11 is the first mypy release with `-O json`, the
+    # output tests/test_static_ratchets.py reads to count each code under
+    # tests/ (ratchet-test-types-and-docstrings R-TDR-16, DEC-TDR-014).
+    "mypy>=1.11",
     "build",
     "hypothesis",
     "tomli; python_version < \"3.11\"",
@@ -319,4 +322,40 @@ select = [
 python_version = "3.10"
 strict = true
 warn_unreachable = true
-files = ["openspec_graph", "tools"]
+# The one list of checked trees: `make typecheck` names this file and passes no
+# path, and a path on the command line would override this list
+# (ratchet-test-types-and-docstrings DEC-TDR-001).
+files = ["openspec_graph", "tools", "tests"]
+# Neither tests/ nor tools/ is a package. Without explicit bases mypy names
+# tests/graft_support.py both `graft_support` and `tests.graft_support` and
+# stops ("Source file found twice under different module names", exit 2).
+# Explicit bases alone root every module at the repository and rename
+# tools/_common.py to `tools._common`, which no gate script imports: `python -m
+# mypy openspec_graph tools --explicit-package-bases` reported 19 errors in 12
+# files. `tools` on the search path is the static form of how the scripts run
+# (`python tools/<script>.py` puts their directory first on sys.path), and with
+# it that run reports none (DEC-TDR-002).
+explicit_package_bases = true
+mypy_path = "tools"
+
+# The per-code baseline for tests/ (ratchet-test-types-and-docstrings): the
+# codes too numerous to fix in one change, disabled for the test modules alone.
+# Every other code is enforced there under the strict configuration above. Each
+# listed code is held to an exact count by MYPY_TESTS_CEILINGS, and every inline
+# ignore under tests/ is a recorded waiver in MYPY_WAIVERS, both in
+# tests/test_static_ratchets.py. A code leaves this list in the commit that
+# fixes its last occurrence, and this entry leaves in the commit that empties
+# the list; no code is ever added (R-TDR-2, R-TDR-4).
+[[tool.mypy.overrides]]
+module = "tests.*"
+disable_error_code = [
+    "no-untyped-def", "attr-defined", "arg-type", "type-arg", "no-any-return", "index", "union-attr",
+]
+
+# `tomli` is installed only where the dev extra's marker puts it, the 3.10 leg,
+# while mypy at `python_version = "3.10"` reads tests/support.py's `tomli`
+# branch on every leg. This keeps that import's verdict the same with and
+# without it, with no inline ignore whose use would flip by leg (R-TDR-6).
+[[tool.mypy.overrides]]
+module = "tomli"
+ignore_missing_imports = true

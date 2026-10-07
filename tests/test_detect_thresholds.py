@@ -15,6 +15,7 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,12 @@ from openspec_graph.parse_semantics import threshold_values
 from tests.support import write_spec
 
 TABLE = detect.COVERAGE_REPORT_TABLE
+
+#: ``os.mkfifo`` where the platform has one, else ``None``. Read through
+#: ``getattr`` so this module type-checks the same under ``--platform linux``
+#: and ``--platform win32``, where typeshed declares no ``mkfifo``
+#: (``ratchet-test-types-and-docstrings`` R-TDR-3).
+_MKFIFO: Callable[[Path], None] | None = getattr(os, "mkfifo", None)
 
 
 # --- as_threshold_number ----------------------------------------------------
@@ -242,13 +249,14 @@ def test_governance_policy_accepts_a_bom_and_a_fractional_floor(tmp_path: Path) 
 
 
 @pytest.mark.unit
-@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs are a POSIX feature")
+@pytest.mark.skipif(_MKFIFO is None, reason="FIFOs are a POSIX feature")
 def test_a_fifo_where_a_config_file_belongs_does_not_hang(tmp_path: Path) -> None:
     """``exists()`` is true for a FIFO and ``open()`` on one blocks until a
     writer appears -- forever, here. ``is_file()`` first, so ``detect`` never
     opens it. A clone cannot contain one, but a working tree can."""
-    os.mkfifo(tmp_path / "Makefile")
-    os.mkfifo(tmp_path / "pyproject.toml")
+    assert _MKFIFO is not None
+    _MKFIFO(tmp_path / "Makefile")
+    _MKFIFO(tmp_path / "pyproject.toml")
     profile = detect.profile(tmp_path)  # would block here before the fix
     assert profile.make_targets == ()
     assert profile.threshold is None
@@ -389,7 +397,7 @@ def test_hard_coded_reads_bullets_and_table_rows_only() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs are a POSIX feature")
+@pytest.mark.skipif(_MKFIFO is None, reason="FIFOs are a POSIX feature")
 def test_a_fifo_where_a_spec_file_belongs_does_not_hang(tmp_path: Path) -> None:
     """The same hazard at the paths that read the most files.
 
@@ -403,14 +411,15 @@ def test_a_fifo_where_a_spec_file_belongs_does_not_hang(tmp_path: Path) -> None:
     (tmp_path / "Makefile").write_text("test:\n\t@echo t\n", encoding="utf-8")
     feature = tmp_path / "specs" / "001-x"
     feature.mkdir(parents=True)
-    os.mkfifo(feature / "spec.md")
+    assert _MKFIFO is not None
+    _MKFIFO(feature / "spec.md")
 
     profile = detect.profile(tmp_path)  # would block here before the fix
     assert profile.speckit_root is None
 
 
 @pytest.mark.unit
-@pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs are a POSIX feature")
+@pytest.mark.skipif(_MKFIFO is None, reason="FIFOs are a POSIX feature")
 def test_a_fifo_spec_raises_spec_read_error_rather_than_blocking(tmp_path: Path) -> None:
     """`parse_spec` owes a `SpecReadError`, not `None`.
 
@@ -422,7 +431,8 @@ def test_a_fifo_spec_raises_spec_read_error_rather_than_blocking(tmp_path: Path)
     from openspec_graph.parse import SpecReadError, parse_spec
 
     target = tmp_path / "spec.md"
-    os.mkfifo(target)
+    assert _MKFIFO is not None
+    _MKFIFO(target)
     with pytest.raises(SpecReadError) as excinfo:
         parse_spec(target, "auto")  # would block here before the fix
     assert "not a regular file" in str(excinfo.value)

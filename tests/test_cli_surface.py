@@ -200,7 +200,9 @@ def test_run_cli_injects_coverage_process_start_by_default(
 
     monkeypatch.setattr(support.subprocess, "run", _fake_run)
     support.run_cli(repo, "--version")
-    assert "COVERAGE_PROCESS_START" in captured["env"]
+    env = captured["env"]
+    assert isinstance(env, dict), env
+    assert "COVERAGE_PROCESS_START" in env
 
 
 @pytest.mark.e2e

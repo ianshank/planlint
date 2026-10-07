@@ -146,7 +146,7 @@ def _minimal_speckit_spec(**overrides: object) -> parse_model.ParsedSpec:
         "delta_headers": (),
     }
     defaults.update(overrides)
-    return parse_model.ParsedSpec(**defaults)  # type: ignore[arg-type]
+    return parse_model.ParsedSpec(**defaults)  # type: ignore[arg-type, unused-ignore]
 
 
 def test_s004_fires_at_warn_not_error(repo: Path) -> None:
