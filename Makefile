@@ -1,40 +1,51 @@
-.PHONY: help test coverage-tools lint typecheck security validate graph graph-mermaid e2e-live ci pre-pr docs-check thresholds matcher-accuracy stage-citations wheel-check skill-catalog skill-manifests skill-artifacts clean
+.PHONY: help coverage-run test coverage-tools coverage-per-file lint typecheck security validate graph graph-mermaid e2e-live ci pre-pr docs-check thresholds matcher-accuracy stage-citations wheel-check skill-catalog skill-manifests skill-artifacts clean
 
-# pytest-cov's own --cov-fail-under is disabled for `coverage-tools` so the
-# two scoped checkers below are the single gate on that run -- they read the
-# real floors from pyproject.toml, which is where rule G003 says a threshold
-# belongs. Spelled as a variable rather than a literal because a bare 0 in a
-# recipe is indistinguishable, to `tools/check_no_hardcoded_thresholds.py`,
-# from the pinned floor that guard exists to reject.
+# pytest-cov's own --cov-fail-under is disabled on the one run in
+# `coverage-run`: its total is the diluted figure for everything measured,
+# and the scoped checkers under `test` and `coverage-tools` are the gate --
+# they read the real floors from pyproject.toml, which is where rule G003
+# says a threshold belongs. Spelled as a variable rather than a literal
+# because a bare 0 in a recipe is indistinguishable, to
+# `tools/check_no_hardcoded_thresholds.py`, from the pinned floor that guard
+# exists to reject.
 NO_FLOOR := 0
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-14s %s\n", $$1, $$2}'
 
-test: ## Run the test suite; line + branch coverage floors read from pyproject.toml
+coverage-run: ## Run the suite once, measuring both trees into coverage.json (no floor of its own; test and coverage-tools read it scoped)
 	@# Erase first: [tool.coverage.run] parallel = true means coverage COMBINES
-	@# every .coverage.* it finds, so data left by an ad-hoc run (a different
-	@# --cov= source, an interrupted run) silently merges into this one. It can
-	@# raise the number as easily as lower it, and a gate that can be talked up
-	@# by a stale file in the working tree is not a gate.
+	@# every .coverage.* it finds, so data left by an ad-hoc run (another
+	@# source, an interrupted run) silently merges into this one. It can raise
+	@# the number as easily as lower it, and a gate that can be talked up by a
+	@# stale file in the working tree is not a gate.
+	@# The bare --cov measures every [tool.coverage.run] source entry; the
+	@# trees are named there, never here, so adding one is a config line.
 	python -m coverage erase
-	python -m pytest tests/ --cov=openspec_graph --cov-branch \
+	python -m pytest tests/ --cov --cov-branch --cov-fail-under=$(NO_FLOOR) \
 		--cov-report=term-missing --cov-report=json:coverage.json -q
-	python tools/check_coverage_floor.py coverage.json
-	python tools/check_branch_coverage.py coverage.json
 
-coverage-tools: ## Coverage floors for the tools/ gate scripts themselves
-	@# A separate run from `test`, not a second --cov= on it: pytest-cov's own
-	@# --cov-fail-under applies to the combined total of everything measured,
-	@# so folding tools/ into that run would replace two honest per-tree
-	@# numbers with one diluted one -- and the diluted one is what the gate
-	@# would then enforce. The floors come from [tool.specgraph]
-	@# tools_*_fail_under via the same two checkers, under --scope.
-	python -m coverage erase
-	python -m pytest tests/ --cov=tools --cov-branch --cov-fail-under=$(NO_FLOOR) \
-		--cov-report=json:coverage-tools.json -q
-	python tools/check_coverage_floor.py coverage-tools.json --scope tools
-	python tools/check_branch_coverage.py coverage-tools.json --scope tools
+test: coverage-run ## Run the test suite; both trees' line + branch floors read scoped from pyproject.toml
+	python tools/check_coverage_floor.py coverage.json --scope openspec_graph
+	python tools/check_branch_coverage.py coverage.json --scope openspec_graph
+	python tools/check_coverage_floor.py coverage.json --scope tools
+	python tools/check_branch_coverage.py coverage.json --scope tools
+
+coverage-tools: coverage-run ## Coverage floors for the tools/ gate scripts themselves
+	@# Depends on the one run, so a standalone `make coverage-tools` produces
+	@# the report it reads and gates tools/ alone; inside `pre-pr` Make builds
+	@# `coverage-run` once and both this target and `test` read that report.
+	@# The floors come from [tool.specgraph] tools_*_fail_under via the same two
+	@# checkers, under --scope -- separate keys because tools/ is a different
+	@# tree with a different reading, and one combined number would let either
+	@# hide behind the other's headroom.
+	python tools/check_coverage_floor.py coverage.json --scope tools
+	python tools/check_branch_coverage.py coverage.json --scope tools
+
+coverage-per-file: coverage-run ## Report every module below [tool.specgraph] per_file_line_min line coverage — a report, not a gate
+	@# Depends on the run and not on `test`, so the list can be read while a
+	@# floor is red (DEC-MCO-009). Composed into neither `ci` nor `pre-pr`.
+	python tools/check_coverage_floor.py coverage.json --per-file-min
 
 lint: ## Ruff check across the package, tests, and tools — a hard gate
 	python -m ruff check openspec_graph tests tools

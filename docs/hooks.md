@@ -49,15 +49,14 @@ a local net before the round-trip to CI.
 
 | Job | Trigger | Gate |
 |---|---|---|
-| `test` (3.10–3.14) | push + PR | `make lint` + `make typecheck` + `make test` |
-| `test-windows` (PYTHON_DEFAULT) | push + PR | same three gates on `windows-latest` (GNU make via Chocolatey) |
+| `test` (3.10–3.14) | push + PR | `make lint` + `make typecheck` + `make test` (both trees' floors, read scoped from one report; the leg's `coverage.json` is uploaded) |
+| `test-windows` (PYTHON_DEFAULT) | push + PR | same three gates on `windows-latest` (GNU make via Chocolatey), and the same upload |
 | `encoding-stress` | push + PR | `make e2e-live` under `PYTHONIOENCODING=ascii` (hard) |
 | `self-validate` | push + PR | `planlint validate --fail-on ERROR` (hard) |
 | `packaging` | push + PR | wheel build + `tools/check_wheel_metadata.py` (hard) |
 | `action-contract` | push + PR | the composite action run against every labelled fixture under `tests/fixtures/action/`, under a read-only token with no secrets (hard) |
 | `graph-diff` | PR only | `tools/diff_spec_graph.py` base→head (AC-CH-5/6) |
 | `security` | push + PR | gitleaks + no-hardcoded-thresholds (hard) |
-| `coverage-tools` (PYTHON_DEFAULT) | push + PR | `make coverage-tools` — the `tools/` gate scripts against their own floors, `[tool.specgraph] tools_*_fail_under` (hard) |
 | `docs` | push + PR | `make docs-check` (hard) |
 | `release` (separate workflow) | `v*` tag | `make pre-pr`, then a clean-venv smoke test of the `planlint` console script, then trusted publishing to PyPI, which uploads PEP 740 attestations for both files |
 
@@ -90,14 +89,20 @@ until it is hard.
 `typecheck` runs as a step inside the `test` matrix (so every supported Python
 version is type-checked), not as a standalone job.
 
-`coverage-tools` is the reverse: its own job on one interpreter, not a step in
-the matrix. It re-runs the suite under `--cov=tools`, and pytest-cov's
-`--cov-fail-under` applies to the combined total of everything measured — so
-folding it into `make test` would replace two honest per-tree numbers with one
-diluted number, and the diluted one is what the gate would then enforce. The
-scripts are stdlib-only and version-independent, so one leg is the whole
-answer. Locally it is part of `make pre-pr`, not `make ci`, which stays the
-fast inner loop.
+`make test` runs the suite once, through `make coverage-run`, over both trees
+in `[tool.coverage.run] source`, and reads the one `coverage.json` scoped:
+`openspec_graph/` against `[tool.coverage.report] fail_under` and
+`[tool.specgraph] branch_fail_under`, `tools/` against
+`tools_line_fail_under` / `tools_branch_fail_under`, through the same two
+checkers under `--scope`. pytest-cov's own total gates nothing on that run —
+it is the diluted figure for everything measured — so neither tree's headroom
+hides the other's regression. `coverage-tools` remains a documented target
+that depends on the run and re-reads `tools/` alone; it has no job of its own
+and is reached in CI as a prerequisite of the `make pre-pr` the release
+workflow runs. Locally it is part of `make pre-pr`, not `make ci`, which stays
+the fast inner loop. Every leg that runs the suite uploads its `coverage.json`
+as an artifact; those per-leg reports are what the floors are set from — two
+points under the minimum green leg, never down.
 
 The `graph-diff` job checks out the PR head SHA (not the synthetic merge
 commit) so `merge-base` resolves to the true branch point (DEC-CH-001).

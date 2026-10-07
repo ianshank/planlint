@@ -427,8 +427,9 @@ def test_threshold_guard_survives_a_missing_workflow(tmp_path: Path) -> None:
 
 # --- scoped coverage floors: the gate that guards the gate scripts ----------
 #
-# `make coverage-tools` gates tools/ against its own floors using the same two
-# checkers under `--scope`. That scoping is now gate-critical logic: get it
+# `make test` gates both trees from one report through the same two checkers
+# under `--scope`, and `make coverage-tools` re-reads `tools/` from it. That
+# scoping is gate-critical logic: get it
 # wrong and the gate silently measures the wrong tree, or nothing at all.
 
 
@@ -574,6 +575,255 @@ def test_scoped_gate_reports_a_usage_error_as_exit_2(tmp_path: Path, capsys) -> 
         "cf_usage", "check_coverage_floor.py", "--scope", cwd=tmp_path
     ) == 2
     assert "usage error" in capsys.readouterr().err
+
+
+
+
+# --- one coverage run, both floors read scoped (measure-coverage-once) -------
+#
+# The checkers now read one report for two trees. The floor for a scope is
+# its own `[tool.specgraph] <scope>_<kind>_fail_under` key, or -- for the
+# FIRST entry of `[tool.coverage.run] source` only, whose floors have always
+# been the unscoped locators -- `fail_under` / `branch_fail_under`. Every
+# other declared tree still needs its keys and exits 2 without them
+# (R-MCO-3, R-MCO-4, R-MCO-5, DEC-MCO-002).
+
+
+def _pyproject_with_sources(path: Path, sources: list[str], **keys: int) -> Path:
+    """A planted pyproject that states which trees one run measures, and in what order."""
+    listed = ", ".join(f'"{s}"' for s in sources)
+    specgraph = "\n".join(f"{k} = {v}" for k, v in keys.items())
+    path.write_text(
+        f"[tool.coverage.run]\nsource = [{listed}]\nbranch = true\n"
+        f"[tool.coverage.report]\nfail_under = 90\n[tool.specgraph]\n{specgraph}\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def _both_checkers(tmp_path: Path, *args: str) -> tuple[int, int]:
+    return (
+        run_tool_main("cf_scoped", "check_coverage_floor.py", *args, cwd=tmp_path),
+        run_tool_main("bc_scoped", "check_branch_coverage.py", *args, cwd=tmp_path),
+    )
+
+
+def test_the_first_source_without_a_scoped_key_reads_the_unscoped_floors(tmp_path: Path) -> None:
+    """`--scope openspec_graph` with no `openspec_graph_*` key reads `fail_under` and
+    `branch_fail_under`, because the package is the first entry of `source`; the
+    second entry keeps reading its own keys."""
+    _pyproject_with_sources(
+        tmp_path / "pyproject.toml", ["openspec_graph", "tools"],
+        branch_fail_under=80, tools_line_fail_under=90, tools_branch_fail_under=80,
+    )
+    _cov_json(tmp_path / "coverage.json", {
+        "openspec_graph/cli.py": (100, 85, 20, 14),   # 85% lines, 70% branches: below 90 / 80
+        "tools/a.py": (10, 10, 2, 2),
+    })
+    assert _both_checkers(tmp_path, "coverage.json", "--scope", "openspec_graph") == (1, 1)
+    assert _both_checkers(tmp_path, "coverage.json", "--scope", "tools") == (0, 0)
+    _cov_json(tmp_path / "coverage.json", {
+        "openspec_graph/cli.py": (100, 95, 20, 18),   # 95% / 90%: at or above both floors
+        "tools/a.py": (10, 10, 2, 2),
+    })
+    assert _both_checkers(tmp_path, "coverage.json", "--scope", "openspec_graph") == (0, 0)
+
+
+def test_a_scoped_key_on_the_first_source_is_honoured_and_is_the_misconfiguration_the_guard_rejects(
+    tmp_path: Path,
+) -> None:
+    """A scoped key on the first entry is read first (so it cannot be ignored),
+    and the duplicate-key helper names it: two places for one threshold."""
+    planted = _pyproject_with_sources(
+        tmp_path / "pyproject.toml", ["openspec_graph", "tools"],
+        branch_fail_under=80, openspec_graph_line_fail_under=95,
+        tools_line_fail_under=90, tools_branch_fail_under=80,
+    )
+    _cov_json(tmp_path / "coverage.json", {"openspec_graph/cli.py": (100, 92, 20, 18)})
+    for spelling in ("openspec_graph", "openspec_graph/"):
+        assert run_tool_main(
+            "cf_dup", "check_coverage_floor.py", "coverage.json", "--scope", spelling, cwd=tmp_path
+        ) == 1, f"92% under --scope {spelling} must fail the planted scoped 95, not pass the unscoped 90"
+    common = load_tool("common_dup", "_common.py")
+    for spelling in ("openspec_graph", "openspec_graph/", "./openspec_graph"):
+        assert common.scoped_floor(planted, spelling, "line") == 95, spelling
+        assert common.scoped_floor(planted, spelling, "branch") == 80, spelling
+    assert common.duplicate_scoped_floor_keys(planted) == ["openspec_graph_line_fail_under"]
+
+
+def test_a_declared_scope_that_is_not_first_still_exits_2_without_its_key(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """R-GTC-11 stands for every tree but the first: `tools` second in `source`
+    with no `tools_*` key is a misconfiguration, named with both places."""
+    _pyproject_with_sources(tmp_path / "pyproject.toml", ["openspec_graph", "tools"], branch_fail_under=80)
+    _cov_json(tmp_path / "coverage.json", {"tools/a.py": (10, 10, 2, 2)})
+    assert _both_checkers(tmp_path, "coverage.json", "--scope", "tools") == (2, 2)
+    err = capsys.readouterr().err
+    assert "tools_line_fail_under" in err and "tools_branch_fail_under" in err
+    assert "openspec_graph" in err, "the message must name the first entry the unscoped floors belong to"
+    _pyproject_with_sources(
+        tmp_path / "pyproject.toml", ["openspec_graph", "tools"],
+        branch_fail_under=80, tools_line_fail_under=90, tools_branch_fail_under=80,
+    )
+    for spelling in ("tools", "tools/"):
+        assert _both_checkers(tmp_path, "coverage.json", "--scope", spelling) == (0, 0), spelling
+
+
+def test_the_first_source_without_its_unscoped_floor_is_named_as_absent(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The other branch of R-MCO-4's message: the first entry with no scoped key
+    AND no unscoped floor is told that floor is absent, not sent to the scoped
+    key -- for both kinds."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[tool.coverage.run]\nsource = ["openspec_graph", "tools"]\n'
+        "[tool.specgraph]\ntools_line_fail_under = 90\ntools_branch_fail_under = 80\n",
+        encoding="utf-8",
+    )
+    _cov_json(tmp_path / "coverage.json", {"openspec_graph/cli.py": (10, 9, 2, 2)})
+    assert _both_checkers(tmp_path, "coverage.json", "--scope", "openspec_graph") == (2, 2)
+    err = capsys.readouterr().err
+    for scoped_key, unscoped in (
+        ("openspec_graph_line_fail_under", "[tool.coverage.report] fail_under"),
+        ("openspec_graph_branch_fail_under", "[tool.specgraph] branch_fail_under"),
+    ):
+        assert scoped_key in err and unscoped in err, err
+    assert "absent too" in err and "applies only" not in err, err
+
+
+def test_coverage_sources_reads_the_run_table_array_and_nothing_else(tmp_path: Path) -> None:
+    common = load_tool("common_sources", "_common.py")
+    p = tmp_path / "pyproject.toml"
+    p.write_text('[tool.coverage.run]\nsource = ["a", "b"]\n', encoding="utf-8")
+    assert common.coverage_sources(p) == ["a", "b"]
+    p.write_text('[tool.coverage.run]\nsource = [\n  "./tools/",\n  "openspec_graph/",\n]\nbranch = true\n', encoding="utf-8")
+    assert common.coverage_sources(p) == ["tools", "openspec_graph"], "multi-line array, ./ and trailing / normalised"
+    p.write_text('[tool.other]\nsource = ["x"]\n[tool.coverage.run]\nbranch = true\n', encoding="utf-8")
+    assert common.coverage_sources(p) == [], "a source key under another table is not this one"
+    p.write_text('[tool.coverage]\nrun.source = ["x"]\n', encoding="utf-8")
+    assert common.coverage_sources(p) == [], "the dotted form is not read (DEC-MCO-003)"
+    p.write_text('[tool.coverage.run]\nsource_pkgs = ["x"]\n', encoding="utf-8")
+    assert common.coverage_sources(p) == [], "source_pkgs is a different key"
+    assert common.coverage_sources(tmp_path / "absent.toml") == []
+
+
+def test_the_first_source_declares_no_duplicate_scoped_floor_key(tmp_path: Path) -> None:
+    """On this repository's own pyproject the first measured tree's floors live in
+    the unscoped locators only; a scoped twin would be two places for one number."""
+    common = load_tool("common_dup_real", "_common.py")
+    real = REPO_ROOT / "pyproject.toml"
+    sources = common.coverage_sources(real)
+    assert sources, "pyproject.toml declares no [tool.coverage.run] source; the guard would be vacuous"
+    assert common.duplicate_scoped_floor_keys(real) == [], (
+        f"{sources[0]} is the first measured tree; its floors are [tool.coverage.report] "
+        f"fail_under and [tool.specgraph] branch_fail_under, not a scoped twin"
+    )
+    planted = _pyproject_with_sources(
+        tmp_path / "pyproject.toml", ["openspec_graph"], branch_fail_under=80,
+        openspec_graph_line_fail_under=90, openspec_graph_branch_fail_under=80,
+    )
+    assert common.duplicate_scoped_floor_keys(planted) == [
+        "openspec_graph_line_fail_under", "openspec_graph_branch_fail_under",
+    ]
+
+
+# --- the per-file minimum, a report rather than a gate (measure-coverage-once) --
+#
+# `check_coverage_floor.py --per-file-min` lists every module under
+# `[tool.specgraph] per_file_line_min`; `make coverage-per-file` runs it and
+# nothing in `ci` or `pre-pr` does (R-MCO-11, DEC-MCO-009).
+
+PER_FILE_KEY = "per_file_line_min"
+
+
+def _per_file_tree(tmp_path: Path, *, minimum: int | None = 85) -> Path:
+    keys = {"tools_line_fail_under": 90, "tools_branch_fail_under": 80}
+    if minimum is not None:
+        keys[PER_FILE_KEY] = minimum
+    _pyproject(tmp_path / "pyproject.toml", **keys)
+    _cov_json(
+        tmp_path / "coverage.json",
+        {
+            "openspec_graph/cli.py": (100, 70, 20, 20),  # 70%: below, the other tree
+            "tools/a.py": (10, 5, 4, 4),  # 50%
+            "tools/b.py": (10, 8, 4, 4),  # 80%
+            "tools/c.py": (10, 10, 4, 4),  # 100%
+        },
+    )
+    return tmp_path
+
+
+def _per_file(tmp_path: Path, *args: str) -> int:
+    return run_tool_main(
+        "cf_per_file", "check_coverage_floor.py", "coverage.json", "--per-file-min", *args, cwd=tmp_path
+    )
+
+
+def test_per_file_report_names_each_module_below_the_minimum(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Both modules under 85 are printed, ascending, each with its percentage,
+    path and covered/total; exit 1."""
+    assert _per_file(_per_file_tree(tmp_path), "--scope", "tools") == 1
+    out = capsys.readouterr().out
+    lines = [line for line in out.splitlines() if line.lstrip().startswith(("50.0%", "80.0%"))]
+    assert lines == [" 50.0%  tools/a.py  (5/10)", " 80.0%  tools/b.py  (8/10)"], out
+    assert "tools/c.py" not in out
+    assert "85%" in out.splitlines()[0], "the header names the minimum"
+
+
+def test_per_file_report_exits_zero_when_no_module_is_below(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    tree = _per_file_tree(tmp_path, minimum=50)
+    assert _per_file(tree, "--scope", "tools") == 0
+    assert "no module below 50% line coverage" in capsys.readouterr().out
+
+
+def test_per_file_report_fails_loudly_without_its_key(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert _per_file(_per_file_tree(tmp_path, minimum=None)) == 2
+    assert PER_FILE_KEY in capsys.readouterr().err
+
+
+def test_per_file_report_respects_the_scope(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--scope tools` lists the tools/ modules below and not the
+    openspec_graph/ one; no scope lists every measured tree; a scope matching
+    nothing exits 2 rather than reporting a vacuous empty list."""
+    tree = _per_file_tree(tmp_path)
+    assert _per_file(tree, "--scope", "tools") == 1
+    scoped = capsys.readouterr().out
+    assert "tools/a.py" in scoped and "openspec_graph/cli.py" not in scoped
+    assert _per_file(tree) == 1
+    unscoped = capsys.readouterr().out
+    assert "openspec_graph/cli.py" in unscoped and "every measured tree" in unscoped
+    assert _per_file(tree, "--scope", "nowhere") == 2
+
+
+def test_per_file_flag_leaves_the_argv_contract_alone(tmp_path: Path) -> None:
+    """The flag is consumed before `parse_coverage_argv`, so a path and a scope
+    beside it reach the same `(path, scope)`; the branch checker, which shares
+    the parser, ignores a trailing flag and gates normally, and given the flag
+    first takes it as the path (exit 2, file not found) -- as it does today."""
+    tree = _per_file_tree(tmp_path)
+    (tree / "coverage.json").rename(tree / "other.json")
+    assert run_tool_main(
+        "cf_pf_argv", "check_coverage_floor.py", "other.json", "--per-file-min", "--scope", "tools",
+        cwd=tree,
+    ) == 1
+    _cov_json(tree / "coverage.json", {"tools/a.py": (10, 10, 4, 4)})
+    assert run_tool_main(
+        "bc_pf_trailing", "check_branch_coverage.py", "coverage.json", "--per-file-min",
+        "--scope", "tools", cwd=tree,
+    ) == 0
+    assert run_tool_main(
+        "bc_pf_first", "check_branch_coverage.py", "--per-file-min", "coverage.json",
+        "--scope", "tools", cwd=tree,
+    ) == 2
 
 
 # --- _common.read_json: the typed reader the artifact consumers share --------

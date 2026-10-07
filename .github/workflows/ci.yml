@@ -62,6 +62,18 @@ jobs:
       - name: Run tests with line + branch coverage gates
         run: make test
 
+      # The per-leg report is what the floor ratchet reads (measure-coverage-once,
+      # R-MCO-12): floors are set two points under the minimum green leg. A red
+      # leg's report is uploaded on purpose and excluded by the ratchet; a leg
+      # with no report (died before `make test`, or pytest ended at collection)
+      # contributes nothing under the action's `if-no-files-found` default of
+      # `warn`.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: coverage-${{ runner.os }}-${{ matrix.python-version }}
+          path: coverage.json
+
   test-windows:
     # The suite's platform guard tests (path separators, console encoding,
     # symlink privilege) only mean something if one leg actually runs on the
@@ -97,6 +109,18 @@ jobs:
 
       - name: Run tests with line + branch coverage gates
         run: make test
+
+      # The per-leg report is what the floor ratchet reads (measure-coverage-once,
+      # R-MCO-12): floors are set two points under the minimum green leg. A red
+      # leg's report is uploaded on purpose and excluded by the ratchet; a leg
+      # with no report (died before `make test`, or pytest ended at collection)
+      # contributes nothing under the action's `if-no-files-found` default of
+      # `warn`.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: coverage-${{ runner.os }}-${{ env.PYTHON_DEFAULT }}
+          path: coverage.json
 
   encoding-stress:
     # Reproduces the environment that crashed `planlint validate` before the
@@ -380,27 +404,6 @@ jobs:
           # The build failing is the report; a review comment would need a
           # write permission this job does not have.
           GITLEAKS_ENABLE_COMMENTS: "false"
-
-  coverage-tools:
-    # The gate scripts under tools/ are what every job here actually runs, so
-    # they carry their own coverage floors ([tool.specgraph] tools_*_fail_under)
-    # rather than riding on the package's number. Three of them had an
-    # untested failing path -- a gate that reports PASS on the thing it was
-    # added to catch is worse than no gate.
-    #
-    # Its own job, on one interpreter, rather than a step in `test`: it re-runs
-    # the suite under a different --cov, and folding that into a 4-way matrix
-    # would pay for it four times to learn the same thing. tools/ is
-    # stdlib-only and version-independent, so one leg is the whole answer.
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: ${{ env.PYTHON_DEFAULT }}
-      - run: pip install -e ".[dev]"
-      - run: make coverage-tools
 
   docs:
     # The documentation set must exist and be linked from README (AC-EH-8).
