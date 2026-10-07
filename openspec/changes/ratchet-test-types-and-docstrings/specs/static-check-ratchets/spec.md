@@ -1480,7 +1480,7 @@ still hides a module, which `--no-respect-gitignore` undoes.
   (R-TDR-14, R-TDR-15, C-TDR-4, DEC-TDR-011, DEC-TDR-013, DEC-TDR-017)
   _Verified by:_ `pytest -k "test_every_changelog_version_links_to_its_release_tag or test_every_spec_test_citation_resolves_to_a_real_test"` · stage: `make validate`
 
-- [ ] **AC-TDR-20 (observed on the CI run on the W6.5 commit):** the type
+- [x] **AC-TDR-20 (observed on the CI run on the W6.5 commit):** the type
   gate and the mypy occurrence and waiver guards are green on every Linux
   leg and on Windows. This is recorded in `tasks.md` with that run's id,
   the head SHA it ran for and the merge SHA it tested. (C-TDR-5,

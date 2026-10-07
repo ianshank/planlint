@@ -1483,6 +1483,50 @@ A second run on the committed tree, and the CI run on this commit
 (AC-TDR-20: its run id, the head SHA it ran for and the merge SHA it tested,
 with every leg's verdict), are recorded in the next commit's records.
 
+### Recorded (the W6.5 commit after it landed: a second `make pre-pr` and its CI run, AC-TDR-20)
+
+Written in the W6.6 commit, as "Order and commits" places every record
+after the commit it describes.
+
+- **`make pre-pr` on the committed tree**, `6649ca1`, with the record above
+  in it. It exited 0 in 184 s by `date +%s` (1791359050 → 1791359234). The
+  same "Success: no issues found in 107 source files" and the same four
+  scoped lines were read: `openspec_graph/` line 99.3% (2276/2292) and branch
+  97.6% (744/762), and `tools/` line 96.4% (946/981) and branch 93.9%
+  (323/344), each meeting its unchanged floor.
+- **The CI run.** `6649ca1` was pushed alone to
+  `claude/m2-tests-under-mypy`. Its pull-request run, workflow "CI", was
+  reported by the coordinator, who pushed it and read the run:
+  - run id 37589644256, run number 232, attempt 1, event `pull_request`;
+  - created 2026-10-07T07:48:37Z, completed 07:54:54Z, conclusion
+    **success**;
+  - head SHA `6649ca1f1d27f27f5e90d69b220ca1fd1a6687de`;
+  - merge SHA tested `6c401089428afeafe1fa7ae917cf066e4ff1f244`. The
+    `packaging` job's checkout log reads `HEAD is now at 6c40108 Merge
+    6649ca1f1d27f27f5e90d69b220ca1fd1a6687de into
+    46ae1b36eafec8c554eb0bc45233d35d4f437010`, and `git fetch origin
+    refs/pull/44/merge` gives the same SHA, with parents `46ae1b3` and
+    `6649ca1`;
+  - base `46ae1b36eafec8c554eb0bc45233d35d4f437010` (`main`).
+- **Every leg's verdict.** All 17 jobs passed:
+  - `test (3.10)` 112687794635, `test (3.11)` 112687794794, `test (3.12)`
+    112687794758, `test (3.13)` 112687794628 and `test (3.14)`
+    112687794467;
+  - `test-windows` 112687794250, the longest, 07:48:41 → 07:54:53;
+  - `security`, `docs`, `packaging`, `graph-diff`, `self-validate` and
+    `encoding-stress`;
+  - `action-contract` × 5: passing, failing, no-tree, empty-tree and nested.
+- **Why that is AC-TDR-20's evidence.**
+  - Each of the five `test` legs is a hard leg: the matrix lists them with no
+    `experimental` include. It and `test-windows` run `make lint`, `make
+    typecheck` and `make test` as steps (`ci.yml`). So a green leg is the
+    type gate green there.
+  - It is also every test of `tests/test_static_ratchets.py` green there:
+    the occurrence guard, which runs mypy under both platforms, and the
+    waiver guard among them. None of those tests carries a skip condition.
+  - The verdicts are the coordinator's reading of the run, recorded as
+    reported. This session pushes nothing and reads no CI.
+
 ## Milestone 3 — Docstrings by ratchet, guards seen red first (the W6.6 commit)
 
 - Extend `tests/test_static_ratchets.py` before the configuration, and run
@@ -1583,6 +1627,167 @@ with every leg's verdict), are recorded in the next commit's records.
   with the run id, the head SHA it ran for and the merge SHA it tested
   (AC-TDR-21, C-TDR-5). This is recorded separately from Milestone 2's run.
 - **Gate:** `make pre-pr`
+
+### Recorded (Milestone 3, 2026-10-07: the W6.6 commit)
+
+Taken on `6649ca1` with this milestone's edits, in the same worktree and
+environment as Milestone 0. `planlint --target . validate --fail-on ERROR`
+exited 0, 52 specs, 0 / 0 / 0, before each write under `openspec/` and before
+the commit.
+
+**Re-measured at `6649ca1`**, because the W6.5 commit changed `tests/`:
+
+- `python -m ruff check --no-cache --isolated --select D100,D101,D102,D103
+  <tree> --statistics` still reads 52 findings in 18 files of
+  `openspec_graph/`, 25 in 12 of `tools/` and 584 in 47 of `tests/`; the new
+  guard modules add none.
+- The guard's command over `openspec_graph tools` prints 77 findings in 30
+  files, 40 pairs, exit 0, stderr empty.
+- The sorted concise output over the three trees is one set of 661 findings
+  under no convention and each of `google`, `numpy` and `pep257`. Its digest
+  moved from Milestone 0's, with `tests/`' line numbers, and is again one
+  value for all four.
+- The wider family still reads 37 under Google and 67 under the other two.
+
+**Departures**, each for the reason given:
+
+- **One comparison, not two.** `ceiling_problems` gained keyword arguments
+  for its wording, defaulting to the mypy messages, which are unchanged word
+  for word. `docstring_ceiling_problems` flattens the pairs to `<file> <code>`
+  keys and calls it. So the two ratchets compare in one place, and the below
+  message reads `lower <file> <code> from A to B`.
+- **The helpers sit in `tests/ratchet_support.py`**, after the W6.5 split:
+  `docstring_config_problems`, `noqa_problems`, `ruff_docstring_command` and
+  `docstring_counts`. `docstring_counts` takes the root's spellings as a
+  list, so the planted run can pass `tmp_path` and its resolved form.
+- **The shape guard names a little more than R-TDR-8 lists:** a `D` code in
+  `extend-select` beyond the four, and any `D` code in `ignore` or
+  `extend-ignore`. Either would make `make lint`'s view differ from the
+  guard's count, which DEC-TDR-009 rules out. `DTZ` is no `D` rule (`D\d*`,
+  matched in full), and a planted case keeps it quiet.
+
+**The red runs**, before the configuration:
+
+- `python -m pytest tests/test_static_ratchets.py
+  tests/test_static_ratchets_planted.py -q -o addopts="" -p no:cacheprovider`
+  read 2 failed, 112 passed, in 13.3 s.
+  - `test_docstring_exemptions_are_file_entries_matching_their_ceilings`:
+    `select lacks ['D100', 'D101', 'D102', 'D103']` and `tests/* lacks
+    ['D100', 'D101', 'D102', 'D103'], its policy exemption`.
+  - `test_every_docstring_exemption_matches_its_ceiling`: every one of the 40
+    pairs as unlisted, from `openspec_graph/cli.py D103 occurs 8 times under
+    openspec_graph/ and tools/ and is not listed` to `tools/stage_citations.py
+    D103 occurs 3 times …`. The planted `.ignore` module was counted.
+  - Every mypy guard stayed green, so the new code adds no occurrence of a
+    listed code (R-TDR-12). All 106 planted cases, the 73 mypy cases and the
+    33 docstring cases, passed from their first run.
+- **The ignore-file plant shown red.** With `--no-respect-gitignore` removed
+  from `ruff_docstring_command` and restored afterwards, the occurrence guard
+  named `planted: ruff wrote to stderr: 'warning: No Python files found under
+  the given path(s)\n'` and `an .ignore file hid the planted module from the
+  count: {}`.
+- **With the configuration and no ceilings.** `make lint` printed "All checks
+  passed!", exit 0. Both docstring guards then named each of the 40 pairs as
+  `… is listed without a ceiling in DOCSTRING_CEILINGS`.
+
+**The configuration**, in `pyproject.toml`'s `[tool.ruff.lint]`:
+
+- `select` gains `"D100", "D101", "D102", "D103"`. Their comment records the
+  convention measurement and the Google best fit, each with its command, and
+  calls Google a fit, not a convention the docstrings follow.
+- The header sentence names the four as the one selection made with a
+  backlog, the "ratchet first" step of DEC-ZCG-012.
+- The `ANN/D` line is now an `ANN` line and a `D` line, as R-TDR-10 requires.
+- `tests/*` gains the four codes, under a comment giving the policy.
+- `openspec_graph/cli.py`'s entry becomes `["T201", "D103"]`.
+- Twenty-nine new keys, one per other offending file, were generated from the
+  measured JSON, each listing exactly its codes, under a comment that names
+  the ratchet, its guard and the leaving rule.
+- No `pydocstyle` table and no `extend-per-file-ignores` table.
+
+**`DOCSTRING_CEILINGS` at the W6.6 commit** was filled from the occurrence
+guard's own measurement: its `-o log_cli=true --log-cli-level=INFO` record,
+checked equal to the hand-run JSON. It holds 30 files, 40 pairs and 77
+findings:
+
+| file | codes |
+|---|---|
+| `openspec_graph/cli.py` | `D103` 8 |
+| `openspec_graph/delta.py` | `D102` 2 |
+| `openspec_graph/detect.py` | `D101` 1, `D102` 1, `D103` 1 |
+| `openspec_graph/ledger.py` | `D101` 1, `D102` 1 |
+| `openspec_graph/machinery.py` | `D103` 1 |
+| `openspec_graph/parse.py` | `D103` 1 |
+| `openspec_graph/parse_harness.py` | `D103` 1 |
+| `openspec_graph/parse_model.py` | `D101` 2, `D102` 4 |
+| `openspec_graph/parse_semantics.py` | `D103` 7 |
+| `openspec_graph/parse_speckit.py` | `D103` 1 |
+| `openspec_graph/parse_upstream.py` | `D103` 1 |
+| `openspec_graph/report.py` | `D102` 2 |
+| `openspec_graph/rule_types.py` | `D101` 2, `D102` 2 |
+| `openspec_graph/rules.py` | `D103` 1 |
+| `openspec_graph/scaffold.py` | `D101` 1, `D102` 1, `D103` 3 |
+| `openspec_graph/scaffold_templates.py` | `D103` 4 |
+| `openspec_graph/thresholds.py` | `D102` 1 |
+| `openspec_graph/witness.py` | `D102` 1, `D103` 1 |
+| `tools/check_branch_coverage.py` | `D103` 2 |
+| `tools/check_coverage_floor.py` | `D103` 2 |
+| `tools/check_docs.py` | `D103` 1 |
+| `tools/check_no_hardcoded_thresholds.py` | `D103` 3 |
+| `tools/check_secrets.py` | `D103` 1 |
+| `tools/check_wheel_metadata.py` | `D103` 1 |
+| `tools/diff_spec_graph.py` | `D103` 2 |
+| `tools/matcher_accuracy.py` | `D102` 3, `D103` 1 |
+| `tools/render_mermaid.py` | `D103` 1 |
+| `tools/render_plugin_manifests.py` | `D103` 3 |
+| `tools/render_rule_catalog.py` | `D103` 1 |
+| `tools/stage_citations.py` | `D102` 1, `D103` 3 |
+
+**Green.**
+
+- `make lint` exited 0.
+- `python -m pytest tests/test_static_ratchets.py
+  tests/test_static_ratchets_planted.py tests/test_ci_workflow.py -q -o
+  addopts="" -p no:cacheprovider --durations=0 --durations-min=0`: 131 passed
+  in 12.2 s. Among them, `test_t201_is_selected_with_exactly_the_cli_and_tools_exempt`
+  (AC-TDR-10) and `test_a_print_in_a_library_module_fails_lint` (AC-TDR-11),
+  the second under a copy of the new configuration.
+- `python -m pytest tests/test_suite_shape.py tests/test_suite_routing.py
+  tests/test_decomposition.py tests/test_spec_test_citations.py`: 68 passed.
+  The criterion reads the shape guard as `integration` (`REPO_ROOT`) and the
+  occurrence guard as `e2e` (`subprocess.run`), as marked; the module tallies
+  0 / 6 / 2.
+
+**Durations**, from the same `--durations=0 --durations-min=0`:
+
+| test | call |
+|---|---|
+| `test_every_docstring_exemption_matches_its_ceiling` | 0.08 s, two ruff runs |
+| `test_docstring_exemptions_are_file_entries_matching_their_ceilings` | 0.04 s |
+| the 106 planted cases | 0.04 s in all |
+| the mypy occurrence guard, for comparison | 10.8 s |
+
+**Line counts**, by `wc -l` at the W6.6 commit:
+`tests/test_static_ratchets.py` 280, within DEC-TDR-012's 600-line budget, so
+no further split. `tests/test_static_ratchets_planted.py` 234, and
+`tests/ratchet_support.py` 500.
+
+The `CHANGELOG.md` `[Unreleased]` entry carries the W6.6 half.
+
+**`make pre-pr`** ran on this commit's tree before this paragraph was added.
+It exited 0 in 186 s, by `date +%s` before and after (1791360348 →
+1791360534). `make lint` printed "All checks passed!", `make typecheck`
+printed "Success: no issues found in 107 source files", and `make
+thresholds` printed PASS. The four scoped floors, unchanged in value, read:
+
+- `openspec_graph/` line 99.3% (2276/2292) against 97%;
+- `openspec_graph/` branch 97.6% (744/762) against 95%;
+- `tools/` line 96.4% (946/981) against 94%;
+- `tools/` branch 93.9% (323/344) against 91%.
+
+A second run on the committed tree, and this commit's CI run for AC-TDR-21
+(its run id, the head SHA it ran for and the merge SHA it tested, with every
+leg's verdict), are recorded in the documents commit's records.
 
 ## Milestone 4 — Documents, records and the verification lines (the documents commit)
 

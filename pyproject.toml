@@ -264,9 +264,12 @@ line-length = 100
 # like a gate and is not, which is the same class of defect this project
 # exists to catch in other people's repositories.
 #
-# Chosen for signal over volume: every family here was at or near zero
-# violations when it was turned on, so each one locks in a property the code
-# already has rather than starting a cleanup backlog.
+# Chosen for signal over volume: every family here but one was at or near
+# zero violations when it was turned on, so each locks in a property the code
+# already has rather than starting a cleanup backlog. The one selection made
+# with a backlog is D100-D103, held by the per-file ratchet entries below: the
+# "ratchet first" step of select-zero-cost-guards' DEC-ZCG-012, which gates
+# with no entry left once the count reaches zero.
 select = [
     "E4", "E7", "E9", "F",  # ruff's defaults, kept explicit
     "I",    # import sorting -- the diff-noise class no reviewer should arbitrate
@@ -282,6 +285,21 @@ select = [
     "N",    # PEP 8 naming
     "RUF",  # ruff's own checks, incl. unused-noqa
     "T201", # `print` outside the two places stdout is the product (below)
+    # Public docstrings -- a module, class, method or function of the package
+    # and tools/ -- held by the per-file ratchet entries below
+    # (ratchet-test-types-and-docstrings R-TDR-8). No `pydocstyle` convention
+    # is set, because none changes these four rules' verdicts: the sorted
+    # concise output of `python -m ruff check --isolated --select
+    # D100,D101,D102,D103 [--config 'lint.pydocstyle.convention = "<c>"']
+    # openspec_graph tools tests` is one finding set, 661 findings, under no
+    # convention and under each of google, numpy and pep257 (at 6649ca1).
+    # Google fits the existing docstrings best, as a fit and not a convention
+    # they follow: of the wider family, `python -m ruff check --isolated
+    # --select D --ignore D100,D101,D102,D103,D104,D105,D106,D107 --config
+    # 'lint.pydocstyle.convention = "<c>"' openspec_graph tools --statistics`
+    # reads 37 under google and 67 under numpy and pep257. The change that
+    # selects a convention-sensitive rule sets the convention with it (R-TDR-10).
+    "D100", "D101", "D102", "D103",
 ]
 # Deliberately NOT selected, each for a stated reason rather than by omission:
 #   E501  -- the line-length limit above is real but currently unmet in ~100
@@ -297,7 +315,12 @@ select = [
 #            below. Everywhere else a `print` is a debugging leftover, and a
 #            library module that prints would corrupt the CLI's `--json`
 #            output -- so the rule keeps `print` where it belongs.
-#   ANN/D -- annotation and docstring coverage in tests; large, low-yield.
+#   ANN   -- annotation coverage: mypy's `no-untyped-def`, under `strict`, is
+#            the annotation check, and a second one could only disagree with it.
+#   D     -- beyond D100-D103: those four are selected by per-file ratchet for
+#            the package and tools/, and tests/ is exempt from them because a
+#            test's name is its documentation. The rest of the family is
+#            formatting debt for the change that selects it with a convention.
 #   PL    -- Pylint refactor heuristics; opinions, not defects.
 
 [tool.ruff.lint.per-file-ignores]
@@ -305,9 +328,48 @@ select = [
 # `T201` is exempted in exactly two places -- the CLI and the gate scripts --
 # because their stdout is the product; `tests/*` is deliberately not one of
 # them (a test that needs to say something puts it in the assertion message).
-"openspec_graph/cli.py" = ["T201"]
-"tests/*" = ["S101", "S603", "S607"]
+# `D100`-`D103` are exempted under `tests/*` by policy, not by ratchet: a test's
+# name is its documentation (ratchet-test-types-and-docstrings DEC-TDR-008).
+"openspec_graph/cli.py" = ["T201", "D103"]
+"tests/*" = ["S101", "S603", "S607", "D100", "D101", "D102", "D103"]
 "tools/*" = ["S603", "S607", "INP001", "T201"]
+# The docstring ratchet (ratchet-test-types-and-docstrings R-TDR-8, R-TDR-9):
+# one entry per file of the package and tools/ that lacked a public docstring
+# when D100-D103 were selected, listing exactly its codes (cli.py's D103 joins
+# its T201 entry above). Each code's finding count in its file is held exactly
+# by DOCSTRING_CEILINGS in tests/test_static_ratchets.py, counted by ruff with
+# no configuration file, no ignore file and no `noqa` honoured. An entry
+# leaves in the pull request that documents its file, and none is ever added;
+# no D code goes under a glob, in extend-per-file-ignores, or in a `noqa`.
+"openspec_graph/delta.py" = ["D102"]
+"openspec_graph/detect.py" = ["D101", "D102", "D103"]
+"openspec_graph/ledger.py" = ["D101", "D102"]
+"openspec_graph/machinery.py" = ["D103"]
+"openspec_graph/parse.py" = ["D103"]
+"openspec_graph/parse_harness.py" = ["D103"]
+"openspec_graph/parse_model.py" = ["D101", "D102"]
+"openspec_graph/parse_semantics.py" = ["D103"]
+"openspec_graph/parse_speckit.py" = ["D103"]
+"openspec_graph/parse_upstream.py" = ["D103"]
+"openspec_graph/report.py" = ["D102"]
+"openspec_graph/rule_types.py" = ["D101", "D102"]
+"openspec_graph/rules.py" = ["D103"]
+"openspec_graph/scaffold.py" = ["D101", "D102", "D103"]
+"openspec_graph/scaffold_templates.py" = ["D103"]
+"openspec_graph/thresholds.py" = ["D102"]
+"openspec_graph/witness.py" = ["D102", "D103"]
+"tools/check_branch_coverage.py" = ["D103"]
+"tools/check_coverage_floor.py" = ["D103"]
+"tools/check_docs.py" = ["D103"]
+"tools/check_no_hardcoded_thresholds.py" = ["D103"]
+"tools/check_secrets.py" = ["D103"]
+"tools/check_wheel_metadata.py" = ["D103"]
+"tools/diff_spec_graph.py" = ["D103"]
+"tools/matcher_accuracy.py" = ["D102", "D103"]
+"tools/render_mermaid.py" = ["D103"]
+"tools/render_plugin_manifests.py" = ["D103"]
+"tools/render_rule_catalog.py" = ["D103"]
+"tools/stage_citations.py" = ["D102", "D103"]
 
 [tool.mypy]
 # `strict` subsumes the flags this table used to list one by one

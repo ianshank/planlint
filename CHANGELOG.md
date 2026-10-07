@@ -50,6 +50,34 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **The mypy floor.** The dev extra's `mypy` becomes `mypy>=1.11`, the first
   release with `-O json`, which the occurrence guard reads. It is a floor,
   not a pin, and a guard holds both.
+- **Public docstrings by per-file ratchet (W6.6).** ruff now selects `D100`,
+  `D101`, `D102` and `D103`, and no other `D` rule, for the package and
+  `tools/`. This is the "ratchet first" step that `select-zero-cost-guards`'
+  DEC-ZCG-012 put before a `D` gate. Each of the 30 files that lacked a public
+  docstring when the four were selected has one `per-file-ignores` entry
+  listing exactly its codes (`openspec_graph/cli.py`'s `D103` joins its `T201`
+  entry). Each of the 40 file-and-code pairs is held to an exact count by
+  `DOCSTRING_CEILINGS`, 77 findings in all, as
+  `test_every_docstring_exemption_matches_its_ceiling` counts them. A pair
+  that moves either way fails, and a lower count is named `lower <file>
+  <code> from A to B`.
+- **Counted with nothing honoured.** ruff runs `--isolated`, so no
+  configuration file or per-file table is read, `--no-respect-gitignore`, so
+  no `.gitignore` or `.ignore` file hides a module, and `--ignore-noqa`. A
+  shape guard also names a `D` code under a glob key, in
+  `extend-per-file-ignores`, or in a `noqa` comment read by ruff's own
+  grammar. An entry leaves in the pull request that documents its file, and
+  none is added.
+- **`tests/` is exempt by policy, not by ratchet.** The existing `tests/*`
+  key carries the four codes, because a test's name is its documentation.
+  That key never enforced a `D` rule, so `shape-the-test-suite`'s C-TSS-6 is
+  not reversed.
+- **No convention.** The four rules' findings are one set under no
+  `pydocstyle` convention and under each of `google`, `numpy` and `pep257`, so
+  none is configured. The `pyproject.toml` comment records that measurement
+  with its command, and records Google as the best fit of the wider family
+  (37 findings against 67), not as a convention the docstrings follow. `ANN`
+  stays unselected, because mypy's `no-untyped-def` is the annotation check.
 - **The guards** live in `tests/test_static_ratchets.py`, with their helpers in
   the uncollected `tests/ratchet_support.py` and their planted inputs in
   `tests/test_static_ratchets_planted.py`.

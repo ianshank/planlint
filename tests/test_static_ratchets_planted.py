@@ -23,20 +23,26 @@ import pytest
 
 from tests.ratchet_support import (
     ALLOWED_VERSION_CHECK,
+    DOCSTRING_CODES,
     MYPY_FIXED,
     MYPY_FLOOR,
     MYPY_TREES,
+    POLICY_KEY,
     TESTS_ENTRY,
     TYPECHECK_RECIPE,
     ceiling_problems,
     derive_config,
     derived_problems,
     dev_extra_problems,
+    docstring_ceiling_problems,
+    docstring_config_problems,
+    docstring_counts,
     hidden_code,
     listed_codes,
     load_mypy_config,
     mypy_config_problems,
     mypy_errors,
+    noqa_problems,
     override_problems,
     platform_only,
     read_comments,
@@ -87,7 +93,22 @@ def _waivers(text: str, *recorded: tuple[str, str, str], listed: Collection[str]
     return problems + waiver_problems(ignores, recorded, listed)
 
 
+def _noqa(comment: str) -> list[str]:
+    return noqa_problems("tools/a.py", f"def f():  {comment}\n    pass\n")
+
+
+def _ruff(stdout: str, stderr: str = "", returncode: int = 0) -> list[str]:
+    counts, problems = docstring_counts(stdout, ["C:\\repo", "/repo"], stderr, returncode)
+    return [f"counted {p} {c} {n}" for p, codes in counts.items() for c, n in codes.items()] + problems
+
+
 _TESTS = {"module": TESTS_ENTRY, "disable_error_code": ["index"]}
+_LINT: dict[str, Any] = {
+    "select": ["E4", "DTZ", *DOCSTRING_CODES],
+    "per-file-ignores": {POLICY_KEY: ["S101", *DOCSTRING_CODES], "openspec_graph/cli.py": ["T201", "D103"]},
+}
+_A, _A_FILE = {"tools/a.py": ["D103"]}, "tools/a.py"
+_FINDING = json.dumps([{"filename": "C:\\repo\\tools\\a.py", "code": "D103"}])
 _SKIP = {"follow_imports": "skip"}
 _PLANTED: dict[str, tuple[Callable[[Path], list[str]], str | None]] = {
     # (case) -> (planted input -> what the helper names, a substring it must name or None for quiet)
@@ -163,6 +184,39 @@ _PLANTED: dict[str, tuple[Callable[[Path], list[str]], str | None]] = {
     "compatible-release": (lambda _: dev_extra_problems(["mypy~=1.11"]), "not floored exactly"),
     "pinned-tool": (lambda _: dev_extra_problems([f"mypy{MYPY_FLOOR}", "ruff==0.4.2"]), "pins a version"),
     "no-mypy": (lambda _: dev_extra_problems(["ruff"]), "0 dev-extra entries"),
+    "docstrings-unselected": (lambda _: docstring_config_problems({**_LINT, "select": ["E4"]})[1], "select lacks"),
+    "another-d-rule": (lambda _: docstring_config_problems({**_LINT, "select": [*_LINT["select"], "D2"]})[1], "select holds ['D2']"),
+    "ignored-d-rule": (lambda _: docstring_config_problems({**_LINT, "ignore": ["D103"]})[1], "ignore holds"),
+    "convention-table": (lambda _: docstring_config_problems({**_LINT, "pydocstyle": {"convention": "google"}})[1], "pydocstyle"),
+    "d-on-a-glob": (lambda _: docstring_config_problems({**_LINT, "per-file-ignores": {**_LINT["per-file-ignores"], "openspec_graph/*": ["D103"]}})[1], "'openspec_graph/*' carries"),
+    "d-on-a-test-file": (lambda _: docstring_config_problems({**_LINT, "per-file-ignores": {**_LINT["per-file-ignores"], "tests/test_x.py": ["D103"]}})[1], "'tests/test_x.py' carries"),
+    "d-in-extend": (lambda _: docstring_config_problems({**_LINT, "extend-per-file-ignores": _A})[1], "extend-per-file-ignores"),
+    "policy-key-short": (lambda _: docstring_config_problems({**_LINT, "per-file-ignores": {POLICY_KEY: ["D100"]}})[1], "tests/* lacks"),
+    "lint-shape": (lambda _: docstring_config_problems(_LINT)[1], None),
+    "ratchet-entry-read": (lambda _: [f"{docstring_config_problems(_LINT)[0]}"], "{'openspec_graph/cli.py': ['D103']}"),
+    "stale-pair": (lambda _: docstring_ceiling_problems(_A, {_A_FILE: {"D103": 1}}, {}), "tools/a.py D103 is stale"),
+    "unlisted-pair": (lambda _: docstring_ceiling_problems({}, {}, {_A_FILE: {"D103": 1}}), "tools/a.py D103 occurs 1 times"),
+    "pair-above": (lambda _: docstring_ceiling_problems(_A, {_A_FILE: {"D103": 1}}, {_A_FILE: {"D103": 2}}), "above its ceiling of 1"),
+    "pair-below": (lambda _: docstring_ceiling_problems(_A, {_A_FILE: {"D103": 3}}, {_A_FILE: {"D103": 2}}), "lower tools/a.py D103 from 3 to 2"),
+    "pair-without-ceiling": (lambda _: docstring_ceiling_problems(_A, {}), "without a ceiling in DOCSTRING_CEILINGS"),
+    "ceiling-without-pair": (lambda _: docstring_ceiling_problems({}, {_A_FILE: {"D103": 1}}), "DOCSTRING_CEILINGS holds tools/a.py D103"),
+    "pair-exact": (lambda _: docstring_ceiling_problems(_A, {_A_FILE: {"D103": 2}}, {_A_FILE: {"D103": 2}}), None),
+    "noqa-no-space": (lambda _: _noqa("#noqa:D103"), "a noqa naming ['D103']"),
+    "noqa-upper-case": (lambda _: _noqa("# NOQA:D103"), "a noqa naming ['D103']"),
+    "noqa-spaced-colon": (lambda _: _noqa("#  noqa  :  D103"), "a noqa naming ['D103']"),
+    "noqa-second-code": (lambda _: _noqa("# noqa: S607 D103"), "a noqa naming ['D103']"),
+    "noqa-after-text": (lambda _: _noqa("# see docs # noqa: D103"), "a noqa naming ['D103']"),
+    "ruff-noqa-mid-file": (lambda _: noqa_problems(_A_FILE, "x = 1\n# ruff: noqa: D103\ny = 2\n"), "a noqa naming ['D103']"),
+    "flake8-noqa": (lambda _: noqa_problems(_A_FILE, "# flake8: noqa: D103\nx = 1\n"), "a noqa naming ['D103']"),
+    "noqa-other-code": (lambda _: _noqa("# noqa: S607"), None),
+    "noqa-list-ends": (lambda _: _noqa("# noqa: S607 -- D103 is documented elsewhere"), None),
+    "noqa-dtz-is-no-d-rule": (lambda _: _noqa("# noqa: DTZ005"), None),
+    "windows-path-normalised": (lambda _: _ruff(_FINDING), "counted tools/a.py D103 1"),
+    "ruff-stderr": (lambda _: _ruff("[]", stderr="warning: No Python files found"), "ruff wrote to stderr"),
+    "ruff-exit": (lambda _: _ruff("[]", returncode=2), "ruff exited 2"),
+    "ruff-not-json": (lambda _: _ruff("error: bad"), "not a JSON list"),
+    "finding-outside-root": (lambda _: _ruff(json.dumps([{"filename": "/elsewhere/a.py", "code": "D103"}])), "outside"),
+    "ruff-clean": (lambda _: _ruff("[]"), None),
     "floored-with-marker": (lambda _: dev_extra_problems([f"mypy{MYPY_FLOOR}", 'tomli; python_version == "3.10"']), None),
 }
 

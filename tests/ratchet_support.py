@@ -27,6 +27,7 @@ import json
 import os
 import re
 import shlex
+import sys
 import tokenize
 from collections import Counter
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
@@ -255,23 +256,34 @@ def platform_only(runs: Mapping[str, Sequence[Mapping[str, Any]]]) -> list[str]:
 
 
 def ceiling_problems(
-    listed: Collection[str], ceilings: Mapping[str, int], counts: Mapping[str, int] | None = None
+    listed: Collection[str],
+    ceilings: Mapping[str, int],
+    counts: Mapping[str, int] | None = None,
+    *,
+    table: str = "MYPY_TESTS_CEILINGS",
+    lister: str = "the override",
+    where: str = "under tests/",
+    unit: str = "occurrence",
 ) -> list[str]:
-    """R-TDR-4 and R-TDR-5: the listed codes and the ceilings are one set, and each count is exact."""
-    problems = [f"{code} is listed without a ceiling in MYPY_TESTS_CEILINGS" for code in sorted(set(listed) - set(ceilings))]
-    problems += [f"MYPY_TESTS_CEILINGS holds {code}, which the override does not list" for code in sorted(set(ceilings) - set(listed))]
+    """R-TDR-4, R-TDR-5 and R-TDR-9: the listed keys and the ceilings are one set, and each count is exact.
+
+    The defaults word it for mypy's codes; :func:`docstring_ceiling_problems`
+    words it for the docstring pairs.
+    """
+    problems = [f"{key} is listed without a ceiling in {table}" for key in sorted(set(listed) - set(ceilings))]
+    problems += [f"{table} holds {key}, which {lister} does not list" for key in sorted(set(ceilings) - set(listed))]
     if counts is None:
         return problems
-    for code in sorted(set(listed) | set(counts)):
-        count, ceiling = counts.get(code, 0), ceilings.get(code, 0)
-        if code not in listed:
-            problems.append(f"{code} occurs {count} times under tests/ and is not listed")
+    for key in sorted(set(listed) | set(counts)):
+        count, ceiling = counts.get(key, 0), ceilings.get(key, 0)
+        if key not in listed:
+            problems.append(f"{key} occurs {count} times {where} and is not listed")
         elif count == 0:
-            problems.append(f"{code} is stale: no occurrence; remove it from the override and the ceilings")
+            problems.append(f"{key} is stale: no {unit}; remove it from {lister} and the ceilings")
         elif count > ceiling:
-            problems.append(f"{code}: {count} occurrences, above its ceiling of {ceiling}")
+            problems.append(f"{key}: {count} {unit}s, above its ceiling of {ceiling}")
         elif count < ceiling:
-            problems.append(f"lower {code} from {ceiling} to {count}")
+            problems.append(f"lower {key} from {ceiling} to {count}")
     return problems
 
 
@@ -364,3 +376,125 @@ def dev_extra_problems(entries: Iterable[str]) -> list[str]:
     problems += [f"{str(r)!r} is not floored exactly {MYPY_FLOOR!r} (-O json)" for r in mypy if str(r.specifier) != MYPY_FLOOR]
     problems += [f"{str(r)!r} pins a version" for r in requirements if any(s.operator in ("==", "===") for s in r.specifier)]
     return problems
+
+
+# --- docstrings by per-file ratchet (R-TDR-8, R-TDR-9, DEC-TDR-009) --------------
+
+#: R-TDR-8: the four rules selected, the trees they are ratcheted in, and the policy key.
+DOCSTRING_CODES = ("D100", "D101", "D102", "D103")
+DOCSTRING_TREES = ("openspec_graph", "tools")
+POLICY_KEY = "tests/*"
+PER_FILE_IGNORES = "[tool.ruff.lint.per-file-ignores]"
+_D_RULE = re.compile(r"D\d*")  # a pydocstyle selector, fully matched: `D`, `D1`, `D103`; never `DTZ`
+#: ruff's `noqa` grammar as measured (DEC-TDR-009): upper-case codes separated by
+#: commas, whitespace or both, the list ending at the first token that is not a
+#: code; a line directive anywhere in a comment, and the file-level `ruff:` and
+#: `flake8:` forms, whose prefixes are matched in any case.
+_CODE_LIST = r"[A-Z]+[0-9]+(?:[\s,]+[A-Z]+[0-9]+)*"
+_NOQA = re.compile(rf"#\s*(?i:noqa)\s*:\s*({_CODE_LIST})")
+_FILE_NOQA = re.compile(rf"#\s*(?i:ruff|flake8)\s*:\s*(?i:noqa)\s*:\s*({_CODE_LIST})")
+
+
+def _d_codes(codes: object) -> list[str]:
+    return [str(code) for code in codes if _D_RULE.fullmatch(str(code))] if isinstance(codes, list) else []
+
+
+def _is_ratchet_key(key: str) -> bool:
+    """One concrete file under the package or ``tools/``: no glob character."""
+    return key.split("/")[0] in DOCSTRING_TREES and key.endswith(".py") and not set(key) & set("*?[]{}!")
+
+
+def docstring_config_problems(lint: Mapping[str, Any]) -> tuple[dict[str, list[str]], list[str]]:
+    """R-TDR-8 over a parsed ``[tool.ruff.lint]``: the ratchet entries (file -> ``D`` codes), and the offenders."""
+    missing = [code for code in DOCSTRING_CODES if code not in lint.get("select", [])]
+    problems = [f"select lacks {missing}"] if missing else []
+    for key in ("select", "extend-select", "ignore", "extend-ignore"):
+        extra = [c for c in _d_codes(lint.get(key)) if key.endswith("ignore") or c not in DOCSTRING_CODES]
+        problems += [f"{key} holds {extra}: only {list(DOCSTRING_CODES)} are selected, never ignored"] if extra else []
+    if "pydocstyle" in lint:
+        problems.append("a [tool.ruff.lint.pydocstyle] table sets a convention no selected verdict depends on (R-TDR-10)")
+    table = lint.get("per-file-ignores", {})
+    lacking = [code for code in DOCSTRING_CODES if code not in _d_codes(table.get(POLICY_KEY))]
+    problems += [f"{POLICY_KEY} lacks {lacking}, its policy exemption"] if lacking else []
+    entries: dict[str, list[str]] = {}
+    for key, codes in table.items():
+        found = _d_codes(codes)
+        if not found or key == POLICY_KEY:
+            continue
+        if _is_ratchet_key(key):
+            entries[key] = found
+            beyond = [code for code in found if code not in DOCSTRING_CODES]
+            problems += [f"ratchet entry {key!r} lists {beyond}, beyond the four"] if beyond else []
+        else:
+            problems.append(f"per-file-ignores {key!r} carries {found}: only a concrete file under openspec_graph/ or tools/, or {POLICY_KEY}, may")
+    for key, codes in lint.get("extend-per-file-ignores", {}).items():
+        found = _d_codes(codes)
+        problems += [f"extend-per-file-ignores {key!r} carries {found}: no D code may sit there"] if found else []
+    return entries, problems
+
+
+def noqa_problems(path: str, text: str) -> list[str]:
+    """Each comment in ``text`` holding a ``noqa`` directive, read as ruff reads it, that names a ``D`` code."""
+    problems: list[str] = []
+    for token in tokenize.generate_tokens(io.StringIO(text).readline):
+        if token.type != tokenize.COMMENT:
+            continue
+        lists = [match[1] for pattern in (_NOQA, _FILE_NOQA) for match in pattern.finditer(token.string)]
+        named = [code for codes in lists for code in re.split(r"[\s,]+", codes) if _D_RULE.fullmatch(code)]
+        problems += [f"{path}:{token.start[0]}: a noqa naming {named}: {token.string}"] if named else []
+    return problems
+
+
+def ruff_docstring_command(*paths: str) -> list[str]:
+    """The occurrence run: no configuration file, no ignore file and no ``noqa`` honoured (DEC-TDR-009)."""
+    return [
+        sys.executable, "-m", "ruff", "check", "--no-cache", "--isolated", "--no-respect-gitignore",
+        "--ignore-noqa", "--select", ",".join(DOCSTRING_CODES), "--output-format", "json", "--exit-zero", *paths,
+    ]
+
+
+def _relative(filename: str, roots: Sequence[str]) -> str | None:
+    path = filename.replace("\\", "/")
+    for root in roots:
+        base = root.replace("\\", "/").rstrip("/") + "/"
+        if path.startswith(base) or path.casefold().startswith(base.casefold()):  # a drive letter's case
+            return path[len(base):]
+    return None
+
+
+def docstring_counts(stdout: str, roots: Sequence[str], stderr: str, returncode: int) -> tuple[dict[str, dict[str, int]], list[str]]:
+    """ruff's JSON findings as file -> code -> count, each path relative to a spelling of the root, in POSIX form."""
+    problems = [f"ruff wrote to stderr: {stderr!r}"] if stderr else []
+    problems += [f"ruff exited {returncode}, not 0"] if returncode != 0 else []
+    try:
+        findings = json.loads(stdout)
+    except json.JSONDecodeError:
+        findings = None
+    if not isinstance(findings, list):
+        return {}, [*problems, f"ruff's stdout is not a JSON list: {stdout[:200]!r}"]
+    counts: dict[str, dict[str, int]] = {}
+    for finding in findings:
+        path = _relative(str(finding.get("filename", "")), roots) if isinstance(finding, dict) else None
+        if path is None:
+            problems.append(f"a finding outside {list(roots)}: {finding!r}")
+            continue
+        codes = counts.setdefault(path, {})
+        codes[str(finding.get("code"))] = codes.get(str(finding.get("code")), 0) + 1
+    return counts, problems
+
+
+def docstring_ceiling_problems(
+    entries: Mapping[str, Iterable[str]],
+    ceilings: Mapping[str, Mapping[str, int]],
+    counts: Mapping[str, Mapping[str, int]] | None = None,
+) -> list[str]:
+    """R-TDR-9: the ratchet pairs and the ceilings' pairs are one set, and each pair's count is exact."""
+
+    def flat(table: Mapping[str, Mapping[str, int]]) -> dict[str, int]:
+        return {f"{path} {code}": count for path, codes in table.items() for code, count in codes.items()}
+
+    listed = [f"{path} {code}" for path, codes in entries.items() for code in codes]
+    return ceiling_problems(
+        listed, flat(ceilings), None if counts is None else flat(counts), table="DOCSTRING_CEILINGS",
+        lister=PER_FILE_IGNORES, where="under openspec_graph/ and tools/", unit="finding",
+    )
