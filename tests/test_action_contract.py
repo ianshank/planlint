@@ -247,7 +247,9 @@ def test_the_step_extractor_sees_the_whole_action() -> None:
     assert all(isinstance(steps[i].get("run"), str) for i, _ in enumerate(steps) if steps[i].get("run"))
     scan = next(step for step in steps if step.get("id") == "scan")
     assert "planlint --target" in str(scan["run"])
-    assert set(scan["env"]) >= {
+    env = scan["env"]
+    assert isinstance(env, dict), env
+    assert set(env) >= {
         "INPUT_TARGET", "INPUT_FAIL_ON", "INPUT_CHANGE", "INPUT_DIALECT", "EVIDENCE",
     }
 

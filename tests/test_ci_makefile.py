@@ -15,6 +15,7 @@ import pytest
 
 from tests.support import (
     load_tool,
+    markdown_section,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -50,11 +51,9 @@ def test_makefile_has_matcher_accuracy_report_target() -> None:
     assert re.search(r"^matcher-accuracy:.*?##", makefile, re.MULTILINE), (
         "Makefile has no documented `matcher-accuracy` target"
     )
-    phony = next(line for line in makefile.splitlines() if line.startswith(".PHONY"))
-    assert "matcher-accuracy" in phony.split(), "matcher-accuracy missing from .PHONY"
-    for gate in ("ci", "pre-pr"):
-        line = next(ln for ln in makefile.splitlines() if ln.startswith(f"{gate}:"))
-        assert "matcher-accuracy" not in line.split(), f"{gate} must not compose the report target"
+    # `.PHONY`, and composed into neither aggregate -- now followed through
+    # prerequisites transitively -- by the one report-target definition.
+    assert _report_target_violations(makefile, "matcher-accuracy") == []
 
 # --- measure-coverage-once: one suite run, two scoped reads ------------------
 #
@@ -101,12 +100,64 @@ def _make_targets(makefile_text: str) -> list[str]:
     return targets
 
 def _prerequisites(makefile_text: str, target: str) -> list[str]:
-    """The targets `target` depends on, from its rule line, help text dropped."""
+    """The targets `target` depends on, help text dropped, gathered from every
+    ordinary rule for it in file order: GNU Make merges the prerequisites of
+    all of a target's rules, so a second `test: audit` composes `audit` as
+    surely as the first rule would."""
+    found: list[str] = []
     for line in makefile_text.splitlines():
         match = _MAKE_RULE.match(line)
         if match and match.group(1) == target:
-            return match.group(2).split("##", 1)[0].split()
-    return []
+            found += [name for name in match.group(2).split("##", 1)[0].split()
+                      if name not in found]
+    return found
+
+def _phony_targets(makefile_text: str) -> set[str]:
+    """Every target named on a `.PHONY:` line."""
+    return {
+        name
+        for line in makefile_text.splitlines()
+        if line.startswith(".PHONY:")
+        for name in line.split(":", 1)[1].split()
+    }
+
+def _report_targets(makefile_text: str) -> list[str]:
+    """Every documented target whose `##` help text begins "Report", in file order."""
+    found: list[str] = []
+    for line in makefile_text.splitlines():
+        match = _MAKE_RULE.match(line)
+        help_text = match.group(2).partition("##")[2].strip() if match else ""
+        if match and help_text.startswith("Report"):
+            found.append(match.group(1))
+    return found
+
+def _reachable(makefile_text: str, start: str) -> dict[str, list[str]]:
+    """Every target reachable from `start` through prerequisites, followed to a
+    fixed point, each with the shortest path that reaches it (`start` first)."""
+    paths: dict[str, list[str]] = {}
+    frontier = [[start]]
+    while frontier:
+        path = frontier.pop(0)
+        for prerequisite in _prerequisites(makefile_text, path[-1]):
+            if prerequisite != start and prerequisite not in paths:
+                paths[prerequisite] = [*path, prerequisite]
+                frontier.append(paths[prerequisite])
+    return paths
+
+def _report_target_violations(makefile_text: str, target: str) -> list[str]:
+    """Each way `target` is not a report target, named: no help text beginning
+    "Report", missing from `.PHONY`, or reachable from `ci` or `pre-pr` -- the
+    last with the path that reaches it (R-RDS-14, DEC-RDS-011)."""
+    found: list[str] = []
+    if target not in _report_targets(makefile_text):
+        found.append(f"{target} is not a report target: its `##` help text does not begin 'Report'")
+    if target not in _phony_targets(makefile_text):
+        found.append(f"{target} is missing from .PHONY")
+    for gate in _GATE_AGGREGATES:
+        path = _reachable(makefile_text, gate).get(target)
+        if path is not None:
+            found.append(f"{gate} composes the {target} report via {' -> '.join(path)}")
+    return found
 
 def _recipe_lines(makefile_text: str, target: str) -> list[str]:
     """`target`'s recipe: the tab-indented lines up to the next rule, `@#` and
@@ -158,9 +209,7 @@ def _one_run_violations(makefile_text: str) -> list[str]:
     for target in _SUITE_READERS:
         if _SUITE_RUN_TARGET not in _prerequisites(makefile_text, target):
             found.append(f"{target} does not depend on {_SUITE_RUN_TARGET}")
-    for gate in _GATE_AGGREGATES:
-        if _REPORT_TARGET in _prerequisites(makefile_text, gate):
-            found.append(f"{gate} composes the {_REPORT_TARGET} report")
+    found += _report_target_violations(makefile_text, _REPORT_TARGET)
     return found
 
 @pytest.mark.integration
@@ -226,7 +275,7 @@ _ONE_RUN_MAKEFILE = textwrap.dedent(
     \tpython tools/check_coverage_floor.py coverage.json --scope openspec_graph
     coverage-tools: coverage-run ## tools alone
     \tpython tools/check_coverage_floor.py coverage.json --scope tools
-    coverage-per-file: coverage-run ## a report
+    coverage-per-file: coverage-run ## Report the per-file minimum
     \tpython tools/check_coverage_floor.py coverage.json --per-file-min
     ci: test lint validate ## core
     \t@echo ci
@@ -281,16 +330,192 @@ def test_makefile_has_coverage_per_file_report_target() -> None:
     assert re.search(rf"^{_REPORT_TARGET}:.*?## ", makefile, re.MULTILINE), (
         f"Makefile has no documented `{_REPORT_TARGET}` target"
     )
-    phony = next(line for line in makefile.splitlines() if line.startswith(".PHONY"))
-    assert _REPORT_TARGET in phony.split(), f"{_REPORT_TARGET} missing from .PHONY"
     assert _prerequisites(makefile, _REPORT_TARGET) == [_SUITE_RUN_TARGET]
     assert _recipe_lines(makefile, _REPORT_TARGET) == [
         f"python tools/check_coverage_floor.py {_COVERAGE_REPORT} --per-file-min"
     ]
-    for gate in _GATE_AGGREGATES:
-        assert _REPORT_TARGET not in _prerequisites(makefile, gate), (
-            f"{gate} must not compose the report target"
-        )
+    # `.PHONY`, and composed into neither aggregate -- now followed through
+    # prerequisites transitively -- by the one report-target definition.
+    assert _report_target_violations(makefile, _REPORT_TARGET) == []
+
+# --- report-dead-code-and-spec-status: one definition of a report target -----
+#
+# A report target is documented with help text beginning "Report", is in
+# `.PHONY`, and is reachable from neither `ci` nor `pre-pr` through
+# prerequisites followed transitively -- so a report composed into `test`
+# cannot slip into the ladder unseen (R-RDS-14, DEC-RDS-011).
+
+#: The report targets this repository must carry; each is required by name so
+#: the test is red before the target exists.
+_REQUIRED_REPORT_TARGETS = (
+    "matcher-accuracy",
+    "coverage-per-file",
+    "stage-citations",
+    "dead-code",
+    "spec-status",
+)
+
+@pytest.mark.integration
+def test_every_report_target_stays_out_of_the_ladder() -> None:
+    """R-RDS-14: every target whose help text begins "Report" is `.PHONY` and
+    unreachable from `ci` and `pre-pr`, and the required ones are among them."""
+    makefile = _makefile_text()
+    reports = _report_targets(makefile)
+    missing = [f"{name} is not a report target" for name in _REQUIRED_REPORT_TARGETS
+               if name not in reports]
+    assert missing == []
+    violations = [item for name in reports for item in _report_target_violations(makefile, name)]
+    assert violations == []
+
+#: The two hygiene reports and the one script each runs (R-RDS-8, R-RDS-13).
+_HYGIENE_REPORTS = {"dead-code": "dead_code.py", "spec-status": "spec_status.py"}
+
+@pytest.mark.integration
+def test_the_hygiene_report_targets_run_exactly_their_script() -> None:
+    """R-RDS-8, R-RDS-13: `dead-code` and `spec-status` have no prerequisites
+    and a recipe of their one script and nothing else."""
+    makefile = _makefile_text()
+    for target, script in _HYGIENE_REPORTS.items():
+        assert _prerequisites(makefile, target) == [], f"{target} has prerequisites"
+        assert _recipe_lines(makefile, target) == [f"python tools/{script}"], target
+
+_PLANTED_REPORT_MAKEFILE = textwrap.dedent(
+    """\
+    .PHONY: test lint audit ci pre-pr
+    test: ## Run the suite
+    \tpython -m pytest tests/
+    lint: ## Lint
+    \tpython -m ruff check .
+    audit: ## Report the audited things — a report, not a gate
+    \tpython tools/audit.py
+    ci: test lint ## core
+    \t@echo ci
+    pre-pr: ci ## full
+    \t@echo pre-pr
+    """
+)
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("label", "before", "after", "expected"),
+    [
+        (
+            "pre-pr composing the report directly",
+            "pre-pr: ci ##",
+            "pre-pr: ci audit ##",
+            ["pre-pr composes the audit report via pre-pr -> audit"],
+        ),
+        (
+            "ci composing it through an intermediate target",
+            "test: ##",
+            "test: audit ##",
+            [
+                "ci composes the audit report via ci -> test -> audit",
+                "pre-pr composes the audit report via pre-pr -> ci -> test -> audit",
+            ],
+        ),
+        (
+            "a second rule for an intermediate target adding it",
+            "lint: ## Lint\n",
+            "test: audit\nlint: ## Lint\n",
+            [
+                "ci composes the audit report via ci -> test -> audit",
+                "pre-pr composes the audit report via pre-pr -> ci -> test -> audit",
+            ],
+        ),
+        (
+            "missing from .PHONY",
+            ".PHONY: test lint audit ci pre-pr",
+            ".PHONY: test lint ci pre-pr",
+            ["audit is missing from .PHONY"],
+        ),
+        (
+            "help text not beginning Report",
+            "## Report the audited things",
+            "## the audited things",
+            ["audit is not a report target: its `##` help text does not begin 'Report'"],
+        ),
+    ],
+)
+def test_a_report_target_composed_into_the_ladder_is_named(
+    label: str, before: str, after: str, expected: list[str]
+) -> None:
+    """R-RDS-14, R-RDS-19: each way a report target slips into the ladder, or
+    stops being a report, is named with the target and, where it is reached,
+    the path -- on a planted Makefile whose unmutated form is clean."""
+    assert _report_target_violations(_PLANTED_REPORT_MAKEFILE, "audit") == []
+    assert _PLANTED_REPORT_MAKEFILE.count(before) == 1, f"{label}: anchor {before!r} not unique"
+    mutated = _PLANTED_REPORT_MAKEFILE.replace(before, after)
+    assert _report_target_violations(mutated, "audit") == expected, label
+
+# --- docs/hooks.md's reports table: a row per report target, no other row ---
+
+#: The section docs/hooks.md lists the report targets under (R-RDS-15).
+_REPORTS_HEADING = "## Reports, not gates"
+
+#: The follow-up the spec-status row or the text under the table must name.
+_SETTLING_PACKAGE = "settle-package-status-headers"
+
+_REPORT_ROW = re.compile(r"^\|\s*`make ([\w-]+)`", re.MULTILINE)
+
+def _hooks_report_rows(hooks_text: str) -> list[str]:
+    """The target of every row in docs/hooks.md's reports table, by the
+    backticked `make <target>` in its first cell, read from the section that
+    begins `## Reports, not gates` up to the next `## ` heading."""
+    return _REPORT_ROW.findall(markdown_section(hooks_text, _REPORTS_HEADING))
+
+def _reports_table_violations(hooks_text: str, report_targets: list[str]) -> list[str]:
+    """Each report target with no row, and each row naming no report target."""
+    rows = _hooks_report_rows(hooks_text)
+    found = [f"{name} has no row in the reports table" for name in report_targets
+             if name not in rows]
+    found += [f"the row for {name} names no report target" for name in rows
+              if name not in report_targets]
+    return found
+
+@pytest.mark.integration
+def test_every_report_target_has_a_row_in_the_hooks_reports_table() -> None:
+    """R-RDS-15: the reports table and the Makefile's report targets agree as
+    sets, and the section says the spec-status report stays red until its
+    follow-up lands."""
+    hooks = (REPO_ROOT / "docs" / "hooks.md").read_text(encoding="utf-8")
+    assert _hooks_report_rows(hooks), "docs/hooks.md has no reports table rows"
+    assert _reports_table_violations(hooks, _report_targets(_makefile_text())) == []
+    assert _SETTLING_PACKAGE in markdown_section(hooks, _REPORTS_HEADING)
+
+_PLANTED_REPORTS_SECTION = textwrap.dedent(
+    """\
+    ## Reports, not gates
+
+    | Target | Reads | Exit |
+    |---|---|---|
+    | `make audit` | the audited things | 0 / 1 / 2 |
+    | `make census` | the counted things | 0 / 2 |
+
+    ## Claude Code hooks
+    """
+)
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("label", "targets", "expected"),
+    [
+        ("every target has its row", ["audit", "census"], []),
+        (
+            "a report target without a row",
+            ["audit", "census", "ledger"],
+            ["ledger has no row in the reports table"],
+        ),
+        ("a row naming no report target", ["audit"], ["the row for census names no report target"]),
+    ],
+)
+def test_a_report_target_without_a_hooks_row_is_named(
+    label: str, targets: list[str], expected: list[str]
+) -> None:
+    """R-RDS-15, R-RDS-19: a missing row and a row naming no report target are
+    each named; a row outside the section is not read."""
+    planted = "| `make ledger` | above the section | 0 |\n\n" + _PLANTED_REPORTS_SECTION
+    assert _reports_table_violations(planted, targets) == expected, label
 
 @pytest.mark.integration
 def test_the_contract_job_is_not_wired_into_a_make_target() -> None:

@@ -346,6 +346,37 @@ it is not cargo-culted into the v0.1 surface.
     turning it on now adds a backlog, not a gate. Reduce alongside item 22,
     case by case, then select it.
 
+24. **Settle the change packages' `Status` headers**
+    (`settle-package-status-headers`, the rest of the reflection plan's
+    W8.5). `report-dead-code-and-spec-status` adds `make spec-status`, a
+    report that lists each change package's `Status` header beside its
+    evidence and edits none; its first output, recorded in that package's
+    `tasks.md`, is this item's worklist. Setting a header is a human
+    decision after review (`.claude/agents/spec-drafter.md`), so this
+    package is the maintainer's: settle each listed header; decide whether
+    the vocabulary gains a value meaning "shipped" — an `IMPLEMENTED`-style
+    third value beside `DRAFT` and `APPROVED`, which touches the scaffold
+    template, the drafter and H005 — and amend `VOCABULARY` in
+    `tools/spec_status.py`, the one place the report's words are written,
+    to match. Three conditions decide whether it can turn the report
+    green. (a) If it records status anywhere other than the `Status`
+    header, such as a supersession-style record, it must teach
+    `tools/spec_status.py` to read that record too; otherwise the report
+    stays red for good. (b) Before it edits any shipped package's header,
+    it must first write down the exception to the records convention
+    (DEC-MCO-006, DEC-ZCG-003, DEC-TSS-016), which otherwise forbids
+    exactly that edit. (c) It decides whether the vocabulary gains a
+    "shipped" value that an agent may set at a package's closure, since
+    the drafter is barred only from `APPROVED`; otherwise every correctly
+    closed package branch reads `draft-but-complete`, and any future gate
+    would be red on every closing pull request. Until this lands
+    `make spec-status` exits non-zero by design, and the quiet quarter
+    before any package may make it a gate starts only then. Beside it:
+    H005 reads the header through `parse_spec`'s unanchored `STATUS`,
+    which a waiver comment or prose above the header can set; the report
+    reads the header anchored and with comments blanked, and fixing the
+    rule is an `openspec_graph/` change of its own.
+
 ## Skills / agents
 
 **Per-directory `AGENTS.md`** — **shipped**, all five milestones of

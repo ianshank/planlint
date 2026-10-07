@@ -31,20 +31,20 @@ Three things this directory gets wrong if you are not watching:
   fails the build over it, and a governance tool that pins its own numbers
   argues against its own rule.
 - **No third-party dependencies, ever.** Shared helpers go in
-  [`_common.py`](_common.py). The nine gate scripts are additionally
-  **stdlib-only** and run in a bare CI runner before anything is installed;
-  the five generators and reports (`matcher_accuracy`, `render_mermaid`,
-  `render_plugin_manifests`, `render_rule_catalog`, `stage_citations`) import
-  `openspec_graph` deliberately, to avoid a second copy of logic that would
-  drift, and so need the package installed.
+  [`_common.py`](_common.py). The nine gate scripts are also **stdlib-only**
+  and run in a bare CI runner before anything is installed; the generators
+  and reports (`matcher_accuracy`, `render_mermaid`, `render_plugin_manifests`,
+  `render_rule_catalog`, `stage_citations`, `spec_status`) import
+  `openspec_graph` on purpose, so no second copy of its logic drifts, and
+  `dead_code` imports neither it nor vulture: it runs vulture as a process.
 
 Three argv conventions, and the split is not "argparse or not" — group by
 what `main` expects. Program name first: the five hand-rolled `check_*`
 coverage/docs/thresholds/secrets scripts, plus `matcher_accuracy`,
-`stage_citations`, `diff_spec_graph` and `render_mermaid`, which strip it
-themselves with `parse_args(argv[1:])`. Arguments only: `render_plugin_manifests`,
-`render_rule_catalog`, `check_wheel_metadata`, `check_promotion` and `smoke_wheel`
-(the last three default `argv` to `None`). `run_tool_main`'s `pass_argv0` picks.
+`stage_citations`, `dead_code`, `spec_status`, `diff_spec_graph` and
+`render_mermaid`, which strip it with `parse_args(argv[1:])`. Arguments only:
+`render_plugin_manifests`, `render_rule_catalog`, `check_wheel_metadata`,
+`check_promotion` and `smoke_wheel` (the last three default `argv` to `None`). `run_tool_main`'s `pass_argv0` picks.
 
 Test behaviour in-process against `main(argv)` — a subprocess is invisible to
 coverage. The `python tools/<script>.py` path is covered once for the whole

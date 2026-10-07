@@ -20,6 +20,7 @@ import pytest
 
 from tests.support import (
     env_without_coverage,
+    markdown_section,
     read_pyproject,
     workflow_job_blocks,
 )
@@ -290,9 +291,17 @@ def test_a_suite_job_without_a_coverage_upload_is_named() -> None:
     and so is one whose upload step would be skipped on a red leg."""
     assert _suite_jobs_without_coverage_upload(_PLANTED_SUITE_JOBS) == ["silent", "sometimes"]
 
+#: The heading the CI hooks table sits under in docs/hooks.md.
+_CI_HOOKS_HEADING = "## CI hooks"
+
 def _hooks_ci_table_cells(hooks_text: str) -> list[str]:
-    """The backticked first cell of every row in docs/hooks.md's CI hooks table."""
-    return re.findall(r"^\|\s*`([\w-]+)`", hooks_text, re.MULTILINE)
+    """The backticked first cell of every row in docs/hooks.md's CI hooks table.
+
+    Only the lines between the heading that begins ``## CI hooks`` and the next
+    ``## `` heading are read, so a second table elsewhere in the file -- the
+    reports table, say -- is never read as CI rows (R-RDS-15, DEC-RDS-010)."""
+    section = markdown_section(hooks_text, _CI_HOOKS_HEADING)
+    return re.findall(r"^\|\s*`([\w-]+)`", section, re.MULTILINE)
 
 def _workflow_job_and_file_names() -> tuple[set[str], set[str]]:
     jobs: set[str] = set()
@@ -329,12 +338,42 @@ def test_a_hooks_row_naming_no_job_is_named() -> None:
     a separate workflow file is not."""
     jobs, files = _workflow_job_and_file_names()
     planted = (
+        "## CI hooks (`.github/workflows/`)\n\n"
         "| Job | Trigger | Gate |\n|---|---|---|\n"
         "| `test` (3.10 to 3.14) | push + PR | x |\n"
         "| `gone-job` | push + PR | x |\n"
         "| `release` (separate workflow) | `v*` tag | x |\n"
     )
     assert _hooks_rows_naming_no_job(planted, jobs, files) == ["gone-job"]
+
+_PLANTED_HOOKS_WITH_TWO_TABLES = textwrap.dedent(
+    """\
+    ## Fast local loop
+
+    | Command | Tier |
+    |---|---|
+    | `fast` | unit |
+
+    ## CI hooks (`.github/workflows/`)
+
+    | Job | Trigger | Gate |
+    |---|---|---|
+    | `test` (3.10 to 3.14) | push + PR | x |
+    | `release` (separate workflow) | `v*` tag | x |
+
+    ## Reports, not gates
+
+    | Target | Reads | Exit |
+    |---|---|---|
+    | `dead-code` | the coverage source trees | 0 / 1 / 2 |
+    """
+)
+
+@pytest.mark.unit
+def test_a_second_table_in_hooks_is_not_read_as_ci_rows() -> None:
+    """R-RDS-15, DEC-RDS-010: only the table under the `## CI hooks` heading is
+    read as CI rows; a table before it or after the next `## ` heading is not."""
+    assert _hooks_ci_table_cells(_PLANTED_HOOKS_WITH_TWO_TABLES) == ["test", "release"]
 
 # --- add-github-action-contract: the composite action is actually executed ----
 

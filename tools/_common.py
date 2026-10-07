@@ -11,7 +11,9 @@ import json
 import logging
 import os
 import re
+import shlex
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -498,3 +500,155 @@ def parse_coverage_argv(argv: list[str]) -> tuple[Path, str | None]:
     if scope is not None and not scope.strip():
         raise ValueError("--scope requires a directory name")
     return cov_path, scope
+
+
+# --- The workflow lexer: which make stages a workflow runs by name ------------
+#
+# Moved here from `tools/stage_citations.py` by `report-dead-code-and-spec-status`
+# (R-RDS-24, DEC-RDS-009), because `tools/spec_status.py` reads the same
+# column and shared helpers live in this module. It stays stdlib-only: what a
+# stage is -- `openspec_graph`'s `MAKE_REF` -- is a parameter, `stage_ref`,
+# which every caller passes, so there is one grammar and no package import
+# here. `stage_ref` is a compiled pattern that fullmatches `` `make <word>` ``
+# with the stage in group 1.
+
+WORKFLOW_DIR = Path(".github") / "workflows"
+
+
+class ReportError(Exception):
+    """A precondition failure: the report cannot be produced. Exit 2."""
+
+
+# `run:` is the only workflow key whose value is shell. A step's `name:`, an
+# `if:`, a `with:` argument, a comment -- anything else that happens to contain
+# `make test` -- is data, so only `run:` scalars are read: the inline form,
+# plain or YAML-quoted, and the block forms -- `|` or `>` with their chomping
+# and indentation indicators and an optional trailing comment, or a bare
+# `run:` over an indented plain scalar -- whose body is every following line
+# indented past the key. A folded block (`>`) joins its lines with spaces, as
+# YAML does, so a `make` on its second line is the argument it would be.
+_RUN_KEY = re.compile(r"^(?P<indent>[ \t]*)(?P<marker>-[ \t]+)?run:[ \t]*(?P<rest>.*?)[ \t]*$")
+_BLOCK_INDICATOR = re.compile(r"[|>][-+0-9]*(?:[ \t]+#.*)?")
+_YAML_QUOTED = re.compile(r"""^(?:"((?:[^"\\]|\\.)*)"|'((?:[^']|'')*)')[ \t]*(?:#.*)?$""")
+
+# Shell operators after which the next word is a command: `;`, `&&`, `||`,
+# `|`, `&`, and `(` as in `$(...)`. The lexer hands a run of these over as one
+# token; a run ending in `)` closes a subshell instead, and what follows it is
+# an argument. A `VAR=value` prefix keeps the word after it in command position.
+_SHELL_SEPARATORS = ";&|()"
+_SHELL_ASSIGNMENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def run_scripts(text: str) -> list[str]:
+    """The shell text of every ``run:`` scalar in a workflow file, in order."""
+    lines = text.splitlines()
+    scripts: list[str] = []
+    index = 0
+    while index < len(lines):
+        match = _RUN_KEY.match(lines[index])
+        index += 1
+        if match is None:
+            continue
+        rest = match.group("rest")
+        if rest and not _BLOCK_INDICATOR.fullmatch(rest):
+            quoted = _YAML_QUOTED.match(rest)
+            if quoted is None:
+                scripts.append(rest)
+            elif quoted.group(1) is not None:
+                scripts.append(quoted.group(1))
+            else:
+                scripts.append(quoted.group(2).replace("''", "'"))
+            continue
+        key_column = len(match.group("indent")) + len(match.group("marker") or "")
+        body: list[str] = []
+        while index < len(lines) and (
+            not lines[index].strip() or len(lines[index]) - len(lines[index].lstrip()) > key_column
+        ):
+            body.append(lines[index])
+            index += 1
+        folded = rest.startswith(">")
+        scripts.append(" ".join(line.strip() for line in body) if folded else "\n".join(body))
+    return scripts
+
+
+def _shell_tokens(text: str) -> list[str]:
+    lexer = shlex.shlex(text, posix=True, punctuation_chars=_SHELL_SEPARATORS)
+    lexer.whitespace_split = True
+    lexer.commenters = "#"
+    return list(lexer)
+
+
+def shell_invocations(script: str, *, stage_ref: re.Pattern[str]) -> set[str]:
+    """Stages a shell script invokes as ``make <stage>`` in command position.
+
+    Lexed, not pattern-matched: a quoted string is one word whatever it
+    contains, a ``#`` comment runs to the end of its line, and only the word
+    at a line start or after a separator is a command. A line is lexed on its
+    own unless a quote left open carries the string onto the next line; a
+    quote still open at the end of the script leaves that tail unread, which
+    credits nothing rather than guessing which half of it is data.
+    """
+    stages: set[str] = set()
+    pending = ""
+    for line in script.replace("\\\n", " ").split("\n"):
+        pending = f"{pending}\n{line}" if pending else line
+        try:
+            words = _shell_tokens(pending)
+        except ValueError:
+            continue
+        pending = ""
+        command_start = True
+        for position, word in enumerate(words):
+            if word and all(char in _SHELL_SEPARATORS for char in word):
+                command_start = not word.endswith(")")
+                continue
+            if not command_start or _SHELL_ASSIGNMENT.match(word):
+                continue
+            if word == "make" and position + 1 < len(words):
+                # The caller's stage grammar decides what a stage is, so a
+                # stage credited here is one a spec could cite.
+                cited = stage_ref.fullmatch(f"`make {words[position + 1]}`")
+                if cited is not None:
+                    stages.add(cited.group(1))
+            command_start = False
+    return stages
+
+
+def workflow_invocations(text: str, *, stage_ref: re.Pattern[str]) -> set[str]:
+    """Stages a workflow file invokes directly as ``make <stage>``."""
+    stages: set[str] = set()
+    for script in run_scripts(text):
+        stages |= shell_invocations(script, stage_ref=stage_ref)
+    return stages
+
+
+def workflow_stages(
+    root: Path, only: Sequence[str] = (), *, stage_ref: re.Pattern[str]
+) -> dict[str, set[str]]:
+    """``{workflow file name: stages it invokes}`` for ``.github/workflows/``.
+
+    ``only`` restricts the scan to the named files; a name that does not exist
+    is a precondition failure rather than an empty result, because a typo'd
+    filter would otherwise report every stage as "run by nothing".
+    """
+    directory = root / WORKFLOW_DIR
+    found = sorted(
+        p for p in directory.glob("*") if p.is_file() and p.suffix in {".yml", ".yaml"}
+    ) if directory.is_dir() else []
+    if only:
+        names = {p.name for p in found}
+        missing = sorted(set(only) - names)
+        if missing:
+            raise ReportError(f"no such workflow under {directory}: {', '.join(missing)}")
+        found = [p for p in found if p.name in set(only)]
+    result: dict[str, set[str]] = {}
+    for path in found:
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            # Same contract as an unreadable spec: could-not-run is exit 2,
+            # never a traceback that exits 1.
+            raise ReportError(f"cannot read {path}: {exc}") from exc
+        result[path.name] = workflow_invocations(text, stage_ref=stage_ref)
+        logger.debug("workflow-stages: %s invokes %s", path.name, sorted(result[path.name]))
+    return result

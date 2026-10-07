@@ -16,6 +16,8 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -24,7 +26,7 @@ from tests.support import captured_logger, load_tool, run_tool_main
 TOOL = "smoke_wheel.py"
 
 
-def _tool():  # type: ignore[no-untyped-def]
+def _tool() -> ModuleType:
     return load_tool("smoke_wheel", TOOL)
 
 
@@ -107,7 +109,7 @@ def test_smoke_fails_a_probe_that_crashed_with_the_expected_code(
     tool = _tool()
     dist = _dist(tmp_path, "planlint-1.0-py3-none-any.whl")
 
-    def runner(args):  # type: ignore[no-untyped-def]
+    def runner(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
         if args[-3:] == ["validate", "--fail-on", "ERROR"] and "fixtures/failing" in args:
             return subprocess.CompletedProcess(
                 args, 1, "", "Traceback (most recent call last):\n  ...\nRuntimeError: boom"
@@ -225,9 +227,9 @@ def test_smoke_main_wires_its_arguments(
 ) -> None:
     """The CLI hands ``smoke`` its probes and a venv: a given one, or a fresh temporary one."""
     tool = _tool()
-    seen: dict[str, object] = {}
+    seen: dict[str, Any] = {}
 
-    def fake_smoke(dist, venv, probes, *, python, script):  # type: ignore[no-untyped-def]
+    def fake_smoke(dist: Path, venv: Path, probes: Sequence[Any], *, python: str, script: str) -> int:
         seen.update(dist=dist, venv=venv, probes=probes, python=python, script=script,
                     existed=venv.parent.is_dir())
         return 0

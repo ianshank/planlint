@@ -85,8 +85,7 @@ def test_promotion_config_absent_file_exits_two(
 @pytest.mark.integration
 def test_this_repository_declares_a_readable_topology(tool: ModuleType) -> None:
     """The committed table parses: CI's route job reads it on every run."""
-    tool = tool
-    topology = tool.load_topology(Path(tool.__file__).resolve().parent.parent / "pyproject.toml")
+    topology = tool.load_topology(Path(__file__).resolve().parent.parent / "pyproject.toml")
     assert len({topology.integration, topology.candidate, topology.production}) == 3
 
 

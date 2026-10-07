@@ -203,6 +203,24 @@ it directly. It exits 0 whatever it finds and 2 only when it cannot run. Its
 behaviour is pinned by `tests/test_stage_citations.py`, including an
 invariant run against this repository rather than a snapshot of its counts.
 
+`make dead-code` and `make spec-status` are two more reports of that kind,
+for drift no command showed before (`report-dead-code-and-spec-status`).
+`make dead-code` runs vulture once, as a process, over every
+`[tool.coverage.run] source` tree at `[tool.specgraph]
+dead_code_min_confidence`. `tests/` counts as a user of the code and is never
+reported, so a symbol only a test calls is referenced. Its whitelist,
+`tools/dead_code_whitelist.txt`, is applied by name after the run and caught
+stale twice: an entry that binds nothing fails a test in `make test`, by
+`ast`, and an entry that hides nothing is listed by the report.
+`make spec-status` lists each change package's `Status` headers beside its
+criteria, milestones, CHANGELOG entries and unrun verification stages. It
+raises a finding only where the headers and both in-tree signals point one
+way and contradict them, and it never edits a header. Both exit 0 when
+nothing is listed, 1 when something is and 2 when they cannot run, which is
+planlint's own contract, so promoting either to a gate is composing its target
+and nothing else. `make spec-status` stays red until the follow-up that
+settles the headers lands.
+
 ## Property-based tests
 
 `tests/test_properties.py` states five invariants over the parsers that read

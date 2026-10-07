@@ -58,6 +58,8 @@ Runner = Callable[[Sequence[str]], "subprocess.CompletedProcess[str]"]
 
 @dataclass(frozen=True)
 class Probe:
+    """One console-script invocation and the exit code it must return."""
+
     label: str
     args: tuple[str, ...]
     expected: int
@@ -108,6 +110,7 @@ def parse_expect(raw: str) -> tuple[str, int]:
 
 
 def build_probes(target: str, severity: str, expects: Sequence[tuple[str, int]]) -> list[Probe]:
+    """The three default probes against ``target``, then one ``validate`` per expectation."""
     probes = [
         Probe("version", ("--version",), 0),
         Probe(f"detect {target}", ("--target", target, "detect"), 0),
@@ -202,6 +205,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Parse ``argv`` and smoke the wheel; return 0, 1 or 2 as the module docstring says."""
     args = _parser().parse_args(argv)
     try:
         expects = [parse_expect(raw) for raw in args.expect]

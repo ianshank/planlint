@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import json
 import subprocess
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from types import ModuleType
 
@@ -228,7 +229,7 @@ def test_tag_ancestry_fetch_failure_is_exit_two(tool: ModuleType) -> None:
     """A fetch that fails answers nothing: exit 2, and nothing else is asked."""
     calls: list[list[str]] = []
 
-    def runner(args):  # type: ignore[no-untyped-def]
+    def runner(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
         calls.append(list(args))
         return subprocess.CompletedProcess(args, 128, "", "fatal: no remote")
 
@@ -244,7 +245,7 @@ def test_tag_ancestry_fetches_with_an_explicit_refspec_before_checking(tool: Mod
     """The remote-tracking ref is updated whatever ``remote.<name>.fetch`` says."""
     calls: list[list[str]] = []
 
-    def runner(args):  # type: ignore[no-untyped-def]
+    def runner(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
         calls.append(list(args))
         stdout = "c0ffee\n" if args[1] in ("rev-parse", "rev-list") else ""
         return subprocess.CompletedProcess(args, 0, stdout, "")
@@ -261,8 +262,8 @@ def test_tag_ancestry_fetches_with_an_explicit_refspec_before_checking(tool: Mod
 @pytest.mark.integration
 def test_tag_ancestry_git_errors_are_exit_two(tool: ModuleType) -> None:
     """A rev-list or merge-base that errors is "could not answer", never a verdict."""
-    def failing_at(step: str):  # type: ignore[no-untyped-def]
-        def runner(args):  # type: ignore[no-untyped-def]
+    def failing_at(step: str) -> Callable[[Sequence[str]], subprocess.CompletedProcess[str]]:
+        def runner(args: Sequence[str]) -> subprocess.CompletedProcess[str]:
             if args[1] == step:
                 return subprocess.CompletedProcess(args, 128, "", "fatal: boom")
             stdout = "c0ffee\n" if args[1] == "rev-parse" else "other\n"

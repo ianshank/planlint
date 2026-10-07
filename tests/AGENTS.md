@@ -12,7 +12,7 @@ flowchart TD
         gs["graft_support.py<br/>fixture constants + findings_for"]
         cf["conftest.py<br/>the repo fixture"]
         ws["workflow_support.py<br/>workflow readers, never asserting"]
-        xs["action_support.py · shape_support.py<br/>Action runner simulator · tier criterion"]
+        xs["action_support.py · shape_support.py · ratchet_support.py<br/>Action runner simulator · tier criterion · ratchet helpers"]
     end
     subgraph subject["split by subject, not by source module"]
         d["test_graft_detection.py"]
@@ -49,9 +49,9 @@ repository — the agent-artifact gates exclude them by prefix for that reason.
 
 `python -m pytest -m unit` is the fast tier. Run `make test`; it measures
 both trees in one run and reads each floor scoped, so one tree's headroom
-never hides the other's regression.
-`make coverage-tools` re-reads `tools/` from the same report. The
-`planlint-verifier` subagent runs the whole ladder.
+never hides the other's regression. `make coverage-tools` re-reads `tools/` from
+the same report, and the `planlint-verifier` subagent runs the whole ladder.
+`make typecheck` covers this directory, and a new occurrence of an exempted mypy code, or a new inline ignore, fails `test_static_ratchets.py`.
 
 Precedence: where this disagrees with the operating contract in
 [`SKILL.md`](../skills/planlint-spec-governance/SKILL.md), `SKILL.md` wins;

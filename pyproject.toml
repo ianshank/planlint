@@ -166,6 +166,19 @@ tools_branch_fail_under = 91
 # once the list is empty on every leg.
 per_file_line_min = 85
 
+# The reporting threshold for `make dead-code`: vulture's confidence for an
+# unused function, method, class, property, attribute or variable. Read by
+# `tools/dead_code.py`, which passes it to vulture on the command line; it is
+# a reporting threshold and gates nothing (DEC-PM-011's posture, as
+# `per_file_line_min` above). Not the reflection plan's 80: vulture rates
+# every unused definition at this level, imports at 90 and only unreachable
+# code and unused arguments at 100, so at 80 the report lists nothing over
+# `openspec_graph/` and `tools/` (report-dead-code-and-spec-status,
+# DEC-RDS-002). There is deliberately no `[tool.vulture]` table: vulture reads
+# one from its working directory and would apply its keys to the report's own
+# run, which must see every finding to say which whitelist entry is stale.
+dead_code_min_confidence = 60
+
 # Bounds for every `timeout-minutes` literal in `.github/workflows/*.yml`,
 # enforced by tests/test_workflow_posture.py through
 # `_common.read_pyproject_int` -- one integer per key, which is why two keys
@@ -263,13 +276,28 @@ enforce_routes = "false"
 # `[project] dependencies` stays empty (see its own comment), and a property
 # test is a contributor/CI tool, never something an adopter installing the CLI
 # should be made to carry.
+#
+# `vulture` is run by `tools/dead_code.py` (`make dead-code`), as a process,
+# and is dev-only like `hypothesis`. It is floored, not pinned, and not bare
+# (report-dead-code-and-spec-status, DEC-RDS-001): exit code 3 means "dead
+# code found" only from 2.9 (before it, dead code and invalid input both exit
+# 1, so the report would read every finding as "could not run"), and Python
+# 3.14, in the support window, is supported from 2.15. `pip install -e
+# ".[dev]"` leaves an installed package that satisfies a bare requirement
+# alone, so a bare entry lets an old install stay old; a floor still resolves
+# the latest release on every fresh install and, unlike a pin, needs no
+# update bot.
 dev = [
     "pytest",
     "pytest-cov",
     "ruff",
-    "mypy",
+    # A floor, never a pin: 1.11 is the first mypy release with `-O json`, the
+    # output tests/test_static_ratchets.py reads to count each code under
+    # tests/ (ratchet-test-types-and-docstrings R-TDR-16, DEC-TDR-014).
+    "mypy>=1.11",
     "build",
     "hypothesis",
+    "vulture>=2.15",
     "tomli; python_version < \"3.11\"",
 ]
 
@@ -283,9 +311,12 @@ line-length = 100
 # like a gate and is not, which is the same class of defect this project
 # exists to catch in other people's repositories.
 #
-# Chosen for signal over volume: every family here was at or near zero
-# violations when it was turned on, so each one locks in a property the code
-# already has rather than starting a cleanup backlog.
+# Chosen for signal over volume: every family here but one was at or near
+# zero violations when it was turned on, so each locks in a property the code
+# already has rather than starting a cleanup backlog. The one selection made
+# with a backlog is D100-D103, held by the per-file ratchet entries below: the
+# "ratchet first" step of select-zero-cost-guards' DEC-ZCG-012, which gates
+# with no entry left once the count reaches zero.
 select = [
     "E4", "E7", "E9", "F",  # ruff's defaults, kept explicit
     "I",    # import sorting -- the diff-noise class no reviewer should arbitrate
@@ -301,6 +332,21 @@ select = [
     "N",    # PEP 8 naming
     "RUF",  # ruff's own checks, incl. unused-noqa
     "T201", # `print` outside the two places stdout is the product (below)
+    # Public docstrings -- a module, class, method or function of the package
+    # and tools/ -- held by the per-file ratchet entries below
+    # (ratchet-test-types-and-docstrings R-TDR-8). No `pydocstyle` convention
+    # is set, because none changes these four rules' verdicts: the sorted
+    # concise output of `python -m ruff check --isolated --select
+    # D100,D101,D102,D103 [--config 'lint.pydocstyle.convention = "<c>"']
+    # openspec_graph tools tests` is one finding set, 661 findings, under no
+    # convention and under each of google, numpy and pep257 (at 6649ca1).
+    # Google fits the existing docstrings best, as a fit and not a convention
+    # they follow: of the wider family, `python -m ruff check --isolated
+    # --select D --ignore D100,D101,D102,D103,D104,D105,D106,D107 --config
+    # 'lint.pydocstyle.convention = "<c>"' openspec_graph tools --statistics`
+    # reads 37 under google and 67 under numpy and pep257. The change that
+    # selects a convention-sensitive rule sets the convention with it (R-TDR-10).
+    "D100", "D101", "D102", "D103",
 ]
 # Deliberately NOT selected, each for a stated reason rather than by omission:
 #   E501  -- the line-length limit above is real but currently unmet in ~100
@@ -316,7 +362,12 @@ select = [
 #            below. Everywhere else a `print` is a debugging leftover, and a
 #            library module that prints would corrupt the CLI's `--json`
 #            output -- so the rule keeps `print` where it belongs.
-#   ANN/D -- annotation and docstring coverage in tests; large, low-yield.
+#   ANN   -- annotation coverage: mypy's `no-untyped-def`, under `strict`, is
+#            the annotation check, and a second one could only disagree with it.
+#   D     -- beyond D100-D103: those four are selected by per-file ratchet for
+#            the package and tools/, and tests/ is exempt from them because a
+#            test's name is its documentation. The rest of the family is
+#            formatting debt for the change that selects it with a convention.
 #   PL    -- Pylint refactor heuristics; opinions, not defects.
 
 [tool.ruff.lint.per-file-ignores]
@@ -324,9 +375,48 @@ select = [
 # `T201` is exempted in exactly two places -- the CLI and the gate scripts --
 # because their stdout is the product; `tests/*` is deliberately not one of
 # them (a test that needs to say something puts it in the assertion message).
-"openspec_graph/cli.py" = ["T201"]
-"tests/*" = ["S101", "S603", "S607"]
+# `D100`-`D103` are exempted under `tests/*` by policy, not by ratchet: a test's
+# name is its documentation (ratchet-test-types-and-docstrings DEC-TDR-008).
+"openspec_graph/cli.py" = ["T201", "D103"]
+"tests/*" = ["S101", "S603", "S607", "D100", "D101", "D102", "D103"]
 "tools/*" = ["S603", "S607", "INP001", "T201"]
+# The docstring ratchet (ratchet-test-types-and-docstrings R-TDR-8, R-TDR-9):
+# one entry per file of the package and tools/ that lacked a public docstring
+# when D100-D103 were selected, listing exactly its codes (cli.py's D103 joins
+# its T201 entry above). Each code's finding count in its file is held exactly
+# by DOCSTRING_CEILINGS in tests/test_static_ratchets.py, counted by ruff with
+# no configuration file, no ignore file and no `noqa` honoured. An entry
+# leaves in the pull request that documents its file, and none is ever added;
+# no D code goes under a glob, in extend-per-file-ignores, or in a `noqa`.
+"openspec_graph/delta.py" = ["D102"]
+"openspec_graph/detect.py" = ["D101", "D102", "D103"]
+"openspec_graph/ledger.py" = ["D101", "D102"]
+"openspec_graph/machinery.py" = ["D103"]
+"openspec_graph/parse.py" = ["D103"]
+"openspec_graph/parse_harness.py" = ["D103"]
+"openspec_graph/parse_model.py" = ["D101", "D102"]
+"openspec_graph/parse_semantics.py" = ["D103"]
+"openspec_graph/parse_speckit.py" = ["D103"]
+"openspec_graph/parse_upstream.py" = ["D103"]
+"openspec_graph/report.py" = ["D102"]
+"openspec_graph/rule_types.py" = ["D101", "D102"]
+"openspec_graph/rules.py" = ["D103"]
+"openspec_graph/scaffold.py" = ["D101", "D102", "D103"]
+"openspec_graph/scaffold_templates.py" = ["D103"]
+"openspec_graph/thresholds.py" = ["D102"]
+"openspec_graph/witness.py" = ["D102", "D103"]
+"tools/check_branch_coverage.py" = ["D103"]
+"tools/check_coverage_floor.py" = ["D103"]
+"tools/check_docs.py" = ["D103"]
+"tools/check_no_hardcoded_thresholds.py" = ["D103"]
+"tools/check_secrets.py" = ["D103"]
+"tools/check_wheel_metadata.py" = ["D103"]
+"tools/diff_spec_graph.py" = ["D103"]
+"tools/matcher_accuracy.py" = ["D102", "D103"]
+"tools/render_mermaid.py" = ["D103"]
+"tools/render_plugin_manifests.py" = ["D103"]
+"tools/render_rule_catalog.py" = ["D103"]
+"tools/stage_citations.py" = ["D102", "D103"]
 
 [tool.mypy]
 # `strict` subsumes the flags this table used to list one by one
@@ -341,4 +431,40 @@ select = [
 python_version = "3.10"
 strict = true
 warn_unreachable = true
-files = ["openspec_graph", "tools"]
+# The one list of checked trees: `make typecheck` names this file and passes no
+# path, and a path on the command line would override this list
+# (ratchet-test-types-and-docstrings DEC-TDR-001).
+files = ["openspec_graph", "tools", "tests"]
+# Neither tests/ nor tools/ is a package. Without explicit bases mypy names
+# tests/graft_support.py both `graft_support` and `tests.graft_support` and
+# stops ("Source file found twice under different module names", exit 2).
+# Explicit bases alone root every module at the repository and rename
+# tools/_common.py to `tools._common`, which no gate script imports: `python -m
+# mypy openspec_graph tools --explicit-package-bases` reported 19 errors in 12
+# files. `tools` on the search path is the static form of how the scripts run
+# (`python tools/<script>.py` puts their directory first on sys.path), and with
+# it that run reports none (DEC-TDR-002).
+explicit_package_bases = true
+mypy_path = "tools"
+
+# The per-code baseline for tests/ (ratchet-test-types-and-docstrings): the
+# codes too numerous to fix in one change, disabled for the test modules alone.
+# Every other code is enforced there under the strict configuration above. Each
+# listed code is held to an exact count by MYPY_TESTS_CEILINGS, and every inline
+# ignore under tests/ is a recorded waiver in MYPY_WAIVERS, both in
+# tests/test_static_ratchets.py. A code leaves this list in the commit that
+# fixes its last occurrence, and this entry leaves in the commit that empties
+# the list; no code is ever added (R-TDR-2, R-TDR-4).
+[[tool.mypy.overrides]]
+module = "tests.*"
+disable_error_code = [
+    "no-untyped-def", "attr-defined", "arg-type", "type-arg", "no-any-return", "index", "union-attr",
+]
+
+# `tomli` is installed only where the dev extra's marker puts it, the 3.10 leg,
+# while mypy at `python_version = "3.10"` reads tests/support.py's `tomli`
+# branch on every leg. This keeps that import's verdict the same with and
+# without it, with no inline ignore whose use would flip by leg (R-TDR-6).
+[[tool.mypy.overrides]]
+module = "tomli"
+ignore_missing_imports = true

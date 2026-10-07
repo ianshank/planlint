@@ -125,6 +125,7 @@ class Topology:
         return None
 
     def head_may_target(self, base: str, head: str) -> bool:
+        """Whether a pull request from ``head`` may target ``base`` under the route rules."""
         if base == self.production:
             # A hotfix branch must name something after the prefix: a head
             # called exactly the prefix is not a hotfix.
@@ -136,6 +137,7 @@ class Topology:
         return True
 
     def as_roles(self) -> dict[str, str]:
+        """Role -> configured value, in :data:`ROLE_KEYS` order."""
         return {role: getattr(self, role) for role in ROLE_KEYS}
 
 
@@ -189,6 +191,8 @@ def load_topology(pyproject: Path) -> Topology:
 
 @dataclass(frozen=True)
 class RouteVerdict:
+    """One run's route decision: allowed or not, whether the release tier runs, and why."""
+
     allowed: bool
     release_tier: bool
     target: str
@@ -481,6 +485,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run one subcommand; return its exit code (0 pass, 1 the gate fired, 2 could not run)."""
     args = _parser().parse_args(argv)
     pyproject = args.pyproject or repo_root() / "pyproject.toml"
 
