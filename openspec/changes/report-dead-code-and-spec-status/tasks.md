@@ -1,12 +1,16 @@
 # Tasks: report-dead-code-and-spec-status
 
-Measured at `1c8917c` (the head of `claude/m2-report-targets`, stacked on the
-unmerged PR #42, `shape-the-test-suite`), 2026-10-07. `openspec_graph/`, the
-`Makefile` and every `tools/` script except one docstring line of
-`tools/_common.py` are byte-identical to `f7118a0` (`main`, the squash of #41),
-by `diff -rq` over the two checkouts. The round-1 corrections were measured at
-`114754c`, this package's first draft, the same day. Every line number below
-is re-checked against the branch head before the milestone that uses it; a
+Measured at `1c8917c` (the head of `claude/m2-report-targets` at drafting,
+stacked on the unmerged PR #42, `shape-the-test-suite`), 2026-10-07.
+`openspec_graph/`, the `Makefile` and every `tools/` script except one
+docstring line of `tools/_common.py` are byte-identical to `f7118a0` (`main`,
+the squash of #41), by `diff -rq` over the two checkouts at `1c8917c`. The
+round-1 corrections were measured at `114754c`, this package's first draft,
+and the round-2 corrections at `1c6b8b8`, the same day. The only changes
+since `1c8917c` are this package's own two commits and the merge of #42's
+head, `92077b5`, which is `1c6b8b8`; that merge moved the suite's routing and
+loop guards into `tests/test_suite_routing.py`. Every line number below is
+re-checked against the branch head before the milestone that uses it; a
 sibling package landing first may move a line without moving the fact. Every
 number here names the command that produced it.
 
@@ -32,10 +36,9 @@ At `1c8917c`:
   - `python -m vulture openspec_graph tools tests --min-confidence 60` prints
     9 lines (exit 3), 7 of them under the two reported trees, in 0.82 s
     timed through `subprocess`.
-- **Status headers.** `grep -l "Status:\*\* DRAFT"
-  openspec/changes/*/specs/*/spec.md | wc -l` prints 25 and the `APPROVED`
-  form 26. `grep -h "^## Milestone" openspec/changes/*/tasks.md | grep -c
-  "\[DONE\]"` prints 136.
+- **Milestones.** `grep -h "^## Milestone" openspec/changes/*/tasks.md | grep
+  -c "\[DONE\]"` prints 136. The header counts are re-measured, anchored, at
+  `1c6b8b8` below.
 - **The comparison.** A one-off, read-only reading of R-RDS-11's definitions
   (not committed) found:
   - `draft-but-complete`: 9;
@@ -46,6 +49,21 @@ At `1c8917c`:
 - **Coverage.** The checkout's `coverage.json` reads `tools/` 946/981 lines
   and 323/344 branches, and `openspec_graph/` 2276/2292 and 744/762, against
   floors 94/91 and 97/95.
+
+At `1c6b8b8`:
+
+- **The gate.** `planlint --target . validate --fail-on ERROR` exits 0 over
+  52 specs, 0 error / 0 warn / 0 info. `planlint --target . detect` reads 51
+  change packages and 23 make targets. `python tools/stage_citations.py`
+  reads 52 specs, 16 stages cited, 12 on a verification line, and the same
+  six invoked by no scanned workflow.
+- **Status headers.** `grep -l "^> \*\*Status:\*\* DRAFT"
+  openspec/changes/*/specs/*/spec.md | wc -l` prints 26 and the `APPROVED`
+  form 26, over 52 specs (`ls openspec/changes/*/specs/*/spec.md | wc -l`),
+  this package's own `DRAFT` spec among them. The grep is anchored on the
+  header's shape: unanchored, the `APPROVED` form prints 27, because this
+  package's spec quotes the phrase in prose. (At `1c8917c` the unanchored
+  form printed 25 and 26 over 51, before this spec existed.)
 
 The order is DEC-RDS-011 and R-RDS-19's: measure; extend the report-target
 guard and scope the CI-table reader; move the workflow lexer into `_common`
@@ -199,12 +217,137 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   - `python -m pytest tests/test_spec_test_citations.py -q -p
     no:cacheprovider`: exit 0.
 
+**Recorded (round-2 corrections, 2026-10-07):**
+
+- *Before the edit.* `planlint --target . validate --fail-on ERROR` at
+  `1c6b8b8`, the merge of #42's head `92077b5` into this branch: exit 0, 52
+  specs, 0 error / 0 warn / 0 info.
+- *Round-2 adversarial review.* The spec-adversary's second pass reviewed the
+  round-1 revision and found three medium and five low findings; one low
+  finding is joined by a Copilot finding on PR #43. The session lead decided
+  each resolution, and all are applied here and in the proposal and spec,
+  before any implementation. Ids are kept where the meaning survived. No id
+  is added: every resolution amends an existing requirement, decision or
+  criterion.
+  - *MEDIUM — a comment could still set the anchored header.* `SUPPRESS`
+    matches across lines, so a waiver's reason, or a commented-out old
+    header, could put a line beginning `> **Status:**` inside the header
+    block. Resolved:
+    - Before matching, the reader blanks every HTML comment, across lines and
+      keeping the newlines so line structure survives. Only then does it find
+      the header block and match. A proposal's status line is read the same
+      way (R-RDS-9, R-RDS-23, DEC-RDS-014).
+    - AC-RDS-7 gains both planted cases, and both read `DRAFT`: a `DRAFT`
+      header under a waiver whose reason carries such a line, and a
+      commented-out old `APPROVED` header above a `DRAFT` one.
+    - Milestone 3 plans them as
+      `test_a_status_line_inside_a_comment_is_never_the_header`, with a third
+      case for the proposal line.
+  - *MEDIUM — the agreement test was an undeclared gate on header form.* It
+    is kept on the real tree and scoped:
+    - It compares case-insensitively, the anchored word upper-cased against
+      `parse_spec(...).status`.
+    - It compares only the specs where the anchored reader found a header
+      and the header block holds no comment, which is where the two readers
+      must agree.
+    - R-RDS-23 says the test guards against drift in the anchored reader,
+      and that header form stays a report finding (R-RDS-11), never a test
+      failure. DEC-RDS-014 and AC-RDS-7 match.
+    - The planned test is renamed
+      `test_the_header_reader_agrees_with_parse_spec_on_every_uncommented_real_header`.
+      It asserts that it compared at least one spec, so an empty scope cannot
+      pass it.
+  - *MEDIUM — the hand-off could not turn the report green as written.*
+    R-RDS-22's list, the `docs/next-steps.md` item text in Milestone 4,
+    DEC-RDS-008's consequences and AC-RDS-22 gain three items:
+    - (a) a status recorded anywhere but the `Status` header, such as a
+      supersession-style record, must be taught to `tools/spec_status.py`,
+      or the report stays red for good;
+    - (b) before any shipped package's header is edited, the exception to the
+      records convention (DEC-MCO-006, DEC-ZCG-003, DEC-TSS-016) is written
+      down first;
+    - (c) the follow-up decides whether the vocabulary gains a "shipped"
+      value an agent may set at a package's closure, since the drafter is
+      barred only from `APPROVED`. Otherwise every correctly closed package
+      branch reads `draft-but-complete`, and any future gate would be red on
+      every closing pull request.
+
+    The proposal's What Changes and Non-Goals match, and so does Milestone
+    5's hand-off.
+  - *LOW — "stays red" was missing from two documents.* R-RDS-15 (the
+    docs/hooks.md reports section) and R-RDS-17 (the CHANGELOG entry) now
+    require the sentence that the spec-status report stays red until
+    `settle-package-status-headers` lands. AC-RDS-12 and AC-RDS-18 match.
+    Milestone 4 puts the sentence in the spec-status row, in the paragraph
+    under the table and in the CHANGELOG bullet.
+  - *LOW — the lexer move's imports, joined by Copilot on PR #43.* R-RDS-24,
+    DEC-RDS-009, AC-RDS-21 and Milestone 2 now say:
+    - `tools/stage_citations.py` imports from `_common` only the names it
+      uses. It re-exports `run_scripts` as
+      `from _common import run_scripts as run_scripts`, because its tests
+      reach it as `sc.run_scripts`. It drops the now-unused `re` import, so
+      `ruff check tools` stays clean.
+    - The moved debug line takes a neutral label, `workflow-stages:`, not
+      `stage-citations:`, because `spec_status` logs through it too.
+    - *Copilot finding on #43 (verified by the session lead):*
+      `shell_invocations` is a public name of `stage_citations`
+      (`tools/stage_citations.py:165`). The promise to keep public names and
+      call shapes therefore also covers a `shell_invocations(script)`
+      wrapper that passes `MAKE_REF`. It is documented beside the
+      `workflow_invocations(text)` and `workflow_stages(root, only=())`
+      wrappers.
+  - *LOW — stale references since the merge of `92077b5`.* Resolved:
+    - `MAX_TEST_MODULE_LINES` is named without a line number.
+    - The "only change since" sentence, in the proposal and above, names the
+      merge.
+    - Milestone 1's suite-shape command also runs
+      `tests/test_suite_routing.py`, and Milestones 2 and 3, which plant
+      roots and specs, run both modules. AC-RDS-15 names each guard's module.
+    - The header-count grep is anchored on `^> \*\*Status:\*\*` everywhere
+      it appears, with the figure at `1c6b8b8`. The spec's evidence and
+      DEC-RDS-008's reason 4 use it.
+  - *LOW — edge cases of `detect.profile(root).change_dirs`.* The Non-Goals
+    say that an `archive/` directory under `openspec/changes/` counts as one
+    package and reports as `header-unrecognised`. They say the packages
+    archived inside it are not seen, and that reading archives belongs to
+    W8.2. An `openspec/changes/` holding no package exits 2 with a message,
+    consistent with DEC-RDS-005's refusal to read emptiness as clean
+    (R-RDS-12, DEC-RDS-006, AC-RDS-8). It is planted in
+    `test_spec_status_exits_two_when_it_cannot_run`.
+  - *LOW — reading `spec.md`.* A `spec.md` is read as `parse_spec` reads it,
+    `utf-8-sig` with undecodable bytes replaced, so the report never refuses
+    a spec that `validate` accepts. R-RDS-12's undecodable clause no longer
+    names `spec.md`; an `OSError` on it still exits 2. DEC-RDS-013 and
+    AC-RDS-8 match.
+- *Found while applying them.*
+  - `openspec_graph.parse_semantics.blank_html_comments` (`:599`) already
+    blanks every HTML comment with newlines kept, and the speckit rules read
+    through it (`openspec_graph/rules_speckit.py:111`). R-RDS-23 names it as
+    the blanking, so there is one comment grammar and no second copy in
+    `tools/`. Like it, the reader blanks a comment only where the comment
+    closes; DEC-RDS-014 records that limit.
+  - The blanking runs before the end of the header block is found, so a
+    `## ` line inside a comment cannot end the block early.
+  - `shlex`, like `re`, is used in `tools/stage_citations.py` only by the
+    moved lexer (lines 50 and 51 at `1c6b8b8`). R-RDS-24 drops both, since
+    either left behind fails `ruff check tools` alike.
+  - `stage_citations.py` no longer imports `WORKFLOW_DIR`: only the moved
+    `workflow_stages` uses it, and no test reaches `sc.WORKFLOW_DIR`.
+  - In the proposal, `:226` after `tools/_common.py:146` read as a line of
+    `_common`. It is `pyproject.toml`'s `[tool.specgraph.action_major_floors]`
+    header. The reader's own stop is `tools/_common.py:171`, now cited so.
+  - A one-off read-only script at `1c6b8b8`, not committed, read every
+    `spec.md` with R-RDS-23's reader. No header block holds a comment, and
+    the scoped comparison agrees on all 52.
+  - AC-RDS-22 lists what the item says, so it gains (a)–(c) with R-RDS-22.
+
 ## Milestone 0 — Grounding pass at the branch head
 
 - Re-run the gate and record its exit code before the first edit under
   `openspec/`: `planlint --target . validate --fail-on ERROR`. The drafting
   value is exit 0 over 51 specs at `1c8917c` before this draft, and 52 at
-  `114754c` with it. Re-read the count here; it moves with every sibling.
+  `114754c` and at `1c6b8b8` with it. Re-read the count here; it moves with
+  every sibling.
 - Re-measure vulture at the branch head, from the repository root, and record
   each command, exit code and full output:
   - `python -m vulture --version` and `python -m pip index versions
@@ -229,13 +372,19 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   reference that appeared since drafting moves that symbol off the dead-code
   list and is recorded, not argued with.
 - Re-measure the status evidence:
-  - the two `grep -l "Status:\*\* <WORD>"` counts;
+  - the two anchored header counts,
+    `grep -l "^> \*\*Status:\*\* <WORD>" openspec/changes/*/specs/*/spec.md | wc -l`
+    for `DRAFT` and `APPROVED`. The anchor matters: an unanchored grep also
+    counts this package's own spec, whose prose quotes the phrase;
   - `grep -n "^> \*\*Status:" openspec/changes/*/proposal.md`;
   - the `[DONE]` count;
   - the CHANGELOG entries in the two shapes, by
     `grep -nE '^### .*\(`[a-z0-9-]+`\)$|^- \*\*`[a-z0-9-]+`\.?\*\*' CHANGELOG.md`;
   - `grep -l "(BLOCKING)" openspec/changes/*/specs/*/spec.md`, which printed
-    nothing at drafting.
+    nothing at drafting;
+  - whether any spec's header block holds an HTML comment, and whether
+    `openspec/changes/` holds an `archive/` directory. Neither did at
+    `1c6b8b8`.
 - Re-read the sites the guards and the move touch, and note any line that
   moved:
   - `tests/test_ci_makefile.py` 44–57 and 275–293 (the two report-target
@@ -249,18 +398,20 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
     `PermissionError` at 223–239);
   - `tests/test_enterprise.py:482`, `test_common_module_is_stdlib_only`;
   - `tests/support.py:48`, `supports_symlinks`;
-  - `tests/test_suite_shape.py:49`, `MAX_TEST_MODULE_LINES`;
+  - `MAX_TEST_MODULE_LINES` in `tests/test_suite_shape.py`, and the routing
+    and loop guards in `tests/test_suite_routing.py`;
   - `tests/test_agent_artifacts.py:454`, `MAX_NESTED_LINES`;
-  - `tools/stage_citations.py` 56–88 and 109–236 (the lexer and its
-    patterns), and `tools/_common.py` 146–181 and 262–300;
-  - `openspec_graph/parse.py:156` and `:168`, `parse_semantics.py:16`,
-    `detect.py:707–715`;
+  - `tools/stage_citations.py` 46–63 (its imports), 56–88 and 109–236 (the
+    lexer and its patterns) and 235 (the debug line's label), and
+    `tools/_common.py` 146–181 and 262–300;
+  - `openspec_graph/parse.py:119`, `:156` and `:168`; `parse_semantics.py:16`,
+    `:51`, `:575` and `:599`; `rules_speckit.py:111`; `detect.py:707–715`;
   - `Makefile` 1 (`.PHONY`), 13–14 (`help`), 45, 79, 82, 91 and 94;
   - `pyproject.toml` 38, 69, 130, 167, 226 and 235–252;
   - `docs/hooks.md` 48, 69–82 and 142;
   - `docs/aqa.md` 193–199;
   - `docs/architecture/c4.md:80`;
-  - `docs/next-steps.md` 320–336 (items 21–23, and whether item 24 is
+  - `docs/next-steps.md` 320–338 (items 21–23, and whether item 24 is
     present);
   - `tools/AGENTS.md` 29–45.
 
@@ -330,7 +481,7 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   `integration` for a test that reads the real `Makefile` or docs, and
   whatever the criterion says for a test that only calls a helper on a
   planted string. Run
-  `python -m pytest tests/test_suite_shape.py tests/test_ci_makefile.py tests/test_ci_workflow.py -q`
+  `python -m pytest tests/test_suite_shape.py tests/test_suite_routing.py tests/test_ci_makefile.py tests/test_ci_workflow.py -q`
   and record. If the criterion disagrees with a mark, the mark moves, never
   the criterion.
 - **Gate:** `make test`
@@ -349,19 +500,38 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
     keyword-only `stage_ref: re.Pattern[str]`, the compiled pattern that
     fullmatches `` `make <word>` `` with the stage in group 1. It replaces
     the `MAKE_REF` import, and `_common` imports `shlex` and nothing outside
-    the standard library. The debug line keeps its text.
-  - `tools/stage_citations.py` imports `ReportError`, `WORKFLOW_DIR` and
-    `run_scripts` from `_common`. It keeps `workflow_invocations(text)` and
-    `workflow_stages(root, only=())` as one-line bindings that pass
-    `stage_ref=MAKE_REF`. Its docstring says where the lexer now lives.
+    the standard library. The debug line in `workflow_stages` takes the
+    neutral label `workflow-stages:` in place of `stage-citations:`, because
+    `spec_status` logs through it too. That is the move's one change of
+    text, and it is on the logger, not in the output the diff compares.
+  - `tools/stage_citations.py` imports from `_common` only the names it uses:
+    - `logger` and `repo_root`, as today, and `ReportError`, which
+      `spec_files`, `build_rows` and `main` still raise or catch;
+    - `run_scripts`, re-exported in the redundant alias form,
+      `from _common import run_scripts as run_scripts`, because
+      `tests/test_stage_citations.py` reaches it as `sc.run_scripts`;
+    - the three lexer functions it wraps, under private aliases, so its own
+      names stay the wrappers.
+
+    It keeps `shell_invocations(script)`, `workflow_invocations(text)` and
+    `workflow_stages(root, only=())` as one-line wrappers that pass
+    `stage_ref=MAKE_REF`, documented together in one comment or docstring
+    that says where the lexer now lives. It does not import `WORKFLOW_DIR`,
+    which only the moved code uses. It drops `import re` and `import shlex`,
+    which only the moved lexer used.
   - Run `python -m pytest tests/test_stage_citations.py -q` unedited and
     `python -m pytest tests/test_enterprise.py -q -k
     test_common_module_is_stdlib_only`, and record both green.
+  - Record that the wrapper nobody's test reaches still answers:
+    `python -c "import sys; sys.path.insert(0, 'tools'); import stage_citations as sc; print(sorted(sc.shell_invocations('make test && echo make lint')))"`
+    prints `['test']`.
   - Capture after, as before, then `diff before.txt after.txt` and
     `diff before.json after.json`. Record both exit codes and that both
     diffs are empty; a non-empty diff is a regression, fixed before
     anything else lands.
-  - Run `ruff check tools` and `mypy tools`, and record both clean.
+  - Run `ruff check tools` and `mypy tools`, and record both clean. An
+    unused-import finding in `tools/stage_citations.py` is the move left
+    half-done, not a warning to waive.
 - `tests/test_dead_code.py` (new), written before the script and run red
   (R-RDS-1 to R-RDS-7, R-RDS-19). In-process through `load_tool` /
   `run_tool_main`, against roots planted under `tmp_path` — a
@@ -443,7 +613,10 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   `integration` by the criterion, except any that only exercise a helper on
   planted text, which take what the criterion computes. Record the red run:
   `FileNotFoundError` from `load_tool` before the script exists. Then
-  `wc -l tests/test_dead_code.py` against `MAX_TEST_MODULE_LINES`.
+  `wc -l tests/test_dead_code.py` against `MAX_TEST_MODULE_LINES`, and run
+  `python -m pytest tests/test_suite_shape.py tests/test_suite_routing.py -q`
+  and record it green: the tier, line-bound and routing guards over the new
+  module.
 - `tests/test_ci_makefile.py`: add `dead-code` to
   `test_every_report_target_stays_out_of_the_ladder`'s required set and run
   it red ("dead-code is not a report target") before the target exists.
@@ -558,14 +731,31 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
     - no `spec.md` at all.
   - `test_a_status_line_outside_the_header_block_is_never_the_header`
     (R-RDS-23, DEC-RDS-014), parametrised:
-    - a waiver comment carrying `**Status:** APPROVED` above a `DRAFT`
-      header: the header column reads `DRAFT`;
+    - a single-line waiver comment carrying `**Status:** APPROVED` above a
+      `DRAFT` header: the header column reads `DRAFT`;
     - no header, `**Status:** APPROVED` in prose: `header-unrecognised`;
     - no header, `**Status:** DRAFT` only inside a fenced code example
       after the first `## ` heading: `header-unrecognised`.
-  - `test_the_header_reader_agrees_with_parse_spec_on_every_real_spec`
-    (R-RDS-23): for every `spec.md` under the real `openspec/changes/`, the
-    script's header reader equals `parse_spec(path, dialect).status`.
+  - `test_a_status_line_inside_a_comment_is_never_the_header` (R-RDS-23,
+    DEC-RDS-014), parametrised:
+    - a waiver whose reason spans lines, one of them
+      `> **Status:** APPROVED`, above a `DRAFT` header: reads `DRAFT`;
+    - a commented-out old header — the comment's opening, the line
+      `> **Status:** APPROVED`, and its close, each on a line of its own —
+      above a `DRAFT` header: reads `DRAFT`;
+    - in a planted `proposal.md`, a commented-out `> **Status: implemented.**`
+      above `> **Status: proposed.**`: the proposal column reads `proposed`.
+
+    Each planted spec goes through `write_spec`; the comment is part of the
+    text it is given.
+  - `test_the_header_reader_agrees_with_parse_spec_on_every_uncommented_real_header`
+    (R-RDS-23): for every `spec.md` under the real `openspec/changes/` whose
+    header block holds no HTML comment and in which the script's
+    `read_header` finds a header, `read_header(text).upper()` equals
+    `parse_spec(path, dialect).status`. A spec outside that scope is skipped,
+    never failed: a header in an unexpected form is the report's finding
+    (R-RDS-11), not this test's. The test asserts that it compared at least
+    one spec, so an empty scope cannot pass it.
   - `test_a_symlinked_alias_of_a_package_is_one_row` (R-RDS-10): a planted
     package and a directory symlink to it under `openspec/changes/` give one
     row. Decorated `pytest.mark.skipif(not supports_symlinks(), …)`.
@@ -577,11 +767,13 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   - `test_the_workflow_column_names_verification_stages_no_workflow_runs`.
   - `test_spec_status_exits_two_when_it_cannot_run`, parametrised (R-RDS-12):
     - no `openspec/changes/`;
+    - an `openspec/changes/` that holds no package;
     - an undecodable `proposal.md`, `tasks.md` or `CHANGELOG.md`;
     - an unreadable `spec.md` or `tasks.md` (an injected `PermissionError`).
 
-    Each asserts exit 2, no `Traceback`, and the file named. No planted
-    `spec.md` is undecodable, for DEC-RDS-013's reason.
+    Each asserts exit 2, no `Traceback`, and the file or directory named. No
+    `spec.md` decode case is planted: a `spec.md` is read with undecodable
+    bytes replaced, as `parse_spec` reads it (DEC-RDS-013).
   - `test_absent_changelog_and_workflows_are_empty_columns_not_failures`.
   - `test_spec_status_imports_only_the_standard_library_common_and_openspec_graph`
     (C-RDS-8): every import root in `tools/spec_status.py` is in
@@ -593,7 +785,11 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   Add `tools/spec_status.py` to
   `test_the_confidence_lives_only_in_the_specgraph_table`'s scripts. All
   `integration` by the criterion. Record the red run, then `wc -l
-  tests/test_spec_status.py` against `MAX_TEST_MODULE_LINES`.
+  tests/test_spec_status.py` against `MAX_TEST_MODULE_LINES`. This module
+  plants specs, so run
+  `python -m pytest tests/test_suite_shape.py tests/test_suite_routing.py -q`
+  and record it green: the routing guard names any planted spec path written
+  by hand.
 - `tests/test_ci_makefile.py`: add `spec-status` to the required report
   targets, and run it red before the target exists.
   `tests/test_gate_scripts.py`: add `"spec_status.py"`, and record it red on
@@ -602,21 +798,29 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   DEC-RDS-009, DEC-RDS-014):
   - Bootstrap `sys.path` for `_common` and the repository root as
     `stage_citations.py` does. Import `detect`, `parse_spec`, `MAKE_REF` and
-    `SpecReadError` from `openspec_graph`, and `logger`, `repo_root`,
+    `SpecReadError` from `openspec_graph`, `blank_html_comments` from
+    `openspec_graph.parse_semantics`, and `logger`, `repo_root`,
     `ReportError` and `workflow_stages` from `_common`. Import no sibling.
   - `VOCABULARY = {"DRAFT": "draft", "APPROVED": "settled"}`, commented as
     the one place the spec words are written and the follow-up's edit point.
-    `PROPOSAL_VOCABULARY = {"proposed": "draft", "implemented": "settled"}`,
-    with the proposal status line read as `^> \*\*Status: (\w+)\.?\*\*`.
+    `PROPOSAL_VOCABULARY = {"proposed": "draft", "implemented": "settled"}`.
   - `HEADER_STATUS = re.compile(r"^> \*\*Status:\*\* ([A-Za-z-]+)",
-    re.MULTILINE)`, case-sensitive, applied by `read_header(text) -> str |
-    None` to the text before the first line that begins `## `.
+    re.MULTILINE)` and `PROPOSAL_STATUS = re.compile(r"^> \*\*Status:
+    (\w+)\.?\*\*", re.MULTILINE)`, both case-sensitive.
+  - `header_block(text) -> str`: `blank_html_comments(text)` first, then the
+    lines before the first line that begins `## `. Blanking first keeps the
+    line structure and stops a `## ` line inside a comment from ending the
+    block.
+  - `read_header(text) -> str | None` and `read_proposal_status(text) -> str
+    | None`, each applying its pattern to `header_block(text)`.
   - `PackageRow` (a dataclass with every column of R-RDS-10).
   - `packages(root) -> tuple[Path, ...]`, which is
     `detect.profile(root).change_dirs`, after checking that
-    `openspec/changes/` is a directory.
-  - `read_package(path, dialect, runs) -> PackageRow`, reading each file with
-    `encoding="utf-8"`.
+    `openspec/changes/` is a directory. An empty result raises `ReportError`
+    naming the directory.
+  - `read_package(path, dialect, runs) -> PackageRow`. It reads each
+    `spec.md` with `encoding="utf-8-sig", errors="replace"`, as `parse_spec`
+    does, and `proposal.md` and `tasks.md` with `encoding="utf-8"`.
   - `changelog_entries(text) -> dict[str, list[str]]`, holding the two entry
     shapes and the section each sits under.
   - `finding(row) -> str | None`, in R-RDS-11's order.
@@ -627,9 +831,9 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
     2, with the file named.
 
   The docstring states the vocabulary, the four findings, why the CHANGELOG
-  and workflow columns enter none of them, why the header is read anchored
-  and not through `parse_spec`, and that it never edits a header. Run
-  `ruff check` and `mypy tools` and record both clean.
+  and workflow columns enter none of them, why the header is read anchored,
+  comment-blind and not through `parse_spec`, and that it never edits a
+  header. Run `ruff check` and `mypy tools` and record both clean.
 - `Makefile`: add `spec-status` to `.PHONY`, and `spec-status: ## Report each
   change package's Status header beside its evidence — a report, not a gate`
   with the recipe `python tools/spec_status.py`. Confirm `make thresholds`
@@ -661,12 +865,17 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   hooks`, with a table `| Target | Reads | Exit |` and one row per report
   target — at drafting `make coverage-per-file`, `make matcher-accuracy`,
   `make stage-citations`, `make dead-code` and `make spec-status`, each first
-  cell the backticked command. Under it, one paragraph: none is composed into
-  `ci`, `pre-pr` or a CI job; each becomes a gate only through its own package
-  after a quarter of an empty report; `make dead-code` needs the dev extra,
-  exiting 2 without it; and `make spec-status` stays non-zero until
-  `settle-package-status-headers` lands. The `## CI hooks` table is
-  untouched. Run `make docs-check`.
+  cell the backticked command. The `make spec-status` row's exit cell says
+  that it stays red until `settle-package-status-headers` lands (R-RDS-15).
+  Under the table, one paragraph:
+  - none is composed into `ci`, `pre-pr` or a CI job;
+  - each becomes a gate only through its own package after a quarter of an
+    empty report;
+  - `make dead-code` needs the dev extra, exiting 2 without it;
+  - `make spec-status` stays red until `settle-package-status-headers` lands,
+    and its quiet quarter starts only then.
+
+  The `## CI hooks` table is untouched. Run `make docs-check`.
 - `docs/aqa.md`: after the `make stage-citations` paragraph (line 193), one
   paragraph on both reports — what each reads, its exit contract (0, 1, 2),
   that `tests/` counts as a user of the code, the whitelist's two stale
@@ -685,8 +894,9 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   `python -m pytest tests/test_agent_artifacts.py -q -k "nested_agents or agent_index_links"`.
 - `docs/next-steps.md` (R-RDS-22): item 24, after item 23 and before
   `## Skills / agents`, in the file's numbered-item shape. If the session
-  lead applied it with the round-1 corrections, confirm the text below and
-  leave it; otherwise add it here. Its text:
+  lead applied it with the round-1 or round-2 corrections, confirm the text
+  below and leave it; otherwise add it here. At `1c6b8b8` it is not present.
+  Its text:
 
   ```
   24. **Settle the change packages' `Status` headers**
@@ -701,12 +911,24 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
       third value beside `DRAFT` and `APPROVED`, which touches the scaffold
       template, the drafter and H005 — and amend `VOCABULARY` in
       `tools/spec_status.py`, the one place the report's words are written,
-      to match. Until this lands `make spec-status` exits non-zero by
-      design, and the quiet quarter before any package may make it a gate
-      starts only then. Beside it: H005 reads the header through
-      `parse_spec`'s unanchored `STATUS`, which a waiver comment or prose
-      above the header can set; the report reads the header anchored, and
-      fixing the rule is an `openspec_graph/` change of its own.
+      to match. Three conditions decide whether it can turn the report
+      green. (a) If it records status anywhere other than the `Status`
+      header, such as a supersession-style record, it must teach
+      `tools/spec_status.py` to read that record too; otherwise the report
+      stays red for good. (b) Before it edits any shipped package's header,
+      it must first write down the exception to the records convention
+      (DEC-MCO-006, DEC-ZCG-003, DEC-TSS-016), which otherwise forbids
+      exactly that edit. (c) It decides whether the vocabulary gains a
+      "shipped" value that an agent may set at a package's closure, since
+      the drafter is barred only from `APPROVED`; otherwise every correctly
+      closed package branch reads `draft-but-complete`, and any future gate
+      would be red on every closing pull request. Until this lands
+      `make spec-status` exits non-zero by design, and the quiet quarter
+      before any package may make it a gate starts only then. Beside it:
+      H005 reads the header through `parse_spec`'s unanchored `STATUS`,
+      which a waiver comment or prose above the header can set; the report
+      reads the header anchored and with comments blanked, and fixing the
+      rule is an `openspec_graph/` change of its own.
   ```
 
   Run `make docs-check`, and
@@ -716,9 +938,10 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
 - `CHANGELOG.md`, under `## [Unreleased]`: `### Added — two hygiene reports:
   dead code and spec status (M2)`, with one bullet led by
   ``- **`report-dead-code-and-spec-status`.**`` naming the items of
-  R-RDS-17, the follow-up `settle-package-status-headers` among them. The
-  figures in it are dated and name their commands; the CHANGELOG is exempt
-  from tracking the tree afterwards.
+  R-RDS-17. Among them are the follow-up `settle-package-status-headers` and
+  the sentence that `make spec-status` stays red until it lands. The figures
+  in it are dated and name their commands; the CHANGELOG is exempt from
+  tracking the tree afterwards.
 - Records, each dated with the commit (R-RDS-20):
   - `make stage-citations` after the change, saying the figures include this
     package's own spec;
@@ -743,13 +966,13 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   | AC-RDS-4 | `test_dead_code_exits_two_when_it_cannot_run`, `test_a_declared_tree_that_is_absent_or_holds_no_python_exits_two`, `test_vulture_stderr_is_logged_and_never_decides_the_exit`, `test_dead_code_exits_zero_when_nothing_is_listed` |
   | AC-RDS-5 | the two binding tests |
   | AC-RDS-6 | `test_the_installed_vulture_reports_a_planted_unused_function` |
-  | AC-RDS-7 | the four finding tests, the checkbox test, `test_a_status_line_outside_the_header_block_is_never_the_header`, `test_the_header_reader_agrees_with_parse_spec_on_every_real_spec`, `test_a_symlinked_alias_of_a_package_is_one_row` and the spec-status import test |
+  | AC-RDS-7 | the four finding tests, the checkbox test, `test_a_status_line_outside_the_header_block_is_never_the_header`, `test_a_status_line_inside_a_comment_is_never_the_header`, `test_the_header_reader_agrees_with_parse_spec_on_every_uncommented_real_header`, `test_a_symlinked_alias_of_a_package_is_one_row` and the spec-status import test |
   | AC-RDS-8 | the partial-evidence, changelog-shape, exit-2 and absent-file tests |
   | AC-RDS-9 | adds `test_the_workflow_column_names_verification_stages_no_workflow_runs` |
   | AC-RDS-10 | adds `test_every_report_target_stays_out_of_the_ladder` |
   | AC-RDS-11 | `test_a_report_target_composed_into_the_ladder_is_named` |
   | AC-RDS-12 | adds the two reports-table tests and `test_a_second_table_in_hooks_is_not_read_as_ci_rows` |
-  | AC-RDS-15 | the four suite-shape guards by name, which resolve on this branch |
+  | AC-RDS-15 | the three guards in `tests/test_suite_shape.py` and the routing guard in `tests/test_suite_routing.py`, by name, which resolve on this branch |
 - Confirm this package validates clean
   (`planlint --target . validate --fail-on ERROR --change report-dead-code-and-spec-status`),
   then the whole tree, and record each exit code.
@@ -772,8 +995,10 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
     `settle-package-status-headers` as the owner of every other header on
     Milestone 3's worklist, and H005's header leak beside it.
   - Milestone 3's `make spec-status` output is that follow-up's worklist. It
-    decides the vocabulary and, for each package on `main`, the written
-    exception for its one `Status` line or a supersession-style status
+    decides the vocabulary, including whether a "shipped" value exists that
+    an agent may set at closure. It writes down the exception to the records
+    convention before it edits any shipped header. If it records status
+    anywhere but the header, it teaches `tools/spec_status.py` to read that
     record (DEC-RDS-008).
   - Milestone 2's `make dead-code` list goes to the M4 package for W5.1–3,
     with `speckit_section_body`, `speckit_subsection_body` and the three

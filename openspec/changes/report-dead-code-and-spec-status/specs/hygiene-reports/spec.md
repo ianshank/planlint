@@ -46,8 +46,9 @@ follow-up package, `settle-package-status-headers`, in which the maintainer
 settles the headers the report lists and decides the vocabulary.
 
 **Evidence:** measured at `1c8917c` (the head of `claude/m2-report-targets`,
-stacked on PR #42), 2026-10-07, and for the round-1 corrections at `114754c`,
-the same day; each command is in the proposal.
+stacked on PR #42), 2026-10-07; for the round-1 corrections at `114754c`; and
+for the round-2 corrections at `1c6b8b8`, the merge of #42's head `92077b5`
+into this branch — all the same day. Each command is in the proposal.
 
 - **vulture's output.** `python -m vulture openspec_graph tools
   --min-confidence 80` prints nothing (exit 0). At 60 it prints 12 findings
@@ -63,16 +64,30 @@ the same day; each command is in the proposal.
 - **The version facts.** vulture 2.16 is installed and is the latest on the
   index. Its changelog dates exit code 3 for dead code to 2.9 and Python 3.14
   support to 2.15.
-- **The headers.** 25 of 51 `spec.md` headers read `DRAFT` and 26
-  `APPROVED`, in one shape. Four proposals carry a status line of their own
-  in another shape.
-- **The header reader.** `parse_spec` takes the status from `STATUS`
-  (`openspec_graph/parse_semantics.py:16`), searched unanchored over the raw
-  text and upper-cased (`openspec_graph/parse.py:156`, `:168`). Rule H005
-  reads that value.
+- **The headers.** At `1c6b8b8`, the grep anchored on a line that begins
+  `> **Status:** ` counts 26 `spec.md` headers reading `DRAFT` and 26
+  `APPROVED`, of 52, in one shape, this package's own `DRAFT` spec among
+  them. The grep is anchored because this spec quotes the phrase in prose,
+  which an unanchored grep counts as a second header. Four proposals carry a
+  status line of their own in another shape, each in its header block.
+- **The header reader.** `parse_spec` reads a spec as `utf-8-sig` with
+  undecodable bytes replaced (`openspec_graph/parse.py:119`), and takes the
+  status from `STATUS` (`openspec_graph/parse_semantics.py:16`), searched
+  unanchored over the raw text and upper-cased (`openspec_graph/parse.py:156`,
+  `:168`). Rule H005 reads that value. The waiver pattern `SUPPRESS`
+  (`openspec_graph/parse_semantics.py:51`) matches across lines, so a
+  waiver's reason can put a line of any shape inside a header block.
+  `blank_html_comments` (`openspec_graph/parse_semantics.py:599`) blanks every
+  HTML comment, across lines, keeping length and newlines, and the speckit
+  rules already read through it (`openspec_graph/rules_speckit.py:111`). At
+  `1c6b8b8` no spec's header block holds an HTML comment, and a one-off
+  read-only reading with the anchored reader of R-RDS-23 agrees with
+  `parse_spec(...).status` on every spec once upper-cased.
 - **The packages.** `detect.profile(root).change_dirs`
   (`openspec_graph/detect.py:707–715`) counts a symlinked alias of a package
-  once, by real-path identity, and keeps a package with no `spec.md`.
+  once, by real-path identity, and keeps a package with no `spec.md`. It is
+  every directory directly under `openspec/changes/`, so an empty directory
+  gives no package at all.
 - **The comparison.** A one-off reading of this spec's definitions finds 9
   all-`DRAFT` packages with every milestone `[DONE]` and every criterion
   ticked, none all-`APPROVED` with neither, one whose proposal and spec
@@ -180,13 +195,13 @@ the same day; each command is in the proposal.
   `openspec_graph`'s own parse — `parse_spec`, under the dialect
   `detect.profile` reports, with `MAKE_REF` over each criterion's
   `verified_by` — and MUST use `parse_spec` for nothing else. It MUST read the
-  `Status` header as R-RDS-23 requires, and the stages each workflow runs
-  through `_common.workflow_stages`, passing `MAKE_REF` as the stage grammar
-  (R-RDS-24). Criterion checkboxes, milestone headings, task checkboxes, a
-  proposal's status line and CHANGELOG entries, which no parser in the
-  package reads, MUST be read with the standard library's `re`. It MUST
-  accept `--root` (default: the repository root), with the program name first
-  in `argv`.
+  `Status` header and a proposal's status line as R-RDS-23 requires, and the
+  stages each workflow runs through `_common.workflow_stages`, passing
+  `MAKE_REF` as the stage grammar (R-RDS-24). Criterion checkboxes, milestone
+  headings, task checkboxes, a proposal's status line and CHANGELOG entries,
+  which no parser in the package reads, MUST be read with the standard
+  library's `re`. It MUST accept `--root` (default: the repository root), with
+  the program name first in `argv`.
 - R-RDS-10: The packages MUST be `detect.profile(root).change_dirs` — every
   directory under `openspec/changes/`, a symlinked alias counted once by
   real-path identity, and a package with no `spec.md` kept — and never a
@@ -236,17 +251,23 @@ the same day; each command is in the proposal.
   finding.
 - R-RDS-12: `tools/spec_status.py` MUST exit 1 when any package carries a
   finding, and 0, with a line saying none does, otherwise. It MUST exit 2,
-  with a message naming the cause and the file and never a traceback, when:
+  with a message naming the cause — the file or directory, where there is
+  one — and never a traceback, when:
   - the root has no `openspec/changes/` directory;
+  - that directory holds no package. A report over no package is not a clean
+    report, for the reason DEC-RDS-005 gives for an empty tree;
   - a `spec.md`, `proposal.md`, `tasks.md`, `CHANGELOG.md` or workflow file
     exists but cannot be read (`OSError`);
-  - one of those, a workflow file excepted, cannot be decoded
-    (`UnicodeDecodeError`). A workflow file is read as `stage_citations` reads
-    it, with undecodable bytes replaced.
+  - a `proposal.md`, `tasks.md` or `CHANGELOG.md` cannot be decoded
+    (`UnicodeDecodeError`).
 
-  The script MUST translate these from its own reads, or catch them in
-  `main`. An absent `CHANGELOG.md`, `proposal.md`, `tasks.md` or workflow
-  directory is not a failure: its column reads as empty.
+  A `spec.md` MUST be read as `parse_spec` reads it — `utf-8-sig`, with
+  undecodable bytes replaced — so the report never refuses a spec that the
+  gate accepts. A workflow file is read as `stage_citations` reads it, with
+  undecodable bytes replaced. The script MUST translate these from its own
+  reads, or catch them in `main`. An absent `CHANGELOG.md`, `proposal.md`,
+  `tasks.md` or workflow directory is not a failure: its column reads as
+  empty.
 - R-RDS-13: The `Makefile` MUST gain a `spec-status` target with the shape
   R-RDS-8 gives `dead-code`, and the recipe `python tools/spec_status.py` and
   nothing else.
@@ -271,11 +292,13 @@ the same day; each command is in the proposal.
 - R-RDS-15: `docs/hooks.md` MUST gain a reports section with one table row
   per report target. Each row's first cell is the backticked command, followed
   by what the report reads and its exit contract, and the section MUST say
-  that none is composed into `ci`, `pre-pr` or a CI job. A test MUST hold that
-  every report target has a row and every row names a report target. The
-  CI-table reader in `tests/test_ci_workflow.py` MUST read only the table
-  under the CI hooks heading, so that a second table in the file is never
-  read as CI rows.
+  that none is composed into `ci`, `pre-pr` or a CI job. The section — the
+  spec-status row or the text under the table — MUST also say that the
+  spec-status report stays red, exiting non-zero, until
+  `settle-package-status-headers` lands. A test MUST hold that every report
+  target has a row and every row names a report target. The CI-table reader
+  in `tests/test_ci_workflow.py` MUST read only the table under the CI hooks
+  heading, so that a second table in the file is never read as CI rows.
 - R-RDS-16: `docs/architecture/c4.md`'s §4 `tools/*` row and `tools/AGENTS.md`
   MUST name both scripts in their groups and give their argv convention:
   - `spec_status` among the reports that import `openspec_graph`;
@@ -296,7 +319,9 @@ the same day; each command is in the proposal.
   - the confidence key and why it is not the plan's D4 figure;
   - the whitelist and its two stale checks;
   - the four finding kinds;
-  - that no header was edited, and the follow-up that owns them.
+  - that no header was edited, and the follow-up that owns them;
+  - that the spec-status report stays red until
+    `settle-package-status-headers` lands.
 - R-RDS-18: Every new test MUST carry exactly one of the registered tiers,
   the one `tests/shape_support.py`'s criterion computes. An in-process test of
   either script loads a `tools/` script and is therefore at least
@@ -354,24 +379,51 @@ the same day; each command is in the proposal.
     one place the vocabulary is written;
   - that the spec-status report stays non-zero until the follow-up lands,
     and the quiet quarter before any package may make it a gate starts only
-    then.
+    then;
+  - that if the follow-up records status anywhere other than the `Status`
+    header — a supersession-style record, say — it must teach
+    `tools/spec_status.py` to read that record too, or the report stays red
+    for good;
+  - that before it edits any shipped package's header it must first write
+    down the exception to the records convention that DEC-MCO-006,
+    DEC-ZCG-003 and DEC-TSS-016 hold;
+  - that it decides whether the vocabulary gains a "shipped" value that an
+    agent may set at a package's closure, since the drafter is barred only
+    from `APPROVED`. Without one, every correctly closed package branch reads
+    `draft-but-complete`, and any future gate on the report would be red on
+    every closing pull request.
 
   This package's own `Status` header MUST stay `DRAFT` when its milestones
   close. The pull request MUST ask the maintainer to settle it at merge.
 - R-RDS-23: `tools/spec_status.py` MUST read each spec's `Status` header with
   `re`, anchored at the start of a line that begins `> **Status:** `, matched
   case-sensitively, within the header block — the lines before the first `## `
-  heading — with the word kept as written. It MUST NOT take the header from
+  heading — with the word kept as written. Before it finds the end of the
+  header block, and before it matches, it MUST blank every HTML comment
+  (`<!-- … -->`), matching across lines and keeping the newlines so line
+  structure survives. It MUST do that through `openspec_graph`'s
+  `blank_html_comments`, so the report and the speckit rules share one
+  comment grammar. A proposal's status line MUST be read the same way:
+  anchored at a line that begins `> **Status: `, within the proposal's header
+  block, after the same blanking. The script MUST NOT take the header from
   `parse_spec`, whose `STATUS` pattern is unanchored, searched over the raw
-  text, and upper-cased. None of these MUST be read as the header:
-  - a status line carried by a waiver comment above the header;
+  text, and upper-cased. Each of these MUST NOT be read as the header:
+  - any line inside an HTML comment, however it is shaped — a single-line
+    waiver above the header carrying the phrase, a waiver whose reason spans
+    lines and carries a line that begins `> **Status:**`, or a commented-out
+    old header above the current one;
   - a lower-case header word, which is read as written and is outside the
     vocabulary;
   - a `**Status:**` phrase anywhere after the header block, in prose or in a
     code example.
 
-  A test in `make test` MUST assert that, on every `spec.md` in the real
-  tree, this reading equals `parse_spec(...).status`. Rule H005 reads the
+  A test in `make test` MUST compare the two readers on the real tree,
+  case-insensitively — the anchored word upper-cased against
+  `parse_spec(...).status` — and only for the specs where the anchored reader
+  finds a header and whose header block holds no HTML comment. Those are the
+  specs on which the two readers must agree. The test guards against drift in
+  the anchored reader. The form of a header stays a report finding
+  (R-RDS-11) and MUST NOT become a test failure. Rule H005 reads the
   unanchored value and has the same leak. Fixing it changes an
   `openspec_graph/` module, which C-RDS-1 excludes, so it MUST be recorded for
   the follow-up and MUST NOT be fixed here.
@@ -382,9 +434,19 @@ the same day; each command is in the proposal.
   - The lexer MUST take the grammar of a stage as a parameter — a compiled
     pattern in `MAKE_REF`'s shape — rather than import it. Each caller MUST
     pass `openspec_graph`'s `MAKE_REF`, so the grammar has one copy.
-  - `tools/stage_citations.py` MUST import them from `_common` and keep its
-    public names with their call shapes, so `tests/test_stage_citations.py`
-    passes unedited.
+  - The moved debug log line MUST carry a neutral label, not
+    `stage-citations:`, because the spec-status report logs through it too.
+  - `tools/stage_citations.py` MUST import from `_common` only the names it
+    uses, and MUST keep its public names with their call shapes, so
+    `tests/test_stage_citations.py` passes unedited:
+    - `run_scripts(text)`, re-exported explicitly as
+      `from _common import run_scripts as run_scripts`, because its tests
+      reach it on the module;
+    - wrappers that pass `MAKE_REF`, documented together:
+      `shell_invocations(script)`, `workflow_invocations(text)` and
+      `workflow_stages(root, only=())`.
+  - Every import the move leaves unused in `tools/stage_citations.py` — `re`,
+    and `shlex` with it — MUST be dropped, so `ruff check tools` stays clean.
   - Its output MUST be byte-identical before and after the move. That MUST
     be shown by a recorded diff of `python tools/stage_citations.py` output,
     as text and as JSON, captured on one tree immediately before and after.
@@ -574,7 +636,9 @@ the same day; each command is in the proposal.
   the plan wants at zero and names a gate for after a quiet quarter. Neither
   is composed into `ci` or `pre-pr` (DEC-PM-011, guardrail 7); a report that
   exits 1 makes `make` print an error line, which `matcher-accuracy` and
-  `coverage-per-file` already accept.
+  `coverage-per-file` already accept. Nothing read is never clean: the
+  spec-status report over an `openspec/changes/` that holds no package exits
+  2, for the reason DEC-RDS-005 gives for a declared tree with no `.py` file.
 - **DEC-RDS-007:** "disagrees with its evidence" is defined mechanically as
   the four findings of R-RDS-11, and only tasks and criteria enter them.
   - The measurement shows each signal is era-dependent: `APPROVED` packages
@@ -625,8 +689,9 @@ the same day; each command is in the proposal.
      follow-up amends `VOCABULARY`, a header carrying such a word — the
      planted `IMPLEMENTED` case included — is `header-unrecognised`.
   4. **The number is not mechanical.** The plan's "18" was a count of
-     `DRAFT` headers, and it is not recoverable mechanically. 25 of 51 read
-     `DRAFT` at `1c8917c`, and the evidence is unanimous for only some.
+     `DRAFT` headers, and it is not recoverable mechanically. By the anchored
+     grep, 26 of 52 read `DRAFT` at `1c6b8b8`, this package's own among them,
+     and the evidence is unanimous for only some.
 
   Consequences, stated so nobody reads a red report as a defect:
   - The spec-status report exits non-zero until the follow-up lands, and the
@@ -636,10 +701,24 @@ the same day; each command is in the proposal.
     `DRAFT`, every milestone `[DONE]` and every criterion ticked is
     `draft-but-complete`. That is the report working as designed, and
     settling it is the maintainer's call at merge.
-  - The follow-up decides, in writing, the vocabulary and the exception for
-    one `Status` line of a shipped record, or a supersession-style record of
-    status. It is named in `docs/next-steps.md` (R-RDS-22), and not in the
-    plan, which is a dated record. It closes the plan's end-state row; this
+  - The follow-up can turn the report green only on three conditions, which
+    `docs/next-steps.md` carries (R-RDS-22):
+    - **Where status lives.** If it records status anywhere but the `Status`
+      header — a supersession-style record, say — it teaches
+      `tools/spec_status.py` to read that record. Otherwise the header the
+      report reads never changes, and the report stays red for good.
+    - **The written exception first.** Before it edits any shipped package's
+      header, it writes down the exception to the records convention of
+      reason 2 (DEC-MCO-006, DEC-ZCG-003, DEC-TSS-016). Settling a header is
+      otherwise exactly the edit that convention forbids.
+    - **A value an agent may set.** It decides whether the vocabulary gains
+      a "shipped" value that an agent may set at a package's closure; the
+      drafter is barred only from `APPROVED`. Without one, every correctly
+      closed package branch reads `draft-but-complete` until a human edits
+      it, and any future gate on the report would be red on every closing
+      pull request.
+  - It is named in `docs/next-steps.md` (R-RDS-22), and not in the plan,
+    which is a dated record. It closes the plan's end-state row; this
     package makes the row measurable.
 - **DEC-RDS-009:** `tools/spec_status.py` imports `openspec_graph` and
   `_common`, and no sibling script. `tools/AGENTS.md`'s rule is "No
@@ -656,7 +735,18 @@ the same day; each command is in the proposal.
     grammar, and no `openspec_graph` import in `_common`.
   - `stage_citations.py` imports the lexer and binds `MAKE_REF` under its
     existing names and call shapes, so its tests run unedited and its output
-    is byte-identical, which the recorded diff shows.
+    is byte-identical, which the recorded diff shows. Its public names are
+    every name the module exposes, not only those its tests reach today:
+    `shell_invocations` (`tools/stage_citations.py:165`) is one, so it keeps
+    a wrapper beside `workflow_invocations` and `workflow_stages`.
+    `run_scripts` needs no `MAKE_REF`, so it is re-exported in the redundant
+    alias form, which ruff and mypy read as an intended re-export rather than
+    an unused import. The module imports nothing else it does not use, and
+    the `re` and `shlex` imports that served only the lexer go with it.
+  - The moved debug log line takes a neutral label, because two reports log
+    through it and a `stage-citations:` line in the spec-status report's log
+    would name the wrong report. The label is on the logger only, never in
+    the output the recorded diff compares.
   - Verification lines are read by the same parse the rules use, because a
     second reader would count something else — the reason
     `stage_citations.py`'s docstring gives for importing the package. The
@@ -730,13 +820,13 @@ the same day; each command is in the proposal.
     `tests/test_repo_io.py` already do, never by `chmod`: as root, a mode of
     000 still reads. A planted symlink is skipped under
     `support.supports_symlinks()`.
-  - A planted `spec.md` is never undecodable: `write_spec` encodes UTF-8,
-    and R-RDS-18 routes every planted spec through it. The undecodable case
-    is planted in the files written directly, and a `spec.md` read failure
-    by the injected `PermissionError`, which the same `except` clause
-    handles.
-- **DEC-RDS-014:** the `Status` header is read anchored and case-sensitively,
-  not through `parse_spec`.
+  - A `spec.md` has no undecodable case. It is read as `parse_spec` reads it,
+    with undecodable bytes replaced (R-RDS-12), so the report accepts every
+    spec the gate accepts, and `write_spec` encodes UTF-8 in any case. The
+    undecodable case is planted in the files written directly, and a
+    `spec.md` read failure by the injected `PermissionError`.
+- **DEC-RDS-014:** the `Status` header is read anchored, case-sensitively and
+  comment-blind, not through `parse_spec`.
   - `STATUS` (`openspec_graph/parse_semantics.py:16`) is unanchored, and
     `parse_spec` searches it over the raw text and upper-cases the match
     (`openspec_graph/parse.py:156`, `:168`). So the first `**Status:**`
@@ -749,21 +839,40 @@ the same day; each command is in the proposal.
 
     A report whose purpose is to compare headers cannot use a reader a
     comment can set.
-  - The fix reads only the header block — the lines before the first `## `
-    heading — and only a line that begins `> **Status:** `, keeping the word
-    as written. Each case above then gets its honest reading: `DRAFT`,
-    `header-unrecognised`, `header-unrecognised`.
-  - A test holds that on the real tree the two readers agree, so the report
-    and the rules read the same headers wherever the leak does not bite.
-    Verification lines stay with `parse_spec`, because they are what the
-    rules read.
+  - Anchoring alone does not close that. `SUPPRESS` matches across lines, so
+    a waiver's reason can carry a line that begins `> **Status:**` inside the
+    header block. And a maintainer who keeps the old header in a comment
+    above the new one leaves a whole header line there. So every HTML comment
+    is blanked first, keeping its newlines so line structure survives, and
+    the header block is found and matched in what is left. The blanking is
+    `blank_html_comments`, which `openspec_graph` already uses for the
+    speckit rules: one comment grammar, not a second copy. Like it, the
+    reader blanks a comment only where it closes; an unclosed comment is
+    malformed Markdown, read the same way by every reader in the repository.
+  - The fix then reads only the header block — the lines before the first
+    `## ` heading — and only a line that begins `> **Status:** `, keeping the
+    word as written. Each case above then gets its honest reading: `DRAFT`,
+    `header-unrecognised`, `header-unrecognised`. A proposal's status line is
+    read the same way, in its own header block.
+  - A test compares the two readers on the real tree, but only where they
+    must agree: the anchored reader found a header and the header block holds
+    no comment. There the comparison is case-insensitive, because
+    `parse_spec` upper-cases. The test guards against drift in the anchored
+    reader. It does not judge the headers themselves: a header in an
+    unexpected form is the report's finding (R-RDS-11), and making it a test
+    failure would be an undeclared gate on header form. Verification lines
+    stay with `parse_spec`, because they are what the rules read.
   - H005 has the same leak, through the same value. Fixing it changes an
     `openspec_graph/` module and a rule's behaviour, which C-RDS-1 excludes,
     so it is recorded for the follow-up and not fixed here.
 
   Rejected: `parse_spec(...).status` (the leak above); stripping waiver
   comments and then searching the raw text (prose, code examples and lower
-  case would still read as a header).
+  case would still read as a header); anchoring without blanking comments (a
+  multi-line waiver or a commented-out header still sets it); a comment
+  pattern of the script's own (a second grammar beside
+  `blank_html_comments`); comparing the two readers on every real spec (a
+  gate on header form that no requirement declares).
 
 ---
 
@@ -859,14 +968,22 @@ the same day; each command is in the proposal.
     - no header, but `**Status:** APPROVED` in prose;
     - no header, but `**Status:** DRAFT` in a body code example.
 
-  A `DRAFT` header beneath a waiver comment carrying `**Status:** APPROVED`
-  reads `DRAFT`. On every real spec, the header reader agrees with
-  `parse_spec(...).status`. A symlinked alias of a planted package gives one
-  row, where the filesystem supports symlinks. The script prints one text row
-  per package with every column, exits 1, and imports nothing from `tools/`
-  but `_common`. The tests are planned; until they exist the stage is the
-  citation. (R-RDS-9, R-RDS-10, R-RDS-11, R-RDS-12, R-RDS-23, C-RDS-7,
-  C-RDS-8, DEC-RDS-007, DEC-RDS-009, DEC-RDS-014)
+  A `DRAFT` header reads `DRAFT` in each of these planted cases:
+  - beneath a single-line waiver comment carrying `**Status:** APPROVED`;
+  - beneath a waiver whose reason spans lines and carries a line that begins
+    `> **Status:** APPROVED`;
+  - beneath a commented-out old `APPROVED` header, the comment opening and
+    closing on lines of their own.
+
+  On every real spec where the anchored reader finds a header and the header
+  block holds no HTML comment, the anchored word, upper-cased, equals
+  `parse_spec(...).status`; a spec outside that scope is not compared. A
+  symlinked alias of a planted package gives one row, where the filesystem
+  supports symlinks. The script prints one text row per package with every
+  column, exits 1, and imports nothing from `tools/` but `_common`. The tests
+  are planned; until they exist the stage is the citation. (R-RDS-9,
+  R-RDS-10, R-RDS-11, R-RDS-12, R-RDS-23, C-RDS-7, C-RDS-8, DEC-RDS-007,
+  DEC-RDS-009, DEC-RDS-014)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-RDS-8 (non-success):** none of these raises a finding:
@@ -875,14 +992,17 @@ the same day; each command is in the proposal.
   - a package named in a CHANGELOG sentence that is not an entry.
 
   Each is listed with its columns, and the script exits 0 when nothing else
-  is found. The script exits 2, with the file named and no traceback, when:
+  is found. The script exits 2, with the cause named and no traceback, when:
   - the root has no `openspec/changes/`;
+  - `openspec/changes/` holds no package;
   - a `proposal.md`, `tasks.md` or `CHANGELOG.md` cannot be decoded;
   - a `spec.md` or a `tasks.md` cannot be read (an injected
     `PermissionError`).
 
-  An absent `CHANGELOG.md` or workflow directory does not change the exit
-  code. The tests are planned; until they exist the stage is the citation.
+  A `spec.md` is read as `parse_spec` reads it, with undecodable bytes
+  replaced, so no `spec.md` decode failure exits 2; that is read directly. An
+  absent `CHANGELOG.md` or workflow directory does not change the exit code.
+  The tests are planned; until they exist the stage is the citation.
   (R-RDS-11, R-RDS-12, DEC-RDS-006, DEC-RDS-007, DEC-RDS-013)
   _Verified by:_ stage: `make test`
 
@@ -925,12 +1045,14 @@ the same day; each command is in the proposal.
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-RDS-12:** docs/hooks.md's reports section has a row for every
-  report target and no row for anything else. A planted text missing a row,
+  report target and no row for anything else, and says — in the spec-status
+  row or the text under the table — that the spec-status report stays red
+  until `settle-package-status-headers` lands. A planted text missing a row,
   and one with a row naming no report target, are each named. The CI-table
   guards still pass on the real file, and a planted second table is not read
   as CI rows. The new tests are planned; until they exist the existing
-  CI-table tests and the stage are the citation. (R-RDS-15, R-RDS-19,
-  DEC-RDS-010)
+  CI-table tests and the stage are the citation; the stays-red sentence is
+  read directly. (R-RDS-15, R-RDS-19, DEC-RDS-008, DEC-RDS-010)
   _Verified by:_ `pytest -k "test_every_hooks_ci_table_row_names_a_job_or_workflow or test_hooks_ci_table_lists_every_ci_job or test_hooks_test_row_names_the_matrix_bounds"` · stage: `make test`
 
 - [ ] **AC-RDS-13:** `docs/architecture/c4.md` §4, `tools/AGENTS.md` and
@@ -951,10 +1073,12 @@ the same day; each command is in the proposal.
 
 - [ ] **AC-RDS-15:** every new test carries exactly the tier the criterion
   computes for it, every new or edited test module is within the line bound,
-  and no new test writes a planted spec path by hand. The suite-shape guards
-  that hold this are `test_every_test_carries_exactly_one_tier_marker`,
-  `test_every_tier_marker_matches_its_mechanical_criterion`,
-  `test_no_test_module_exceeds_the_line_bound` and
+  and no new test writes a planted spec path by hand. The guards that hold
+  this are, in `tests/test_suite_shape.py`,
+  `test_every_test_carries_exactly_one_tier_marker`,
+  `test_every_tier_marker_matches_its_mechanical_criterion` and
+  `test_no_test_module_exceeds_the_line_bound`, and, in
+  `tests/test_suite_routing.py`,
   `test_no_test_module_writes_a_spec_path_by_hand`, on this package's base
   branch. They are cited by the stage, because they do not exist on `main`.
   (R-RDS-18, DEC-RDS-013)
@@ -972,10 +1096,11 @@ the same day; each command is in the proposal.
   _Verified by:_ `pytest -k test_every_spec_test_citation_resolves_to_a_real_test` · stage: `make test`
 
 - [ ] **AC-RDS-18:** `CHANGELOG.md` `[Unreleased]` carries this package's
-  `Added` entry with the items R-RDS-17 names, in the bullet shape the
-  spec-status report reads as an entry, and every versioned section still
-  links to its release tag. The entry is read directly; the test holds the
-  link shape. (R-RDS-17)
+  `Added` entry with the items R-RDS-17 names — among them that the
+  spec-status report stays red until `settle-package-status-headers` lands —
+  in the bullet shape the spec-status report reads as an entry, and every
+  versioned section still links to its release tag. The entry is read
+  directly; the test holds the link shape. (R-RDS-17)
   _Verified by:_ `pytest -k test_every_changelog_version_links_to_its_release_tag` · stage: `make test`
 
 - [ ] **AC-RDS-19:** `tasks.md` records, each dated with its commit and naming
@@ -1003,10 +1128,17 @@ the same day; each command is in the proposal.
   _Verified by:_ stage: `make pre-pr`
 
 - [ ] **AC-RDS-21:** `tools/_common.py` holds `workflow_stages` and its
-  lexer, takes the stage grammar as a parameter, and stays stdlib-only.
-  `tools/stage_citations.py` imports them and passes `MAKE_REF`, and its
-  tests pass unedited. Its text and JSON output are byte-identical across the
-  move, by the recorded diff. (R-RDS-24, C-RDS-8, DEC-RDS-009)
+  lexer, takes the stage grammar as a parameter, and stays stdlib-only; the
+  moved debug log line carries a neutral label, not `stage-citations:`.
+  `tools/stage_citations.py` imports from `_common` only the names it uses,
+  re-exports `run_scripts` in the redundant alias form, keeps
+  `shell_invocations(script)`, `workflow_invocations(text)` and
+  `workflow_stages(root, only=())` as documented wrappers that pass
+  `MAKE_REF`, and no longer imports `re` or `shlex`, so `ruff check tools` is
+  clean. Its tests pass unedited. Its text and JSON output are byte-identical
+  across the move, by the recorded diff. The imports, the wrappers and the
+  label are read directly; ruff runs in the ladder of AC-RDS-20. (R-RDS-24,
+  C-RDS-8, DEC-RDS-009)
   _Verified by:_ `pytest -k "test_make_in_command_position_is_an_invocation or test_an_unreadable_workflow_exits_two_rather_than_a_traceback or test_an_unknown_workflow_filter_exits_two or test_common_module_is_stdlib_only"` · stage: `make test`
 
 - [ ] **AC-RDS-22:** `docs/next-steps.md` carries one numbered item for
@@ -1015,7 +1147,14 @@ the same day; each command is in the proposal.
   - gives its scope — settle each listed header, decide whether the
     vocabulary gains a "shipped" value, amend `VOCABULARY`;
   - says the spec-status report stays non-zero until it lands, and the quiet
-    quarter starts only then.
+    quarter starts only then;
+  - says that a status recorded anywhere but the `Status` header must be
+    taught to `tools/spec_status.py`, or the report stays red for good;
+  - says that the exception to the records convention is written down
+    before any shipped package's header is edited;
+  - says that the follow-up decides whether a "shipped" value exists that an
+    agent may set at a package's closure, and why: without one every closing
+    pull request reads `draft-but-complete`.
 
   This package's own header is `DRAFT` when its milestones close, and the
   pull request asks the maintainer to settle it at merge. No dated record is
