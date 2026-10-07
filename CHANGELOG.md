@@ -5,6 +5,38 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — two hygiene reports: dead code and spec status (M2)
+
+- **`report-dead-code-and-spec-status`.** Two report targets, composed into
+  neither `ci` nor `pre-pr` nor any CI job, each exiting 0 when nothing is
+  listed, 1 when something is and 2 when it cannot run.
+  `make dead-code` (`tools/dead_code.py`) runs vulture once, as a process,
+  over every `[tool.coverage.run] source` tree, with `tests/` counted as a
+  user of the code and never reported. Vulture joins the `dev` extra floored
+  at `vulture>=2.15` — exit code 3 means "dead code found" from 2.9, Python
+  3.14 is supported from 2.15, and pip leaves a satisfied bare requirement
+  alone — and never `[project] dependencies`. The confidence is
+  `[tool.specgraph] dead_code_min_confidence`, vulture's level for an unused
+  definition, not the reflection plan's 80: at 80, `python -m vulture
+  openspec_graph tools --min-confidence 80` printed nothing on 2026-10-07,
+  because vulture rates every unused function, method, class, property,
+  attribute and variable lower. `tools/dead_code_whitelist.txt` is applied
+  by name after the run, and is caught stale twice: an entry that binds
+  nothing fails a test in `make test`, by `ast`, and an entry that hides
+  nothing is listed by the report. Its first output, `make dead-code` on
+  2026-10-07, listed five symbols for the M4 package that removes them.
+  `make spec-status` (`tools/spec_status.py`) lists each change package's
+  `Status` headers beside its criteria, milestones, CHANGELOG entries and
+  unrun verification stages, read anchored and comment-blind rather than
+  through `parse_spec`. It raises four findings: `draft-but-complete`,
+  `settled-but-empty`, `headers-disagree` and `header-unrecognised`. No
+  header was edited. Settling them is the maintainer's follow-up,
+  `settle-package-status-headers` (`docs/next-steps.md` item 24), and
+  `make spec-status` stays red until it lands; its first output, on
+  2026-10-07, raised ten findings. The workflow lexer behind both
+  `make stage-citations` and `make spec-status` moved into `tools/_common.py`,
+  with `stage_citations`' output unchanged byte for byte.
+
 ### Changed — the test suite split by concern (M2)
 
 - **`shape-the-test-suite`.** Every test module now sits at or under 700

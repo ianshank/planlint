@@ -1276,7 +1276,7 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
     own read of the same file reaches first; the not-a-directory root; and
     the `__main__` line. `make lint`: exit 0. `make typecheck`: no issues.
 
-## Milestone 4 — Documents, the reports table and the records
+## Milestone 4 — Documents, the reports table and the records [DONE]
 
 - `tests/test_ci_makefile.py`, written before the table and run red
   (R-RDS-15). Planned tests:
@@ -1377,6 +1377,118 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
     that closes this milestone;
   - `python -m vulture --version`.
 - **Gate:** `make docs-check`, then `make pre-pr`.
+  **Recorded (Milestone 4, 2026-10-07, on `f6d346b` + the Milestone 4 tree):**
+  - *Red first: the reports-table guard.*
+    `test_every_report_target_has_a_row_in_the_hooks_reports_table` and
+    `test_a_report_target_without_a_hooks_row_is_named` were written before
+    the section. `python -m pytest tests/test_ci_makefile.py -q -p
+    no:cacheprovider -o addopts="" -k "hooks_reports_table or
+    without_a_hooks_row" -rA`: the real-tree test failed, `AssertionError:
+    docs/hooks.md has no reports table rows`. The planted test passed every
+    case from its first run, its helpers `_hooks_report_rows` and
+    `_reports_table_violations` being written with it. Its red is its
+    planted counter-examples, each named: `ledger has no row in the reports
+    table` and `the row for census names no report target`; a row above
+    the section is not read. The real-tree test also asserts that the
+    section names `settle-package-status-headers`. The section is cut by
+    `tests.support.markdown_section`, Milestone 1's helper.
+  - *`docs/hooks.md`.* `## Reports, not gates` before `## Claude Code
+    hooks`: a table `| Target | Reads | Exit |` with one row per report
+    target, each first cell the backticked command — `make
+    coverage-per-file`, `make matcher-accuracy`, `make stage-citations`,
+    `make dead-code`, `make spec-status`. The spec-status row's exit cell
+    says it stays red until `settle-package-status-headers` lands. The
+    paragraph under it says: none is composed into `ci`, `pre-pr` or a CI
+    job, held by `test_every_report_target_stays_out_of_the_ladder`; each
+    becomes a gate only through its own package after a quarter of an
+    empty report; `make dead-code` needs the dev extra and exits 2 without
+    it; `make spec-status` never edits a header and stays red until the
+    follow-up lands, which starts its quiet quarter. The `## CI hooks`
+    table is untouched. `python -m pytest tests/test_ci_makefile.py
+    tests/test_ci_workflow.py -q -o addopts=""`: 39 passed, the two
+    CI-table tests among them. The reports rows' first cells, `` `make
+    dead-code` `` and the like, are not read by
+    `test_hooks_ci_table_lists_every_ci_job`'s own whole-file pattern, which
+    matches a single backticked word.
+  - *`docs/aqa.md`,* after the `make stage-citations` paragraph: both
+    reports, what each reads, the exit contract, `tests/` as a user, the
+    whitelist's two stale checks, that `make spec-status` never edits a
+    header, and that it stays red until the follow-up lands.
+  - *`docs/architecture/c4.md` §4, the `tools/*` row:* `dead_code.py`
+    (`make dead-code`) and `spec_status.py` (`make spec-status`) named.
+    The groups sentence's counts are replaced by the lists they summarised:
+    the gate scripts by name, and `spec_status` among the generators and
+    reports that import `openspec_graph`, taking its root as `--root`.
+    `dead_code` is described as the one report that imports neither
+    `openspec_graph` nor vulture and runs vulture as a process. The sentence
+    also says every script shares helpers, the workflow lexer among them,
+    only through `_common.py`.
+  - *`tools/AGENTS.md`:* the "No third-party dependencies" bullet names
+    `spec_status` among the reports importing `openspec_graph` and says
+    `dead_code` imports neither it nor vulture, running vulture as a
+    process. The argv paragraph puts both in the program-name-first group.
+    Sentences were replaced, not added: `wc -l tools/AGENTS.md` reads 59,
+    as before. `python -m pytest tests/test_agent_artifacts.py -q -k
+    "nested_agents or agent_index_links"`: 43 passed.
+  - *`docs/next-steps.md`:* item 24, after item 23 and before `## Skills /
+    agents`, with the text above verbatim; it was not present before.
+    `make docs-check`: `docs-check: all required docs present and linked
+    from README`. `python -m pytest tests/test_rule_registry_docs.py -q`: 6
+    passed.
+  - *`CHANGELOG.md`:* under `## [Unreleased]`, `### Added — two hygiene
+    reports: dead code and spec status (M2)` with one bullet led by
+    ``- **`report-dead-code-and-spec-status`.**``. It names both targets,
+    the floored dev extra and its reasons, the confidence key and why not
+    80 (with the dated `python -m vulture openspec_graph tools
+    --min-confidence 80` reading), the whitelist and its two stale checks,
+    the four findings, that no header was edited, the follow-up
+    `settle-package-status-headers` that owns them, and that `make
+    spec-status` stays red until it lands. Released sections are untouched.
+    `python -m pytest tests/ -q -o addopts="" -k changelog`: 6 passed.
+    `make spec-status` now reads the entry: this package's CHANGELOG column
+    is `Unreleased`.
+  - *`make stage-citations` after the change,* exit 0. The figures include
+    this package's own spec, and the output is identical to Milestone 0's:
+    `52 spec(s); 16 stage(s) cited; 12 on a verification line; 6 of those
+    invoked by no scanned workflow: ci, coverage-tools, security,
+    thresholds, validate, wheel-check`.
+  - *`make help`,* exit 0: Milestone 0's 22 lines plus `dead-code
+    Report unreferenced code under the coverage source trees (vulture) — a
+    report, not a gate` and `spec-status    Report each change package's
+    Status header beside its evidence — a report, not a gate`, after
+    `stage-citations`. Both names fit the fourteen-character column.
+  - *`python -m vulture --version`:* `vulture 2.16`.
+  - *`make dead-code` at the tree this milestone closes,* exit 2 from
+    `make`, 1 from the script, unchanged from Milestone 2:
+
+    ```
+    python tools/dead_code.py
+    dead-code: openspec_graph, tools at confidence 60 (vulture 2.16; tests/ read as a user); 2 whitelist entries read
+    openspec_graph/parse_model.py:58: unused property 'has_selector' (60% confidence)
+    openspec_graph/parse_semantics.py:510: unused function 'speckit_section_body' (60% confidence)
+    openspec_graph/parse_semantics.py:546: unused function 'speckit_subsection_body' (60% confidence)
+    tools/matcher_accuracy.py:119: unused method 'precision_pct' (60% confidence)
+    tools/matcher_accuracy.py:123: unused method 'recall_pct' (60% confidence)
+    5 unreferenced symbols; 0 stale whitelist entries
+    make: *** [Makefile:98: dead-code] Error 1
+    ```
+
+  - *`make spec-status` at the tree this milestone closes,* exit 2 from
+    `make`, 1 from the script. It is Milestone 3's recorded output line for
+    line, but for this package's own row, now that Milestones 0 to 4 are
+    `[DONE]` and the CHANGELOG entry exists:
+
+    ```
+    report-dead-code-and-spec-status         spec DRAFT                           0/22      milestones 5/6   Unreleased  thresholds, validate        -
+    51 package(s); 10 finding(s): 0 header-unrecognised, 1 headers-disagree, 9 draft-but-complete, 0 settled-but-empty
+    ```
+
+    Still no finding on this row: no criterion is ticked.
+  - *Gate.* `make docs-check`: exit 0. `make pre-pr`: exit 0 in 174 s of
+    wall time (`date +%s` before and after), ending `pre-pr: all enterprise
+    gates passed`; its recipe lines run neither report. Its four scoped
+    lines: `openspec_graph/` 2276/2292 and 744/762, `tools/` 1305/1354 and
+    434/460, every floor where it was.
 
 ## Milestone 5 — Confirm, re-point and hand off
 

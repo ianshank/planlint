@@ -15,6 +15,7 @@ import pytest
 
 from tests.support import (
     load_tool,
+    markdown_section,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -420,6 +421,75 @@ def test_a_report_target_composed_into_the_ladder_is_named(
     assert _PLANTED_REPORT_MAKEFILE.count(before) == 1, f"{label}: anchor {before!r} not unique"
     mutated = _PLANTED_REPORT_MAKEFILE.replace(before, after)
     assert _report_target_violations(mutated, "audit") == expected, label
+
+# --- docs/hooks.md's reports table: a row per report target, no other row ---
+
+#: The section docs/hooks.md lists the report targets under (R-RDS-15).
+_REPORTS_HEADING = "## Reports, not gates"
+
+#: The follow-up the spec-status row or the text under the table must name.
+_SETTLING_PACKAGE = "settle-package-status-headers"
+
+_REPORT_ROW = re.compile(r"^\|\s*`make ([\w-]+)`", re.MULTILINE)
+
+def _hooks_report_rows(hooks_text: str) -> list[str]:
+    """The target of every row in docs/hooks.md's reports table, by the
+    backticked `make <target>` in its first cell, read from the section that
+    begins `## Reports, not gates` up to the next `## ` heading."""
+    return _REPORT_ROW.findall(markdown_section(hooks_text, _REPORTS_HEADING))
+
+def _reports_table_violations(hooks_text: str, report_targets: list[str]) -> list[str]:
+    """Each report target with no row, and each row naming no report target."""
+    rows = _hooks_report_rows(hooks_text)
+    found = [f"{name} has no row in the reports table" for name in report_targets
+             if name not in rows]
+    found += [f"the row for {name} names no report target" for name in rows
+              if name not in report_targets]
+    return found
+
+@pytest.mark.integration
+def test_every_report_target_has_a_row_in_the_hooks_reports_table() -> None:
+    """R-RDS-15: the reports table and the Makefile's report targets agree as
+    sets, and the section says the spec-status report stays red until its
+    follow-up lands."""
+    hooks = (REPO_ROOT / "docs" / "hooks.md").read_text(encoding="utf-8")
+    assert _hooks_report_rows(hooks), "docs/hooks.md has no reports table rows"
+    assert _reports_table_violations(hooks, _report_targets(_makefile_text())) == []
+    assert _SETTLING_PACKAGE in markdown_section(hooks, _REPORTS_HEADING)
+
+_PLANTED_REPORTS_SECTION = textwrap.dedent(
+    """\
+    ## Reports, not gates
+
+    | Target | Reads | Exit |
+    |---|---|---|
+    | `make audit` | the audited things | 0 / 1 / 2 |
+    | `make census` | the counted things | 0 / 2 |
+
+    ## Claude Code hooks
+    """
+)
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("label", "targets", "expected"),
+    [
+        ("every target has its row", ["audit", "census"], []),
+        (
+            "a report target without a row",
+            ["audit", "census", "ledger"],
+            ["ledger has no row in the reports table"],
+        ),
+        ("a row naming no report target", ["audit"], ["the row for census names no report target"]),
+    ],
+)
+def test_a_report_target_without_a_hooks_row_is_named(
+    label: str, targets: list[str], expected: list[str]
+) -> None:
+    """R-RDS-15, R-RDS-19: a missing row and a row naming no report target are
+    each named; a row outside the section is not read."""
+    planted = "| `make ledger` | above the section | 0 |\n\n" + _PLANTED_REPORTS_SECTION
+    assert _reports_table_violations(planted, targets) == expected, label
 
 @pytest.mark.integration
 def test_the_contract_job_is_not_wired_into_a_make_target() -> None:
