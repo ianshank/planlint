@@ -1011,3 +1011,30 @@ collected count; the red runs are recorded here and never committed.
     `tools/` 96.4% (946/981) and 93.9% (323/344), the four floors unchanged
     in value. Every criterion is ticked against the evidence recorded above
     and in Milestones 0–6.
+  **Recorded (Copilot review of PR #42, 2026-10-07, on `1c8917c` + the fixes):**
+  - *Routing guard gap.* `inline_cli_spawns` matched only a literal
+    `subprocess.run([...])`. Run against the `1c8917c` engine, three planted
+    spawns went unnamed: `import subprocess as sp` then `sp.run([...])`;
+    `from subprocess import run` then `run([...])`; and an argv built in a
+    local, then `subprocess.run(argv)`. One `import_bindings` helper now
+    resolves every import spelling, shared with the tier engine, which used
+    the same logic inline. The argv's string literals are read through the
+    locals and module constants it is built in. All three cases are named,
+    and the real tree has no offender. The tier tally is unchanged at 573
+    `unit`, 298 `integration` and 198 `e2e` of 1069.
+  - *Duplicate tier registration.* The registration test built a mapping, so
+    a `unit` registered twice collapsed and passed; the old logic on a
+    planted duplicate returned "passes". It now compares the list of names,
+    through `_registration_problems`.
+    `test_a_duplicated_or_missing_tier_registration_is_named` names a
+    duplicate, a missing tier, a blank criterion and a lax `addopts`.
+  - *Stale Dockerfile pointer.* The COPY-set guard is named as
+    `tests/test_release_surface.py`, which holds it since Milestone 3.
+  - *Split.* The new planted cases would have taken
+    `tests/test_suite_shape.py` past the bound, at 689 lines. By R-TSS-1, the
+    routing and loop guards moved, names unchanged, to
+    `tests/test_suite_routing.py` (204 lines; `test_suite_shape.py` is now
+    555). The planting helper moved to `tests/shape_support.py` as `plant`.
+    The R-TSS-2 baseline now excludes both guard modules: 1057 names, sha256
+    prefix `2f62db0aee56ef40`, and 1602 collected with both ignored —
+    unchanged.
