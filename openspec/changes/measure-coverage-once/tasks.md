@@ -255,6 +255,15 @@ committed.
   name or the trailing slash is the spelling that works end to end. The planted
   first-entry-without-`fail_under` case prints "… openspec_graph_line_fail_under, and
   [tool.coverage.report] fail_under -- the first source entry's floor -- is absent too".
+  **Review correction (this commit):** the first implementation normalised the scope only
+  for the first-entry comparison and built the scoped key from the raw spelling, so
+  `--scope openspec_graph/` fell past a planted scoped 95 onto the unscoped 90 and
+  `--scope tools/` exited 2 with the `tools_*` keys present — found by the Copilot review
+  on PR #41 (comment r4201986513), reproduced red in the extended scoped tests, then fixed:
+  `scoped_floor` and `missing_floor_message` normalise first and build the key from the
+  normalised name, as R-MCO-3 requires; the three scoped tests now cover the bare,
+  slash-suffixed and `./` spellings (the last at the helper level, because
+  `coverage_totals` is unchanged by the Non-Goals). Both modules green after the fix.
 - **Gate:** `make test`
 
 ## Milestone 2 — One run, its guards seen red first, and the records  [DONE]

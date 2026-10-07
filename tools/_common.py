@@ -302,7 +302,11 @@ def coverage_sources(pyproject: Path) -> list[str]:
 def scoped_floor(pyproject: Path, scope: str, kind: str) -> int | None:
     """The ``kind`` (``"line"`` or ``"branch"``) floor for one measured tree.
 
-    In this order (R-MCO-3): the tree's own ``[tool.specgraph]
+    ``scope`` is normalised first -- ``"tools"``, ``"tools/"`` and ``"./tools"``
+    are one tree -- and the scoped key is built from the normalised name
+    (``tools_line_fail_under``, never ``tools/_line_fail_under``), so no
+    spelling can slip past a stricter scoped floor onto the unscoped one.
+    Then, in this order (R-MCO-3): the tree's own ``[tool.specgraph]
     <scope>_<kind>_fail_under`` key; else, when ``scope`` is the FIRST entry of
     ``[tool.coverage.run] source``, the unscoped locator in
     :data:`UNSCOPED_FLOOR_LOCATORS`; else ``None``, which the caller turns into
@@ -314,10 +318,11 @@ def scoped_floor(pyproject: Path, scope: str, kind: str) -> int | None:
     this repository's own ``pyproject.toml``. Every later entry keeps
     R-GTC-11 as written: no key, no gate, exit 2.
     """
+    scope = normalize_scope(scope)
     own = read_pyproject_int(pyproject, SCOPED_FLOOR_SECTION, scoped_floor_key(scope, kind))
     if own is not None:
         return own
-    if normalize_scope(scope) in coverage_sources(pyproject)[:1]:
+    if scope in coverage_sources(pyproject)[:1]:
         section, key = UNSCOPED_FLOOR_LOCATORS[kind]
         logger.debug(
             "scoped_floor: %s is the first coverage source; reading %s %s", scope, section, key
@@ -327,12 +332,17 @@ def scoped_floor(pyproject: Path, scope: str, kind: str) -> int | None:
 
 
 def missing_floor_message(pyproject: Path, scope: str, kind: str) -> str:
-    """Both places a scoped floor could have lived, for the checkers' exit-2 line."""
+    """Both places a scoped floor could have lived, for the checkers' exit-2 line.
+
+    Names the scoped key as :func:`scoped_floor` looked it up -- built from the
+    normalised scope -- so the reader is sent to a key that can exist.
+    """
+    scope = normalize_scope(scope)
     section, key = UNSCOPED_FLOOR_LOCATORS[kind]
     where = f"{SCOPED_FLOOR_SECTION} {scoped_floor_key(scope, kind)}"
     sources = coverage_sources(pyproject)
     first = sources[0] if sources else None
-    if first is not None and normalize_scope(scope) == first:
+    if first is not None and scope == first:
         return f"{where}, and {section} {key} -- the first source entry's floor -- is absent too"
     return (
         f"{where}; the unscoped {key} applies only to the first {COVERAGE_RUN_SECTION} source "

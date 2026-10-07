@@ -640,10 +640,14 @@ def test_a_scoped_key_on_the_first_source_is_honoured_and_is_the_misconfiguratio
         tools_line_fail_under=90, tools_branch_fail_under=80,
     )
     _cov_json(tmp_path / "coverage.json", {"openspec_graph/cli.py": (100, 92, 20, 18)})
-    assert run_tool_main(
-        "cf_dup", "check_coverage_floor.py", "coverage.json", "--scope", "openspec_graph", cwd=tmp_path
-    ) == 1, "92% must fail the planted scoped floor of 95, not pass the unscoped 90"
+    for spelling in ("openspec_graph", "openspec_graph/"):
+        assert run_tool_main(
+            "cf_dup", "check_coverage_floor.py", "coverage.json", "--scope", spelling, cwd=tmp_path
+        ) == 1, f"92% under --scope {spelling} must fail the planted scoped 95, not pass the unscoped 90"
     common = load_tool("common_dup", "_common.py")
+    for spelling in ("openspec_graph", "openspec_graph/", "./openspec_graph"):
+        assert common.scoped_floor(planted, spelling, "line") == 95, spelling
+        assert common.scoped_floor(planted, spelling, "branch") == 80, spelling
     assert common.duplicate_scoped_floor_keys(planted) == ["openspec_graph_line_fail_under"]
 
 
@@ -658,6 +662,12 @@ def test_a_declared_scope_that_is_not_first_still_exits_2_without_its_key(
     err = capsys.readouterr().err
     assert "tools_line_fail_under" in err and "tools_branch_fail_under" in err
     assert "openspec_graph" in err, "the message must name the first entry the unscoped floors belong to"
+    _pyproject_with_sources(
+        tmp_path / "pyproject.toml", ["openspec_graph", "tools"],
+        branch_fail_under=80, tools_line_fail_under=90, tools_branch_fail_under=80,
+    )
+    for spelling in ("tools", "tools/"):
+        assert _both_checkers(tmp_path, "coverage.json", "--scope", spelling) == (0, 0), spelling
 
 
 def test_the_first_source_without_its_unscoped_floor_is_named_as_absent(
