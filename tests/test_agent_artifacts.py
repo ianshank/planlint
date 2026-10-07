@@ -142,12 +142,14 @@ def _frontmatter_list(raw: str) -> list[str]:
 # --- evals ------------------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_eval_suite_is_not_empty() -> None:
     """A silently-empty glob would make every case-level test vacuous."""
     assert len(EVAL_CASES) >= 20, (
         f"expected the eval suite to be populated, found {len(EVAL_CASES)} case(s)"
     )
 
+@pytest.mark.integration
 @pytest.mark.parametrize("case", EVAL_CASES, ids=_ids(EVAL_CASES))
 def test_eval_case_has_a_prompt_with_required_frontmatter(case: Path) -> None:
     prompt = case / "prompt.md"
@@ -162,6 +164,7 @@ def test_eval_case_has_a_prompt_with_required_frontmatter(case: Path) -> None:
     body = text.split("\n---\n", 1)[1].strip()
     assert body, f"{case.name}: prompt has frontmatter but no actual prompt text"
 
+@pytest.mark.integration
 @pytest.mark.parametrize("case", EVAL_CASES, ids=_ids(EVAL_CASES))
 def test_eval_case_declares_the_plugin_under_test(case: Path) -> None:
     """A case that forgets the plugin tests the base agent, not this skill.
@@ -177,6 +180,7 @@ def test_eval_case_declares_the_plugin_under_test(case: Path) -> None:
         f"{case.name}: plugins {fields['plugins']!r} does not name exactly [{declared}]"
     )
 
+@pytest.mark.integration
 @pytest.mark.parametrize("case", EVAL_CASES, ids=_ids(EVAL_CASES))
 def test_eval_case_bounds_its_turns(case: Path) -> None:
     """``max_turns`` was only checked for truthiness, so ``banana`` passed."""
@@ -186,6 +190,7 @@ def test_eval_case_bounds_its_turns(case: Path) -> None:
         f"{case.name}: max_turns {raw!r} is not a positive integer"
     )
 
+@pytest.mark.integration
 @pytest.mark.parametrize("case", EVAL_CASES, ids=_ids(EVAL_CASES))
 def test_eval_case_tags_come_from_the_known_vocabulary(case: Path) -> None:
     """An invented tag drops the case out of every tag-filtered run, silently."""
@@ -198,6 +203,7 @@ def test_eval_case_tags_come_from_the_known_vocabulary(case: Path) -> None:
         "or fix the typo"
     )
 
+@pytest.mark.integration
 @pytest.mark.parametrize("case", EVAL_CASES, ids=_ids(EVAL_CASES))
 def test_eval_case_has_at_least_one_typed_grader(case: Path) -> None:
     """An ungraded case always passes, which is worse than not having it."""
@@ -251,6 +257,7 @@ def _readme_tables() -> tuple[set[str], set[str]]:
     row = re.compile(r"^\| `([a-z0-9-]+)` \|", re.MULTILINE)
     return set(row.findall(head)), set(row.findall(tail))
 
+@pytest.mark.integration
 def test_readme_tables_index_every_case_and_only_real_ones() -> None:
     """The README's tables are the suite's index; a stale row hides a gap.
 
@@ -267,6 +274,7 @@ def test_readme_tables_index_every_case_and_only_real_ones() -> None:
         f"case(s) exist but are in no README table: {sorted(actual - listed)}"
     )
 
+@pytest.mark.integration
 def test_adversarial_table_and_the_adversarial_tag_agree() -> None:
     """Tagging is how a runner selects the half that matters."""
     _, adversarial = _readme_tables()
@@ -285,6 +293,7 @@ def test_adversarial_table_and_the_adversarial_tag_agree() -> None:
         f"tagged-not-tabled={sorted(tagged - adversarial)}"
     )
 
+@pytest.mark.integration
 def test_eval_prompts_quote_no_credential_shaped_literals() -> None:
     """`make security` scans every tracked file, and these discuss secrets."""
     patterns = (r"AKIA[0-9A-Z]{16}", r"gh[pousr]_[A-Za-z0-9]{20,}",
@@ -300,6 +309,7 @@ def test_eval_prompts_quote_no_credential_shaped_literals() -> None:
 # --- context7.json ----------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_context7_config_is_valid_and_its_folders_exist() -> None:
     """A retrieval config scoping a renamed folder indexes nothing, silently."""
     config = json.loads(CONTEXT7.read_text(encoding="utf-8"))
@@ -320,6 +330,7 @@ def test_context7_config_is_valid_and_its_folders_exist() -> None:
     for name in config.get("excludeFiles", []):
         assert (REPO_ROOT / name).exists(), f"context7.json excludes missing file {name!r}"
 
+@pytest.mark.integration
 def test_context7_indexes_the_skill_and_excludes_the_evals() -> None:
     """The scoping decision itself, pinned: skill in, eval prompts out.
 
@@ -349,6 +360,7 @@ def _index_id(path: Path) -> str:
     """`tools/AGENTS.md` rather than three test cases all called `AGENTS.md`."""
     return path.relative_to(REPO_ROOT).as_posix()
 
+@pytest.mark.e2e
 @pytest.mark.parametrize("path", AGENT_INDEXES, ids=[_index_id(p) for p in AGENT_INDEXES])
 def test_agent_index_links_resolve(path: Path) -> None:
     """Every path advertised must exist, or the index sends readers nowhere.
@@ -373,6 +385,7 @@ def test_agent_index_links_resolve(path: Path) -> None:
     ]
     assert not missing, f"{_index_id(path)} links to missing path(s): {missing}"
 
+@pytest.mark.integration
 def test_agents_md_declares_no_invariant_ids() -> None:
     """A self-referential trap this repository is uniquely able to walk into.
 
@@ -410,6 +423,7 @@ def test_agents_md_declares_no_invariant_ids() -> None:
         "detect adopt it as this repository's invariant source"
     )
 
+@pytest.mark.integration
 def test_llms_txt_states_the_exit_code_contract() -> None:
     """It is a summary for agents; omitting the contract makes it misleading."""
     text = LLMS_TXT.read_text(encoding="utf-8")
@@ -439,6 +453,7 @@ PRECEDENCE_CLAUSE = "SKILL.md` wins"
 # the root pointer that would have been read instead. From the plan's §5.
 MAX_NESTED_LINES = 60
 
+@pytest.mark.e2e
 def test_nested_agents_discovery_finds_a_planted_file(tmp_path: Path) -> None:
     """The discovery these contracts rest on actually discovers.
 
@@ -469,6 +484,7 @@ def test_nested_agents_discovery_finds_a_planted_file(tmp_path: Path) -> None:
                        capture_output=True, text=True, check=False).stdout.strip()
     ), "precondition: the planted file is untracked, and was still discovered"
 
+@pytest.mark.e2e
 @pytest.mark.parametrize("path", NESTED_AGENTS, ids=_NESTED_IDS)
 def test_nested_agents_file_states_its_precedence(path: Path) -> None:
     """Nearest-file-wins makes a nested file the one an agent reads first.
@@ -482,6 +498,7 @@ def test_nested_agents_file_states_its_precedence(path: Path) -> None:
         f"must say that SKILL.md wins, as the root AGENTS.md does"
     )
 
+@pytest.mark.e2e
 @pytest.mark.parametrize("path", NESTED_AGENTS, ids=_NESTED_IDS)
 def test_nested_agents_file_declares_no_invariant_ids(path: Path) -> None:
     """Defence in depth against the trap the root guard describes.
@@ -494,6 +511,7 @@ def test_nested_agents_file_declares_no_invariant_ids(path: Path) -> None:
     found = re.findall(r"\bINV-\d+\b", path.read_text(encoding="utf-8"))
     assert not found, f"{_index_id(path)} declares invariant id(s) {found}"
 
+@pytest.mark.e2e
 @pytest.mark.parametrize("path", NESTED_AGENTS, ids=_NESTED_IDS)
 def test_nested_agents_file_stays_short(path: Path) -> None:
     lines = path.read_text(encoding="utf-8").splitlines()
@@ -503,6 +521,7 @@ def test_nested_agents_file_stays_short(path: Path) -> None:
         f"read the root pointer instead"
     )
 
+@pytest.mark.e2e
 @pytest.mark.parametrize("path", NESTED_AGENTS, ids=_NESTED_IDS)
 def test_nested_agents_file_has_a_balanced_mermaid_block(path: Path) -> None:
     """Each file carries a diagram of what its directory is for, and the fence
@@ -523,6 +542,7 @@ def test_nested_agents_file_has_a_balanced_mermaid_block(path: Path) -> None:
 # --- M5: a cited command that does not exist ---------------------------------
 
 
+@pytest.mark.e2e
 def test_every_make_citation_in_an_agent_index_names_a_real_target() -> None:
     """G004, turned on this repository's own agent-facing prose.
 

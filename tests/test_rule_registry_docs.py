@@ -21,7 +21,11 @@ import json
 import re
 from pathlib import Path
 
+import pytest
+
 from openspec_graph.rules import RULES, rule_table
+
+pytestmark = pytest.mark.integration
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -113,4 +117,17 @@ def test_rule_set_matches_baseline() -> None:
         "tests/baseline_rules.json with `planlint rules --json > tests/baseline_rules.json`"
     )
     # sanity: the baseline is non-empty and covers the rules we rely on
+    assert len(baseline) == len(RULES)
+
+
+# Moved from tests/test_graft_rules.py by shape-the-test-suite (R-TSS-1): the
+# one test there that reads the tree, beside the other baseline guard, so that
+# module stays one tier and inside the line bound.
+def test_rule_registry_baseline_is_unchanged() -> None:
+    """AC-UG-8: no rule id added, no finding emitted for an omitted GIVEN."""
+
+    baseline = json.loads(
+        (Path(__file__).resolve().parent / "baseline_rules.json").read_text(encoding="utf-8")
+    )
+    assert {r["id"] for r in baseline} == {r.ident for r in RULES}
     assert len(baseline) == len(RULES)

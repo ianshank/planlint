@@ -89,15 +89,18 @@ def _concurrency_offenders(text: str) -> list[str]:
 # --- R-HCW-4 / R-HCW-5: least privilege, stated and commented ---------------
 
 
+@pytest.mark.integration
 def test_ci_declares_read_only_permissions_at_the_top() -> None:
     """AC-HCW-4: the default for every job is `contents: read` and nothing
     else; a job widens only in its own block."""
     assert _top_level_block(_ci_text(), "permissions") == {"contents": "read"}
 
+@pytest.mark.integration
 def test_no_write_permission_anywhere_in_ci() -> None:
     """AC-HCW-4: no `write` under any permissions: block in ci.yml."""
     assert not _write_permissions(_ci_text()), _write_permissions(_ci_text())
 
+@pytest.mark.integration
 def test_every_job_level_permissions_block_carries_a_comment() -> None:
     """AC-HCW-5: a widening (or a narrowing) names its reason, in a comment
     somewhere above it inside the same job."""
@@ -106,6 +109,7 @@ def test_every_job_level_permissions_block_carries_a_comment() -> None:
         offenders += _uncommented_permission_blocks(workflow.read_text(encoding="utf-8"), _rel(workflow))
     assert not offenders, "\n".join(offenders)
 
+@pytest.mark.integration
 def test_security_reads_pull_requests_and_posts_no_comments() -> None:
     """AC-HCW-6: gitleaks-action's commit listing needs `pull-requests: read`;
     comments are off so no write permission is ever needed."""
@@ -114,6 +118,7 @@ def test_security_reads_pull_requests_and_posts_no_comments() -> None:
     security = workflow_job_blocks(_ci_text())["security"]
     assert re.search(r'^\s*GITLEAKS_ENABLE_COMMENTS:\s*"false"\s*$', security, re.MULTILINE), security
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "label, body, expected",
     [
@@ -145,6 +150,7 @@ def test_a_permissive_workflow_is_named(label: str, body: str, expected: str | N
         offenders = _write_permissions(body)
         assert offenders and expected in offenders[0], (label, offenders)
 
+@pytest.mark.unit
 def test_an_uncommented_job_permissions_block_is_named() -> None:
     body = "jobs:\n  quiet:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: read\n"
     offenders = _uncommented_permission_blocks(body, "planted.yml")
@@ -153,6 +159,7 @@ def test_an_uncommented_job_permissions_block_is_named() -> None:
 # --- R-HCW-6: every job has a bounded timeout -------------------------------
 
 
+@pytest.mark.integration
 def test_every_job_in_every_workflow_has_a_timeout_inside_the_range() -> None:
     """AC-HCW-8: a hung step costs minutes, not GitHub's six-hour default."""
     low, high = _timeout_range()
@@ -161,16 +168,19 @@ def test_every_job_in_every_workflow_has_a_timeout_inside_the_range() -> None:
         offenders += _timeout_offenders(workflow.read_text(encoding="utf-8"), _rel(workflow), low, high)
     assert not offenders, "\n".join(offenders)
 
+@pytest.mark.unit
 def test_a_job_without_a_timeout_is_named() -> None:
     body = "jobs:\n  fast:\n    runs-on: ubuntu-latest\n    timeout-minutes: 10\n  slow:\n    runs-on: ubuntu-latest\n"
     assert _timeout_offenders(body, "planted.yml", 5, 45) == ["planted.yml: job slow has no timeout-minutes"]
 
+@pytest.mark.unit
 def test_a_timeout_above_the_ceiling_is_named() -> None:
     body = "jobs:\n  typo:\n    runs-on: ubuntu-latest\n    timeout-minutes: 300\n"
     assert _timeout_offenders(body, "planted.yml", 5, 45) == [
         "planted.yml: job typo timeout-minutes 300 is outside 5..45"
     ]
 
+@pytest.mark.integration
 def test_a_missing_timeout_range_key_fails_rather_than_skips(tmp_path: Path) -> None:
     """AC-HCW-9: a pyproject without the range is a misconfiguration, so the
     guard fails loudly instead of passing vacuously."""
@@ -182,12 +192,14 @@ def test_a_missing_timeout_range_key_fails_rather_than_skips(tmp_path: Path) -> 
 # --- R-HCW-7: concurrency that never cancels a push to main -----------------
 
 
+@pytest.mark.integration
 def test_ci_concurrency_never_cancels_a_push() -> None:
     """AC-HCW-10: pull requests group by ref and cancel in progress; every
     other event groups by SHA, so a `main` run is neither cancelled nor left
     pending to be superseded."""
     assert not _concurrency_offenders(_ci_text()), "\n".join(_concurrency_offenders(_ci_text()))
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "label, block, expected",
     [
@@ -209,6 +221,7 @@ def test_a_cancelling_or_missing_concurrency_group_is_named(label: str, block: s
     offenders = _concurrency_offenders(f"name: CI\n{block}jobs:\n  t:\n    runs-on: ubuntu-latest\n")
     assert any(expected in offender for offender in offenders), (label, offenders)
 
+@pytest.mark.integration
 def test_release_has_no_concurrency_group() -> None:
     """AC-HCW-10: a tag is its own ref and must never be cancelled."""
     assert _top_level_block(RELEASE_YML.read_text(encoding="utf-8"), "concurrency") is None
@@ -216,6 +229,7 @@ def test_release_has_no_concurrency_group() -> None:
 # --- C-HCW-2: the thresholds guard is quiet on every new line ---------------
 
 
+@pytest.mark.integration
 def test_threshold_guard_stays_quiet_on_timeouts_env_and_concurrency(tmp_path: Path) -> None:
     """AC-HCW-27: nothing this package adds to a workflow registers with
     tools/check_no_hardcoded_thresholds.py, and a real floor still does."""
@@ -248,6 +262,7 @@ def test_threshold_guard_stays_quiet_on_timeouts_env_and_concurrency(tmp_path: P
     planted.write_text(planted.read_text(encoding="utf-8") + "      - run: pytest --cov-fail-under=90\n", encoding="utf-8")
     assert guard.check_workflow(planted), "a planted coverage floor went unreported"
 
+@pytest.mark.integration
 def test_threshold_guard_stays_quiet_on_a_sha_pinned_uses_line(tmp_path: Path) -> None:
     """AC-ASP-16: a `uses: owner/repo@<sha> # vX.Y.Z` line registers nothing
     with tools/check_no_hardcoded_thresholds.py, and a real floor still does."""
@@ -300,6 +315,7 @@ def _publisher_step_declares(release_text: str, key: str, value: str) -> bool:
             return True
     return False
 
+@pytest.mark.integration
 def test_publish_declares_attestations_explicitly() -> None:
     """`attestations: true` is written on the publish step, not inherited from a version's default.
 

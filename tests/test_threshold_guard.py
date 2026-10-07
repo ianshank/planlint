@@ -14,6 +14,8 @@ from tests.support import (
     load_tool,
 )
 
+pytestmark = pytest.mark.integration
+
 # --- the threshold guard's own coverage, which was close to inverted --------
 
 

@@ -81,7 +81,21 @@ include = ["openspec_graph*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# Every test carries exactly one tier: a cost signal decided by what the test
+# uses, not by what it is called (shape-the-test-suite R-TSS-5, R-TSS-6;
+# DEC-TSS-005, DEC-TSS-006). A module-level `pytestmark` and a decorator both
+# count, so a module whose tests are not all one tier marks each test function
+# and carries no module tier, and a tier is never written through an alias.
+# tests/shape_support.py computes the criterion; tests/test_suite_shape.py
+# holds the guards. The tiers are registered here and not only through
+# `addopts`, which the durations command clears; `--strict-markers` makes any
+# other mark a collection error rather than a typo that passes.
+markers = [
+    "unit: its code under tests/ starts no process and reads none of this repository's own files outside tests/fixtures and tests/corpus",
+    "integration: reads this repository's own files (a tools/ script loaded in-process included) and starts no process",
+    "e2e: starts a process -- subprocess, os, asyncio or pty, directly or through a helper such as run_cli",
+]
+addopts = "-q --strict-markers"
 
 [tool.coverage.run]
 # One run (`make coverage-run`) measures both trees; `make test` and

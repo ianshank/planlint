@@ -185,33 +185,51 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   pattern) MUST NOT be used for a tier and MUST be named by the guard.
   `skipif`, `parametrize` and pytest's other built-in marks are not tiers
   and are unconstrained.
-- R-TSS-6: The tier of a test is decided by what its body names, or what
-  is named by a same-module helper its body calls or a fixture it takes as
-  a parameter — a fixture being a `@pytest.fixture` body in the same module
-  or in `tests/conftest.py` — resolved transitively through both kinds. A
-  test is `e2e` if and only if it names a process start: `subprocess` in a
-  call or an attribute access (not in an annotation), `run_cli`, or a
-  helper or fixture that does. A test is `integration` if and only if it
-  is not `e2e` and reads this repository's own tree or runs a `tools/`
-  script in-process: it names one of the `tests/support.py` tree-readers —
-  an enumerated set kept as one module constant of the guard, at this
-  change `load_tool`, `run_tool_main` and the `read_pyproject` this package
-  adds — or it names `__file__`, as a bare name or as an attribute such as
-  `detect.__file__`, in a path expression whose chain carries no segment
-  equal to `fixtures` or `corpus`, whether that expression is in a body, a
-  fixture, or a module-level constant reached through other constants. A
-  test is `unit` if and only if it names none of those; writing fixtures
-  under `tmp_path`, reading the labelled corpora under `tests/fixtures/`
-  and `tests/corpus/`, and calling the package — `cli.main` included —
-  in-process do not change its tier. A guard test MUST compute the signals
-  by AST over `tests/test_*.py` and `tests/conftest.py` and assert the
-  marker agrees in both directions, and MUST be shown red on planted module
-  texts: an unmarked test, a test carrying two tiers, a `unit`-marked test
-  that calls `run_cli`, an `e2e`-marked test that names no process start, a
+- R-TSS-6: The tier of a test is decided by what it uses, and by what is
+  used by every definition it reaches: a function, class or module constant
+  its body names in its own module; a fixture it requests — as a parameter,
+  through `usefixtures`, or by being autouse in its module or in
+  `tests/conftest.py`; and a function, class or constant it imports from
+  another module under `tests/` — resolved transitively, a class reached
+  contributing every method it defines. A use counts and a binding does
+  not: a name bound to a tree path counts where it is used, and where it is
+  bound only when nothing uses it; an annotation is never a use. A test is
+  `e2e` if and only if it reaches a process start: a reference — called,
+  passed or aliased — to a process-starting function of `subprocess`, `os`,
+  `asyncio` or `pty`, the set kept as one constant of the criterion;
+  `subprocess.CompletedProcess` and `subprocess.TimeoutExpired` start
+  nothing and do not count, and `run_cli` is `e2e` through its body. A test
+  is `integration` if and only if it is not `e2e` and reads this
+  repository's own tree: it uses `__file__`, as a bare name or as an
+  attribute such as `detect.__file__`, or a name bound to it — a module
+  constant, a local, or a constant of an imported module — in a path
+  expression whose chain carries no segment equal to `fixtures` or
+  `corpus`; or it uses a name imported from a script under `tools/`, which
+  runs that script in-process. `load_tool`, `run_tool_main` and the
+  `read_pyproject` this package adds are `integration` through their
+  bodies, and no list names them. A test is `unit` if and only if it
+  reaches neither. The criterion stops at `tests/`: writing fixtures under
+  `tmp_path`, reading the labelled corpora under `tests/fixtures/` and
+  `tests/corpus/`, and calling the package — `cli.main` included — in-process
+  do not change a tier, including where the code under test starts a
+  process itself. The criterion errs upward: it MAY place a test above its
+  runtime cost, and MUST NOT place in `unit` a test whose own code under
+  `tests/` starts a process or reads the tree. The criterion MUST be
+  computed by AST in an uncollected module under `tests/`; a guard test
+  MUST assert every marker agrees with it in both directions over every
+  `tests/test_*.py`, and MUST be shown red on planted module texts: an
+  unmarked test, a test carrying two tiers, a `unit`-marked test that calls
+  `run_cli`, an `e2e`-marked test that names no process start, a
   `unit`-marked test that names a tree constant, a `unit`-marked test that
-  reads the tree through a fixture parameter, a tier written through an
-  alias, and a module over the bound; and MUST be shown quiet on a planted
-  `unit` test whose body builds a `__file__`-rooted path under `fixtures`.
+  reads the tree through a fixture parameter, a `unit`-marked test under an
+  autouse fixture that starts a process, a `unit`-marked test that starts a
+  process only through a method of a class it imports, a `unit`-marked test
+  that binds a tree read to a local it never uses, a tier written through
+  an alias, and a module over the bound; and MUST be shown quiet on a
+  planted `unit` test whose body builds a `__file__`-rooted path under
+  `fixtures`, a `fixtures`-rooted module constant, a
+  `subprocess.CompletedProcess` annotation and constructor, and a module
+  exactly at the bound.
 - R-TSS-7: The fast tier is the command `python -m pytest -m unit`,
   documented in `docs/hooks.md` beside the optional pre-push hook and in
   `tests/AGENTS.md`'s run sentence, with what the tier excludes stated in a
@@ -457,11 +475,14 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   filesystem" (every parser test writes a fixture, so the unit tier would
   be nearly empty); "uses the `repo` fixture" (a conftest fixture that
   writes three files under `tmp_path` is not a boundary).
-- **DEC-TSS-007:** the tier guard is an AST scan over `tests/test_*.py` and
-  `tests/conftest.py`, non-recursive like the two existing guards, with
-  transitive resolution through same-module helpers and through fixture
-  parameters, the signal sets of R-TSS-6, and agreement asserted in both
-  directions. Both directions because a stale `e2e` mark on a test that no
+- **DEC-TSS-007:** the tier guard is an AST scan over `tests/test_*.py`,
+  `tests/conftest.py` and the modules under `tests/` they import,
+  non-recursive like the two existing guards, with transitive resolution
+  through helpers, classes, constants and fixtures, the signals of R-TSS-6,
+  and agreement asserted in both directions. The criterion lives in the
+  uncollected `tests/shape_support.py`, beside `workflow_support.py`, so
+  `tests/test_suite_shape.py` holds assertions and planted texts and stays
+  inside the bound it enforces. Both directions because a stale `e2e` mark on a test that no
   longer spawns is a test the fast tier is wrongly missing, and a `unit`
   mark on a test that does spawn is a slow test the fast tier is wrongly
   paying for; one direction would guard half the property. Fixture
@@ -478,18 +499,24 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   must apply to every `__file__`-rooted expression, body-level or constant,
   not to module constants alone. `__file__` is matched as a name or an
   attribute because `tests/test_detect_corpus.py:307` spells its root as
-  `Path(detect.__file__)`. The `tests/support.py` tree-readers are an
-  enumerated set kept as one module constant — `load_tool`, `run_tool_main`,
-  and the `read_pyproject` this package adds when `_pyproject()` moves to
-  `support.py` — because a reader that lives in `support.py` names no
-  `__file__` at its call site, so a caller would otherwise be `unit` while
-  reading the repository's `pyproject.toml`; the set is one constant so
-  adding a reader is one line and the guard's docstring says so. The spawn
-  names are `subprocess` and `run_cli` because `run_cli` is the one wrapper
-  and every other spawn in the tree calls `subprocess` directly (`grep -ln
-  "subprocess.run"` lists them); `subprocess` counts only in a call or an
-  attribute access, because `subprocess.CompletedProcess` in a return
-  annotation is a type, not a process. Rejected: `request.session.items`
+  `Path(detect.__file__)`. A reader that lives in `support.py` names no
+  `__file__` at its call site, so a caller would be `unit` while reading
+  the repository's `pyproject.toml` unless the criterion follows the
+  import; it follows imports into every module under `tests/` and takes
+  `load_tool`, `run_tool_main` and `read_pyproject` to `integration` from
+  their bodies. This supersedes the enumerated set of tree-readers the
+  round-1 draft kept as a constant: implementation found that a hand list
+  misses what nobody listed — `tests/test_action_contract.py`'s runner
+  simulator starts `bash` from a class method, and
+  `tests/test_wheel_metadata.py` puts `tools/` on `sys.path` and runs
+  `check_wheel_metadata` in-process with no support helper at all — and
+  the derived form needs no line added when a helper is. For the same
+  reason a process start is any reference to a process-starting function,
+  not only a call, and an assignment defers to its uses but never hides a
+  process start. `subprocess.CompletedProcess` and
+  `subprocess.TimeoutExpired` do not count, because the first is a result
+  type — in an annotation or a fake built for a monkeypatch — and the
+  second is an exception class. Rejected: `request.session.items`
   from inside a guard (pytest's own deselection hook runs first, so under
   `-k` or `-m` the guard would see only the selected items and pass on a
   tree it never checked); `item.iter_markers()` for the same reason; a
@@ -688,6 +715,25 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   reserves that for an unmerged sibling, and these are merged); leaving the
   stale records unnamed (a reader would take R-HCW-15 as a requirement this
   package broke).
+- **DEC-TSS-017:** the criterion is checked against runtime once, by a
+  recorded audit, and stops at `tests/`. Milestone 4 ran the whole suite
+  under a `sys.addaudithook` hook recording each test's process starts and
+  its opens of repository files, and compared the result with the AST
+  tiers: every runtime signal above a test's tier was either a process
+  started by the code under test or a tool's own state (the editable
+  install's metadata, Hypothesis's cache), and none came from code under
+  `tests/`. The record in `tasks.md` names each one. The boundary is
+  `tests/` because the package's one process start, `detect._current_sha`'s
+  `git rev-parse HEAD`, and `tools/check_secrets.py`'s `git ls-files` are
+  behaviour under test, and a name-level reach into `openspec_graph/`
+  arrives at `_current_sha` from nearly every in-process CLI test, which
+  would empty the `unit` tier of the tests DEC-TSS-006 puts at its heart.
+  `docs/hooks.md` says so in the fast-loop paragraph, so the tier is not
+  described as starting no process at all. Rejected: a standing audit-hook
+  test (it needs the whole suite under the hook, a second full run that
+  `measure-coverage-once` removed); extending the criterion into the
+  package (above); a `slow` list for the residue (DEC-TSS-005 rejects a
+  tier named for a measurement).
 
 ---
 
@@ -747,7 +793,7 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   unchanged, read structurally from `pyproject.toml`; and a collection with
   an unregistered mark fails. The test is written with this change; until
   it exists the stage is the citation. (R-TSS-5, DEC-TSS-005)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_pytest_registers_exactly_the_three_tier_markers_strictly or test_an_unregistered_marker_fails_collection_under_strict_markers"` · stage: `make test`
 
 - [ ] **AC-TSS-7:** every collected test carries exactly one tier, counted
   across module-level marks — single or list form — and function-level
@@ -758,20 +804,23 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   process start remains in each. The guards are written with this change
   and run red on the unmarked tree; until they exist the stage is the
   citation. (R-TSS-5, R-TSS-6, R-TSS-12, C-TSS-7, DEC-TSS-005,
-  DEC-TSS-006, DEC-TSS-007)
-  _Verified by:_ stage: `make test`
+  DEC-TSS-006, DEC-TSS-007, DEC-TSS-017)
+  _Verified by:_ `pytest -k "test_every_test_carries_exactly_one_tier_marker or test_every_tier_marker_matches_its_mechanical_criterion"` · stage: `make test`
 
 - [ ] **AC-TSS-8 (non-success):** on planted module texts, the guards'
   helpers name an unmarked test, a test carrying two tiers, a `unit` test
   that calls `run_cli`, an `e2e` test that names no process start, a
   `unit` test that names a tree constant, a `unit` test that reads the
-  tree only through a fixture parameter, a tier written through an alias,
-  and a module over the bound; and do not name a `unit` test whose body
-  builds a `__file__`-rooted path under `fixtures`, nor a `fixtures`-rooted
-  constant, nor a `subprocess.CompletedProcess` return annotation. The
-  test is written with this change; until it exists the stage is the
-  citation. (R-TSS-6, R-TSS-12, DEC-TSS-007)
-  _Verified by:_ stage: `make test`
+  tree only through a fixture parameter, a `unit` test under an autouse
+  fixture that starts a process, a `unit` test that starts a process only
+  through an imported class's method, a `unit` test that binds a tree read
+  to a local it never uses, a tier written through an alias, a module over
+  the bound and a module under a subdirectory; and do not name a `unit`
+  test whose body builds a `__file__`-rooted path under `fixtures`, nor a
+  `fixtures`-rooted constant, nor a `subprocess.CompletedProcess` annotation
+  or constructor, nor a module exactly at the bound. (R-TSS-1, R-TSS-6,
+  R-TSS-12, DEC-TSS-007)
+  _Verified by:_ `pytest -k test_a_mismarked_or_unmarked_planted_module_is_named` · stage: `make test`
 
 - [ ] **AC-TSS-9:** `python -m pytest -m unit` collects a non-empty
   selection in which no item carries `e2e` or `integration`; its collected

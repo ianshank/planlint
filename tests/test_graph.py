@@ -19,6 +19,8 @@ from openspec_graph.cli import main
 from openspec_graph.parse import parse_spec
 from tests.support import write_spec
 
+pytestmark = pytest.mark.unit
+
 MAKEFILE = textwrap.dedent(
     """\
     .PHONY: help test ci

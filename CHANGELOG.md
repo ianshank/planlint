@@ -24,6 +24,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `harden-ci-workflows` R-HCW-15, R-HCW-16 and DEC-HCW-008, `pin-actions-by-sha`
   R-ASP-8 and R-ASP-11, `prepare-release-0-3-0` DEC-REL-011 — are superseded by
   name in this package (DEC-TSS-016), those packages being on `main`.
+- **Tiers.** Every test carries exactly one of three registered markers —
+  `unit` (its code under `tests/` starts no process and reads none of this
+  repository's files outside `tests/fixtures/` and `tests/corpus/`),
+  `integration` (reads the repository, a `tools/` script loaded in-process
+  included) or `e2e` (starts a process) — decided mechanically from what the
+  test uses by `tests/shape_support.py`, through helpers, fixtures, support
+  modules and classes. `addopts` gains `--strict-markers`, so a misspelt mark
+  fails collection. `python -m pytest -m unit` is the fast local loop, a
+  command rather than a Make target because `coverage-run` stays the only
+  recipe that runs pytest. `test_rule_registry_baseline_is_unchanged` moved
+  from `test_graft_rules.py` to `test_rule_registry_docs.py`, and the Action
+  contract's runner simulator to the uncollected `tests/action_support.py`;
+  `read_pyproject()` in `tests/support.py` replaces two private copies.
 
 ### Changed — one suite run measures both trees (M2)
 

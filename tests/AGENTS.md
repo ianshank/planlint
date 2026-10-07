@@ -12,6 +12,7 @@ flowchart TD
         gs["graft_support.py<br/>fixture constants + findings_for"]
         cf["conftest.py<br/>the repo fixture"]
         ws["workflow_support.py<br/>workflow readers, never asserting"]
+        xs["action_support.py · shape_support.py<br/>Action runner simulator · tier criterion"]
     end
     subgraph subject["split by subject, not by source module"]
         d["test_graft_detection.py"]
@@ -26,7 +27,7 @@ flowchart TD
     corpus["corpus/ + fixtures/phrasing/<br/>labelled input, not documents"] --> subject
 ```
 
-Three things to know before adding a file here:
+Four things to know before adding a file here:
 
 - **Do not create `tests/<subdir>/`.** `test_spec_test_citations.py` and
   `test_decomposition.py` both glob `test_*.py` **non-recursively**. A
@@ -38,12 +39,17 @@ Three things to know before adding a file here:
 - **A spec's `_Verified by:` citation must name a real test function.**
   `test_spec_test_citations.py` resolves every one by AST; renaming a test
   breaks the spec that cites it.
+- **Every test carries exactly one of `unit`, `integration`, `e2e`**, by what
+  it uses (`shape_support.py`): `e2e` starts a process, `integration` reads
+  this repository. A mixed module marks per function; a wrong tier fails
+  `test_suite_shape.py`, an unregistered one fails collection.
 
 `corpus/` and `fixtures/` are labelled input to planlint, not documents of this
 repository — the agent-artifact gates exclude them by prefix for that reason.
 
-Run `make test`; it measures both trees in one run and reads each floor
-scoped, so one tree's headroom never hides the other's regression.
+`python -m pytest -m unit` is the fast tier. Run `make test`; it measures
+both trees in one run and reads each floor scoped, so one tree's headroom
+never hides the other's regression.
 `make coverage-tools` re-reads `tools/` from the same report. The
 `planlint-verifier` subagent runs the whole ladder.
 

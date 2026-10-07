@@ -19,6 +19,8 @@ from tests.support import (
 )
 from tests.support import write_spec as _write_spec
 
+pytestmark = pytest.mark.integration
+
 # --- AC-CH-5 / AC-CH-6: graph-diff fails on regressions, passes on fixes ----
 
 

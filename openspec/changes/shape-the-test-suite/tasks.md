@@ -433,7 +433,8 @@ collected count; the red runs are recorded here and never committed.
   (`[tool.pytest.ini_options].markers` parsed with `tomllib`/`tomli`
   through the `_pyproject()` reader — moved from `tests/test_ci_workflow.py`
   to `tests/support.py` as `read_pyproject()` now that two modules need
-  it, and added to the guard's tree-reader set in the same commit — holds
+  it, with `tests/workflow_support.py`'s private copy routed through it in
+  the same commit — holds
   exactly `unit`, `integration`, `e2e` by name, each description
   non-empty; `addopts` contains `--strict-markers`; `testpaths ==
   ["tests"]`);
@@ -447,26 +448,28 @@ collected count; the red runs are recorded here and never committed.
   test_*`, exactly one, offenders named with their tiers; any module-level
   `name = pytest.mark.<tier>` alias named as a violation);
   `test_every_tier_marker_matches_its_mechanical_criterion` (per test, the
-  spawn signal — `subprocess` in a `Call` or `Attribute`, not in an
-  annotation, or `run_cli`, or a same-module helper or a fixture parameter
-  whose body names one, fixtures resolved from `@pytest.fixture` bodies in
-  the same module and in `tests/conftest.py`, all resolved transitively —
-  and the tree signal — a name in the guard's `SUPPORT_TREE_READERS`
-  constant (`load_tool`, `run_tool_main`, `read_pyproject`), or `__file__`
-  as a `Name` or an `Attribute` in a path expression whose chain carries no
-  `fixtures`/`corpus` segment, in a body, a fixture or a module constant
-  reached through other constants — then `e2e` ⇔ spawn, `integration` ⇔
-  tree and not spawn, `unit` ⇔ neither; disagreements named with the
-  signal found); `test_a_mismarked_or_unmarked_planted_module_is_named` (the
-  helpers over planted texts: an unmarked test; a test with two tiers; a
-  `unit` test calling `run_cli`; an `e2e` test naming no spawn; a `unit`
-  test naming a `__file__`-bound constant; a `unit` test that reads the
-  tree only through a planted `repo_root` fixture parameter; a tier
-  written through an alias; a module over the bound; a `tests/<dir>/test_x.py`
-  under a temporary copy named by the flatness helper; and, not named, a
-  `unit` test whose body builds `Path(__file__).parent / "fixtures" / ...`,
-  a `fixtures`-rooted module constant, and a `-> subprocess.CompletedProcess`
-  annotation). Record the red: the registration test red on the unchanged
+  tier R-TSS-6 computes — the criterion in the uncollected
+  `tests/shape_support.py`, which follows helpers, classes, constants,
+  requested and autouse fixtures and imports into every module under
+  `tests/`, so `load_tool`, `run_tool_main`, `read_pyproject` and `run_cli`
+  take their signals from their bodies and no list names them — against
+  the one tier the test carries; disagreements named with the chain of
+  names that decided the tier, and the per-module tally logged at INFO);
+  `test_a_mismarked_or_unmarked_planted_module_is_named` (the helpers over
+  planted texts, one parameter each: an unmarked test; a test with two
+  tiers; a `unit` test calling `run_cli`; an `e2e` test naming no spawn; a
+  `unit` test naming a `__file__`-bound constant; a `unit` test that reads
+  the tree only through a planted `repo_root` fixture parameter; a `unit`
+  test under a planted autouse fixture that spawns; a `unit` test that
+  spawns only through a method of a class imported from a planted support
+  module; a `unit` test that binds a tree read to a local it never uses; a
+  tier written through an alias; a module over the bound; a
+  `tests/<dir>/test_x.py` under a temporary copy named by the flatness
+  helper; and, not named, a `unit` test whose body builds
+  `Path(__file__).parent / "fixtures" / ...`, a `fixtures`-rooted module
+  constant, a `-> subprocess.CompletedProcess` annotation with the
+  constructor in a fake, and a module exactly at the bound).
+  Record the red: the registration test red on the unchanged
   `pyproject.toml`; the exactly-one test naming every test in the tree;
   the criterion test idle until marks exist and red on the first module
   marked wrongly, if any — record which.
@@ -522,6 +525,86 @@ collected count; the red runs are recorded here and never committed.
 - **Gate:** `make test` — the suite green under `--strict-markers`, the
   four guards green on the tree and red on their planted texts, the floors
   held; then `make lint`.
+  **Recorded (Milestone 4, 2026-10-07, on `378bd54` + the Milestone 4 tree):**
+  - *Red first.* `python -m pytest tests/test_suite_shape.py -q -o addopts=""`
+    on the unchanged `pyproject.toml`: 3 failed. The registration test read
+    no markers (`registered markers [] are not exactly the tiers`); the
+    nested collection of the planted `@pytest.mark.nonsuch` module exited 0
+    with only a `PytestUnknownMarkWarning`; the exactly-one test named all
+    1064 test functions with no tier, and no alias. The criterion test was
+    idle (0 disagreements with no marks), and the planted test passed every
+    case from its first run, its helpers being written with it. With the
+    markers and `--strict-markers` in place, both registration tests pass.
+    The marks were written by a script from the criterion's own verdicts, so
+    no module was marked wrongly on the tree; red on the real tree is shown
+    on a copy with `tests/test_graph.py`'s `pytestmark` flipped to
+    `integration`: 44 tests named, each with the criterion's verdict.
+  - *Corrections found while implementing,* folded into R-TSS-6, DEC-TSS-007
+    and DEC-TSS-017. The hand list of tree-readers gave way to following
+    imports into every module under `tests/`. A class reached now contributes
+    its methods: `ActionRun.run_step` starts `bash`. A name imported from a
+    `tools/` script counts as running it in-process:
+    `tests/test_wheel_metadata.py` puts `tools/` on `sys.path`. Function-local
+    imports, autouse fixtures and `usefixtures` resolve. A process start is
+    any reference to a process-starting function, and a tree read bound to
+    a local nobody uses still counts.
+  - *Moves made to fit the marks.* `tests/test_action_contract.py` was at 700
+    lines, so its runner simulator moved to the uncollected
+    `tests/action_support.py` (446 lines after). `test_graft_rules.py` was
+    684 lines with 59 `unit` tests and one `integration` test, so per-function
+    marks would have reached 744; `test_rule_registry_baseline_is_unchanged`
+    moved beside `test_rule_set_matches_baseline` in
+    `tests/test_rule_registry_docs.py`, its body unchanged but for `RULES`
+    in place of `rules.RULES`. The two `_pyproject()` copies became
+    `tests.support.read_pyproject()`. After: 1057 names, sha256 prefix
+    `2f62db0aee56ef40`, and 1602 collected with `tests/test_suite_shape.py`
+    ignored — both unchanged.
+  - *Shapes and tally.* 23 modules carry one `pytestmark` tier under their
+    imports and 31 mark per function. `tests/test_spec_discovery_identity.py`
+    is mixed, so its `skipif` `pytestmark` stays as it was and the list form
+    had no module to apply to. The criterion's tally is 575 `unit`, 291
+    `integration` and 198 `e2e` of 1064 test functions. Against the expected
+    shapes: `test_graft_cli` and `test_graft_detection` are single-tier
+    `unit` (their CLI tests run `cli.main` in-process); `test_action_contract`
+    (15 `integration`, 10 `e2e`) and `test_wheel_metadata` (16 and 1) are
+    mixed; `test_cli_speckit` and `test_e2e_corpus` are single-tier `e2e`.
+    The largest module after the marks is `tests/test_report.py`, 690 lines.
+  - *Fast tier (R-TSS-7).* `python -m pytest -m unit --collect-only -q -o
+    addopts=""`: `733/1622 tests collected (889 deselected)`; `-m "not unit"`:
+    `889/1622 tests collected (733 deselected)`, the two summing to the
+    collected count. `python -m pytest -m unit -q -p no:cacheprovider -o
+    addopts=""`: `733 passed, 889 deselected in 12.96s`, wall 13.4 s.
+  - *Runtime audit (DEC-TSS-017).* The whole suite ran once under a
+    `sys.addaudithook` plugin kept in the session scratchpad, not committed.
+    It recorded each test's `subprocess.Popen` and `os` process events and
+    its `open` events under the checkout: `1604 passed in 159.04s`, 759
+    items with any event. `.egg-info/` metadata reads by `importlib.metadata`
+    and Hypothesis's `.hypothesis/` state were excluded as tool state. Four
+    items show a runtime signal above their tier, all outside `tests/`:
+    `test_gate_scripts.py::test_fallback_scan_returns_nothing_outside_a_git_repo`
+    (`integration`; `git ls-files` inside `tools/check_secrets.py`);
+    `test_graft_witness.py::test_current_sha_returns_none_outside_a_git_repo`
+    and `::test_profile_witnesses_field_reads_the_planlint_witnesses_directory`
+    (`unit`; `git rev-parse HEAD` inside `detect._current_sha`); and
+    `test_properties.py::test_parse_makefile_is_deterministic_with_sorted_unique_targets`
+    (`unit`; Hypothesis reading loaded `tools/` modules' source for its
+    constants). The first comparison found two more,
+    `test_wheel_metadata.py::test_main_exits_0_on_a_good_wheel` and
+    `::test_main_exits_1_on_a_bad_wheel`, reading `pyproject.toml` through
+    `tools/check_wheel_metadata.py`. That miss was under `tests/` and was
+    fixed by the `tools/` script rule before any mark was applied. Forty
+    items sit above their runtime cost, which R-TSS-6 allows: 38 `e2e` tests
+    with no runtime process (skipped `bash` cases and monkeypatched spawns)
+    and 2 `integration` tests with no runtime read.
+  - *Gate.* `make test`: exit 0; `openspec_graph/` 99.3% (2276/2292) lines and
+    97.6% (744/762) branches, `tools/` 96.4% (946/981) and 93.9% (323/344).
+    `make lint`, `make typecheck`, `make docs-check` and `make thresholds`:
+    exit 0. `tests/AGENTS.md` is 59 lines against `MAX_NESTED_LINES`;
+    `python -m pytest tests/test_agent_artifacts.py -q -k "nested_agents or
+    agent_index_links"`: 43 passed. `planlint --target . validate --fail-on
+    ERROR`: exit 0 before and after the package corrections. Milestone 4 is
+    committed on its own, so a container restart cannot lose it; the second
+    stage's commit is Milestone 5's.
 
 ## Milestone 5 — Route the duplicated shapes through `tests/support.py`, guards seen red first
 

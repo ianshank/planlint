@@ -7,7 +7,11 @@ style).
 
 from __future__ import annotations
 
+import pytest
+
 from openspec_graph import mermaid
+
+pytestmark = pytest.mark.unit
 
 
 def _graph(nodes: list[dict[str, object]], edges: list[dict[str, object]]) -> dict[str, object]:

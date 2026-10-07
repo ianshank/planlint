@@ -140,6 +140,7 @@ def populated_repo(repo: Path) -> Path:
 # --- AC-SD-4: the read-only claim -------------------------------------------
 
 
+@pytest.mark.e2e
 def test_read_only_verbs_leave_tree_byte_identical(populated_repo: Path) -> None:
     """AC-SD-4 (non-success): no read-only verb creates, removes, or edits a file."""
     before = _tree_digest(populated_repo)
@@ -178,6 +179,7 @@ def test_read_only_verbs_leave_tree_byte_identical(populated_repo: Path) -> None
         f"created={created} removed={removed} modified={modified}"
     )
 
+@pytest.mark.integration
 def test_read_only_invocations_cover_every_verb_the_skill_calls_read_only() -> None:
     """The list above is only meaningful if it matches SKILL.md's own table.
 
@@ -208,6 +210,7 @@ def _skill_verb_tables() -> tuple[set[str], set[str]]:
     row = re.compile(r"^\| `([a-z]+)` \|", re.MULTILINE)
     return set(row.findall(read_only)), set(row.findall(writes))
 
+@pytest.mark.integration
 def test_write_verbs_are_documented_as_writing() -> None:
     """The complement: every verb that writes is in the writes-files table."""
     _, documented = _skill_verb_tables()
@@ -215,6 +218,7 @@ def test_write_verbs_are_documented_as_writing() -> None:
         f"SKILL.md's write-verb table lists {sorted(documented)}"
     )
 
+@pytest.mark.integration
 def test_skill_tables_cover_every_verb_the_cli_actually_has() -> None:
     """No verb may exist that the skill classifies as neither read nor write.
 
@@ -246,6 +250,7 @@ def test_skill_tables_cover_every_verb_the_cli_actually_has() -> None:
         f"verb(s) {sorted(read_only & writes)} are in both tables"
     )
 
+@pytest.mark.e2e
 def test_dry_run_writes_nothing(populated_repo: Path) -> None:
     """SKILL.md tells agents `--dry-run` previews safely; prove it.
 
@@ -263,6 +268,7 @@ def test_dry_run_writes_nothing(populated_repo: Path) -> None:
         "a --dry-run invocation modified the target tree"
     )
 
+@pytest.mark.e2e
 def test_write_verbs_actually_write(populated_repo: Path) -> None:
     """The affirmative complement, so the read-only test cannot pass by inertia.
 
@@ -282,6 +288,7 @@ def test_write_verbs_actually_write(populated_repo: Path) -> None:
 # --- AC-SD-5 / AC-SD-6: the exit-code contract ------------------------------
 
 
+@pytest.mark.e2e
 @pytest.mark.parametrize("verb", ["validate", "waivers"])
 def test_exit_two_messages_match_the_documented_contract(repo: Path, verb: str) -> None:
     """AC-SD-5: the short no-spec-tree message is exactly what the doc quotes."""
@@ -292,6 +299,7 @@ def test_exit_two_messages_match_the_documented_contract(repo: Path, verb: str) 
     assert result.returncode == 2, f"{verb} on an empty repo should exit 2"
     assert result.stderr.strip() == _NO_TREE_SHORT
 
+@pytest.mark.e2e
 def test_graph_exit_two_message_names_both_absolute_paths(repo: Path) -> None:
     """AC-SD-5: `graph` prints a different, longer message than validate does.
 
@@ -307,12 +315,14 @@ def test_graph_exit_two_message_names_both_absolute_paths(repo: Path) -> None:
     doc = EXIT_CODES_DOC.read_text(encoding="utf-8")
     assert "no openspec/ directory found at" in doc
 
+@pytest.mark.e2e
 def test_unknown_change_package_exits_two(populated_repo: Path) -> None:
     """AC-SD-5: `--change` naming no package is a usage error, not a finding."""
     result = run_cli(populated_repo, "validate", "--change", "nope")
     assert result.returncode == 2
     assert result.stderr.strip() == "no specs found for change 'nope'"
 
+@pytest.mark.e2e
 def test_missing_target_directory_exits_two(tmp_path: Path) -> None:
     """AC-SD-6 (non-success): a bad --target is a usage error (DEC-SD-001).
 
@@ -328,6 +338,7 @@ def test_missing_target_directory_exits_two(tmp_path: Path) -> None:
     assert "target is not a directory" in result.stderr
     assert "FAIL" not in result.stdout
 
+@pytest.mark.e2e
 def test_a_real_finding_still_exits_one(populated_repo: Path) -> None:
     """The other half of AC-SD-6: exit 1 still means findings, unchanged."""
     spec = populated_repo / "openspec/changes/c1/specs/cap/spec.md"
@@ -348,6 +359,7 @@ def test_a_real_finding_still_exits_one(populated_repo: Path) -> None:
 # how a claim stays true until the day it silently stops being.
 
 
+@pytest.mark.e2e
 def test_graph_unknown_change_exits_two(populated_repo: Path) -> None:
     """`graph --change` shares validate's message; the doc quotes it once."""
     result = run_cli(populated_repo, "graph", "--change", "nope", "--format", "json")
@@ -355,6 +367,7 @@ def test_graph_unknown_change_exits_two(populated_repo: Path) -> None:
     assert result.stderr.strip() == "no specs found for change 'nope'"
     assert "no specs found for change 'name'" in EXIT_CODES_DOC.read_text(encoding="utf-8")
 
+@pytest.mark.e2e
 def test_graph_format_dot_exits_two(populated_repo: Path) -> None:
     """Rendering is out of scope, and refusing it is a usage error, not a finding.
 
@@ -367,12 +380,14 @@ def test_graph_format_dot_exits_two(populated_repo: Path) -> None:
     assert "dot" in result.stderr.lower()
     assert "graph --format dot" in EXIT_CODES_DOC.read_text(encoding="utf-8")
 
+@pytest.mark.e2e
 def test_detect_diff_missing_baseline_exits_two(populated_repo: Path, tmp_path: Path) -> None:
     """An unreadable baseline is a usage error; drift is the exit-1 case."""
     result = run_cli(populated_repo, "detect", "--diff", str(tmp_path / "absent.json"))
     assert result.returncode == 2
     assert "cannot read --diff baseline" in result.stderr
 
+@pytest.mark.e2e
 def test_detect_diff_malformed_baseline_exits_two(populated_repo: Path, tmp_path: Path) -> None:
     """Valid JSON of the wrong shape is still not a dialect card."""
     baseline = tmp_path / "baseline.json"
@@ -381,6 +396,7 @@ def test_detect_diff_malformed_baseline_exits_two(populated_repo: Path, tmp_path
     assert result.returncode == 2
     assert "object" in result.stderr.lower()
 
+@pytest.mark.e2e
 @pytest.mark.parametrize(
     "argv, why",
     [
@@ -405,6 +421,7 @@ def test_witness_boundary_checks_exit_two(populated_repo: Path, argv, why: str) 
         f"witness with a bad {why} must exit 2, got {result.returncode}: {result.stderr!r}"
     )
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "argv",
     [("init",), ("new", "some-change", "--capability", "some-cap")],
@@ -435,6 +452,7 @@ def test_write_verbs_exit_two_when_the_target_cannot_be_written(
     code = cli.main(["--target", str(populated_repo), *argv])
     assert code == 2, f"{argv[0]} on an unwritable target must exit 2, got {code}"
 
+@pytest.mark.unit
 def test_write_verbs_still_exit_zero_when_the_target_is_writable(
     populated_repo: Path,
 ) -> None:
@@ -446,6 +464,7 @@ def test_write_verbs_still_exit_zero_when_the_target_is_writable(
 # --- C-SD-1 / C-SD-2: the boundaries ----------------------------------------
 
 
+@pytest.mark.integration
 def test_runtime_dependencies_stay_empty() -> None:
     """AC-SD-15 (non-success): the zero-dependency boundary is load-bearing."""
     text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
@@ -453,6 +472,7 @@ def test_runtime_dependencies_stay_empty() -> None:
         "runtime dependencies must stay empty (docs/architecture/c4.md)"
     )
 
+@pytest.mark.integration
 def test_distributable_skill_is_not_copied_into_claude_skills() -> None:
     """AC-SD-16 (non-success): .claude/skills/ stays contributor tooling.
 

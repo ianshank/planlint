@@ -18,6 +18,7 @@ import tempfile
 from collections.abc import Iterator
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -68,6 +69,23 @@ def supports_symlinks() -> bool:
             # failure this capability probe exists to avoid.
             return False
         return True
+
+
+def read_pyproject() -> dict[str, Any]:
+    """This repository's ``pyproject.toml``, parsed structurally.
+
+    So a guard asserts a *value* rather than grepping for a line that a
+    reformat could move. ``tomllib`` is 3.11+; the 3.10 leg of the matrix uses
+    the ``tomli`` backport the dev extra already installs for coverage's own
+    startup hook. Shared by the CI-configuration and workflow guards, which
+    each carried a copy until ``shape-the-test-suite`` (R-TSS-8).
+    """
+    try:
+        import tomllib as toml_reader
+    except ModuleNotFoundError:  # pragma: no cover - 3.10 leg only
+        import tomli as toml_reader  # type: ignore[import-not-found,no-redef]
+    with _PYPROJECT.open("rb") as handle:
+        return toml_reader.load(handle)
 
 
 def load_tool(name: str, filename: str) -> ModuleType:

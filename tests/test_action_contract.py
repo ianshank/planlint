@@ -26,13 +26,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import subprocess
 from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-ACTION = REPO_ROOT / ".github" / "actions" / "planlint" / "action.yml"
+from tests.action_support import REPO_ROOT, ActionRun, _action_text, _drive, _needs_bash, _steps
+
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "action"
 
 # The v1 contract. Adding an output is allowed within a major version; renaming
@@ -41,69 +40,13 @@ EXPECTED_INPUTS = {
     "target", "version", "fail-on", "python-version", "upload-artifact", "artifact-name",
     "change", "dialect",
 }
+
 EXPECTED_OUTPUTS = {
     "status", "exit-code", "errors", "warnings", "infos", "findings", "blocking",
     "specs-checked", "rules-triggered", "dialect", "make-targets", "coverage-floor",
     "discovery-warnings", "version", "evidence-dir", "json-path", "sarif-path",
     "evidence-sha256",
 }
-
-_EXPRESSION = re.compile(r"\$\{\{\s*([^}]+?)\s*\}\}")
-
-
-def _github_bash() -> str | None:
-    """The interpreter GitHub uses for a ``shell: bash`` step on this platform.
-
-    On Linux and macOS that is plain ``bash``. On Windows it is the bash that
-    ships with Git for Windows -- deliberately *not* whatever ``bash`` resolves
-    to on PATH, which is System32's WSL launcher. A hosted Windows runner has
-    no WSL distribution installed, so that launcher answers every invocation
-    with a UTF-16 error and exit 1, and this simulation would be reporting the
-    absence of WSL rather than anything about the action.
-
-    Mirroring the runner's own choice keeps the simulation faithful on both
-    platforms instead of running on only one. Returns ``None`` when no such
-    interpreter exists, so the caller can skip with a reason rather than fail
-    with a confusing one.
-    """
-    if os.name != "nt":
-        return "bash"
-    roots = [
-        os.environ.get("PROGRAMFILES", r"C:\Program Files"),
-        os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"),
-    ]
-    for root in roots:
-        candidate = Path(root) / "Git" / "bin" / "bash.exe"
-        if candidate.is_file():
-            return str(candidate)
-    return None
-
-
-_BASH = _github_bash()
-
-# The executable half only. The declarative assertions above read the YAML and
-# run everywhere, including the Windows leg -- it is the contract that has to
-# hold on every platform, while the shell body is POSIX and runs where GitHub
-# runs it.
-_needs_bash = pytest.mark.skipif(
-    _BASH is None,
-    reason="no Git for Windows bash on this machine; GitHub uses it for `shell: bash` "
-    "on Windows runners, and PATH's `bash` there is the WSL launcher",
-)
-
-
-def _posix(path: Path | str) -> str:
-    """A path spelled the way the interpreter above expects to read it.
-
-    Git Bash accepts ``D:/a/_temp/x`` and mangles ``D:\\a\\_temp\\x``, whose
-    backslashes it reads as escapes. No-op on POSIX.
-    """
-    return Path(path).as_posix()
-
-
-def _action_text() -> str:
-    return ACTION.read_text(encoding="utf-8")
-
 
 def _top_level_keys(text: str, section: str) -> set[str]:
     """The two-space-indented keys under a top-level mapping.
@@ -126,16 +69,16 @@ def _top_level_keys(text: str, section: str) -> set[str]:
             found.add(match.group(1))
     return found
 
-
 # --- the declarative half ----------------------------------------------------
 
 
+@pytest.mark.integration
 def test_the_action_declares_exactly_the_v1_inputs() -> None:
     """The closed list grew by two named flags (`change`, `dialect`).
     Adding an input is the stronger change; outputs may still grow."""
     assert _top_level_keys(_action_text(), "inputs") == EXPECTED_INPUTS
 
-
+@pytest.mark.integration
 def test_the_action_declares_every_v1_output() -> None:
     """Superset rather than equality: an output may be added inside a major
     version, and pinning equality would turn that into a test failure instead
@@ -143,7 +86,7 @@ def test_the_action_declares_every_v1_output() -> None:
     declared = _top_level_keys(_action_text(), "outputs")
     assert declared >= EXPECTED_OUTPUTS, f"missing: {sorted(EXPECTED_OUTPUTS - declared)}"
 
-
+@pytest.mark.integration
 def test_the_action_runs_validate_once_and_projects_the_rest() -> None:
     """The property that makes every surface agree: one rule-engine run, and
     every other rendering a projection of the file it wrote."""
@@ -158,7 +101,7 @@ def test_the_action_runs_validate_once_and_projects_the_rest() -> None:
     for fmt in ("sarif", "github-annotations", "github-summary", "github-outputs"):
         assert f"--format {fmt}" in text, fmt
 
-
+@pytest.mark.integration
 def test_evidence_is_written_outside_the_workspace() -> None:
     """Non-success: the adapter must not write into the repository it scans.
     The CLI's read-only guarantee is the product; breaking it one directory up
@@ -167,7 +110,7 @@ def test_evidence_is_written_outside_the_workspace() -> None:
     assert "RUNNER_TEMP" in text
     assert "GITHUB_WORKSPACE" not in text
 
-
+@pytest.mark.integration
 def test_the_action_writes_only_to_evidence_and_the_runner_command_files() -> None:
     """Non-success: every redirection in the action has an approved target.
 
@@ -195,7 +138,7 @@ def test_the_action_writes_only_to_evidence_and_the_runner_command_files() -> No
             offenders.append(f"{step.get('id')}: {target}")
     assert not offenders, f"the action redirects to unapproved path(s): {offenders}"
 
-
+@pytest.mark.integration
 def test_an_index_install_refuses_a_release_without_the_report_verb() -> None:
     """A version predating this contract installs cleanly and then has no verb
     to project with, so the run would die mid-projection with a usage error
@@ -205,7 +148,7 @@ def test_an_index_install_refuses_a_release_without_the_report_verb() -> None:
     assert "planlint report --help" in text
     assert "has no 'report' verb" in text
 
-
+@pytest.mark.integration
 def test_the_template_grants_what_a_private_repository_needs() -> None:
     """`upload-sarif` needs a second read permission on a private repository,
     so an adopter who enabled the documented option would otherwise fail in the
@@ -215,13 +158,13 @@ def test_the_template_grants_what_a_private_repository_needs() -> None:
     for permission in ("contents: read", "security-events: write", "actions: read"):
         assert permission in block, permission
 
-
+@pytest.mark.integration
 def test_the_artifact_upload_survives_a_failing_gate() -> None:
     """A red run is exactly when somebody needs the evidence."""
     text = _action_text()
     assert "always() && inputs.upload-artifact == 'true'" in text
 
-
+@pytest.mark.integration
 def test_the_action_needs_no_token_and_no_privileged_permission() -> None:
     """The scan reads untrusted repository content, so it holds nothing worth
     stealing: no token input, and no step that needs a write permission. SARIF
@@ -239,7 +182,7 @@ def test_the_action_needs_no_token_and_no_privileged_permission() -> None:
     assert not [line for line in directives if "codeql" in line or "upload-sarif" in line]
     assert not [line for line in directives if line.strip().startswith("permissions:")]
 
-
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "path",
     sorted(
@@ -260,7 +203,7 @@ def test_no_workflow_or_template_uses_pull_request_target(path: Path) -> None:
     """
     assert "pull_request_target" not in path.read_text(encoding="utf-8")
 
-
+@pytest.mark.integration
 def test_the_install_override_names_the_published_distribution() -> None:
     """The index-install line has to be visible to the adopter install-line
     guard. It was not: `_requirements()` stopped at `[<>=!~;`, so
@@ -274,7 +217,7 @@ def test_the_install_override_names_the_published_distribution() -> None:
     )
     assert _requirements(line) == ["planlint"], line
 
-
+@pytest.mark.integration
 def test_action_inputs_include_change_and_dialect() -> None:
     declared = _top_level_keys(_action_text(), "inputs")
     assert declared == EXPECTED_INPUTS
@@ -285,7 +228,7 @@ def test_action_inputs_include_change_and_dialect() -> None:
     assert re.search(r"^  change:$", text, re.MULTILINE)
     assert re.search(r"^  dialect:$", text, re.MULTILINE)
 
-
+@pytest.mark.integration
 def test_action_does_not_pass_require_witness() -> None:
     text = _action_text()
     declared = _top_level_keys(text, "inputs")
@@ -294,68 +237,7 @@ def test_action_does_not_pass_require_witness() -> None:
     assert "--require-witness" not in text
     assert not (REPO_ROOT / "action.yml").exists()
 
-
-# --- the executable half -----------------------------------------------------
-
-
-def _steps(text: str) -> list[dict[str, object]]:
-    """Every step under ``runs.steps``, as ``{id, uses, run, env}``.
-
-    Scans the six-space-indented ``- `` items and their keys, and lifts a
-    ``run: |`` block scalar by dedenting its body. Narrow on purpose: it
-    understands exactly the shapes this action uses, and raises rather than
-    guessing at anything else.
-    """
-    lines = text.splitlines()
-    start = lines.index("  steps:") + 1
-    steps: list[dict[str, object]] = []
-    current: dict[str, object] | None = None
-    block_key: str | None = None
-    block: list[str] = []
-    in_env = False
-
-    def flush() -> None:
-        nonlocal block_key, block
-        if current is not None and block_key:
-            current[block_key] = "\n".join(block).rstrip() + "\n"
-        block_key, block = None, []
-
-    for raw in lines[start:]:
-        if block_key:
-            if raw.strip() and not raw.startswith(" " * 8):
-                flush()
-            else:
-                block.append(raw[8:] if len(raw) > 8 else "")
-                continue
-        if raw.startswith("    - "):
-            flush()
-            current = {"env": {}}
-            steps.append(current)
-            in_env = False
-            raw = "      " + raw[6:]
-        if current is None:
-            continue
-        if re.match(r"^      env:\s*$", raw):
-            in_env = True
-            continue
-        if in_env:
-            pair = re.match(r"^        ([A-Za-z_][\w-]*):\s*(.+?)\s*$", raw)
-            if pair:
-                envs = current["env"]
-                assert isinstance(envs, dict)
-                envs[pair.group(1)] = pair.group(2)
-                continue
-            in_env = False
-        entry = re.match(r"^      (id|uses|shell|if):\s*(.+?)\s*$", raw)
-        if entry:
-            current[entry.group(1)] = entry.group(2)
-            continue
-        if re.match(r"^      run:\s*\|\s*$", raw):
-            block_key, block = "run", []
-    flush()
-    return steps
-
-
+@pytest.mark.integration
 def test_the_step_extractor_sees_the_whole_action() -> None:
     """Guard the guard: a parser that silently found nothing would make every
     execution test below pass by running no shell at all."""
@@ -369,116 +251,6 @@ def test_the_step_extractor_sees_the_whole_action() -> None:
         "INPUT_TARGET", "INPUT_FAIL_ON", "INPUT_CHANGE", "INPUT_DIALECT", "EVIDENCE",
     }
 
-
-def _resolve(expression: str, context: dict[str, object]) -> str:
-    """Evaluate the ``${{ ... }}`` forms this action uses, and only those."""
-    def substitute(match: re.Match[str]) -> str:
-        parts = match.group(1).split(".")
-        if parts[0] == "inputs":
-            inputs = context["inputs"]
-            assert isinstance(inputs, dict)
-            return str(inputs.get(parts[1], ""))
-        if parts[0] == "steps":
-            steps = context["steps"]
-            assert isinstance(steps, dict)
-            return str(steps.get(parts[1], {}).get(parts[3], ""))
-        raise AssertionError(f"unsupported action expression: {match.group(1)}")
-
-    return _EXPRESSION.sub(substitute, expression)
-
-
-class ActionRun:
-    """One simulated invocation of the composite action's shell steps."""
-
-    def __init__(self, workspace: Path, runner_temp: Path, **inputs: str) -> None:
-        self.context: dict[str, object] = {
-            "inputs": {
-                "target": ".", "version": "", "fail-on": "ERROR",
-                "python-version": "3.12", "upload-artifact": "true",
-                "artifact-name": "planlint-evidence",
-                "change": "", "dialect": "", **inputs,
-            },
-            # The install step is a `uses:`-adjacent concern (it installs the
-            # CLI that is already installed here), so its one output is seeded
-            # from the real command rather than by running pip again.
-            "steps": {"install": {"version": _installed_version()}},
-        }
-        self.workspace = workspace
-        self.runner_temp = runner_temp
-        self.summary = runner_temp / "step-summary.md"
-        self.summary.write_text("", encoding="utf-8")
-        self.logs: dict[str, str] = {}
-
-    def run_step(self, step_id: str) -> int:
-        step = next(s for s in _steps(_action_text()) if s.get("id") == step_id)
-        outputs_file = self.runner_temp / f"{step_id}-outputs.txt"
-        outputs_file.write_text("", encoding="utf-8")
-
-        env = {
-            "PATH": os.environ["PATH"],
-            "HOME": _posix(self.runner_temp),
-            "RUNNER_TEMP": _posix(self.runner_temp),
-            "GITHUB_OUTPUT": _posix(outputs_file),
-            "GITHUB_STEP_SUMMARY": _posix(self.summary),
-            "GITHUB_ACTION_PATH": _posix(ACTION.parent),
-            # Isolated HOME hides a `--user` install. The hosted job installs
-            # into the runner's Python; pointing at this checkout is the local
-            # equivalent so the scan exercises the adapter, not site.USER_SITE.
-            "PYTHONPATH": os.pathsep.join(
-                p for p in (str(REPO_ROOT), os.environ.get("PYTHONPATH", "")) if p
-            ),
-        }
-        # Git Bash needs SYSTEMROOT to resolve its own helpers; harmless
-        # elsewhere and absent from the minimal env above without it.
-        for passthrough in ("SYSTEMROOT", "SystemRoot", "TEMP", "TMP", "COMSPEC"):
-            if passthrough in os.environ:
-                env.setdefault(passthrough, os.environ[passthrough])
-        raw_env = step["env"]
-        assert isinstance(raw_env, dict)
-        for key, value in raw_env.items():
-            env[key] = _resolve(value, self.context)
-
-        assert _BASH is not None, "run_step needs the interpreter the skip guard checks for"
-        # `-e` is not decoration: GitHub runs a composite `shell: bash` step as
-        # `bash --noprofile --norc -eo pipefail {0}`, so a body that merely
-        # omits `set -e` still starts under errexit. Simulating that is what
-        # caught the action's fallible steps dying on their first non-zero
-        # command before an exit code could be recorded.
-        result = subprocess.run(
-            [_BASH, "--noprofile", "--norc", "-eo", "pipefail", "-c", str(step["run"])],
-            cwd=self.workspace, env=env, capture_output=True, text=True, check=False,
-        )
-        self.logs[step_id] = result.stdout + result.stderr
-        parsed: dict[str, str] = {}
-        for line in outputs_file.read_text(encoding="utf-8").splitlines():
-            if "=" in line:
-                key, value = line.split("=", 1)
-                parsed[key] = value
-        steps = self.context["steps"]
-        assert isinstance(steps, dict)
-        steps[step_id] = parsed
-        return result.returncode
-
-    def outputs(self, step_id: str) -> dict[str, str]:
-        steps = self.context["steps"]
-        assert isinstance(steps, dict)
-        return dict(steps.get(step_id, {}))
-
-
-def _installed_version() -> str:
-    result = subprocess.run(["planlint", "--version"], capture_output=True, text=True, check=True)
-    return result.stdout.split()[-1]
-
-
-def _drive(tmp_path: Path, target: str) -> ActionRun:
-    """Run paths -> scan -> project and return the simulation, gate not yet applied."""
-    run = ActionRun(REPO_ROOT, tmp_path, target=target)
-    assert run.run_step("paths") == 0, run.logs["paths"]
-    assert run.run_step("scan") == 0, run.logs["scan"]
-    assert run.run_step("project") == 0, run.logs["project"]
-    return run
-
-
 ACTION_CONTRACT = (
     # (fixture target, status, gate exit, a phrase the gate must explain with)
     ("tests/fixtures/action/passing", "pass", 0, "no findings at or above"),
@@ -488,7 +260,7 @@ ACTION_CONTRACT = (
     ("tests/fixtures/action/nested/sub", "pass", 0, "no findings at or above"),
 )
 
-
+@pytest.mark.e2e
 @pytest.mark.parametrize(
     "target,status,gate_exit,phrase",
     ACTION_CONTRACT,
@@ -512,7 +284,7 @@ def test_the_action_reports_each_fixtures_labelled_status(
     assert gate == gate_exit, run.logs["gate"]
     assert phrase in run.logs["gate"], run.logs["gate"]
 
-
+@pytest.mark.e2e
 @_needs_bash
 def test_a_failing_run_populates_the_whole_evidence_bundle(tmp_path: Path) -> None:
     run = _drive(tmp_path, "tests/fixtures/action/failing")
@@ -533,7 +305,7 @@ def test_a_failing_run_populates_the_whole_evidence_bundle(tmp_path: Path) -> No
     assert outputs["evidence-sha256"], "the envelope must be hashed for the artifact"
     assert (evidence / "annotations.txt").read_text(encoding="utf-8").startswith("::error ")
 
-
+@pytest.mark.e2e
 @_needs_bash
 def test_an_unscannable_target_produces_the_error_status_and_no_envelope(tmp_path: Path) -> None:
     """Non-success: the one status the envelope cannot describe. `validate`
@@ -548,7 +320,7 @@ def test_an_unscannable_target_produces_the_error_status_and_no_envelope(tmp_pat
     assert "no openspec/ directory" in (evidence / "validate.stderr.txt").read_text(encoding="utf-8")
     assert json.loads((evidence / "run.json").read_text(encoding="utf-8"))["validate_exit_code"] == 2
 
-
+@pytest.mark.e2e
 @_needs_bash
 def test_annotation_paths_resolve_from_the_repository_root(tmp_path: Path) -> None:
     """A finding's path is relative to the target; GitHub resolves an
@@ -568,7 +340,7 @@ def test_annotation_paths_resolve_from_the_repository_root(tmp_path: Path) -> No
         assert path.startswith("tests/fixtures/action/failing/"), path
         assert (REPO_ROOT / path).is_file(), f"{path} does not resolve from the repository root"
 
-
+@pytest.mark.e2e
 @_needs_bash
 def test_a_nested_target_is_scanned_at_its_own_root(tmp_path: Path) -> None:
     """The target one directory down is a real target: it detects its own
@@ -585,7 +357,7 @@ def test_a_nested_target_is_scanned_at_its_own_root(tmp_path: Path) -> None:
     assert run.outputs("project")["status"] == "pass"
     assert run.outputs("project")["specs-checked"] == "1"
 
-
+@pytest.mark.e2e
 @_needs_bash
 def test_the_step_summary_reaches_the_job_summary_file(tmp_path: Path) -> None:
     run = _drive(tmp_path, "tests/fixtures/action/failing")
@@ -593,7 +365,7 @@ def test_the_step_summary_reaches_the_job_summary_file(tmp_path: Path) -> None:
     assert "## planlint" in summary
     assert "`fail`" in summary
 
-
+@pytest.mark.e2e
 @_needs_bash
 def test_the_evidence_directory_is_outside_the_scanned_tree(tmp_path: Path) -> None:
     """Non-success, observed rather than asserted from the YAML: the scanned
@@ -610,7 +382,6 @@ def test_the_evidence_directory_is_outside_the_scanned_tree(tmp_path: Path) -> N
     evidence = Path(run.outputs("paths")["evidence-dir"]).resolve()
     assert evidence.is_relative_to(tmp_path.resolve())
     assert not evidence.is_relative_to(target.resolve())
-
 
 def _capture_validate_argv(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, **inputs: str
@@ -657,7 +428,7 @@ def _capture_validate_argv(
     assert len(validate_rows) == 1, rows
     return validate_rows[0]
 
-
+@pytest.mark.integration
 def test_empty_change_and_dialect_inputs_omit_cli_flags() -> None:
     scan = next(step for step in _steps(_action_text()) if step.get("id") == "scan")
     body = str(scan["run"])
@@ -669,7 +440,7 @@ def test_empty_change_and_dialect_inputs_omit_cli_flags() -> None:
     # fallback in the script, only as `$INPUT_DIALECT` when the input is set.
     assert "--dialect auto" not in body
 
-
+@pytest.mark.e2e
 @_needs_bash
 def test_empty_change_and_dialect_inputs_omit_cli_flags_on_the_argv(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -678,7 +449,7 @@ def test_empty_change_and_dialect_inputs_omit_cli_flags_on_the_argv(
     assert "--change" not in argv
     assert "--dialect" not in argv
 
-
+@pytest.mark.e2e
 @_needs_bash
 def test_nonempty_change_input_passes_change_flag(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -689,7 +460,7 @@ def test_nonempty_change_input_passes_change_flag(
     assert argv[argv.index("--change") + 1] == "add-thing"
     assert "--dialect" not in argv
 
-
+@pytest.mark.e2e
 @_needs_bash
 def test_nonempty_dialect_input_passes_dialect_flag(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

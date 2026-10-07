@@ -46,6 +46,7 @@ def _subcommand_names(parser: argparse.ArgumentParser) -> set[str]:
 # --- AC-RP-3: verb allow-list (closed surface) -----------------------------
 
 
+@pytest.mark.unit
 def test_cli_verbs_are_exactly_the_allow_list() -> None:
     """The CLI surface is a closed set — no surprise verbs, none missing."""
     names = _subcommand_names(build_parser())
@@ -54,6 +55,7 @@ def test_cli_verbs_are_exactly_the_allow_list() -> None:
     )
 
 
+@pytest.mark.unit
 def test_cli_rejects_authoring_verbs() -> None:
     """Non-success (AC-RP-3): no authoring/chat verbs may be registered."""
     names = _subcommand_names(build_parser())
@@ -83,12 +85,14 @@ def _dialect_choices(parser: argparse.ArgumentParser, verb: str) -> list[str] | 
     return None
 
 
+@pytest.mark.unit
 def test_cli_dialect_choices_include_speckit_on_validate_and_waivers() -> None:
     parser = build_parser()
     assert _dialect_choices(parser, "validate") == ["harness", "upstream", "speckit", "auto"]
     assert _dialect_choices(parser, "waivers") == ["harness", "upstream", "speckit", "auto"]
 
 
+@pytest.mark.unit
 def test_cli_new_and_graph_do_not_gain_speckit_dialect_surface() -> None:
     # C-SK-6 (non-success): scaffolding a SpecKit package is out of scope --
     # `new`'s --dialect choices must not gain "speckit", and `graph` must
@@ -98,6 +102,7 @@ def test_cli_new_and_graph_do_not_gain_speckit_dialect_surface() -> None:
     assert _dialect_choices(parser, "graph") is None
 
 
+@pytest.mark.unit
 def test_no_feature_cli_flag_exists() -> None:
     # C-SK-7 (non-success): filter_speckit_by_feature() exists for
     # shape-parity with filter_by_change but is reachable only via direct
@@ -112,16 +117,19 @@ def test_no_feature_cli_flag_exists() -> None:
 # --- VER-1: --version/-V ----------------------------------------------------
 
 
+@pytest.mark.e2e
 def test_version_flag_prints_version_and_exits_zero(repo: Path) -> None:
     result = run_cli(repo, "--version")
     assert result.returncode == 0
     assert result.stdout.strip()
 
 
+@pytest.mark.e2e
 def test_short_version_flag_matches_long_form(repo: Path) -> None:
     assert run_cli(repo, "-V").stdout == run_cli(repo, "--version").stdout
 
 
+@pytest.mark.e2e
 def test_version_flag_does_not_require_a_subcommand(repo: Path) -> None:
     # --version must short-circuit before argparse's required-subcommand
     # check, so it works with no verb at all.
@@ -129,12 +137,14 @@ def test_version_flag_does_not_require_a_subcommand(repo: Path) -> None:
     assert "usage" not in result.stderr.lower()
 
 
+@pytest.mark.unit
 def test_version_flag_is_not_a_registered_subcommand() -> None:
     # A top-level optional flag like --target/--verbose, never a verb --
     # must not appear in or expand the closed subcommand allow-list.
     assert "version" not in _subcommand_names(build_parser())
 
 
+@pytest.mark.unit
 def test_version_string_falls_back_when_package_metadata_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -152,6 +162,7 @@ def test_version_string_falls_back_when_package_metadata_is_unavailable(
     assert _version_string() == f"%(prog)s {__version__}"
 
 
+@pytest.mark.unit
 def test_version_string_falls_back_when_top_level_package_is_unmapped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -177,6 +188,7 @@ def test_version_string_falls_back_when_top_level_package_is_unmapped(
 # "the custom value was honored" from "it was silently overridden."
 
 
+@pytest.mark.e2e
 def test_run_cli_injects_coverage_process_start_by_default(
     monkeypatch: pytest.MonkeyPatch, repo: Path
 ) -> None:
@@ -191,6 +203,7 @@ def test_run_cli_injects_coverage_process_start_by_default(
     assert "COVERAGE_PROCESS_START" in captured["env"]
 
 
+@pytest.mark.e2e
 def test_run_cli_never_overrides_a_caller_supplied_coverage_process_start(
     monkeypatch: pytest.MonkeyPatch, repo: Path
 ) -> None:
@@ -209,6 +222,7 @@ def test_run_cli_never_overrides_a_caller_supplied_coverage_process_start(
 # --- AC-RP-1: entry points wired + deprecation alias ------------------------
 
 
+@pytest.mark.integration
 def test_entry_points_wired_in_pyproject(repo_root: Path) -> None:
     """pyproject must ship `planlint` (primary) and `specgraph` (legacy alias)."""
     text = (repo_root / "pyproject.toml").read_text()
@@ -218,6 +232,7 @@ def test_entry_points_wired_in_pyproject(repo_root: Path) -> None:
     ), "deprecated specgraph alias missing"
 
 
+@pytest.mark.e2e
 def test_planlint_module_runs(repo: Path, fixtures: dict[str, Path]) -> None:
     """`python -m openspec_graph.cli` still works (the in-process entry path)."""
     (repo / "Makefile").write_text((fixtures["makefile"]).read_text())
@@ -226,6 +241,7 @@ def test_planlint_module_runs(repo: Path, fixtures: dict[str, Path]) -> None:
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.e2e
 def test_primary_command_emits_no_deprecation_warning(repo: Path, fixtures: dict[str, Path]) -> None:
     """The `planlint` path must NOT carry the legacy-alias deprecation warning."""
     (repo / "Makefile").write_text((fixtures["makefile"]).read_text())
@@ -237,6 +253,7 @@ def test_primary_command_emits_no_deprecation_warning(repo: Path, fixtures: dict
     )
 
 
+@pytest.mark.unit
 def test_deprecated_alias_warns_to_stderr_and_delegates(repo: Path, fixtures: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
     """`specgraph` (alias) warns to stderr, then runs and preserves exit code."""
     (repo / "Makefile").write_text((fixtures["makefile"]).read_text())
@@ -248,6 +265,7 @@ def test_deprecated_alias_warns_to_stderr_and_delegates(repo: Path, fixtures: di
     assert "planlint" in err.lower()
 
 
+@pytest.mark.unit
 def test_deprecated_alias_preserves_failure_exit_code(repo: Path, fixtures: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
     """The alias never silently passes — a real ERROR still exits 1."""
     (repo / "Makefile").write_text((fixtures["makefile"]).read_text())
@@ -262,6 +280,7 @@ def test_deprecated_alias_preserves_failure_exit_code(repo: Path, fixtures: dict
     assert "deprecated" in err.lower(), "alias must still emit the deprecation warning"
 
 
+@pytest.mark.unit
 def test_deprecated_alias_keeps_stdout_parseable(repo: Path, fixtures: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
     """The alias warning goes to stderr only; stdout stays valid JSON."""
     (repo / "Makefile").write_text((fixtures["makefile"]).read_text())
@@ -280,6 +299,7 @@ def test_deprecated_alias_keeps_stdout_parseable(repo: Path, fixtures: dict[str,
     json.loads(out.out), "stdout must remain parseable JSON through the alias"
 
 
+@pytest.mark.e2e
 def test_planlint_log_level_env_var_works(repo: Path, fixtures: dict[str, Path]) -> None:
     """The new PLANLINT_LOG_LEVEL env var enables debug logging (not just legacy)."""
     (repo / "Makefile").write_text((fixtures["makefile"]).read_text())
@@ -296,6 +316,7 @@ def test_planlint_log_level_env_var_works(repo: Path, fixtures: dict[str, Path])
 # --- Defect D: stdout/stderr forced to UTF-8 (fixes UnicodeEncodeError) ----
 
 
+@pytest.mark.e2e
 def test_common_verbs_do_not_crash_under_ascii_stdout_encoding(
     repo: Path, fixtures: dict[str, Path]
 ) -> None:
@@ -326,6 +347,7 @@ def test_common_verbs_do_not_crash_under_ascii_stdout_encoding(
     assert fail_result.returncode == 1, fail_result.stderr
 
 
+@pytest.mark.e2e
 def test_arbitrary_non_ascii_spec_content_survives_graph_mermaid_under_ascii_encoding(
     repo: Path, fixtures: dict[str, Path]
 ) -> None:
@@ -347,6 +369,7 @@ def test_arbitrary_non_ascii_spec_content_survives_graph_mermaid_under_ascii_enc
     assert "évidence id (café, 日本語)" in result.stdout
 
 
+@pytest.mark.e2e
 def test_non_ascii_target_path_error_survives_ascii_stdout_encoding(tmp_path: Path) -> None:
     """A non-ASCII absolute path embedded in an error message (not a
     hardcoded literal) must not crash stderr either. The target directory
@@ -366,6 +389,7 @@ def test_non_ascii_target_path_error_survives_ascii_stdout_encoding(tmp_path: Pa
     assert "Traceback" not in result.stderr
 
 
+@pytest.mark.e2e
 def test_json_output_is_unaffected_by_the_stdout_encoding_fix(
     repo: Path, fixtures: dict[str, Path]
 ) -> None:
@@ -405,6 +429,7 @@ class _ReconfigureRaises:
         raise self._exc_type("reconfiguration not supported by this test double")
 
 
+@pytest.mark.e2e
 def test_waivers_format_json_emits_parseable_json(repo: Path, fixtures: dict[str, Path]) -> None:
     """The `waivers --format json` surface had no subprocess coverage at all;
     it must emit parseable JSON, on the UTF-8 stream like every other verb."""
@@ -421,6 +446,7 @@ def test_waivers_format_json_emits_parseable_json(repo: Path, fixtures: dict[str
     assert payload and payload[0]["rule"] == "G003", "the seeded waiver must appear"
 
 
+@pytest.mark.e2e
 def test_validate_fail_on_info_exits_1_on_info_findings(
     repo: Path, fixtures: dict[str, Path]
 ) -> None:
@@ -441,6 +467,7 @@ def test_validate_fail_on_info_exits_1_on_info_findings(
     assert payload["blocking"] > 0
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize("exc_type", [ValueError, OSError])
 def test_main_tolerates_a_stream_whose_reconfigure_raises(
     exc_type: type[Exception],
@@ -482,6 +509,7 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.unit
 def test_deprecated_alias_names_its_removal_version(repo: Path, fixtures: dict[str, Path], capsys: pytest.CaptureFixture[str]) -> None:
     """The alias warning states its window, not just that one exists (R-REL-7).
 

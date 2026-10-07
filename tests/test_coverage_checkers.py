@@ -43,6 +43,7 @@ def _write_pyproject(path: Path, floor: int | None) -> Path:
         )
     return path
 
+@pytest.mark.integration
 def test_branch_check_fails_below_floor(tmp_path: Path, capsys) -> None:
     _write_coverage_json(tmp_path / "coverage.json", branches=10, covered=5)  # 50%
     _write_pyproject(tmp_path / "pyproject.toml", floor=80)
@@ -52,12 +53,14 @@ def test_branch_check_fails_below_floor(tmp_path: Path, capsys) -> None:
     assert "50.0%" in out
     assert "below floor 80" in out
 
+@pytest.mark.integration
 def test_branch_check_passes_at_or_above_floor(tmp_path: Path, capsys) -> None:
     _write_coverage_json(tmp_path / "coverage.json", branches=10, covered=8)  # 80%
     _write_pyproject(tmp_path / "pyproject.toml", floor=80)
     assert _run_branch_check(tmp_path) == 0
     assert "80.0%" in capsys.readouterr().out
 
+@pytest.mark.integration
 def test_branch_check_fails_when_no_branches_measured(tmp_path: Path) -> None:
     # branch=true is configured but zero branches were measured -> misconfiguration,
     # not a silent pass. The gate fails loud (AC-CH-3: a missing gate is a bug).
@@ -65,6 +68,7 @@ def test_branch_check_fails_when_no_branches_measured(tmp_path: Path) -> None:
     _write_pyproject(tmp_path / "pyproject.toml", floor=80)
     assert _run_branch_check(tmp_path) == 2
 
+@pytest.mark.integration
 def test_branch_check_fails_when_floor_not_configured(tmp_path: Path) -> None:
     # A repo that turns this gate on MUST set branch_fail_under. Missing it is a
     # misconfiguration, not a skip — CI must not pass silently.
@@ -91,23 +95,27 @@ def _write_cov_lines(path: Path, statements: int, covered: int) -> Path:
     )
     return path
 
+@pytest.mark.integration
 def test_cov_floor_fails_below_threshold(tmp_path: Path) -> None:
     # 50% line coverage against a floor of 90 read from pyproject.
     _write_cov_lines(tmp_path / "coverage.json", statements=100, covered=50)
     _write_pyproject(tmp_path / "pyproject.toml", floor=80)  # sets fail_under=90
     assert _run_cov_floor_check(tmp_path) == 1
 
+@pytest.mark.integration
 def test_cov_floor_passes_at_or_above(tmp_path: Path) -> None:
     _write_cov_lines(tmp_path / "coverage.json", statements=100, covered=92)
     _write_pyproject(tmp_path / "pyproject.toml", floor=80)
     assert _run_cov_floor_check(tmp_path) == 0
 
+@pytest.mark.integration
 def test_cov_floor_fails_loud_when_floor_not_configured(tmp_path: Path) -> None:
     # fail_under missing from pyproject -> misconfiguration, not a skip.
     _write_cov_lines(tmp_path / "coverage.json", statements=100, covered=50)
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\n')
     assert _run_cov_floor_check(tmp_path) == 2
 
+@pytest.mark.integration
 def test_cov_floor_threshold_is_read_from_pyproject_not_hardcoded(tmp_path: Path) -> None:
     # The floor is whatever pyproject declares — 95 here, not the repo's 90.
     _write_cov_lines(tmp_path / "coverage.json", statements=100, covered=92)  # 92% < 95
@@ -116,6 +124,7 @@ def test_cov_floor_threshold_is_read_from_pyproject_not_hardcoded(tmp_path: Path
     )
     assert _run_cov_floor_check(tmp_path) == 1
 
+@pytest.mark.e2e
 def test_coverage_floor_fails_below_threshold_pytest(tmp_path: Path) -> None:
     """A package with uncovered lines fails the --cov-fail-under gate."""
     pkg = tmp_path / "pkg"
@@ -132,6 +141,7 @@ def test_coverage_floor_fails_below_threshold_pytest(tmp_path: Path) -> None:
     )
     assert result.returncode != 0, "below-floor coverage must fail the gate"
 
+@pytest.mark.e2e
 def test_coverage_floor_passes_at_threshold(tmp_path: Path) -> None:
     pkg = tmp_path / "pkg"
     pkg.mkdir()
@@ -145,6 +155,7 @@ def test_coverage_floor_passes_at_threshold(tmp_path: Path) -> None:
     )
     assert result.returncode == 0
 
+@pytest.mark.e2e
 def test_suite_survives_an_ambient_coverage_file(tmp_path: Path) -> None:
     """An inherited ``COVERAGE_FILE`` must not crash the run at teardown.
 
@@ -186,6 +197,7 @@ def test_suite_survives_an_ambient_coverage_file(tmp_path: Path) -> None:
     assert result.returncode != 3, f"INTERNALERROR at teardown:\n{combined[-3000:]}"
     assert result.returncode == 0, combined[-3000:]
 
+@pytest.mark.unit
 def test_env_without_coverage_strips_every_coverage_variable() -> None:
     """The helper removes the whole family and applies overrides on top."""
     from tests.support import COVERAGE_ENV_VARS
@@ -235,6 +247,7 @@ def _pyproject(path: Path, **keys: int) -> Path:
     )
     return path
 
+@pytest.mark.integration
 def test_scoped_totals_sum_only_the_named_subtree(tmp_path: Path) -> None:
     common = load_tool("common_scope", "_common.py")
     cov = _cov_json(tmp_path / "c.json", {
@@ -246,6 +259,7 @@ def test_scoped_totals_sum_only_the_named_subtree(tmp_path: Path) -> None:
     # Unscoped still reads the report's own totals, unchanged.
     assert common.coverage_totals(cov, "covered_lines", "num_statements") == (110, 120)
 
+@pytest.mark.integration
 def test_scoped_totals_normalize_windows_separators(tmp_path: Path) -> None:
     """coverage.py writes paths as the platform spells them.
 
@@ -258,11 +272,13 @@ def test_scoped_totals_normalize_windows_separators(tmp_path: Path) -> None:
     cov = _cov_json(tmp_path / "c.json", {"tools\\check_docs.py": (10, 9, 2, 2)})
     assert common.coverage_totals(cov, "covered_lines", "num_statements", "tools") == (9, 10)
 
+@pytest.mark.integration
 def test_scoped_totals_are_zero_for_a_subtree_nobody_measured(tmp_path: Path) -> None:
     common = load_tool("common_none", "_common.py")
     cov = _cov_json(tmp_path / "c.json", {"openspec_graph/cli.py": (10, 10, 2, 2)})
     assert common.coverage_totals(cov, "covered_lines", "num_statements", "tools") == (0, 0)
 
+@pytest.mark.integration
 def test_a_scope_matching_nothing_fails_the_gate_rather_than_passing(tmp_path: Path) -> None:
     """The load-bearing case. A prefix typo, a renamed directory, or a run
     that forgot `--cov=tools` all produce 0 measured statements, and 0/0 is
@@ -276,6 +292,7 @@ def test_a_scope_matching_nothing_fails_the_gate_rather_than_passing(tmp_path: P
         "bc_empty", "check_branch_coverage.py", "coverage.json", "--scope", "tools", cwd=tmp_path
     ) == 2
 
+@pytest.mark.integration
 def test_scoped_gate_fails_below_its_own_floor_and_passes_at_it(tmp_path: Path) -> None:
     _pyproject(tmp_path / "pyproject.toml", tools_line_fail_under=90, tools_branch_fail_under=80)
     _cov_json(tmp_path / "coverage.json", {
@@ -295,6 +312,7 @@ def test_scoped_gate_fails_below_its_own_floor_and_passes_at_it(tmp_path: Path) 
         "cf_whole", "check_coverage_floor.py", "coverage.json", cwd=tmp_path
     ) == 0
 
+@pytest.mark.integration
 def test_scoped_gate_fails_loudly_when_its_floor_is_not_configured(tmp_path: Path) -> None:
     """A missing scoped floor is a misconfiguration, not a skip -- the same
     rule the unscoped floors already follow."""
@@ -307,6 +325,7 @@ def test_scoped_gate_fails_loudly_when_its_floor_is_not_configured(tmp_path: Pat
         "bc_nofloor", "check_branch_coverage.py", "coverage.json", "--scope", "tools", cwd=tmp_path
     ) == 2
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("argv", "expected_path", "expected_scope"),
     [
@@ -325,6 +344,7 @@ def test_coverage_argv_parses_every_accepted_shape(
     path, scope = common.parse_coverage_argv(argv)
     assert (path.name, scope) == (expected_path, expected_scope)
 
+@pytest.mark.integration
 @pytest.mark.parametrize("argv", [["prog", "--scope"], ["prog", "--scope="], ["prog", "--scope", ""]])
 def test_coverage_argv_rejects_a_scope_without_a_value(argv: list[str]) -> None:
     """`--scope` with nothing after it must not be read as scope="" , which
@@ -333,6 +353,7 @@ def test_coverage_argv_rejects_a_scope_without_a_value(argv: list[str]) -> None:
     with pytest.raises(ValueError, match="requires a directory name"):
         common.parse_coverage_argv(argv)
 
+@pytest.mark.integration
 def test_scoped_gate_reports_a_usage_error_as_exit_2(tmp_path: Path, capsys) -> None:
     _pyproject(tmp_path / "pyproject.toml", tools_line_fail_under=90)
     assert run_tool_main(
@@ -367,6 +388,7 @@ def _both_checkers(tmp_path: Path, *args: str) -> tuple[int, int]:
         run_tool_main("bc_scoped", "check_branch_coverage.py", *args, cwd=tmp_path),
     )
 
+@pytest.mark.integration
 def test_the_first_source_without_a_scoped_key_reads_the_unscoped_floors(tmp_path: Path) -> None:
     """`--scope openspec_graph` with no `openspec_graph_*` key reads `fail_under` and
     `branch_fail_under`, because the package is the first entry of `source`; the
@@ -387,6 +409,7 @@ def test_the_first_source_without_a_scoped_key_reads_the_unscoped_floors(tmp_pat
     })
     assert _both_checkers(tmp_path, "coverage.json", "--scope", "openspec_graph") == (0, 0)
 
+@pytest.mark.integration
 def test_a_scoped_key_on_the_first_source_is_honoured_and_is_the_misconfiguration_the_guard_rejects(
     tmp_path: Path,
 ) -> None:
@@ -408,6 +431,7 @@ def test_a_scoped_key_on_the_first_source_is_honoured_and_is_the_misconfiguratio
         assert common.scoped_floor(planted, spelling, "branch") == 80, spelling
     assert common.duplicate_scoped_floor_keys(planted) == ["openspec_graph_line_fail_under"]
 
+@pytest.mark.integration
 def test_a_declared_scope_that_is_not_first_still_exits_2_without_its_key(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -426,6 +450,7 @@ def test_a_declared_scope_that_is_not_first_still_exits_2_without_its_key(
     for spelling in ("tools", "tools/"):
         assert _both_checkers(tmp_path, "coverage.json", "--scope", spelling) == (0, 0), spelling
 
+@pytest.mark.integration
 def test_the_first_source_without_its_unscoped_floor_is_named_as_absent(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -447,6 +472,7 @@ def test_the_first_source_without_its_unscoped_floor_is_named_as_absent(
         assert scoped_key in err and unscoped in err, err
     assert "absent too" in err and "applies only" not in err, err
 
+@pytest.mark.integration
 def test_coverage_sources_reads_the_run_table_array_and_nothing_else(tmp_path: Path) -> None:
     common = load_tool("common_sources", "_common.py")
     p = tmp_path / "pyproject.toml"
@@ -462,6 +488,7 @@ def test_coverage_sources_reads_the_run_table_array_and_nothing_else(tmp_path: P
     assert common.coverage_sources(p) == [], "source_pkgs is a different key"
     assert common.coverage_sources(tmp_path / "absent.toml") == []
 
+@pytest.mark.integration
 def test_the_first_source_declares_no_duplicate_scoped_floor_key(tmp_path: Path) -> None:
     """On this repository's own pyproject the first measured tree's floors live in
     the unscoped locators only; a scoped twin would be two places for one number."""
@@ -510,6 +537,7 @@ def _per_file(tmp_path: Path, *args: str) -> int:
         "cf_per_file", "check_coverage_floor.py", "coverage.json", "--per-file-min", *args, cwd=tmp_path
     )
 
+@pytest.mark.integration
 def test_per_file_report_names_each_module_below_the_minimum(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -522,6 +550,7 @@ def test_per_file_report_names_each_module_below_the_minimum(
     assert "tools/c.py" not in out
     assert "85%" in out.splitlines()[0], "the header names the minimum"
 
+@pytest.mark.integration
 def test_per_file_report_exits_zero_when_no_module_is_below(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -529,12 +558,14 @@ def test_per_file_report_exits_zero_when_no_module_is_below(
     assert _per_file(tree, "--scope", "tools") == 0
     assert "no module below 50% line coverage" in capsys.readouterr().out
 
+@pytest.mark.integration
 def test_per_file_report_fails_loudly_without_its_key(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert _per_file(_per_file_tree(tmp_path, minimum=None)) == 2
     assert PER_FILE_KEY in capsys.readouterr().err
 
+@pytest.mark.integration
 def test_per_file_report_respects_the_scope(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -550,6 +581,7 @@ def test_per_file_report_respects_the_scope(
     assert "openspec_graph/cli.py" in unscoped and "every measured tree" in unscoped
     assert _per_file(tree, "--scope", "nowhere") == 2
 
+@pytest.mark.integration
 def test_per_file_flag_leaves_the_argv_contract_alone(tmp_path: Path) -> None:
     """The flag is consumed before `parse_coverage_argv`, so a path and a scope
     beside it reach the same `(path, scope)`; the branch checker, which shares

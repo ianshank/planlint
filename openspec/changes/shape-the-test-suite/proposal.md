@@ -267,14 +267,24 @@ byte-identical at `bb4e4ad`, the commit that carries this draft),
   keeps the read-only claim (and `READ_ONLY_INVOCATIONS`, which
   `tests/test_report.py` imports), the exit-code contract, the exit-2
   remainder and the boundaries.
-- `tests/test_action_contract.py` — unchanged: at the bound, not over it.
+- `tests/test_action_contract.py` — at the bound when this package was
+  drafted, so its Action runner simulator (`ActionRun`, the step reader and
+  the expression resolver) moves to the uncollected `tests/action_support.py`
+  to make room for its tier marks; `EXPECTED_INPUTS` stays, because R-WCA-15
+  and R-GA-33 name it there.
+- `tests/shape_support.py` — new, uncollected: the R-TSS-6 criterion, by
+  AST, that the tier guards assert against (DEC-TSS-007).
+- `tests/test_graft_rules.py` → `tests/test_rule_registry_docs.py` —
+  `test_rule_registry_baseline_is_unchanged`, the one test there that reads
+  the tree, moves beside the other baseline guard, so the module is one
+  tier and stays inside the bound once marked.
 - `tests/test_suite_shape.py` — new; the guards of this package: the tree
   stays flat, no module exceeds `MAX_TEST_MODULE_LINES`, the three tier
   markers are registered and strict, every test carries exactly one tier,
   each tier agrees with its mechanical criterion (fixture parameters
   resolved like called helpers, the `fixtures`/`corpus` exemption applied
-  to every `__file__`-rooted path, the `tests/support.py` tree-readers an
-  enumerated set), no tier is written through an alias, no test module
+  to every `__file__`-rooted path, the tree-readers of `tests/support.py`
+  followed into their bodies), no tier is written through an alias, no test module
   spawns the CLI in `run_cli`'s shape or writes a harness spec by hand, and
   the four converted loops keep exactly one subprocess — each shown red on
   a planted counter-example.

@@ -23,6 +23,8 @@ import pytest
 
 from tests.support import normalize_root, run_cli
 
+pytestmark = pytest.mark.e2e
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CORPUS = REPO_ROOT / "tests" / "corpus" / "targets"
 CANARY_PLACEHOLDER = "@@CANARY@@"

@@ -20,6 +20,8 @@ from openspec_graph import witness
 from openspec_graph.witness import Witness
 from tests import support
 
+pytestmark = pytest.mark.unit
+
 # Windows needs Administrator rights or Developer Mode to create any symlink
 # at all -- probed once, at this module's import time, not assumed from
 # sys.platform, so a Windows box that does have one of those enabled still

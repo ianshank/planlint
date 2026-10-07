@@ -11,7 +11,11 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from openspec_graph import machinery
+
+pytestmark = pytest.mark.unit
 
 
 def test_multi_target_line_resolves_both_names() -> None:

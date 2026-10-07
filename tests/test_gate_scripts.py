@@ -47,15 +47,18 @@ def _docs_fixture(root: Path, *, omit: str | None = None, unlinked: str | None =
     (root / "README.md").write_text(body, encoding="utf-8")
     return root
 
+@pytest.mark.integration
 def test_docs_check_passes_when_every_doc_is_present_and_linked(tmp_path: Path) -> None:
     check_docs = load_tool("check_docs_pass", "check_docs.py")
     assert check_docs.check(_docs_fixture(tmp_path)) == []
 
+@pytest.mark.integration
 def test_docs_check_reports_a_missing_doc(tmp_path: Path) -> None:
     check_docs = load_tool("check_docs_missing", "check_docs.py")
     problems = check_docs.check(_docs_fixture(tmp_path, omit="SECURITY.md"))
     assert problems == ["MISSING: SECURITY.md"]
 
+@pytest.mark.integration
 def test_docs_check_reports_a_present_but_unlinked_doc(tmp_path: Path) -> None:
     """Present-but-unlinked is the whole point of the gate: a doc a new
     contributor cannot reach from the front page is effectively absent, and
@@ -64,6 +67,7 @@ def test_docs_check_reports_a_present_but_unlinked_doc(tmp_path: Path) -> None:
     problems = check_docs.check(_docs_fixture(tmp_path, unlinked="docs/aqa.md"))
     assert problems == ["UNLINKED: docs/aqa.md not referenced in README.md"]
 
+@pytest.mark.integration
 def test_docs_check_main_exits_1_on_a_defect_and_0_when_clean(tmp_path: Path, capsys) -> None:
     check_docs = load_tool("check_docs_main", "check_docs.py")
     assert check_docs.main(["check_docs.py"], _docs_fixture(tmp_path, omit="AGENTS.md")) == 1
@@ -74,6 +78,7 @@ def test_docs_check_main_exits_1_on_a_defect_and_0_when_clean(tmp_path: Path, ca
     assert check_docs.main(["check_docs.py"], _docs_fixture(clean)) == 0
     assert "all required docs present and linked" in capsys.readouterr().out
 
+@pytest.mark.integration
 def test_docs_check_treats_a_missing_readme_as_every_doc_unlinked(tmp_path: Path) -> None:
     """No README at all must not crash or silently pass.
 
@@ -116,6 +121,7 @@ GH_TOKEN = "ghp_" + "b" * 36
 
 SLACK_TOKEN = "xoxb-" + "1234567890-abcdefghij"
 
+@pytest.mark.e2e
 @pytest.mark.parametrize(
     ("label", "secret"),
     [("aws", AWS_KEY), ("github", GH_TOKEN), ("slack", SLACK_TOKEN)],
@@ -135,11 +141,13 @@ def test_fallback_scan_fires_on_each_token_shape(tmp_path: Path, label: str, sec
     # logs has published it further than the commit did.
     assert secret not in findings[0]
 
+@pytest.mark.e2e
 def test_fallback_scan_is_clean_on_a_repo_without_secrets(tmp_path: Path) -> None:
     secrets = load_tool("check_secrets_clean", "check_secrets.py")
     repo = _git_repo(tmp_path, {"ok.py": "VERSION = '1.2.3'\nSHA = 'a' * 40\n"})
     assert secrets.fallback_scan(repo) == []
 
+@pytest.mark.e2e
 def test_fallback_scan_skips_vendored_directories_but_not_tests(tmp_path: Path) -> None:
     """The skip list is vendored/generated only. A secret under ``tests/``
     must still fail the gate -- the comment in ``_is_allowlisted`` says so,
@@ -153,11 +161,13 @@ def test_fallback_scan_skips_vendored_directories_but_not_tests(tmp_path: Path) 
     assert len(findings) == 1, findings
     assert "tests" in findings[0] and "node_modules" not in findings[0]
 
+@pytest.mark.integration
 def test_fallback_scan_returns_nothing_outside_a_git_repo(tmp_path: Path) -> None:
     """``git ls-files`` fails, ``_tracked_files`` returns [] -- no crash."""
     secrets = load_tool("check_secrets_nogit", "check_secrets.py")
     assert secrets.fallback_scan(tmp_path) == []
 
+@pytest.mark.e2e
 def test_secret_gate_main_returns_1_when_the_fallback_finds_a_key(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
@@ -173,6 +183,7 @@ def test_secret_gate_main_returns_1_when_the_fallback_finds_a_key(
     assert secrets.main(["check_secrets.py"], repo) == 1
     assert "FAIL:" in capsys.readouterr().out
 
+@pytest.mark.e2e
 def test_secret_gate_main_returns_0_when_the_fallback_is_clean(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
@@ -182,12 +193,14 @@ def test_secret_gate_main_returns_0_when_the_fallback_is_clean(
     assert secrets.main(["check_secrets.py"], repo) == 0
     assert "fallback scan clean" in capsys.readouterr().out
 
+@pytest.mark.integration
 def test_secret_gate_main_trusts_a_clean_gitleaks_verdict(monkeypatch, capsys) -> None:
     secrets = load_tool("check_secrets_gl_ok", "check_secrets.py")
     monkeypatch.setattr(secrets, "run_gitleaks", lambda root=None: (0, ""))
     assert secrets.main(["check_secrets.py"]) == 0
     assert "gitleaks found no secrets" in capsys.readouterr().out
 
+@pytest.mark.integration
 def test_secret_gate_main_fails_when_gitleaks_reports_a_finding(monkeypatch, capsys) -> None:
     """The CI path. Any non-zero, non-(-1) code is a finding, and the gate
     must surface gitleaks' own output rather than swallowing it."""
@@ -198,6 +211,7 @@ def test_secret_gate_main_fails_when_gitleaks_reports_a_finding(monkeypatch, cap
     assert "FAIL: gitleaks detected secrets" in out
     assert "leak: api.py:3" in out
 
+@pytest.mark.integration
 def test_run_gitleaks_reports_minus_one_when_the_binary_is_absent(monkeypatch) -> None:
     secrets = load_tool("check_secrets_which", "check_secrets.py")
     monkeypatch.setattr(secrets.shutil, "which", lambda _name: None)
@@ -208,6 +222,7 @@ def test_run_gitleaks_reports_minus_one_when_the_binary_is_absent(monkeypatch) -
 # --- render_plugin_manifests.py: --check must detect staleness --------------
 
 
+@pytest.mark.integration
 def test_plugin_manifests_check_passes_on_the_committed_repo() -> None:
     """``make skill-manifests`` output is committed; --check must agree."""
     # argparse-based: no argv[0]. See run_tool_main's note on the split.
@@ -215,6 +230,7 @@ def test_plugin_manifests_check_passes_on_the_committed_repo() -> None:
         "rpm_check", "render_plugin_manifests.py", "--check", pass_argv0=False
     ) == 0
 
+@pytest.mark.integration
 def test_plugin_manifests_check_fails_on_a_stale_manifest(tmp_path: Path, monkeypatch) -> None:
     rpm = load_tool("rpm_stale", "render_plugin_manifests.py")
     stale = tmp_path / "plugin.json"
@@ -222,6 +238,7 @@ def test_plugin_manifests_check_fails_on_a_stale_manifest(tmp_path: Path, monkey
     monkeypatch.setattr(rpm, "PLUGIN_PATH", stale)
     assert rpm.main(["--check"]) == 1
 
+@pytest.mark.integration
 def test_plugin_manifests_write_regenerates_both_files(tmp_path: Path, monkeypatch) -> None:
     rpm = load_tool("rpm_write", "render_plugin_manifests.py")
     plugin, marketplace = tmp_path / "plugin.json", tmp_path / "marketplace.json"
@@ -233,6 +250,7 @@ def test_plugin_manifests_write_regenerates_both_files(tmp_path: Path, monkeypat
     assert json.loads(plugin.read_text(encoding="utf-8"))["name"] == rpm.SKILL_NAME
     assert json.loads(marketplace.read_text(encoding="utf-8"))["plugins"][0]["version"]
 
+@pytest.mark.integration
 def test_plugin_manifests_require_a_mode(capsys) -> None:
     """--write and --check are mutually exclusive AND required: a bare
     invocation must not silently do nothing."""
@@ -241,6 +259,7 @@ def test_plugin_manifests_require_a_mode(capsys) -> None:
         rpm.main([])
     assert excinfo.value.code == 2
 
+@pytest.mark.integration
 def test_plugin_manifests_reject_an_empty_skill_file(tmp_path: Path, monkeypatch, capsys) -> None:
     rpm = load_tool("rpm_empty", "render_plugin_manifests.py")
     empty = tmp_path / "SKILL.md"
@@ -249,6 +268,7 @@ def test_plugin_manifests_reject_an_empty_skill_file(tmp_path: Path, monkeypatch
     assert rpm.main(["--check"]) == 2
     assert "missing or empty" in capsys.readouterr().err
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("label", "body"),
     [
@@ -270,6 +290,7 @@ def test_plugin_manifests_reject_an_unusable_description(
     assert rpm.main(["--check"]) == 2, label
     assert "ERROR" in capsys.readouterr().err
 
+@pytest.mark.integration
 def test_plugin_manifests_verbose_logs_without_polluting_stdout(
     tmp_path: Path, monkeypatch, capsys, caplog
 ) -> None:
@@ -302,6 +323,7 @@ def test_plugin_manifests_verbose_logs_without_polluting_stdout(
 # --- _common.read_json: the typed reader the artifact consumers share --------
 
 
+@pytest.mark.integration
 def test_read_json_rejects_a_non_mapping_document(tmp_path: Path) -> None:
     """A top-level list is refused here, naming the file, rather than
     surfacing later as a ``TypeError`` from the first ``graph["nodes"]``."""
@@ -311,6 +333,7 @@ def test_read_json_rejects_a_non_mapping_document(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match=re.escape(str(doc))):
         common.read_json(doc)
 
+@pytest.mark.integration
 def test_read_json_reports_a_missing_file_by_name(tmp_path: Path) -> None:
     """Read directly, not through ``read_text``: its missing-file ``""`` would
     turn an absent artifact into a ``JSONDecodeError`` with no path in it."""
@@ -323,6 +346,7 @@ def test_read_json_reports_a_missing_file_by_name(tmp_path: Path) -> None:
 # --- the executable contract, once rather than per script --------------------
 
 
+@pytest.mark.e2e
 @pytest.mark.parametrize(
     "script",
     [

@@ -17,6 +17,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 from openspec_graph import detect
 from openspec_graph.parse_semantics import MAKE_REF
 from tests import support
@@ -120,6 +122,7 @@ def _rel(path: Path) -> str:
 # --- the real tree -----------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_policies_doc_is_registered_in_the_docs_gate_and_named_in_the_readme_and_llms() -> None:
     """Three registrations, one of which nothing else guards.
 
@@ -136,12 +139,14 @@ def test_policies_doc_is_registered_in_the_docs_gate_and_named_in_the_readme_and
     assert not missing, f"docs/policies.md is not registered in: {missing}"
 
 
+@pytest.mark.integration
 def test_every_policy_heading_is_indexed_and_every_index_anchor_resolves() -> None:
     text = POLICIES.read_text(encoding="utf-8")
     offenders = [f"{_rel(POLICIES)}: {o}" for o in _index_offenders(text)]
     assert not offenders, "\n".join(offenders)
 
 
+@pytest.mark.integration
 def test_every_policy_pointer_resolves_to_a_heading_and_each_pointer_file_has_one() -> None:
     policies_text = POLICIES.read_text(encoding="utf-8")
     offenders: list[str] = []
@@ -159,6 +164,7 @@ def test_every_policy_pointer_resolves_to_a_heading_and_each_pointer_file_has_on
     assert not offenders, "\n".join(offenders)
 
 
+@pytest.mark.integration
 def test_every_make_citation_in_the_policy_doc_names_a_real_target() -> None:
     """G004's own matcher and target set, pointed at the policy document."""
     targets = set(detect.profile(REPO_ROOT).make_targets)
@@ -182,6 +188,7 @@ _PLANTED = (
 )
 
 
+@pytest.mark.unit
 def test_a_dead_index_anchor_is_named() -> None:
     planted = _PLANTED.replace(
         "- [Beta](#beta) — two\n", "- [Beta](#beta) — two\n- [Gamma](#gamma) — three\n"
@@ -190,12 +197,14 @@ def test_a_dead_index_anchor_is_named() -> None:
     assert offenders == ["index anchor with no heading: #gamma"], offenders
 
 
+@pytest.mark.unit
 def test_an_unindexed_policy_heading_is_named() -> None:
     planted = _PLANTED + "\n## Gamma\n"
     offenders = _index_offenders(planted)
     assert offenders == ["heading not indexed: Gamma"], offenders
 
 
+@pytest.mark.unit
 def test_an_empty_policy_document_is_an_offender_not_a_pass() -> None:
     offenders = _index_offenders("# Policies\n\nNothing here.\n")
     assert "no level-two heading" in offenders and "no index entry" in offenders, offenders
@@ -209,6 +218,7 @@ def test_an_empty_policy_document_is_an_offender_not_a_pass() -> None:
     assert "heading repeated: Alpha" in offenders, offenders
 
 
+@pytest.mark.unit
 def test_a_pointer_to_a_missing_fragment_is_named() -> None:
     pointer = (
         "See [the count rule](../docs/policies.md#no-such-heading) "

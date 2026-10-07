@@ -67,6 +67,7 @@ def _uncommented(block: str) -> str:
             kept.append(stripped)
     return "\n".join(kept)
 
+@pytest.mark.integration
 def test_release_workflow_is_gated_and_uses_trusted_publishing() -> None:
     """The publish path's own safety properties, pinned per job.
 
@@ -107,6 +108,7 @@ def test_release_workflow_is_gated_and_uses_trusted_publishing() -> None:
         "the workflow's default permissions must be read-only"
     )
 
+@pytest.mark.integration
 def test_every_workflow_is_scanned_by_the_threshold_guard() -> None:
     """Wiring check: the guard's target list must cover what actually exists."""
     mod = _load_tool("nht", "check_no_hardcoded_thresholds.py")
@@ -131,6 +133,7 @@ def test_every_workflow_is_scanned_by_the_threshold_guard() -> None:
 # --- generated artifacts ----------------------------------------------------
 
 
+@pytest.mark.e2e
 @pytest.mark.parametrize(
     "script,target",
     [("render_plugin_manifests.py", "make skill-manifests")],
@@ -151,6 +154,7 @@ def test_generated_artifacts_are_fresh(script: str, target: str) -> None:
         f"{result.stdout}{result.stderr}\nrun `{target}` to regenerate"
     )
 
+@pytest.mark.integration
 def test_manifest_generator_rejects_a_folded_description(tmp_path: Path) -> None:
     """A folded scalar must stop the generator, not become the description.
 
@@ -167,6 +171,7 @@ def test_manifest_generator_rejects_a_folded_description(tmp_path: Path) -> None
     with pytest.raises(ValueError):
         mod.skill_description("no frontmatter at all\n")
 
+@pytest.mark.integration
 def test_manifest_version_tracks_the_package_not_a_literal() -> None:
     """The generator must read the version, never restate it."""
     source = (REPO_ROOT / "tools" / "render_plugin_manifests.py").read_text(encoding="utf-8")
@@ -178,6 +183,7 @@ def test_manifest_version_tracks_the_package_not_a_literal() -> None:
 # --- packaging surface ------------------------------------------------------
 
 
+@pytest.mark.integration
 def test_docker_build_context_is_sufficient_for_the_dynamic_version() -> None:
     """The Dockerfile copies a subset; `attr:` needs the package in it.
 
@@ -199,6 +205,7 @@ def test_docker_build_context_is_sufficient_for_the_dynamic_version() -> None:
             "pyproject declares readme = README.md but the Dockerfile never copies it"
         )
 
+@pytest.mark.integration
 def test_agent_artifacts_are_excluded_from_the_docker_context() -> None:
     """Prose for external agents has no place in a runtime image."""
     ignored = {
@@ -220,6 +227,7 @@ def test_agent_artifacts_are_excluded_from_the_docker_context() -> None:
         "the build context, and every other root markdown file is agent-facing prose"
     )
 
+@pytest.mark.integration
 def test_every_root_markdown_file_is_wired_into_the_docs_gate() -> None:
     """The check that would have caught AGENTS.md landing as an orphan.
 

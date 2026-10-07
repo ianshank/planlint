@@ -5,7 +5,11 @@ Pure unit tests: diff_cards operates on plain dicts, no CLI/subprocess needed.
 
 from __future__ import annotations
 
+import pytest
+
 from openspec_graph import dialect_card
+
+pytestmark = pytest.mark.unit
 
 
 def test_diff_cards_is_empty_when_nothing_changed() -> None:

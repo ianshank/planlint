@@ -25,6 +25,8 @@ from openspec_graph import detect
 from tests.graft_support import GOOD_SPECKIT
 from tests.support import load_tool, run_tool_main, write_spec, write_speckit_spec
 
+pytestmark = pytest.mark.integration
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TOOL = "stage_citations.py"
 

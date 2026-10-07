@@ -79,6 +79,7 @@ def _run(file_path: str) -> str:
     return result.stdout
 
 
+@pytest.mark.integration
 def test_settings_wires_the_hook_script() -> None:
     """The script is only a gate if settings.json actually names it."""
     settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
@@ -95,11 +96,13 @@ def test_settings_wires_the_hook_script() -> None:
     assert any("Edit" in m and "Write" in m for m in matchers), matchers
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX execute bit")
 def test_hook_script_is_executable() -> None:
     assert os.access(HOOK, os.X_OK), f"{HOOK.name} is not executable; Claude Code cannot run it"
 
 
+@pytest.mark.e2e
 @needs_bash
 @pytest.mark.parametrize(("path", "remedy"), sorted(NUDGED.items()))
 def test_each_documented_file_class_is_nudged(path: str, remedy: str) -> None:
@@ -109,12 +112,14 @@ def test_each_documented_file_class_is_nudged(path: str, remedy: str) -> None:
     assert remedy in reason, f"{path}: nudge does not name {remedy!r}:\n{reason}"
 
 
+@pytest.mark.e2e
 @needs_bash
 @pytest.mark.parametrize("path", QUIET)
 def test_unrelated_paths_are_not_nudged(path: str) -> None:
     assert _run(str(REPO_ROOT / path)) == "", f"{path} should not be nudged"
 
 
+@pytest.mark.e2e
 @needs_bash
 def test_windows_style_paths_are_normalised() -> None:
     """A JSON-escaped backslash path must hit the same case as a POSIX one.
@@ -127,6 +132,7 @@ def test_windows_style_paths_are_normalised() -> None:
     assert out and "tests/test_rule_registry_docs.py" in json.loads(out)["reason"]
 
 
+@pytest.mark.e2e
 @needs_bash
 def test_every_emitted_reason_is_valid_json() -> None:
     """The reasons are hand-emitted without jq; one stray quote breaks them all."""
@@ -134,6 +140,7 @@ def test_every_emitted_reason_is_valid_json() -> None:
         json.loads(_run(str(REPO_ROOT / path)))
 
 
+@pytest.mark.integration
 def test_docs_list_every_hook_case_the_script_implements() -> None:
     """docs/hooks.md's bullet list and the script's case list must agree.
 
@@ -158,6 +165,7 @@ def _case_alternatives() -> list[str]:
     return [alt for arm in _CASE_ARM.findall(script) for alt in arm.split("|")]
 
 
+@pytest.mark.integration
 def test_the_case_arm_scanner_sees_the_whole_script() -> None:
     """Guard the guard: a scanner that matched nothing would pass vacuously."""
     alternatives = _case_alternatives()
@@ -165,6 +173,7 @@ def test_the_case_arm_scanner_sees_the_whole_script() -> None:
     assert "*/openspec/changes/*/specs/*/spec.md" in alternatives
 
 
+@pytest.mark.integration
 def test_no_case_alternative_is_shadowed_by_an_earlier_identical_one() -> None:
     """Non-success criterion: no hook arm may be dead code.
 
@@ -177,6 +186,7 @@ def test_no_case_alternative_is_shadowed_by_an_earlier_identical_one() -> None:
     assert not duplicated, f"unreachable hook arm(s), shadowed by an earlier copy: {duplicated}"
 
 
+@pytest.mark.e2e
 @needs_bash
 def test_the_spec_nudge_carries_every_trap_it_documents() -> None:
     """The one ``spec.md`` arm names each trap ``docs/hooks.md`` says it does:

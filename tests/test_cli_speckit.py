@@ -18,6 +18,8 @@ import pytest
 
 from tests.support import run_cli, write_spec, write_speckit_spec
 
+pytestmark = pytest.mark.e2e
+
 GOOD_SPECKIT = textwrap.dedent(
     """\
     # Feature Specification: Demo Capability

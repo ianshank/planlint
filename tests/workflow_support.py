@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
 
 from tests.support import workflow_job_blocks
 
@@ -157,13 +156,6 @@ def _dockerfile_from(text: str) -> tuple[int, str] | None:
             return number, match.group(1)
     return None
 
-def _pyproject() -> dict[str, Any]:
-    try:
-        import tomllib as toml_reader
-    except ModuleNotFoundError:  # pragma: no cover - 3.10 leg only
-        import tomli as toml_reader  # type: ignore[import-not-found,no-redef]
-    with PYPROJECT.open("rb") as handle:
-        return toml_reader.load(handle)
 
 def _ci_text() -> str:
     return CI_YML.read_text(encoding="utf-8")

@@ -19,6 +19,7 @@ from tests.support import (
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
+@pytest.mark.integration
 def test_makefile_has_e2e_live_target() -> None:
     """AC-AQA-1: the no-mocks live track is one local command, not a recipe
     contributors must copy out of the CI YAML."""
@@ -40,6 +41,7 @@ def test_makefile_has_e2e_live_target() -> None:
     )
     assert "e2e-live" not in pre_pr, "e2e-live must not become part of `make pre-pr`"
 
+@pytest.mark.integration
 def test_makefile_has_matcher_accuracy_report_target() -> None:
     """`make matcher-accuracy` is a report, not a gate: documented, `.PHONY`,
     and composed into neither `ci` nor `pre-pr`. The gate for the same
@@ -161,6 +163,7 @@ def _one_run_violations(makefile_text: str) -> list[str]:
             found.append(f"{gate} composes the {_REPORT_TARGET} report")
     return found
 
+@pytest.mark.integration
 def test_the_suite_runs_once_through_coverage_run() -> None:
     """R-MCO-6: `coverage-run` is the one place the suite runs -- in `.PHONY`,
     documented, its recipe the erase and exactly one pytest line carrying a
@@ -186,6 +189,7 @@ def test_the_suite_runs_once_through_coverage_run() -> None:
     assert "--cov=" not in makefile, "a `--cov=` pin bypasses [tool.coverage.run] source"
     assert _one_run_violations(makefile) == []
 
+@pytest.mark.integration
 def test_test_and_coverage_tools_read_the_one_report_scoped() -> None:
     """R-MCO-6: both aggregates depend on the run and read its one report
     scoped -- `test` for every declared tree, `coverage-tools` for `tools/`
@@ -231,6 +235,7 @@ _ONE_RUN_MAKEFILE = textwrap.dedent(
     """
 )
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     ("label", "before", "after", "expected"),
     [
@@ -267,6 +272,7 @@ def test_a_recipe_that_pins_a_cov_source_or_skips_the_run_dependency_is_named(
     found = _one_run_violations(_ONE_RUN_MAKEFILE.replace(before, after))
     assert any(expected in item for item in found), f"{label}: {found}"
 
+@pytest.mark.integration
 def test_makefile_has_coverage_per_file_report_target() -> None:
     """`make coverage-per-file` is a report, not a gate (DEC-MCO-009): documented,
     `.PHONY`, depending on the run and not on `test` so it can be read while a
@@ -286,6 +292,7 @@ def test_makefile_has_coverage_per_file_report_target() -> None:
             f"{gate} must not compose the report target"
         )
 
+@pytest.mark.integration
 def test_the_contract_job_is_not_wired_into_a_make_target() -> None:
     """It needs a runner, so it stays CI-side: folding it into `make pre-pr`
     would make the local gate unrunnable rather than more thorough."""

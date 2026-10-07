@@ -15,10 +15,12 @@ import subprocess
 import sys
 import textwrap
 from pathlib import Path
-from typing import Any
+
+import pytest
 
 from tests.support import (
     env_without_coverage,
+    read_pyproject,
     workflow_job_blocks,
 )
 
@@ -32,34 +34,22 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # against the real files so the criteria stop being prose.
 
 
-def _pyproject() -> dict[str, Any]:
-    """``pyproject.toml`` parsed structurally, so a guard asserts a *value*
-    rather than grepping for a line that a reformat could move.
-
-    ``tomllib`` is 3.11+; the 3.10 leg of the matrix uses the ``tomli``
-    backport the dev extra already installs for coverage's own startup hook.
-    """
-    try:
-        import tomllib as toml_reader
-    except ModuleNotFoundError:  # pragma: no cover - 3.10 leg only
-        import tomli as toml_reader  # type: ignore[import-not-found,no-redef]
-    with (REPO_ROOT / "pyproject.toml").open("rb") as handle:
-        return toml_reader.load(handle)
-
+@pytest.mark.integration
 def test_t201_is_selected_with_exactly_the_cli_and_tools_exempt() -> None:
     """select-zero-cost-guards R-ZCG-1 / R-ZCG-10: `print` is held to the two
     places stdout is the product. Nothing else about `select` is asserted --
     a second copy of the list would be the drift this test exists to catch."""
-    lint = _pyproject()["tool"]["ruff"]["lint"]
+    lint = read_pyproject()["tool"]["ruff"]["lint"]
     assert "T201" in lint["select"], "T201 is not selected; a library-module print passes lint"
     exempt = {path for path, rules in lint["per-file-ignores"].items() if "T201" in rules}
     assert exempt == {"openspec_graph/cli.py", "tools/*"}, exempt
 
+@pytest.mark.integration
 def test_mypy_is_strict_and_warns_on_unreachable_code() -> None:
     """select-zero-cost-guards R-ZCG-3 / R-ZCG-10: strict is the mode, with
     `warn_unreachable` on its own because `strict` does not include it, and
     the 3.10 floor still the version mypy checks against."""
-    mypy = _pyproject()["tool"]["mypy"]
+    mypy = read_pyproject()["tool"]["mypy"]
     assert mypy.get("strict") is True, "mypy is not strict; a bare `dict` annotation passes"
     assert mypy.get("warn_unreachable") is True
     assert mypy.get("python_version") == "3.10"
@@ -75,6 +65,7 @@ def _plant_tree(tmp_path: Path, files: dict[str, str]) -> Path:
         target.write_text(body, encoding="utf-8")
     return tmp_path
 
+@pytest.mark.e2e
 def test_a_print_in_a_library_module_fails_lint(tmp_path: Path) -> None:
     """select-zero-cost-guards R-ZCG-2 / R-ZCG-11 (non-success): under this
     repository's own per-file-ignores, the same `print` is a finding in a
@@ -96,6 +87,7 @@ def test_a_print_in_a_library_module_fails_lint(tmp_path: Path) -> None:
     located = [(f["code"], Path(f["filename"]).relative_to(tree).as_posix()) for f in findings]
     assert located == [("T201", "openspec_graph/leak.py")], located
 
+@pytest.mark.e2e
 def test_a_bare_generic_in_tools_fails_typecheck(tmp_path: Path) -> None:
     """select-zero-cost-guards R-ZCG-4 / R-ZCG-11 (non-success): under this
     repository's own mypy configuration, a parameter annotated as bare `dict`
@@ -111,6 +103,7 @@ def test_a_bare_generic_in_tools_fails_typecheck(tmp_path: Path) -> None:
     assert result.returncode != 0, result.stdout
     assert "type-arg" in result.stdout, result.stdout
 
+@pytest.mark.integration
 def test_lint_is_a_hard_gate() -> None:
     """AC-CH-4 (non-success): `make lint` fails on a violation and offers no
     "skipping" escape hatch.
@@ -139,6 +132,7 @@ def test_lint_is_a_hard_gate() -> None:
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
     assert "make lint" in workflow, "CI does not run the `make lint` gate"
 
+@pytest.mark.integration
 def test_graph_diff_artifact_uploaded() -> None:
     """AC-CH-7: the graph-diff job publishes the graph and its comparison, so a
     reviewer can see what changed rather than taking the job's word for it."""
@@ -159,15 +153,18 @@ def _ci_workflow_text() -> str:
 # two parser tests and every call site byte-identical (R-HCW-16).
 _ci_job_blocks = workflow_job_blocks
 
+@pytest.mark.unit
 def test_ci_job_blocks_returns_empty_when_jobs_key_is_absent() -> None:
     # The guard tests above must fail on a real missing job, not on a parser
     # that silently found nothing.
     assert _ci_job_blocks("name: CI\non: push\n") == {}
 
+@pytest.mark.unit
 def test_ci_job_blocks_ignores_comments_mentioning_jobs() -> None:
     text = "jobs:\n  test:\n    # see the other jobs: for context\n    runs-on: ubuntu-latest\n"
     assert set(_ci_job_blocks(text)) == {"test"}
 
+@pytest.mark.integration
 def test_ci_workflow_has_a_windows_job() -> None:
     """AC-AQA-2: the platform guard tests (path separators, console encoding,
     symlink privilege) must actually execute on the OS they guard."""
@@ -181,6 +178,7 @@ def test_ci_workflow_has_a_windows_job() -> None:
     for gate in ("make lint", "make typecheck", "make test"):
         assert gate in body, f"the Windows job must run `{gate}`, the same gates as `test`"
 
+@pytest.mark.integration
 def test_ci_workflow_has_an_encoding_stress_job() -> None:
     """AC-AQA-3: the encoding crash's original failure environment is itself
     a gate, so a regression can't ship silently the way the original did."""
@@ -191,6 +189,7 @@ def test_ci_workflow_has_an_encoding_stress_job() -> None:
         "the encoding-stress job must run the live track (`make e2e-live`)"
     )
 
+@pytest.mark.integration
 def test_hooks_ci_table_lists_every_ci_job() -> None:
     """AC-AQA-4 (non-success): a ci.yml job absent from docs/hooks.md's CI
     hooks table fails the suite -- the `packaging` drift this package
@@ -246,6 +245,7 @@ def _suite_jobs_without_coverage_upload(workflow_text: str) -> list[str]:
         and not any(_uploads_report_always(step, _COVERAGE_REPORT) for step in _workflow_steps(body))
     )
 
+@pytest.mark.integration
 def test_every_job_running_the_suite_uploads_its_coverage_report() -> None:
     """R-MCO-7: each leg's coverage.json is what the floor ratchet reads
     (R-MCO-12), so every job that runs `make test` uploads it under
@@ -284,6 +284,7 @@ _PLANTED_SUITE_JOBS = textwrap.dedent(
     """
 )
 
+@pytest.mark.unit
 def test_a_suite_job_without_a_coverage_upload_is_named() -> None:
     """R-MCO-13: a job running the suite with no upload step is named by id,
     and so is one whose upload step would be skipped on a red leg."""
@@ -313,6 +314,7 @@ def _hooks_rows_naming_no_job(
         if cell not in job_names and cell not in workflow_names
     )
 
+@pytest.mark.integration
 def test_every_hooks_ci_table_row_names_a_job_or_workflow() -> None:
     """R-MCO-7 / AC-MCO-10: the reverse of `test_hooks_ci_table_lists_every_ci_job`
     -- a row for a job that no longer exists is a stale promise, named here."""
@@ -321,6 +323,7 @@ def test_every_hooks_ci_table_row_names_a_job_or_workflow() -> None:
     jobs, files = _workflow_job_and_file_names()
     assert _hooks_rows_naming_no_job(hooks, jobs, files) == []
 
+@pytest.mark.integration
 def test_a_hooks_row_naming_no_job_is_named() -> None:
     """R-MCO-13: a planted row for a job no workflow has is named; the row for
     a separate workflow file is not."""
@@ -336,6 +339,7 @@ def test_a_hooks_row_naming_no_job_is_named() -> None:
 # --- add-github-action-contract: the composite action is actually executed ----
 
 
+@pytest.mark.integration
 def test_ci_workflow_has_an_action_contract_job() -> None:
     """AC: the action runs somewhere.
 
@@ -362,6 +366,7 @@ def test_ci_workflow_has_an_action_contract_job() -> None:
     assert "contents: read" in job
     assert "secrets." not in job, "the scan must need no secret"
 
+@pytest.mark.integration
 def test_every_action_fixture_has_a_contract_leg() -> None:
     """Non-success: a sixth fixture cannot be added without a leg asserting it.
 

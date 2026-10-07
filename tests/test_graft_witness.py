@@ -34,6 +34,7 @@ def _git_init_and_commit(repo: Path) -> None:
         subprocess.run(args, cwd=repo, check=True)
 
 
+@pytest.mark.unit
 def test_stack_profile_construction_still_works_without_witness_fields(repo: Path) -> None:
     # New StackProfile fields must be additive (C-WM-1) -- a caller building
     # a StackProfile without knowing about witnesses/current_sha (every
@@ -54,6 +55,7 @@ def test_stack_profile_construction_still_works_without_witness_fields(repo: Pat
     assert prof.current_sha is None
 
 
+@pytest.mark.unit
 def test_stack_profile_construction_still_works_without_speckit_fields(repo: Path) -> None:
     # New StackProfile fields must be additive (R-SK-1) -- a caller building
     # a StackProfile without knowing about speckit_root/feature_dirs (every
@@ -74,10 +76,12 @@ def test_stack_profile_construction_still_works_without_speckit_fields(repo: Pat
     assert prof.feature_dirs == ()
 
 
+@pytest.mark.unit
 def test_current_sha_returns_none_outside_a_git_repo(repo: Path) -> None:
     assert detect._current_sha(repo) is None
 
 
+@pytest.mark.e2e
 def test_current_sha_reads_head_inside_a_real_git_repo(repo: Path) -> None:
     _git_init_and_commit(repo)
     sha = detect._current_sha(repo)
@@ -88,6 +92,7 @@ def test_current_sha_reads_head_inside_a_real_git_repo(repo: Path) -> None:
     assert sha is not None and len(sha) == 40
 
 
+@pytest.mark.e2e
 def test_current_sha_is_not_invoked_when_no_witnesses_are_present(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -107,6 +112,7 @@ def test_current_sha_is_not_invoked_when_no_witnesses_are_present(
     assert prof.current_sha is None
 
 
+@pytest.mark.unit
 def test_profile_witnesses_field_reads_the_planlint_witnesses_directory(repo: Path) -> None:
     w = witness.Witness(
         schema_version=witness.WITNESS_SCHEMA_VERSION,
@@ -120,6 +126,7 @@ def test_profile_witnesses_field_reads_the_planlint_witnesses_directory(repo: Pa
     assert detect.profile(repo).witnesses == (w,)
 
 
+@pytest.mark.e2e
 def test_profile_current_sha_is_populated_once_a_witness_exists_in_a_git_repo(repo: Path) -> None:
     _git_init_and_commit(repo)
     witness.write_witness(
@@ -161,6 +168,7 @@ def _witness(**overrides: object) -> witness.Witness:
     return witness.Witness(**fields)  # type: ignore[arg-type]
 
 
+@pytest.mark.unit
 def test_w001_fires_when_a_cited_stage_has_no_matching_witness(repo: Path) -> None:
     path = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     prof = _profile_with(repo, witnesses=())
@@ -168,6 +176,7 @@ def test_w001_fires_when_a_cited_stage_has_no_matching_witness(repo: Path) -> No
     assert any(f.rule == "W001" for f in found)
 
 
+@pytest.mark.unit
 def test_w001_reports_never_witnessed_not_a_sha_failure_when_the_store_is_empty(
     repo: Path,
 ) -> None:
@@ -187,6 +196,7 @@ def test_w001_reports_never_witnessed_not_a_sha_failure_when_the_store_is_empty(
     assert not any("could not be determined" in f.message for f in w001)
 
 
+@pytest.mark.unit
 def test_w001_fires_when_the_witness_sha_does_not_match_current_sha(repo: Path) -> None:
     path = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     prof = _profile_with(repo, witnesses=(_witness(sha=OTHER_SHA),))
@@ -195,6 +205,7 @@ def test_w001_fires_when_the_witness_sha_does_not_match_current_sha(repo: Path) 
     assert w001 and "not at the current commit" in w001[0].message
 
 
+@pytest.mark.unit
 def test_w001_fires_when_the_matching_witness_recorded_a_nonzero_exit_code(repo: Path) -> None:
     path = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     prof = _profile_with(repo, witnesses=(_witness(exit_code=1),))
@@ -203,6 +214,7 @@ def test_w001_fires_when_the_matching_witness_recorded_a_nonzero_exit_code(repo:
     assert w001 and "failing run" in w001[0].message
 
 
+@pytest.mark.unit
 def test_w001_fires_for_every_citation_when_current_sha_is_none(repo: Path) -> None:
     path = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     prof = _profile_with(repo, witnesses=(_witness(),), current_sha=None)
@@ -211,6 +223,7 @@ def test_w001_fires_for_every_citation_when_current_sha_is_none(repo: Path) -> N
     assert w001 and "could not be determined" in w001[0].message
 
 
+@pytest.mark.unit
 def test_w001_does_not_fire_when_a_fresh_passing_witness_exists(repo: Path) -> None:
     path = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     prof = _profile_with(repo, witnesses=(_witness(),))
@@ -218,6 +231,7 @@ def test_w001_does_not_fire_when_a_fresh_passing_witness_exists(repo: Path) -> N
     assert not any(f.rule == "W001" for f in found)
 
 
+@pytest.mark.unit
 def test_w002_fires_when_witness_coverage_is_below_the_detected_floor(repo: Path) -> None:
     path = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     prof = _profile_with(repo, witnesses=(_witness(coverage=50.0),))
@@ -226,6 +240,7 @@ def test_w002_fires_when_witness_coverage_is_below_the_detected_floor(repo: Path
     assert any(f.rule == "W002" for f in found)
 
 
+@pytest.mark.unit
 def test_w002_does_not_fire_when_witness_coverage_meets_the_floor(repo: Path) -> None:
     path = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     prof = _profile_with(repo, witnesses=(_witness(coverage=95.0),))
@@ -233,6 +248,7 @@ def test_w002_does_not_fire_when_witness_coverage_meets_the_floor(repo: Path) ->
     assert not any(f.rule == "W002" for f in found)
 
 
+@pytest.mark.unit
 def test_w002_does_not_fire_when_the_witness_has_no_recorded_coverage(repo: Path) -> None:
     path = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     prof = _profile_with(repo, witnesses=(_witness(coverage=None),))
@@ -240,6 +256,7 @@ def test_w002_does_not_fire_when_the_witness_has_no_recorded_coverage(repo: Path
     assert not any(f.rule == "W002" for f in found)
 
 
+@pytest.mark.unit
 def test_w002_does_not_fire_when_there_is_no_detected_coverage_floor(repo: Path) -> None:
     path = write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     prof = dataclasses.replace(_profile_with(repo, witnesses=(_witness(coverage=1.0),)), threshold=None)
@@ -247,6 +264,7 @@ def test_w002_does_not_fire_when_there_is_no_detected_coverage_floor(repo: Path)
     assert not any(f.rule == "W002" for f in found)
 
 
+@pytest.mark.unit
 def test_w002_does_not_evaluate_a_witness_that_already_fails_w001(repo: Path) -> None:
     # A failing (nonzero exit) witness with low coverage must not ALSO
     # produce a W002 finding -- that's W001's own finding to make (DEC-WM-012).
@@ -257,6 +275,7 @@ def test_w002_does_not_evaluate_a_witness_that_already_fails_w001(repo: Path) ->
     assert any(f.rule == "W001" for f in found)
 
 
+@pytest.mark.unit
 def test_witness_rules_apply_to_both_dialects(repo: Path) -> None:
     path = write_spec(repo, "c1", "cap1", GOOD_UPSTREAM)
     prof = _profile_with(repo, witnesses=())
@@ -264,6 +283,7 @@ def test_witness_rules_apply_to_both_dialects(repo: Path) -> None:
     assert any(f.rule == "W001" for f in found)
 
 
+@pytest.mark.unit
 def test_w001_fires_independently_for_each_stage_cited_in_one_upstream_scenario(repo: Path) -> None:
     # DEC-WM-016: a scenario mentioning more than one backtick-fenced stage
     # requires a witness for every citation -- no heuristic picks "the real
@@ -293,6 +313,7 @@ def test_w001_fires_independently_for_each_stage_cited_in_one_upstream_scenario(
     assert "`regression`" in messages
 
 
+@pytest.mark.unit
 def test_w001_reports_never_witnessed_for_a_stage_the_non_empty_store_lacks(repo: Path) -> None:
     # The store isn't empty (so the top-level "nothing has ever been
     # witnessed" short-circuit doesn't apply) and current_sha is known, but
@@ -325,6 +346,7 @@ def test_w001_reports_never_witnessed_for_a_stage_the_non_empty_store_lacks(repo
     assert any("`regression`" in m and "never been witnessed" in m for m in w001)
 
 
+@pytest.mark.unit
 def test_w001_waiver_suppresses_the_finding_and_downgrades_to_info(repo: Path) -> None:
     body = GOOD_HARNESS.replace(
         "## Problem Statement",
@@ -339,6 +361,7 @@ def test_w001_waiver_suppresses_the_finding_and_downgrades_to_info(repo: Path) -
     assert all(f.message.startswith("[waived]") for f in w001)
 
 
+@pytest.mark.unit
 def test_w001_waiver_is_inert_when_require_witness_is_not_passed(repo: Path) -> None:
     # A W001/W002 waiver has nothing to suppress on a run that never
     # evaluates the rules at all (DEC-WM-015) -- not a bug, just inert.
@@ -355,6 +378,7 @@ def test_w001_waiver_is_inert_when_require_witness_is_not_passed(repo: Path) -> 
 # --- witness mode CLI: `witness` verb + `validate --require-witness` -------
 
 
+@pytest.mark.unit
 def test_cli_witness_stage_flag_does_not_collide_with_global_target(repo: Path) -> None:
     args = build_parser().parse_args(
         ["--target", str(repo), "witness", "--stage", "test", "--exit", "0", "--sha", "a" * 40]
@@ -363,6 +387,7 @@ def test_cli_witness_stage_flag_does_not_collide_with_global_target(repo: Path) 
     assert args.stage == "test"
 
 
+@pytest.mark.unit
 def test_cli_witness_rejects_a_target_that_is_not_a_directory(tmp_path: Path, capsys) -> None:
     # cmd_witness resolves --target itself rather than going through
     # _profile() (which would run the whole detection pipeline for no
@@ -373,12 +398,14 @@ def test_cli_witness_rejects_a_target_that_is_not_a_directory(tmp_path: Path, ca
     assert "not a directory" in capsys.readouterr().err.lower()
 
 
+@pytest.mark.unit
 def test_cli_witness_verb_rejects_an_abbreviated_sha(repo: Path, capsys) -> None:
     exit_code = main(["--target", str(repo), "witness", "--stage", "test", "--exit", "0", "--sha", "abc1234"])
     assert exit_code == 2
     assert "40-character" in capsys.readouterr().err
 
 
+@pytest.mark.unit
 def test_cli_witness_verb_rejects_an_out_of_range_coverage_value(repo: Path, capsys) -> None:
     exit_code = main(
         ["--target", str(repo), "witness", "--stage", "test", "--exit", "0", "--coverage", "150", "--sha", "a" * 40]
@@ -387,6 +414,7 @@ def test_cli_witness_verb_rejects_an_out_of_range_coverage_value(repo: Path, cap
     assert "coverage" in capsys.readouterr().err.lower()
 
 
+@pytest.mark.unit
 def test_cli_witness_verb_rejects_a_non_finite_coverage_value(repo: Path, capsys) -> None:
     exit_code = main(
         ["--target", str(repo), "witness", "--stage", "test", "--exit", "0", "--coverage", "nan", "--sha", "a" * 40]
@@ -395,6 +423,7 @@ def test_cli_witness_verb_rejects_a_non_finite_coverage_value(repo: Path, capsys
     assert "coverage" in capsys.readouterr().err.lower()
 
 
+@pytest.mark.unit
 def test_cli_witness_records_a_zero_coverage_value_distinctly_from_none(repo: Path) -> None:
     exit_code = main(
         ["--target", str(repo), "witness", "--stage", "test", "--exit", "0", "--coverage", "0", "--sha", "a" * 40]
@@ -405,6 +434,7 @@ def test_cli_witness_records_a_zero_coverage_value_distinctly_from_none(repo: Pa
     assert recorded[0].coverage == 0.0
 
 
+@pytest.mark.unit
 def test_cli_witness_prints_a_forward_slash_path(repo: Path, capsys) -> None:
     exit_code = main(
         ["--target", str(repo), "witness", "--stage", "test", "--exit", "0", "--sha", "a" * 40]
@@ -415,12 +445,14 @@ def test_cli_witness_prints_a_forward_slash_path(repo: Path, capsys) -> None:
     assert "\\" not in out
 
 
+@pytest.mark.unit
 def test_cli_witness_rejects_a_malformed_stage(repo: Path, capsys) -> None:
     exit_code = main(["--target", str(repo), "witness", "--stage", "Not Valid", "--exit", "0", "--sha", "a" * 40])
     assert exit_code == 2
     assert "stage" in capsys.readouterr().err.lower()
 
 
+@pytest.mark.unit
 def test_cli_witness_reports_a_clean_error_when_the_witness_directory_is_unwritable(
     repo: Path, capsys
 ) -> None:
@@ -434,6 +466,7 @@ def test_cli_witness_reports_a_clean_error_when_the_witness_directory_is_unwrita
     assert "cannot write" in capsys.readouterr().err.lower()
 
 
+@pytest.mark.unit
 def test_validate_without_require_witness_never_evaluates_w001(repo: Path, capsys) -> None:
     write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     exit_code = main(["--target", str(repo), "validate", "--json"])
@@ -442,6 +475,7 @@ def test_validate_without_require_witness_never_evaluates_w001(repo: Path, capsy
     assert not any(f["rule"] == "W001" for f in out["findings"])
 
 
+@pytest.mark.unit
 def test_validate_without_require_witness_prints_no_witness_related_stderr(repo: Path, capsys) -> None:
     # Copilot review finding on PR #14: the default (flag-absent) path is
     # every existing caller's own behavior, unmodified by this change --
@@ -454,12 +488,14 @@ def test_validate_without_require_witness_prints_no_witness_related_stderr(repo:
     assert "witness" not in capsys.readouterr().err.lower()
 
 
+@pytest.mark.unit
 def test_validate_require_witness_fails_closed_on_a_repo_with_no_witness_store(repo: Path) -> None:
     # AC-WM-9, literal: zero witnesses must never read as "passed".
     write_spec(repo, "c1", "cap1", GOOD_HARNESS)
     assert main(["--target", str(repo), "validate", "--require-witness"]) == 1
 
 
+@pytest.mark.e2e
 def test_validate_require_witness_passes_once_a_matching_fresh_witness_is_recorded(
     repo: Path, capsys
 ) -> None:
@@ -495,6 +531,7 @@ def _capture_detect(caplog: pytest.LogCaptureFixture) -> logging.Logger:
     return target
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     ("label", "outcome", "expected"),
     [
@@ -527,6 +564,7 @@ def test_each_unknown_sha_cause_is_logged_and_still_returns_none(
     assert any(expected in r.getMessage() for r in caplog.records), [r.getMessage() for r in caplog.records]
 
 
+@pytest.mark.e2e
 def test_a_resolved_sha_is_logged(repo: Path, caplog: pytest.LogCaptureFixture) -> None:
     _git_init_and_commit(repo)
     target = _capture_detect(caplog)
@@ -538,6 +576,7 @@ def test_a_resolved_sha_is_logged(repo: Path, caplog: pytest.LogCaptureFixture) 
     assert any(r.getMessage() == f"current sha: {sha}" for r in caplog.records)
 
 
+@pytest.mark.e2e
 def test_verbose_validate_names_a_dropped_witness_on_stderr_and_keeps_stdout_clean(repo: Path) -> None:
     """Integration: the reason reaches an operator through ``--verbose``, on
     stderr only; the verdict is the same fail-closed W001 as without it, and

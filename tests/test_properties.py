@@ -43,12 +43,15 @@ from __future__ import annotations
 
 import string
 
+import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from openspec_graph.machinery import parse_makefile, strip_define_blocks
 from openspec_graph.parse_model import Criterion
 from openspec_graph.parse_upstream import parse_upstream
+
+pytestmark = pytest.mark.unit
 
 PROPERTY_SETTINGS = settings(
     max_examples=300,

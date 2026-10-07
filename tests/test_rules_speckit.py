@@ -17,6 +17,8 @@ from openspec_graph import detect, parse_model, rules
 from openspec_graph.parse import parse_spec
 from tests.support import write_speckit_spec
 
+pytestmark = pytest.mark.unit
+
 GOOD_SPECKIT = textwrap.dedent(
     """\
     # Feature Specification: Demo Capability

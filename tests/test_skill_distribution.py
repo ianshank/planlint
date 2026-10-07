@@ -42,6 +42,7 @@ def _run_renderer(*args: str) -> subprocess.CompletedProcess:
         capture_output=True, text=True, check=False, encoding="utf-8",
     )
 
+@pytest.mark.e2e
 def test_rule_catalog_is_fresh() -> None:
     """AC-SD-2: the committed catalog matches the live rule registry."""
     result = _run_renderer("--check")
@@ -49,6 +50,7 @@ def test_rule_catalog_is_fresh() -> None:
         f"{result.stdout}{result.stderr}\nrun `make skill-catalog` to regenerate"
     )
 
+@pytest.mark.integration
 def test_rule_catalog_check_fails_when_stale(tmp_path: Path, monkeypatch) -> None:
     """AC-SD-3 (non-success): --check reports staleness rather than hiding it.
 
@@ -74,6 +76,7 @@ def test_rule_catalog_check_fails_when_stale(tmp_path: Path, monkeypatch) -> Non
     assert module.main(["--check"]) == 0
     assert CATALOG.read_text(encoding="utf-8"), "the tracked catalog must be untouched"
 
+@pytest.mark.integration
 def test_rule_catalog_render_is_deterministic() -> None:
     """The pure function's own contract, exercised in-process.
 
@@ -84,6 +87,7 @@ def test_rule_catalog_render_is_deterministic() -> None:
     assert module.render() == module.render()
     assert module.render().endswith("\n")
 
+@pytest.mark.integration
 def test_rule_catalog_lists_every_registered_rule() -> None:
     """The catalog is generated, so this asserts the generator's coverage."""
     from openspec_graph.rules import RULES
@@ -92,6 +96,7 @@ def test_rule_catalog_lists_every_registered_rule() -> None:
     listed = set(re.findall(r"^\| ([A-Z]\d{3}) \|", text, re.MULTILINE))
     assert listed == {rule.ident for rule in RULES}
 
+@pytest.mark.integration
 def test_rule_catalog_states_no_total_count() -> None:
     """DEC-SD-003: a count here would be the one number nothing guards."""
     text = CATALOG.read_text(encoding="utf-8")
@@ -103,6 +108,7 @@ def test_rule_catalog_states_no_total_count() -> None:
 # --- AC-SD-7: manifest agreement --------------------------------------------
 
 
+@pytest.mark.integration
 def test_plugin_manifests_agree() -> None:
     """AC-SD-7: manifests, skill directory, and package version are one story."""
     plugin = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
@@ -125,6 +131,7 @@ def test_plugin_manifests_agree() -> None:
 # --- AC-SD-10 / AC-SD-11: the shipped CI asset ------------------------------
 
 
+@pytest.mark.integration
 def test_skill_asset_matches_template() -> None:
     """AC-SD-10: the bundled workflow is a byte-identical copy (DEC-SD-004)."""
     template = (REPO_ROOT / "templates" / "spec-gate.yml").read_bytes()
@@ -134,6 +141,7 @@ def test_skill_asset_matches_template() -> None:
         "templates/spec-gate.yml; copy the template over it"
     )
 
+@pytest.mark.integration
 def test_spec_gate_template_triggers_on_speckit_trees() -> None:
     """AC-SD-11: a SpecKit repo must trigger the gate it just installed."""
     text = (REPO_ROOT / "templates" / "spec-gate.yml").read_text(encoding="utf-8")
@@ -147,6 +155,7 @@ def test_spec_gate_template_triggers_on_speckit_trees() -> None:
 # --- AC-SD-12 / AC-SD-13 / AC-SD-14: packaging and gate coverage ------------
 
 
+@pytest.mark.integration
 def test_version_has_a_single_source() -> None:
     """AC-SD-12: pyproject reads the package attribute, never a second literal.
 
@@ -161,6 +170,7 @@ def test_version_has_a_single_source() -> None:
         "pyproject.toml carries its own version literal again"
     )
 
+@pytest.mark.unit
 def test_installed_distribution_version_matches_the_package_attribute() -> None:
     """The single source, proven end to end through the installed metadata."""
     import importlib.metadata
@@ -171,6 +181,7 @@ def test_installed_distribution_version_matches_the_package_attribute() -> None:
         pytest.skip("planlint is not installed in this environment")
     assert installed == __version__
 
+@pytest.mark.e2e
 def test_cli_version_flag_reports_the_package_version() -> None:
     """`planlint --version` is the preflight step SKILL.md tells agents to run."""
     result = subprocess.run(
@@ -180,6 +191,7 @@ def test_cli_version_flag_reports_the_package_version() -> None:
     assert result.returncode == 0
     assert __version__ in result.stdout
 
+@pytest.mark.integration
 def test_threshold_guard_scans_every_workflow() -> None:
     """AC-SD-13 (non-success): a workflow other than ci.yml cannot escape it.
 
@@ -206,6 +218,7 @@ def test_threshold_guard_scans_every_workflow() -> None:
         checker = mod.check_makefile if target.name == "Makefile" else mod.check_workflow
         assert checker(target) == [], f"{target.name} already trips the guard"
 
+@pytest.mark.integration
 def test_threshold_guard_flags_a_pinned_floor_in_a_non_ci_workflow(tmp_path: Path) -> None:
     """The matching half of AC-SD-13, on a file that is not ci.yml."""
     mod = _load_tool("nht", "check_no_hardcoded_thresholds.py")
@@ -220,6 +233,7 @@ def test_threshold_guard_flags_a_pinned_floor_in_a_non_ci_workflow(tmp_path: Pat
             f"a pinned coverage floor in {name} must be flagged"
         )
 
+@pytest.mark.e2e
 def test_required_docs_are_linked() -> None:
     """AC-SD-14: the skill is a required doc and the README links it."""
     check_docs = REPO_ROOT / "tools" / "check_docs.py"
@@ -233,6 +247,7 @@ def test_required_docs_are_linked() -> None:
     )
     assert result.returncode == 0, result.stdout + result.stderr
 
+@pytest.mark.integration
 def test_skill_quotes_no_credential_shaped_literals() -> None:
     """`make security` scans every tracked file; an example token would fail it.
 
@@ -255,6 +270,7 @@ def test_skill_quotes_no_credential_shaped_literals() -> None:
 # --- backwards compatibility: the distribution rename ------------------------
 
 
+@pytest.mark.unit
 def test_version_lookup_prefers_the_named_distribution_over_list_order(monkeypatch) -> None:
     """A stale `openspec-graph` install must not be able to report its version.
 
@@ -292,6 +308,7 @@ def test_version_lookup_prefers_the_named_distribution_over_list_order(monkeypat
         "an ambiguous environment must say so; silence hides a stale install"
     )
 
+@pytest.mark.unit
 def test_version_lookup_is_silent_when_one_distribution_is_listed_twice(monkeypatch) -> None:
     """Duplicate entries for one name are not ambiguity, and must not warn.
 
@@ -319,6 +336,7 @@ def test_version_lookup_is_silent_when_one_distribution_is_listed_twice(monkeypa
     assert __version__ in cli._version_string()
     assert not captured, f"warned about a non-ambiguous environment: {captured}"
 
+@pytest.mark.integration
 def test_scaffolded_project_doc_names_the_current_distribution() -> None:
     """`planlint init` must not write a package name that no longer exists.
 

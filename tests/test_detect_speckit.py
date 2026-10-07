@@ -20,6 +20,8 @@ from openspec_graph import detect, parse_semantics
 from tests import support
 from tests.support import write_spec, write_speckit_spec
 
+pytestmark = pytest.mark.unit
+
 _CAN_SYMLINK = support.supports_symlinks()
 
 GOOD_SPECKIT = textwrap.dedent(

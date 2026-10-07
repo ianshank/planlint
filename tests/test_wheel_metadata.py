@@ -67,10 +67,12 @@ def _wheel(
     return path
 
 
+@pytest.mark.integration
 def test_a_correct_wheel_passes(tmp_path: Path) -> None:
     assert check_wheel(_wheel(tmp_path), "Apache-2.0", ["LICENSE"]) == []
 
 
+@pytest.mark.integration
 def test_missing_license_expression_is_caught(tmp_path: Path) -> None:
     """The core regression: a wheel built by a setuptools too old to
     understand the SPDX form would omit this key entirely."""
@@ -82,6 +84,7 @@ def test_missing_license_expression_is_caught(tmp_path: Path) -> None:
     assert "License-Expression" in problems[0]
 
 
+@pytest.mark.integration
 def test_a_mismatched_expression_is_caught(tmp_path: Path) -> None:
     """The wheel must carry the licence pyproject declares, not merely some
     licence — a silent relicensing is exactly what nobody reviews."""
@@ -92,6 +95,7 @@ def test_a_mismatched_expression_is_caught(tmp_path: Path) -> None:
     assert problems
 
 
+@pytest.mark.integration
 def test_a_legacy_license_classifier_is_caught(tmp_path: Path) -> None:
     """PEP 639 forbids the pair, and setuptools>=77 rejects it. Catching it
     here means the failure is one readable line, not a build traceback."""
@@ -102,6 +106,7 @@ def test_a_legacy_license_classifier_is_caught(tmp_path: Path) -> None:
     assert any("legacy classifier" in p for p in problems)
 
 
+@pytest.mark.integration
 def test_a_missing_license_file_is_caught(tmp_path: Path) -> None:
     """The exact failure the original criterion wrongly assumed the build
     itself would catch: metadata claims a licence, the archive has none."""
@@ -112,6 +117,7 @@ def test_a_missing_license_file_is_caught(tmp_path: Path) -> None:
     assert any("license-files" in p for p in problems)
 
 
+@pytest.mark.integration
 def test_a_licence_outside_dist_info_does_not_satisfy_the_check(tmp_path: Path) -> None:
     """A licence shipped as package data is not a packaged licence.
 
@@ -133,6 +139,7 @@ def test_a_licence_outside_dist_info_does_not_satisfy_the_check(tmp_path: Path) 
     assert any("license-files" in p for p in problems), problems
 
 
+@pytest.mark.integration
 def test_the_dist_info_directory_name_is_not_assumed(tmp_path: Path) -> None:
     """The gate reads the wheel it is handed. A differently-named
     distribution must pass on its own merits, so the anchoring fix cannot
@@ -145,6 +152,7 @@ def test_the_dist_info_directory_name_is_not_assumed(tmp_path: Path) -> None:
     assert check_wheel(path, "Apache-2.0", ["LICENSE"]) == []
 
 
+@pytest.mark.integration
 def test_an_empty_license_file_is_caught(tmp_path: Path) -> None:
     """A zero-byte LICENSE satisfies "the file is present" and satisfies
     nobody's lawyer."""
@@ -153,6 +161,7 @@ def test_an_empty_license_file_is_caught(tmp_path: Path) -> None:
     assert any("empty" in p for p in problems)
 
 
+@pytest.mark.integration
 def test_a_glob_pattern_matches_the_files_it_names(tmp_path: Path) -> None:
     """PEP 639 says `license-files` entries are globs, so they are matched as
     globs. Comparing basenames instead would reject a legitimate pattern like
@@ -169,6 +178,7 @@ def test_a_glob_pattern_matches_the_files_it_names(tmp_path: Path) -> None:
     assert check_wheel(wheel, "Apache-2.0", ["LICENSE*"]) == []
 
 
+@pytest.mark.integration
 def test_a_pattern_naming_a_subdirectory_is_matched_there(tmp_path: Path) -> None:
     """The pattern is matched against the path relative to the licence
     directory, so a subdirectory in the pattern is honoured rather than
@@ -185,6 +195,7 @@ def test_a_pattern_naming_a_subdirectory_is_matched_there(tmp_path: Path) -> Non
     assert check_wheel(wheel, "Apache-2.0", ["third_party/LICENSE"])
 
 
+@pytest.mark.integration
 def test_an_empty_file_is_caught_even_when_it_is_not_the_first_match(
     tmp_path: Path,
 ) -> None:
@@ -206,6 +217,7 @@ def test_an_empty_file_is_caught_even_when_it_is_not_the_first_match(
     assert any("empty" in p and "LICENSE.z" in p for p in problems), problems
 
 
+@pytest.mark.integration
 def test_a_wheel_without_metadata_is_caught(tmp_path: Path) -> None:
     path = tmp_path / "broken-0.1-py3-none-any.whl"
     with zipfile.ZipFile(path, "w") as archive:
@@ -219,18 +231,21 @@ def test_a_wheel_without_metadata_is_caught(tmp_path: Path) -> None:
 # --- The CLI's own three-way exit contract ---
 
 
+@pytest.mark.integration
 def test_main_exits_1_on_a_bad_wheel(tmp_path: Path) -> None:
     _wheel(tmp_path, license_text=None)
 
     assert main([str(tmp_path)]) == 1
 
 
+@pytest.mark.integration
 def test_main_exits_0_on_a_good_wheel(tmp_path: Path) -> None:
     _wheel(tmp_path)
 
     assert main([str(tmp_path)]) == 0
 
 
+@pytest.mark.integration
 def test_main_exits_2_when_there_is_nothing_to_check(tmp_path: Path) -> None:
     """Non-success criterion: "no wheels" must never read as "all wheels
     passed". A release job whose build step silently produced nothing would
@@ -238,6 +253,7 @@ def test_main_exits_2_when_there_is_nothing_to_check(tmp_path: Path) -> None:
     assert main([str(tmp_path)]) == 2
 
 
+@pytest.mark.integration
 def test_main_exits_2_on_a_missing_directory(tmp_path: Path) -> None:
     assert main([str(tmp_path / "nope")]) == 2
 
@@ -245,6 +261,7 @@ def test_main_exits_2_on_a_missing_directory(tmp_path: Path) -> None:
 # --- Against the real artifact ---
 
 
+@pytest.mark.e2e
 def test_the_real_wheel_passes_the_gate(tmp_path: Path) -> None:
     """Builds this project for real, in an isolated environment, and gates the
     result. Skips rather than fails when `build` is unavailable or the network

@@ -63,6 +63,7 @@ def _make_unreadable(repo: Path, change: str = "broken", capability: str = "cap"
     return path
 
 
+@pytest.mark.e2e
 @pytest.mark.parametrize("verb", PARSING_VERBS, ids=lambda v: " ".join(v))
 def test_unreadable_spec_exits_2_from_every_parsing_verb(tmp_path: Path, verb: tuple) -> None:
     """AC-RE-1: exit 2, the code reserved for "could not run"."""
@@ -77,6 +78,7 @@ def test_unreadable_spec_exits_2_from_every_parsing_verb(tmp_path: Path, verb: t
     )
 
 
+@pytest.mark.e2e
 @pytest.mark.parametrize("verb", PARSING_VERBS, ids=lambda v: " ".join(v))
 def test_unreadable_spec_never_prints_a_traceback(tmp_path: Path, verb: tuple) -> None:
     """AC-RE-1: a clean one-line diagnostic, not a stack dump."""
@@ -92,6 +94,7 @@ def test_unreadable_spec_never_prints_a_traceback(tmp_path: Path, verb: tuple) -
     )
 
 
+@pytest.mark.e2e
 def test_message_names_the_path_root_relative_and_the_reason(tmp_path: Path) -> None:
     """AC-RE-2: the line identifies which spec and why, without leaking the
     absolute checkout path (two machines cloning the same repo to different
@@ -110,6 +113,7 @@ def test_message_names_the_path_root_relative_and_the_reason(tmp_path: Path) -> 
     ), result.stderr
 
 
+@pytest.mark.e2e
 def test_json_output_is_not_emitted_alongside_the_error(tmp_path: Path) -> None:
     """AC-RE-5: a consumer piping stdout gets nothing to misparse as a clean
     result — the failure is not half a report."""
@@ -124,6 +128,7 @@ def test_json_output_is_not_emitted_alongside_the_error(tmp_path: Path) -> None:
 # --- Non-success criteria (G002): the guard must not swallow real results ---
 
 
+@pytest.mark.e2e
 def test_a_spec_with_real_findings_still_exits_1(tmp_path: Path) -> None:
     """AC-RE-4 (non-success): the new exit-2 path must not capture ordinary
     rule failures. A spec that genuinely violates a rule still exits 1 — if
@@ -137,6 +142,7 @@ def test_a_spec_with_real_findings_still_exits_1(tmp_path: Path) -> None:
     assert "Traceback" not in result.stderr
 
 
+@pytest.mark.e2e
 def test_a_clean_tree_still_exits_0(tmp_path: Path) -> None:
     """AC-RE-4 (non-success): and it must not turn a passing repo into a
     failure either."""
@@ -147,6 +153,7 @@ def test_a_clean_tree_still_exits_0(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.e2e
 def test_one_unreadable_spec_does_not_let_the_others_pass_silently(tmp_path: Path) -> None:
     """AC-RE-5: the run aborts rather than reporting on the specs it could
     read. Skipping the unreadable one would let a spec pass a gate that never
@@ -163,6 +170,7 @@ def test_one_unreadable_spec_does_not_let_the_others_pass_silently(tmp_path: Pat
 # --- The exception itself ---
 
 
+@pytest.mark.unit
 def test_spec_read_error_carries_path_and_reason(tmp_path: Path) -> None:
     """AC-RE-3: callers render the diagnostic from typed attributes rather
     than re-parsing the message string."""
@@ -177,6 +185,7 @@ def test_spec_read_error_carries_path_and_reason(tmp_path: Path) -> None:
     assert str(unreadable) in str(caught.value)
 
 
+@pytest.mark.unit
 def test_spec_read_error_chains_the_original_oserror(tmp_path: Path) -> None:
     """AC-RE-3: the OS error is translated, not discarded — `--verbose` and a
     debugger both still reach the original cause."""
@@ -189,6 +198,7 @@ def test_spec_read_error_chains_the_original_oserror(tmp_path: Path) -> None:
     assert isinstance(caught.value.__cause__, OSError)
 
 
+@pytest.mark.unit
 def test_a_readable_spec_still_parses(tmp_path: Path) -> None:
     """The guard is a translation layer, not a behavior change."""
     body = (FX / "good_harness.md").read_text(encoding="utf-8")
@@ -203,6 +213,7 @@ def test_a_readable_spec_still_parses(tmp_path: Path) -> None:
 # --- `--change` on a SpecKit-only target ---
 
 
+@pytest.mark.e2e
 def test_change_on_a_speckit_only_target_names_the_limitation(tmp_path: Path) -> None:
     """AC-RE-7: `--change` scopes OpenSpec change packages. On a SpecKit tree
     the generic "no specs found" reads as "your feature is missing"; the real
@@ -220,6 +231,7 @@ def test_change_on_a_speckit_only_target_names_the_limitation(tmp_path: Path) ->
     assert "re-run without --change" in result.stderr
 
 
+@pytest.mark.e2e
 def test_change_on_an_openspec_target_keeps_the_original_message(tmp_path: Path) -> None:
     """AC-RE-8 (non-success): the SpecKit wording must not leak onto an
     OpenSpec target, where `--change` genuinely applies and a missing package
@@ -233,6 +245,7 @@ def test_change_on_an_openspec_target_keeps_the_original_message(tmp_path: Path)
     assert "SpecKit" not in result.stderr
 
 
+@pytest.mark.e2e
 def test_graph_still_reports_a_missing_tree_distinctly(tmp_path: Path) -> None:
     """The new handler sits beside the existing NoOpenSpecTreeError one; an
     absent tree must still produce its own message, not the read-error one."""
@@ -245,6 +258,7 @@ def test_graph_still_reports_a_missing_tree_distinctly(tmp_path: Path) -> None:
     assert "planlint init" in result.stderr
 
 
+@pytest.mark.e2e
 def test_graph_json_stays_valid_when_every_spec_is_readable(tmp_path: Path) -> None:
     """Guard against the try/except swallowing the success path."""
     repo = _repo(tmp_path)

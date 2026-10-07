@@ -74,11 +74,13 @@ def _expected_for(shape: Path) -> dict[str, object]:
 # --- the corpus itself ------------------------------------------------------
 
 
+@pytest.mark.unit
 def test_corpus_is_not_empty() -> None:
     """A silently-empty corpus would make every parametrised test below vacuous."""
     assert SHAPES, f"no corpus shapes found under {CORPUS_ROOT}"
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize("shape", SHAPES, ids=lambda p: p.name)
 def test_detected_card_matches_the_labelled_expectation(shape: Path) -> None:
     """The heart of the corpus: detection must agree with the label."""
@@ -86,6 +88,7 @@ def test_detected_card_matches_the_labelled_expectation(shape: Path) -> None:
     assert not drift, f"{shape.name}: detection disagrees with its label:\n  " + "\n  ".join(drift)
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize("shape", SHAPES, ids=lambda p: p.name)
 def test_every_shape_is_documented(shape: Path) -> None:
     """Referential integrity between the corpus and its README.
@@ -99,6 +102,7 @@ def test_every_shape_is_documented(shape: Path) -> None:
     )
 
 
+@pytest.mark.unit
 def test_corpus_pins_the_card_schema_version() -> None:
     """One deliberate place to notice a schema bump, instead of thirteen.
 
@@ -111,6 +115,7 @@ def test_corpus_pins_the_card_schema_version() -> None:
 # --- the safety invariant ---------------------------------------------------
 
 
+@pytest.mark.unit
 def test_parsing_a_hostile_makefile_executes_nothing(tmp_path: Path) -> None:
     """R-MP-2/DEC-MP-001, as behaviour rather than as an import guard.
 
@@ -145,6 +150,7 @@ def test_parsing_a_hostile_makefile_executes_nothing(tmp_path: Path) -> None:
 # --- shapes that cannot be committed as files -------------------------------
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize("name", ["Makefile", "pyproject.toml"])
 def test_a_directory_where_a_config_file_belongs_does_not_crash(
     tmp_path: Path, name: str
@@ -163,6 +169,7 @@ def test_a_directory_where_a_config_file_belongs_does_not_crash(
     assert profile.threshold is None
 
 
+@pytest.mark.unit
 def test_an_unreadable_config_file_is_treated_as_absent(tmp_path: Path) -> None:
     """The same posture for the other unreadable cases: absent, never fatal."""
     (tmp_path / "CONTRACT.md").mkdir()
@@ -173,6 +180,7 @@ def test_an_unreadable_config_file_is_treated_as_absent(tmp_path: Path) -> None:
     assert profile.adr_ids == ()
 
 
+@pytest.mark.unit
 def test_a_large_makefile_parses_in_linear_time(tmp_path: Path) -> None:
     """A guard against a pathological (catastrophically backtracking) parser.
 
@@ -194,6 +202,7 @@ def test_a_large_makefile_parses_in_linear_time(tmp_path: Path) -> None:
 # --- the BOM defect, at the unit level --------------------------------------
 
 
+@pytest.mark.unit
 def test_strip_bom_is_idempotent_and_leaves_other_text_alone() -> None:
     assert machinery.strip_bom("﻿all:") == "all:"
     assert machinery.strip_bom(machinery.strip_bom("﻿﻿all:")) == "all:"
@@ -202,6 +211,7 @@ def test_strip_bom_is_idempotent_and_leaves_other_text_alone() -> None:
     assert machinery.strip_bom("a﻿b") == "a﻿b"
 
 
+@pytest.mark.unit
 def test_both_makefile_parsers_agree_on_a_bom_prefixed_file() -> None:
     """The structural parser and the legacy regex fallback failed differently
     on a BOM -- one fabricated a mangled target, the other silently dropped
@@ -215,6 +225,7 @@ def test_both_makefile_parsers_agree_on_a_bom_prefixed_file() -> None:
 # --- makefile filename resolution (GNU Make's own search order) -------------
 
 
+@pytest.mark.unit
 def test_makefile_names_are_gnu_makes_own_search_order() -> None:
     """The order is the contract, not an implementation detail.
 
@@ -224,11 +235,13 @@ def test_makefile_names_are_gnu_makes_own_search_order() -> None:
     assert detect.MAKEFILE_NAMES == ("GNUmakefile", "makefile", "Makefile")
 
 
+@pytest.mark.unit
 def test_no_makefile_at_all_resolves_to_none(tmp_path: Path) -> None:
     assert detect._resolve_makefile(tmp_path) is None
     assert detect.profile(tmp_path).make_targets == ()
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize("name", ["GNUmakefile", "makefile", "Makefile"])
 def test_each_honoured_name_is_read(tmp_path: Path, name: str) -> None:
     """Regression for the fail-open: a repo using any name GNU Make honours
@@ -239,6 +252,7 @@ def test_each_honoured_name_is_read(tmp_path: Path, name: str) -> None:
     assert detect.profile(tmp_path).make_targets == ("build",)
 
 
+@pytest.mark.unit
 def test_gnumakefile_shadows_makefile_rather_than_merging(tmp_path: Path) -> None:
     """Both present: GNU Make reads GNUmakefile and never opens Makefile.
 
@@ -250,6 +264,7 @@ def test_gnumakefile_shadows_makefile_rather_than_merging(tmp_path: Path) -> Non
     assert detect.profile(tmp_path).make_targets == ("gnu-only",)
 
 
+@pytest.mark.unit
 @pytest.mark.skipif(
     not support.supports_case_sensitive_filenames(),
     reason="case-insensitive filesystem: `makefile` and `Makefile` are one path",
@@ -267,6 +282,7 @@ def test_lowercase_makefile_shadows_capitalised_makefile(tmp_path: Path) -> None
     assert detect.profile(tmp_path).make_targets == ("lower-only",)
 
 
+@pytest.mark.unit
 def test_an_unreadable_candidate_is_terminal_not_a_fall_through(tmp_path: Path) -> None:
     """GNU Make parity: it aborts on an unopenable makefile, it does not skip it.
 
@@ -284,6 +300,7 @@ def test_an_unreadable_candidate_is_terminal_not_a_fall_through(tmp_path: Path) 
     assert detect.profile(tmp_path).make_targets == ()
 
 
+@pytest.mark.unit
 def test_an_empty_candidate_does_shadow(tmp_path: Path) -> None:
     """Readable-but-empty is NOT the same as unreadable.
 
@@ -296,6 +313,7 @@ def test_an_empty_candidate_does_shadow(tmp_path: Path) -> None:
     assert detect.profile(tmp_path).make_targets == ()
 
 
+@pytest.mark.integration
 def test_makefile_names_are_not_duplicated_as_inline_literals() -> None:
     """The constant must be the single source, not decoration beside literals.
 
@@ -322,6 +340,7 @@ def test_makefile_names_are_not_duplicated_as_inline_literals() -> None:
         )
 
 
+@pytest.mark.unit
 @pytest.mark.skipif(not support.supports_symlinks(), reason="cannot create symlinks here")
 def test_a_dangling_symlink_candidate_is_terminal_not_absent(tmp_path: Path) -> None:
     """`Path.exists()` follows symlinks, so a broken link reads as absent.

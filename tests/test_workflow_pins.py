@@ -16,6 +16,7 @@ from typing import Any
 
 import pytest
 
+from tests.support import read_pyproject
 from tests.workflow_support import (
     ACTION_YMLS,
     DEPENDABOT,
@@ -29,7 +30,6 @@ from tests.workflow_support import (
     WRITING_VERBS,
     _code_lines,
     _dockerfile_from,
-    _pyproject,
     _rel,
 )
 
@@ -121,7 +121,7 @@ def _major(ref: str) -> int | None:
     return int(match.group(1)) if match else None
 
 def _action_major_floors(config: dict[str, Any] | None = None) -> dict[str, int]:
-    table = (config or _pyproject())["tool"]["specgraph"].get(FLOOR_TABLE)
+    table = (config or read_pyproject())["tool"]["specgraph"].get(FLOOR_TABLE)
     assert table, f"pyproject.toml declares no [tool.specgraph.{FLOOR_TABLE}]; the floor guard cannot run"
     return {name: int(floor) for name, floor in table.items()}
 
@@ -238,6 +238,7 @@ def _docker_watch_offenders(dockerfile_text: str, dependabot_text: str) -> list[
 # --- R-HCW-1 / R-HCW-2 / R-ASP-1: action refs agree, and every one is a pinned SHA
 
 
+@pytest.mark.integration
 def test_every_reference_to_one_action_agrees_on_one_ref() -> None:
     """AC-HCW-1: one action, one ref, across the workflows, the composite
     action, the adopter templates and the README snippet."""
@@ -245,6 +246,7 @@ def test_every_reference_to_one_action_agrees_on_one_ref() -> None:
     offenders = _ref_disagreements(ACTION_REF_SCAN)
     assert not offenders, "\n".join(offenders)
 
+@pytest.mark.integration
 def test_a_leftover_retired_major_is_reported_with_file_and_line(tmp_path: Path) -> None:
     """AC-HCW-2 (non-success): a template left on the old major while the
     workflow moved is named with both files and lines."""
@@ -265,12 +267,14 @@ def test_a_leftover_retired_major_is_reported_with_file_and_line(tmp_path: Path)
     assert f"spec-gate.yml:5 @{old} # v4.2.2" in offenders[0], offenders
     assert offenders[0].endswith(HAND_CARRY), offenders
 
+@pytest.mark.integration
 def test_every_third_party_action_meets_its_major_floor() -> None:
     """AC-HCW-28: the agreement guard cannot see every copy regressing
     together; the per-action floor in pyproject.toml can (R-HCW-17)."""
     offenders = _floor_offenders(ACTION_REF_SCAN, _action_major_floors())
     assert not offenders, "\n".join(offenders)
 
+@pytest.mark.integration
 def test_a_uniformly_retired_major_is_named_with_file_and_line(tmp_path: Path) -> None:
     """AC-HCW-29 (non-success): two files agreeing on one retired pin pass
     the agreement guard and fail the floor guard, each named with the
@@ -287,6 +291,7 @@ def test_a_uniformly_retired_major_is_named_with_file_and_line(tmp_path: Path) -
         f"spec-gate.yml:4 actions/checkout@{sha} # v4.2.2 is below its floor v7",
     ]
 
+@pytest.mark.integration
 def test_an_action_without_a_floor_is_named(tmp_path: Path) -> None:
     """AC-HCW-29 (non-success): a table that forgot an action is a hole;
     a branch ref has no major and is the shape guard's business, not the
@@ -304,6 +309,7 @@ def test_an_action_without_a_floor_is_named(tmp_path: Path) -> None:
     assert _major("v7") == 7 and _major("v7.0.1") == 7 and _major("v3.38.2") == 3
     assert _major("release/v1") is None and _major("a" * 40) is None
 
+@pytest.mark.integration
 def test_every_third_party_action_is_pinned_to_a_commit_sha_with_its_release_tag() -> None:
     """AC-ASP-1: every third-party `uses:` in the scan set is a 40-hex commit
     with its release tag in a trailing comment (R-ASP-1)."""
@@ -311,6 +317,7 @@ def test_every_third_party_action_is_pinned_to_a_commit_sha_with_its_release_tag
     offenders = _pin_offenders(ACTION_REF_SCAN)
     assert not offenders, "\n".join(offenders)
 
+@pytest.mark.integration
 def test_a_sha_pin_without_its_release_tag_comment_is_named(tmp_path: Path) -> None:
     """AC-ASP-2 (non-success): a bare SHA is pinned but unreadable; it is
     named beside a commented one that is not."""
@@ -324,6 +331,7 @@ def test_a_sha_pin_without_its_release_tag_comment_is_named(tmp_path: Path) -> N
         f"t.yml:5 actions/setup-python@{'b' * 40} has no `# vX.Y.Z` release-tag comment"
     ]
 
+@pytest.mark.integration
 def test_the_own_action_ref_is_exempt_from_the_sha_check(tmp_path: Path) -> None:
     """This repository's own action ref (a bare SHA until the first tag,
     policed by tests/test_adopter_urls.py) and a `./` local action are not
@@ -338,6 +346,7 @@ def test_the_own_action_ref_is_exempt_from_the_sha_check(tmp_path: Path) -> None
         f"t.yml:6 actions/checkout@{'b' * 40} has no `# vX.Y.Z` release-tag comment"
     ]
 
+@pytest.mark.integration
 def test_an_unpinned_ref_is_named_with_file_and_line(tmp_path: Path) -> None:
     """AC-ASP-2 (non-success): a tag, a branch, and two malformed comments
     are each named; a whole-line `# uses:` comment is not."""
@@ -371,6 +380,7 @@ def test_an_unpinned_ref_is_named_with_file_and_line(tmp_path: Path) -> None:
         ),
     ]
 
+@pytest.mark.unit
 def test_the_version_comment_is_read_from_the_raw_line(tmp_path: Path) -> None:
     """AC-ASP-2: the reader keeps the comment `_code_lines` strips (R-ASP-6)."""
     planted = tmp_path / "t.yml"
@@ -381,6 +391,7 @@ def test_the_version_comment_is_read_from_the_raw_line(tmp_path: Path) -> None:
     assert (action, ref, comment) == ("actions/checkout", "a" * 40, "v7.0.1")
     assert all("#" not in code for _, code in _code_lines(planted.read_text(encoding="utf-8")))
 
+@pytest.mark.integration
 def test_a_comment_disagreement_behind_one_sha_is_named(tmp_path: Path) -> None:
     """AC-ASP-6 (non-success): one SHA, two release-tag comments -- the pair
     disagrees even though the ref agrees (R-ASP-5)."""
@@ -392,6 +403,7 @@ def test_a_comment_disagreement_behind_one_sha_is_named(tmp_path: Path) -> None:
     assert len(offenders) == 1, offenders
     assert f"ci.yml:4 @{sha} # v7.0.1" in offenders[0] and f"release.yml:4 @{sha} # v7.0.0" in offenders[0]
 
+@pytest.mark.integration
 def test_a_version_comment_below_the_floor_is_named(tmp_path: Path) -> None:
     """AC-ASP-4 (non-success): the floor reads the comment, and names it."""
     planted = tmp_path / "t.yml"
@@ -404,17 +416,20 @@ def test_a_version_comment_below_the_floor_is_named(tmp_path: Path) -> None:
 # --- R-HCW-13 / R-HCW-14: the Dockerfile and its update bot -----------------
 
 
+@pytest.mark.integration
 def test_dockerfile_from_is_digest_pinned_with_the_tag_in_the_reference() -> None:
     """AC-HCW-18: the digest is the pin; the tag stays in the reference for
     readers and for Dependabot, which moves both together."""
     offenders = [o for o in _dockerfile_offenders(DOCKERFILE.read_text(encoding="utf-8")) if "FROM" in o]
     assert not offenders, "\n".join(offenders)
 
+@pytest.mark.integration
 def test_dockerfile_switches_to_a_non_root_user_after_install() -> None:
     """AC-HCW-18: the CLI only reads the tree it is pointed at."""
     offenders = [o for o in _dockerfile_offenders(DOCKERFILE.read_text(encoding="utf-8")) if "USER" in o]
     assert not offenders, "\n".join(offenders)
 
+@pytest.mark.integration
 def test_dockerfile_documents_the_user_override_for_writing_verbs() -> None:
     """AC-HCW-18: the CLI is not wholly read-only -- `init`, `new` and
     `witness` write into the target -- and a non-root image cannot write into
@@ -422,6 +437,7 @@ def test_dockerfile_documents_the_user_override_for_writing_verbs() -> None:
     offenders = _user_override_offenders(DOCKERFILE.read_text(encoding="utf-8"))
     assert not offenders, "\n".join(offenders)
 
+@pytest.mark.unit
 def test_a_non_root_dockerfile_without_the_override_is_named() -> None:
     """AC-HCW-19 (non-success)."""
     silent = "# Run: docker run --rm planlint validate\nFROM python:3.12-slim\nUSER app\n"
@@ -430,6 +446,7 @@ def test_a_non_root_dockerfile_without_the_override_is_named() -> None:
     assert len(offenders) == 1 + len(WRITING_VERBS), offenders
     assert _user_override_offenders("FROM python:3.12-slim\n") == []
 
+@pytest.mark.integration
 def test_a_digest_pinned_base_is_watched_by_a_docker_dependabot_entry() -> None:
     """AC-HCW-18: an unwatched digest is a pin that only gets staler."""
     offenders = _docker_watch_offenders(
@@ -437,6 +454,7 @@ def test_a_digest_pinned_base_is_watched_by_a_docker_dependabot_entry() -> None:
     )
     assert not offenders, "\n".join(offenders)
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "label, dockerfile, expected",
     [
@@ -452,6 +470,7 @@ def test_a_weak_dockerfile_is_named(label: str, dockerfile: str, expected: str) 
     offenders = _dockerfile_offenders(dockerfile)
     assert any(expected in offender for offender in offenders), (label, offenders)
 
+@pytest.mark.unit
 def test_a_plural_directories_entry_is_read_as_one_pair_per_directory() -> None:
     """AC-ASP-17: one `github-actions` entry with `directories:` is read as
     one pair per directory, in flow and in block form (R-ASP-11)."""
@@ -469,6 +488,7 @@ def test_a_plural_directories_entry_is_read_as_one_pair_per_directory() -> None:
     assert _dependabot_entries(flow) == expected
     assert _dependabot_entries(block) == expected
 
+@pytest.mark.unit
 def test_an_unwatched_digest_is_named() -> None:
     dockerfile = f"FROM python:3.12-slim@sha256:{'0' * 64}\n"
     dependabot = 'version: 2\nupdates:\n  - package-ecosystem: "github-actions"\n    directory: "/"\n'
@@ -500,11 +520,13 @@ def _dependabot_directories() -> set[str]:
         found |= set(re.findall(r'"([^"]+)"', block))
     return found
 
+@pytest.mark.integration
 def test_dependabot_config_exists_and_watches_github_actions() -> None:
     assert DEPENDABOT.is_file(), "no .github/dependabot.yml; action pins would go stale silently"
     text = DEPENDABOT.read_text(encoding="utf-8")
     assert 'package-ecosystem: "github-actions"' in text
 
+@pytest.mark.integration
 def test_every_composite_action_directory_is_watched_by_dependabot() -> None:
     """A nested composite action is invisible to the root entry.
 
@@ -525,6 +547,7 @@ def test_every_composite_action_directory_is_watched_by_dependabot() -> None:
             f"its third-party pins would never be updated. Watched: {sorted(watched)}"
         )
 
+@pytest.mark.integration
 def test_dependabot_does_not_add_a_pip_ecosystem() -> None:
     """Non-success: the dev extras are unpinned on purpose.
 

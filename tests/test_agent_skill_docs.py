@@ -192,6 +192,7 @@ def _ids(paths: list[Path]) -> list[str]:
     return [str(p.relative_to(REPO_ROOT)) for p in paths]
 
 
+@pytest.mark.integration
 def test_at_least_one_agent_and_one_skill_file_exist() -> None:
     # A silently-empty glob would make every other test in this file
     # vacuously pass -- assert real content is actually being checked.
@@ -200,6 +201,7 @@ def test_at_least_one_agent_and_one_skill_file_exist() -> None:
     assert DIST_SKILL_FILES, f"no skill files found under {DIST_SKILLS_DIR}"
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("path", AGENT_FILES, ids=_ids(AGENT_FILES))
 def test_agent_frontmatter_has_required_keys(path: Path) -> None:
     fields = _frontmatter(path.read_text(encoding="utf-8"))
@@ -210,6 +212,7 @@ def test_agent_frontmatter_has_required_keys(path: Path) -> None:
     )
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("path", SKILL_MANIFESTS, ids=_ids(SKILL_MANIFESTS))
 def test_skill_frontmatter_has_required_keys(path: Path) -> None:
     fields = _frontmatter(path.read_text(encoding="utf-8"))
@@ -217,6 +220,7 @@ def test_skill_frontmatter_has_required_keys(path: Path) -> None:
         assert fields.get(key), f"{path.name}: frontmatter missing/empty {key!r}"
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("path", SKILL_MANIFESTS, ids=_ids(SKILL_MANIFESTS))
 def test_skill_frontmatter_name_matches_directory_name(path: Path) -> None:
     """AC-SD-1: the format requires `name` to equal the skill's directory."""
@@ -227,6 +231,7 @@ def test_skill_frontmatter_name_matches_directory_name(path: Path) -> None:
     )
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("path", SKILL_MANIFESTS, ids=_ids(SKILL_MANIFESTS))
 def test_skill_frontmatter_fields_are_within_format_limits(path: Path) -> None:
     """AC-SD-1: length limits the Agent Skills format imposes.
@@ -292,6 +297,7 @@ def _reference_resolves_for(doc: Path, ref: str) -> bool:
     return False
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("path", ALL_FILES, ids=_ids(ALL_FILES))
 def test_path_like_backtick_references_resolve_to_real_files(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
@@ -302,6 +308,7 @@ def test_path_like_backtick_references_resolve_to_real_files(path: Path) -> None
     )
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("path", ALL_FILES, ids=_ids(ALL_FILES))
 def test_make_target_references_are_real_makefile_targets(path: Path) -> None:
     text = path.read_text(encoding="utf-8")
@@ -313,6 +320,7 @@ def test_make_target_references_are_real_makefile_targets(path: Path) -> None:
     )
 
 
+@pytest.mark.integration
 def test_add_rule_skill_rule_family_list_matches_real_rule_modules() -> None:
     # The exact drift class this test file exists to close: this skill's
     # own step-1 checklist silently omitted rules_speckit.py after the
@@ -332,6 +340,7 @@ def test_add_rule_skill_rule_family_list_matches_real_rule_modules() -> None:
 # --- AC-SD-8 / AC-SD-9: the guard's own new machinery -----------------------
 
 
+@pytest.mark.unit
 def test_frontmatter_parses_one_nested_level() -> None:
     """AC-SD-9 (non-success): a nested value parses as itself, not a marker.
 
@@ -358,12 +367,14 @@ def test_frontmatter_parses_one_nested_level() -> None:
     assert "metadata" not in parsed, "a nested parent must not also land as a scalar"
 
 
+@pytest.mark.unit
 def test_frontmatter_rejects_nesting_under_an_unnestable_key() -> None:
     """Deeper or unexpected nesting fails loudly rather than mis-parsing."""
     with pytest.raises(AssertionError):
         _frontmatter("---\nname: demo\n  stray: value\n---\n\nbody\n")
 
 
+@pytest.mark.unit
 def test_frontmatter_rejects_nesting_deeper_than_one_level() -> None:
     """Reported in review: depth was never actually checked.
 
@@ -389,6 +400,7 @@ def test_frontmatter_rejects_nesting_deeper_than_one_level() -> None:
         _frontmatter(block_valued)
 
 
+@pytest.mark.unit
 def test_frontmatter_accepts_consistently_indented_siblings() -> None:
     """The complement: a well-formed nested block still parses."""
     parsed = _frontmatter(
@@ -399,6 +411,7 @@ def test_frontmatter_accepts_consistently_indented_siblings() -> None:
     assert parsed["metadata.planlint-min-version"] == "0.2.0"
 
 
+@pytest.mark.integration
 def test_skill_relative_references_resolve() -> None:
     """AC-SD-8: a skill addresses its own files the way its consumers do.
 
@@ -419,6 +432,7 @@ def test_skill_relative_references_resolve() -> None:
         )
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("path", DIST_SKILL_MANIFESTS, ids=_ids(DIST_SKILL_MANIFESTS))
 def test_skill_min_version_is_not_ahead_of_the_package(path: Path) -> None:
     """A skill demanding a version this repo has not shipped is unusable.
@@ -451,6 +465,7 @@ def test_skill_min_version_is_not_ahead_of_the_package(path: Path) -> None:
     )
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("path", DIST_SKILL_MANIFESTS, ids=_ids(DIST_SKILL_MANIFESTS))
 def test_skill_metadata_version_matches_the_package(path: Path) -> None:
     """One release, one number -- the skill's own version included.
@@ -480,6 +495,7 @@ def test_skill_metadata_version_matches_the_package(path: Path) -> None:
     )
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("path", DIST_SKILL_MANIFESTS, ids=_ids(DIST_SKILL_MANIFESTS))
 def test_compatibility_prose_matches_the_declared_minimum(path: Path) -> None:
     """Two numbers, one meaning -- so they must be bound, not both written.
@@ -503,6 +519,7 @@ def test_compatibility_prose_matches_the_declared_minimum(path: Path) -> None:
     )
 
 
+@pytest.mark.integration
 def test_rule_ids_cited_by_skills_exist_in_the_registry() -> None:
     """A skill citing a rule the engine dropped is worse than citing none."""
     from openspec_graph.rules import RULES
@@ -516,6 +533,7 @@ def test_rule_ids_cited_by_skills_exist_in_the_registry() -> None:
         )
 
 
+@pytest.mark.integration
 def test_make_target_guard_sees_digit_bearing_targets() -> None:
     """Non-success criterion for the guard itself: a digit-bearing target is
     both recognised as real and checked when cited, so a typo of one is caught
