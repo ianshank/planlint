@@ -834,7 +834,7 @@ module is below: `tools/check_branch_coverage.py` at 84.2 %.
   citation. (R-MCO-11, DEC-MCO-009)
   _Verified by:_ `pytest -k "test_per_file_flag_leaves_the_argv_contract_alone or test_coverage_argv_parses_every_accepted_shape"` · stage: `make test`
 
-- [ ] **AC-MCO-19 (observed after the first CI run):** the source run's
+- [x] **AC-MCO-19 (observed after the first CI run):** the source run's
   `make test` step was green on every leg, so no leg is excluded; the
   per-leg table — run id, artifact names, `covered/total` and the exact
   percentage for both trees and both kinds on every leg — is recorded in

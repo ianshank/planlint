@@ -257,7 +257,7 @@ committed.
   [tool.coverage.report] fail_under -- the first source entry's floor -- is absent too".
 - **Gate:** `make test`
 
-## Milestone 2 — One run, its guards seen red first, and the records
+## Milestone 2 — One run, its guards seen red first, and the records  [DONE]
 
 - `tests/test_ci_hardening.py`, written before the Makefile and workflow
   move and run red (R-MCO-13, DEC-MCO-011). Helpers, in the shape of the
@@ -628,7 +628,7 @@ committed.
 - **Gate:** `make test` — the per-file tests green on their planted
   reports; then `make thresholds` PASS.
 
-## Milestone 4 — Floors from the minimum leg, after the first CI run
+## Milestone 4 — Floors from the minimum leg, after the first CI run  [DONE]
 
 - Precondition: the pull request carrying Milestones 1–3 has had one CI
   run with the upload steps of Milestone 2, and that run's `make test` step
@@ -698,6 +698,9 @@ committed.
 - Push, and record here the next CI run's id and that every `test` leg and
   `test-windows` is green with the new floors — the leg that was the
   minimum included. Check AC-MCO-19 only once both runs are recorded.
+  **Recorded (this commit):** run `37554082222` on `731479c` (pull_request, 17 checks): every `test` leg and
+  `test-windows` green under 97/95/94/91, the Windows leg that set the package floors included.
+  Both runs recorded; AC-MCO-19 ticked.
 - **Gate:** `make pre-pr`
 
 ## Milestone 5 — Confirm, re-point, and record for the plan
