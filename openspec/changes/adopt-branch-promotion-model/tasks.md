@@ -77,11 +77,49 @@ bullets are filled in after the fact with what was observed.
 - [x] Every AC-BPM-1..19 citation re-pointed to its test, keeping the stage;
   `python -m pytest tests/test_spec_test_citations.py -q` green.
 
+## Milestone 5b — Adversarial review (`spec-adversary`), every finding resolved — done
+
+Each finding was reproduced, fixed with a counter-example test, and the
+reviewer's planted workflow violations re-run against the new guards: all ten
+now fail a named test.
+
+- [x] HIGH-1 (`tag-ancestry` accepted second-parent ancestors): first-parent
+  check, DEC-BPM-014, R-BPM-7 rewritten, AC-BPM-11 extended with a real
+  promotion-shaped repository.
+- [x] HIGH-2 (guards satisfied by comments, no soft-fail check): guards read
+  comment-stripped code only; `continue-on-error` / `|| true` forbidden in the
+  promotion jobs and the ancestry step; the ancestry `if:` pinned exactly
+  (R-BPM-11, AC-BPM-16, AC-BPM-19).
+- [x] MEDIUM-1 (empty tier output read as false): tier read from the needs
+  JSON, strictly; the route step id wiring guarded (DEC-BPM-016, R-BPM-8).
+- [x] MEDIUM-2 (null head repository skipped the fork check): counted as
+  foreign (R-BPM-5).
+- [x] MEDIUM-3 (AC-BPM-18 / R-BPM-12 not pinned): probes, build, metadata
+  step and the shared venv path asserted.
+- [x] MEDIUM-4 (a crash exits 1 like findings): a traceback fails the probe
+  (R-BPM-9).
+- [x] LOW-1, LOW-2 (unquoted switch read as absent; commented header leaked
+  keys): exit 2, and the shared readers stop at any header (DEC-BPM-015).
+- [x] LOW-3: DEC-BPM-013 now says the fork refusal is downgraded too.
+- [x] LOW-4: explicit refspec on `--fetch`.
+- [x] LOW-5: cross-repo message names the head; R-BPM-6 and R-BPM-8 state
+  what the code does; AC-BPM-29 moved; `release-tier` checkout drops
+  persisted credentials.
+
+## Observed
+
+- [x] AC-BPM-26: CI run 37575715654 (#226) on `318383e`, this package's pull
+  request into `main`: `promotion` success (route printed as `WARN` while
+  `enforce_routes` is off), `release-tier` success (its first run: `make
+  pre-pr`, build, metadata, smoke with both fixture probes), `ci-ok` success.
+  The run before it (#225, `04ab618`, cancelled by the next push) showed
+  `ci-ok` failing on exactly `release-tier: cancelled`, `test: cancelled`
+  and `test-windows: failure`.
+
 ## Milestone 6 — Owner actions, outside the tree (Phase 2)
 
 - [ ] Precondition: `v0.3.0` tagged on trunk and published under the 0.3.0
   runbook; this change merged after it. Record both commits.
-- [ ] Record this package's first pull-request run (AC-BPM-26).
 - [ ] Create `dev` and `qa` from `main`'s tip; record the SHA. In the same
   sitting, a pull request into `dev` setting `enforce_routes = "true"` and
   adding `target-branch: "dev"` to each `.github/dependabot.yml` entry

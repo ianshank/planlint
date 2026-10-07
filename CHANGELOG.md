@@ -19,8 +19,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   needs the release tier (a refusal is a `WARN` while `enforce_routes` is
   `"false"`, until `dev` and `qa` exist); `aggregate` is the new **`ci-ok`** job, the single
   required status check, failing on any failed, cancelled or wrongly skipped job;
-  `tag-ancestry` makes the release workflow refuse a tag on a commit not
-  reachable from `main`.
+  `tag-ancestry` makes the release workflow refuse a tag on a commit that is
+  not on `main`'s first-parent chain (a production merge commit, or trunk
+  history from before the model).
 - **`tools/smoke_wheel.py`**: the clean-venv console-script smoke test, now one
   tool run by both the release workflow's `build` job and a new `release-tier`
   CI job on every pull request and push into `qa` or `main`, which also runs

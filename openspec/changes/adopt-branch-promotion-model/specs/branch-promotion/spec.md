@@ -80,20 +80,34 @@ digits only.
   heads that base accepts -- unless `enforce_routes` is `"false"`, when it
   MUST instead print the same refusal as a `WARN` and exit 0, with the release
   tier computed exactly as when enforced. Any value other than `"true"` or
-  `"false"` MUST exit 2.
+  `"false"` MUST exit 2, and so MUST a present key written in a shape the
+  reader does not read (`= false`, `= 'false'`), rather than reading as
+  absent (DEC-BPM-015).
 - R-BPM-5: `route` MUST refuse a head from another repository into the
   candidate or production branch, whatever its name, because a fork's
-  branch name is not the branch the rule means.
+  branch name is not the branch the rule means. An empty head repository
+  (GitHub reports a deleted fork's as null) MUST count as another
+  repository whenever the base repository is known; the refusal MUST name
+  the head branch and its repository.
 - R-BPM-6: `route` MUST compute a release tier, true when a pull request's
-  base, or a push's ref, is the candidate or the production branch, and
-  false otherwise; and when `$GITHUB_OUTPUT` is set it MUST append
+  base, or the ref of any other event (a push, a dispatch, a schedule), is
+  the candidate or the production branch, and false otherwise; and when `$GITHUB_OUTPUT` is set it MUST append
   `release-tier=true` or `release-tier=false` to that file.
-- R-BPM-7: `tag-ancestry` MUST exit 0 when the tagged commit is an ancestor
-  of `origin/<production_branch>`, 1 when it is not, and 2 when git fails;
-  with `--fetch` it MUST fetch the production branch first.
+- R-BPM-7: `tag-ancestry` MUST exit 0 only when the tagged commit, peeled
+  to a commit, is on the **first-parent** chain of
+  `origin/<production_branch>` -- a production merge commit, or a trunk
+  commit from before the model; 1 when it is not, saying whether it reached
+  production only through a promotion merge's second parent or not at all;
+  and 2 when git cannot answer. With `--fetch` it MUST first fetch the
+  production branch with an explicit refspec, so the remote-tracking ref is
+  updated whatever the remote's configured refspec (DEC-BPM-014).
 - R-BPM-8: `aggregate` MUST read the `needs` context as JSON on stdin and
-  MUST fail on any job whose result is `failure` or `cancelled`, and on any
-  `skipped` job not declared conditional. A job declared
+  MUST fail on any job whose result is anything other than `success` --
+  `failure`, `cancelled`, an unknown value -- and on any `skipped` job not
+  declared conditional. The release tier MUST be read from the route job's
+  own `release-tier` output inside that JSON (`--release-tier-from`), and
+  MUST be exactly `true` or `false`: an empty, missing or other value exits
+  2, never a default (DEC-BPM-016). A job declared
   `--pull-request-only` MAY be skipped only when the event is not
   `pull_request`; a job declared `--release-tier-only` MAY be skipped only
   when the release tier is false. Any other skip MUST fail, naming the job.
@@ -103,7 +117,9 @@ digits only.
   `--version`, `--target . detect`, `--target . validate --fail-on ERROR` —
   and MUST run each repeatable `--expect PATH=EXITCODE` probe as
   `--target PATH validate --fail-on ERROR`, exiting 1 naming any probe whose
-  exit code differs from the one declared.
+  exit code differs from the one declared, or whose stderr carries a Python
+  traceback -- an uncaught exception also exits 1, so a failing verdict must
+  be shown not to be a crash.
 - R-BPM-10: `ci.yml`'s `on.push.branches` MUST be exactly the three
   configured branches, and a test MUST hold that list equal to the
   promotion table; `master` is dropped.
@@ -116,7 +132,11 @@ digits only.
   `if: always()` that needs every other job in the workflow and runs
   `aggregate`, declaring each conditional job with the flag matching its
   condition. A test MUST fail when a job is missing from `ci-ok`'s needs or
-  a conditional job is undeclared.
+  a conditional job is undeclared. These guards MUST read comment-stripped
+  code only (R-HCW-15): a comment naming a command satisfies nothing. No
+  step in `promotion`, `release-tier` or `ci-ok`, nor the ancestry step, MAY
+  carry `continue-on-error` or a `|| true`-style escape; `release-tier`'s
+  checkout MUST NOT persist credentials, since it runs pull-request code.
 - R-BPM-12: `release.yml`'s `gate` MUST run
   `check_promotion.py tag-ancestry --fetch` in a step that runs only for a
   tag ref; `build`'s smoke step MUST call `tools/smoke_wheel.py`, the same
@@ -263,7 +283,9 @@ digits only.
   and `qa`, every pull request -- this one included -- targets `main` from a
   branch that is neither `qa` nor `hotfix/*`; enforced, `route` would turn
   `promotion` and `ci-ok` red on every one of them, and a red check everyone
-  learns to ignore is the habit this repository refuses. So
+  learns to ignore is the habit this repository refuses. The switch
+  downgrades every refusal, the fork refusal of R-BPM-5 included: before
+  Phase 2 a fork pull request into `main` is an ordinary contribution. So
   `enforce_routes = "false"` ships with this change: `route` prints each
   refusal as `WARN` with its full reason and exits 0, and still computes the
   release tier, so every pull request into `main` runs `release-tier` from
@@ -273,6 +295,25 @@ digits only.
   reason above; (c) `route` treating a protected base whose source branch is
   absent on `origin` as open -- it needs network access in `route`, and a
   deleted `qa` would silently open `main`.
+- **DEC-BPM-014:** tag ancestry is first-parent, not mere ancestry (review
+  HIGH-1). Under DEC-BPM-002 every squash commit on `dev` becomes an ancestor
+  of `main` once promoted, so `merge-base --is-ancestor` accepted a mid-`dev`
+  commit that no release tier ever ran on -- meeting the old R-BPM-7's
+  letter while defeating DEC-BPM-001. The production branch's first-parent
+  chain is exactly its own tips: each promotion merge, and every trunk commit
+  from before the model, so the planned `v0.3.0` commit still passes.
+- **DEC-BPM-015:** a switch the reader cannot read is a configuration error,
+  not an absence (review LOW-1). `enforce_routes = false` is valid TOML that
+  the 3.10-safe string reader does not read; taken as absent it would enforce,
+  the opposite of what was written. The shared pyproject readers also stop at
+  a commented table header (`[tool.x]  # why`), which previously let the next
+  table's keys leak into the one being read (review LOW-2).
+- **DEC-BPM-016:** the release tier is read from the needs JSON, strictly
+  (review MEDIUM-1). Passed as a separate value defaulting to false, an empty
+  output -- a renamed step id -- excused the very `release-tier` job it had
+  failed to start and turned `ci-ok` green. Read from the route job's entry in
+  the JSON the verdict is computed over, the two cannot disagree, and a value
+  other than `true` or `false` exits 2.
 
 ---
 
@@ -304,7 +345,7 @@ digits only.
 - [ ] **AC-BPM-5 (non-success):** a head from another repository named `qa`
   into `main`, or named `dev` into `qa`, is refused with exit 1. Test: `test_route_rejects_a_cross_repository_head_into_a_protected_branch`.
   (R-BPM-5)
-  _Verified by:_ `pytest -k test_route_rejects_a_cross_repository_head_into_a_protected_branch` · stage: `make test`
+  _Verified by:_ `pytest -k "test_route_rejects_a_cross_repository_head_into_a_protected_branch or test_route_treats_an_unknown_head_repository_as_foreign"` · stage: `make test`
 
 - [ ] **AC-BPM-6:** the release tier is true for a pull request based on
   `qa` or `main` and for a push to either, and false for a pull request into
@@ -317,9 +358,11 @@ digits only.
   _Verified by:_ `pytest -k test_route_writes_github_output` · stage: `make test`
 
 - [ ] **AC-BPM-8 (non-success):** `aggregate` exits 1 naming the job for a
-  `failure`, a `cancelled`, and a `skipped` result on a job not declared
-  conditional. Test: `test_aggregate_fails_on_failure_cancelled_and_unexpected_skip`. (R-BPM-8)
-  _Verified by:_ `pytest -k "test_aggregate_fails_on_failure_cancelled_and_unexpected_skip or test_aggregate_cli_refuses_unusable_needs"` · stage: `make test`
+  `failure`, a `cancelled`, an unknown result, and a `skipped` result on a
+  job not declared conditional; and exits 2 when the route job's tier output
+  is empty, missing, wrongly cased or not a string, or its source is unknown
+  or undeclared. Test: `test_aggregate_fails_on_failure_cancelled_and_unexpected_skip`. (R-BPM-8)
+  _Verified by:_ `pytest -k "test_aggregate_fails_on_failure_cancelled_and_unexpected_skip or test_aggregate_cli_refuses_unusable_needs or test_aggregate_refuses_an_undecided_release_tier"` · stage: `make test`
 
 - [ ] **AC-BPM-9:** `aggregate` exits 0 when a `--pull-request-only` job is
   skipped on a push and a `--release-tier-only` job is skipped with the
@@ -333,12 +376,15 @@ digits only.
   (R-BPM-8, DEC-BPM-003)
   _Verified by:_ `pytest -k "test_aggregate_fails_a_conditional_job_skipped_when_its_condition_is_true or test_aggregate_names_a_declared_job_missing_from_needs"` · stage: `make test`
 
-- [ ] **AC-BPM-11:** in a throwaway repository with an `origin` remote,
-  `tag-ancestry` exits 0 for a commit on the production branch and 1 for a
-  commit only on another branch, and exits 2 when git cannot resolve the
-  ref. Test: `test_tag_ancestry_accepts_a_commit_on_production_and_rejects_one_off_it`.
+- [ ] **AC-BPM-11:** in a throwaway repository built in the real promotion
+  shape (trunk commit, integration commits, `--no-ff` merges into the
+  candidate and then production), `tag-ancestry` exits 0 for the production
+  merge commit, for the pre-model trunk commit and for an annotated tag on the
+  merge; 1 for an integration commit reachable only through a merge's second
+  parent and for a commit never promoted; and 2 when git cannot resolve the
+  ref. The fetch uses an explicit refspec. Test: `test_tag_ancestry_accepts_a_commit_on_production_and_rejects_one_off_it`.
   (R-BPM-7, DEC-BPM-006)
-  _Verified by:_ `pytest -k "test_tag_ancestry_accepts_a_commit_on_production_and_rejects_one_off_it or test_tag_ancestry_fetch_failure_is_exit_two"` · stage: `make test`
+  _Verified by:_ `pytest -k "test_tag_ancestry_accepts_a_commit_on_production_and_rejects_one_off_it or test_tag_ancestry_fetch_failure_is_exit_two or test_tag_ancestry_fetches_with_an_explicit_refspec_before_checking or test_tag_ancestry_git_errors_are_exit_two"` · stage: `make test`
 
 - [ ] **AC-BPM-12:** `smoke_wheel.py` runs the three default invocations and
   every `--expect` probe with the venv's own `planlint` console script, not
@@ -349,7 +395,7 @@ digits only.
 - [ ] **AC-BPM-13 (non-success):** a probe whose exit code differs from its
   declared one makes `smoke_wheel.py` exit 1 naming the path, the expected
   and the observed code. Test: `test_smoke_fails_when_a_probe_exit_code_differs`. (R-BPM-9)
-  _Verified by:_ `pytest -k test_smoke_fails_when_a_probe_exit_code_differs` · stage: `make test`
+  _Verified by:_ `pytest -k "test_smoke_fails_when_a_probe_exit_code_differs or test_smoke_fails_a_probe_that_crashed_with_the_expected_code"` · stage: `make test`
 
 - [ ] **AC-BPM-14 (non-success):** a dist directory with no wheel, or with
   two, makes `smoke_wheel.py` exit 2 before creating a venv. Test: `test_smoke_requires_exactly_one_wheel`. (R-BPM-9)
@@ -362,7 +408,7 @@ digits only.
 
 - [ ] **AC-BPM-16:** `ci-ok` runs `if: always()` and its `needs:` is every
   other job in `ci.yml`. Test: `test_ci_ok_needs_every_other_ci_job`. (R-BPM-11, DEC-BPM-003)
-  _Verified by:_ `pytest -k "test_ci_ok_needs_every_other_ci_job or test_a_job_missing_from_the_aggregator_is_named"` · stage: `make test`
+  _Verified by:_ `pytest -k "test_ci_ok_needs_every_other_ci_job or test_a_job_missing_from_the_aggregator_is_named or test_promotion_jobs_cannot_soften_their_own_failure or test_a_soft_failing_promotion_job_is_named or test_the_route_output_is_wired_to_the_step_that_runs_route"` · stage: `make test`
 
 - [ ] **AC-BPM-17 (non-success):** a `ci.yml` job carrying an `if:` that is
   not declared to `aggregate` with the matching flag fails the suite naming
@@ -371,23 +417,19 @@ digits only.
   _Verified by:_ `pytest -k test_every_conditional_ci_job_is_declared_to_the_aggregator` · stage: `make test`
 
 - [ ] **AC-BPM-18:** `release.yml`'s `build` and `ci.yml`'s `release-tier`
-  both call `tools/smoke_wheel.py`, and `release-tier` passes the `passing`
-  and `failing` fixtures as probes expecting 0 and 1. Test: `test_release_and_ci_share_one_smoke_tool`. (R-BPM-11, R-BPM-12,
+  both call `tools/smoke_wheel.py` in a `run:` value, comments stripped;
+  `release-tier` runs `make pre-pr`, the build, the metadata check and both
+  fixture probes; and `release.yml`'s `--venv` path is the one its
+  tag-versus-version step reads. Test: `test_release_and_ci_share_one_smoke_tool`. (R-BPM-11, R-BPM-12,
   DEC-BPM-012)
   _Verified by:_ `pytest -k test_release_and_ci_share_one_smoke_tool` · stage: `make test`
 
 - [ ] **AC-BPM-19:** `release.yml`'s `gate` runs
-  `check_promotion.py tag-ancestry --fetch` in a step conditioned on a tag
-  ref, against the production branch read from the table. Test: `test_release_gate_checks_tag_ancestry_against_production` in
+  `check_promotion.py tag-ancestry --fetch` in a step whose only condition is
+  exactly the tag test and which carries no soft-fail escape, against the
+  production branch read from the table. Test: `test_release_gate_checks_tag_ancestry_against_production` in
   `tests/test_release_surface.py`. (R-BPM-12, DEC-BPM-006)
   _Verified by:_ `pytest -k test_release_gate_checks_tag_ancestry_against_production` · stage: `make test`
-
-- [ ] **AC-BPM-29:** with `enforce_routes = "false"`, a refused route --
-  a feature branch into production, a fork into the candidate -- exits 0 with
-  a `WARN` line carrying the full refusal and the release tier unchanged; a
-  permitted route is not a warning; an absent key or `"true"` enforces; any
-  other value exits 2. (R-BPM-1, R-BPM-4, DEC-BPM-013)
-  _Verified by:_ `pytest -k "test_route_with_enforcement_off_warns_instead_of_failing or test_route_enforcement_defaults_on or test_route_enforcement_rejects_a_non_boolean"` · stage: `make test`
 
 - [ ] **AC-BPM-20:** `release.yml` still chains `gate` → `build` →
   `publish`, `gate` still runs the full ladder, `build` still creates a
@@ -450,6 +492,14 @@ digits only.
   `ci-ok` green. Both run numbers are recorded in `tasks.md`. (R-BPM-4,
   R-BPM-11, DEC-BPM-001)
   _Verified by:_ stage: `make pre-pr`
+
+- [ ] **AC-BPM-29:** with `enforce_routes = "false"`, a refused route --
+  a feature branch into production, a fork into the candidate -- exits 0 with
+  a `WARN` line carrying the full refusal and the release tier unchanged; a
+  permitted route is not a warning; an absent key or `"true"` enforces; any
+  other value, or an unquoted one, exits 2; and a commented table header
+  after the promotion table does not leak its keys into it. (R-BPM-1, R-BPM-4, DEC-BPM-013, DEC-BPM-015)
+  _Verified by:_ `pytest -k "test_route_with_enforcement_off_warns_instead_of_failing or test_route_enforcement_defaults_on or test_route_enforcement_rejects_a_non_boolean or test_route_enforcement_refuses_an_unreadable_switch or test_promotion_config_does_not_read_past_a_commented_table_header or test_pyproject_readers_stop_at_a_commented_table_header"` · stage: `make test`
 
 ---
 

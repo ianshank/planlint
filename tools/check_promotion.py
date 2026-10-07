@@ -56,7 +56,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _common import logger, read_pyproject_str, repo_root
+from _common import has_pyproject_key, logger, read_pyproject_str, repo_root
 
 #: The table every key below is read from.
 PROMOTION_SECTION = "[tool.specgraph.promotion]"
@@ -78,6 +78,9 @@ ROLE_KEYS: dict[str, str] = {
 #: enforced route would turn every one of them red (DEC-BPM-013).
 ENFORCE_KEY = "enforce_routes"
 _BOOLEAN = {"true": True, "false": False}
+
+#: The step/job output carrying the route's release-tier decision.
+TIER_OUTPUT = "release-tier"
 
 #: Events whose run is about a pull request's base, not the pushed ref.
 PULL_REQUEST_EVENTS = frozenset({"pull_request", "pull_request_target"})
@@ -157,6 +160,13 @@ def load_topology(pyproject: Path) -> Topology:
                 f"{values['hotfix_prefix']!r}, so the route rules would be ambiguous"
             )
     raw_enforce = read_pyproject_str(pyproject, PROMOTION_SECTION, ENFORCE_KEY)
+    if raw_enforce is None and has_pyproject_key(pyproject, PROMOTION_SECTION, ENFORCE_KEY):
+        # Present but not a double-quoted string (`= false`, `= 'false'`):
+        # valid TOML this reader does not read. Treating it as absent would
+        # quietly enforce the opposite of what was written.
+        raise ConfigError(
+            f'{pyproject}: {ENFORCE_KEY} must be written "true" or "false" (double-quoted)'
+        )
     if raw_enforce is not None and raw_enforce not in _BOOLEAN:
         raise ConfigError(
             f'{pyproject}: {ENFORCE_KEY} must be "true" or "false", got {raw_enforce!r}'
@@ -227,12 +237,16 @@ def _route(
     if event in PULL_REQUEST_EVENTS:
         target = base
         protected = target in topology.release_tier_branches
-        cross_repo = bool(head_repo and base_repo and head_repo != base_repo)
+        # A head repository that is empty -- GitHub reports null for a
+        # deleted fork -- is foreign too: only a head known to be this
+        # repository may promote. Judged only when the base repository is
+        # known, which it always is in CI (`github.repository`).
+        cross_repo = bool(base_repo) and head_repo != base_repo
         if protected and cross_repo:
             return RouteVerdict(
                 False, True, target,
-                f"a head from {head_repo!r} may not target {target!r}; "
-                f"promotions into {target!r} come from {base_repo!r} itself",
+                f"{head!r} from {head_repo or 'an unknown repository'!r} may not target "
+                f"{target!r}; promotions into {target!r} come from {base_repo!r} itself",
             )
         if not topology.head_may_target(target, head):
             return RouteVerdict(
@@ -295,6 +309,29 @@ def aggregate(
     return problems
 
 
+def tier_from_needs(needs: Mapping[str, Any], source: str | None, required: bool) -> bool:
+    """The release tier as the route job decided it, read from ``needs`` itself.
+
+    Read from the same JSON the verdict is computed over, rather than passed in
+    beside it, so the two cannot disagree. Exactly ``"true"`` or ``"false"``:
+    an empty or missing value -- a renamed step id leaves the job output empty
+    -- would otherwise read as "no release tier" and excuse the very job it
+    failed to start, so it is a ValueError (exit 2), never a default.
+    """
+    if source is None:
+        if required:
+            raise ValueError("--release-tier-only needs --release-tier-from to know the tier")
+        return False
+    entry = needs.get(source)
+    outputs = entry.get("outputs") if isinstance(entry, Mapping) else None
+    raw = outputs.get(TIER_OUTPUT) if isinstance(outputs, Mapping) else None
+    if not isinstance(raw, str) or raw not in _BOOLEAN:
+        raise ValueError(
+            f"{source}.outputs.{TIER_OUTPUT} must be 'true' or 'false', got {raw!r}"
+        )
+    return _BOOLEAN[raw]
+
+
 def _read_needs(source: str) -> dict[str, Any]:
     text = sys.stdin.read() if source == "-" else Path(source).read_text(encoding="utf-8")
     data = json.loads(text)
@@ -320,20 +357,49 @@ def tag_ancestry(
     fetch: bool,
     runner: Runner | None = None,
 ) -> tuple[int, str]:
-    """``(exit code, message)``: is ``sha`` an ancestor of ``remote/production``?"""
+    """``(exit code, message)``: is ``sha`` a commit the production branch itself held?
+
+    First-parent, not mere ancestry. Under merge-commit promotions every
+    squash commit on the integration branch becomes an *ancestor* of
+    production once promoted -- but only the production tips (its own merge
+    commits, and trunk commits from before the model) are commits the release
+    tier ran on. Those are exactly the first-parent chain of
+    ``remote/production``; a commit reachable only through a merge's second
+    parent is refused, with a message saying which case it is.
+    """
     run = runner or _run_git
     tracking = f"{remote}/{production}"
     if fetch:
-        fetched = run(["git", "fetch", "--no-tags", remote, production])
+        # An explicit refspec, so the remote-tracking ref is updated whatever
+        # `remote.<name>.fetch` is configured to.
+        refspec = f"+refs/heads/{production}:refs/remotes/{tracking}"
+        fetched = run(["git", "fetch", "--no-tags", remote, refspec])
         if fetched.returncode != 0:
             return 2, f"could not fetch {tracking}: {fetched.stderr.strip()}"
-    checked = run(["git", "merge-base", "--is-ancestor", sha, tracking])
-    logger.debug("check_promotion: merge-base --is-ancestor %s %s -> %s", sha, tracking, checked.returncode)
-    if checked.returncode == _GIT_IS_ANCESTOR:
-        return 0, f"{sha} is on {tracking}"
-    if checked.returncode == _GIT_NOT_ANCESTOR:
+    resolved = run(["git", "rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}"])
+    if resolved.returncode != 0:
+        return 2, f"cannot resolve {sha!r} to a commit"
+    commit = resolved.stdout.strip()
+    chain = run(["git", "rev-list", "--first-parent", tracking])
+    if chain.returncode != 0:
+        return 2, f"cannot list {tracking}: {chain.stderr.strip()}"
+    first_parent = set(chain.stdout.split())
+    logger.debug(
+        "check_promotion: %s -> %s; %d first-parent commit(s) on %s",
+        sha, commit, len(first_parent), tracking,
+    )
+    if commit in first_parent:
+        return 0, f"{sha} is a commit {tracking} itself held"
+    reached = run(["git", "merge-base", "--is-ancestor", commit, tracking])
+    if reached.returncode == _GIT_IS_ANCESTOR:
+        return 1, (
+            f"{sha} reached {tracking} only through a promotion merge's second parent; "
+            f"tag the {production!r} merge commit that promoted it, which is the commit "
+            "the release tier ran on"
+        )
+    if reached.returncode == _GIT_NOT_ANCESTOR:
         return 1, f"{sha} is not on {tracking}; release tags belong on {production!r} only"
-    return 2, f"git merge-base failed: {checked.stderr.strip()}"
+    return 2, f"git merge-base failed: {reached.stderr.strip()}"
 
 
 # --- CLI --------------------------------------------------------------------
@@ -373,7 +439,10 @@ def _parser() -> argparse.ArgumentParser:
     agg = sub.add_parser("aggregate", help="the single required check over toJSON(needs)")
     agg.add_argument("--needs", required=True, help="a JSON file, or - for stdin")
     agg.add_argument("--event", required=True)
-    agg.add_argument("--release-tier", default="false", help="the route job's release-tier output")
+    agg.add_argument(
+        "--release-tier-from", default=None, metavar="JOB",
+        help=f"the job in needs whose `{TIER_OUTPUT}` output decides the release tier",
+    )
     agg.add_argument("--pull-request-only", action="append", default=[], metavar="JOB")
     agg.add_argument("--release-tier-only", action="append", default=[], metavar="JOB")
     return parser
@@ -394,10 +463,15 @@ def main(argv: list[str] | None = None) -> int:
         if not needs:
             print("ERROR needs is empty; an aggregate over nothing gates nothing", file=sys.stderr)
             return 2
+        try:
+            release_tier = tier_from_needs(needs, args.release_tier_from, bool(args.release_tier_only))
+        except ValueError as exc:
+            print(f"ERROR {exc}", file=sys.stderr)
+            return 2
         problems = aggregate(
             needs,
             event=args.event,
-            release_tier=args.release_tier.strip().lower() == "true",
+            release_tier=release_tier,
             pull_request_only=args.pull_request_only,
             release_tier_only=args.release_tier_only,
         )
@@ -435,10 +509,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         output = args.github_output or os.environ.get("GITHUB_OUTPUT")
         if output:
-            write_github_output(output, {"release-tier": str(verdict.release_tier).lower()})
+            write_github_output(output, {TIER_OUTPUT: str(verdict.release_tier).lower()})
         label = "WARN" if verdict.warned else ("PASS" if verdict.allowed else "FAIL")
         print(f"{label} {verdict.reason}")
-        print(f"release-tier={str(verdict.release_tier).lower()}")
+        print(f"{TIER_OUTPUT}={str(verdict.release_tier).lower()}")
         return 0 if verdict.allowed else 1
 
     # tag-ancestry, the only command left.

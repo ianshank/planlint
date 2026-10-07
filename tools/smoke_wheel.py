@@ -15,7 +15,8 @@ Probes, in order, each a separate PASS/FAIL line:
 1. ``planlint --version`` exits 0;
 2. ``planlint --target TARGET detect`` exits 0;
 3. ``planlint --target TARGET validate --fail-on SEVERITY`` exits 0;
-4. one ``validate`` per ``--expect PATH=CODE``, exiting exactly CODE -- a
+4. one ``validate`` per ``--expect PATH=CODE``, exiting exactly CODE with no
+   traceback on stderr (an uncaught exception also exits 1) -- a
    labelled fixture whose expected verdict is committed beside it, so the
    installed artifact is shown to *fail* a failing tree, not merely to run.
 
@@ -41,6 +42,11 @@ from _common import logger
 
 #: The console script ``[project.scripts]`` declares.
 CONSOLE_SCRIPT = "planlint"
+
+#: What CPython prints when an exception escapes. An uncaught exception also
+#: exits 1 -- the same code as "findings" -- so a probe expecting a failing
+#: verdict must also show it was a verdict, not a crash.
+TRACEBACK_MARKER = "Traceback (most recent call last)"
 
 Runner = Callable[[Sequence[str]], "subprocess.CompletedProcess[str]"]
 
@@ -127,11 +133,15 @@ def smoke(
     for probe in probes:
         done = run([script, *probe.args])
         logger.debug("smoke_wheel: %s -> %s (expected %s)", probe.label, done.returncode, probe.expected)
-        if done.returncode == probe.expected:
+        crashed = TRACEBACK_MARKER in done.stderr
+        if done.returncode == probe.expected and not crashed:
             print(f"PASS {probe.label} (exit {done.returncode})")
             continue
         failed += 1
-        print(f"FAIL {probe.label}: expected exit {probe.expected}, got {done.returncode}")
+        if crashed:
+            print(f"FAIL {probe.label}: the console script crashed (exit {done.returncode})")
+        else:
+            print(f"FAIL {probe.label}: expected exit {probe.expected}, got {done.returncode}")
         for stream in (done.stdout, done.stderr):
             if stream.strip():
                 print(stream.rstrip())

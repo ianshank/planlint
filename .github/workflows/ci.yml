@@ -471,9 +471,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      # Pull-request code runs here, so the token is not left in .git/config.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
@@ -535,9 +537,11 @@ jobs:
         env:
           NEEDS: ${{ toJSON(needs) }}
           EVENT: ${{ github.event_name }}
-          RELEASE_TIER: ${{ needs.promotion.outputs.release-tier }}
+        # The release tier is read from the promotion job's own entry in
+        # NEEDS, and must be exactly true or false: an empty output (a renamed
+        # step id) is exit 2, never "no release tier".
         run: >-
           printf '%s' "$NEEDS" | python tools/check_promotion.py aggregate --needs -
-          --event "$EVENT" --release-tier "$RELEASE_TIER"
+          --event "$EVENT" --release-tier-from promotion
           --pull-request-only graph-diff
           --release-tier-only release-tier

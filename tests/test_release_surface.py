@@ -92,9 +92,14 @@ def test_release_gate_checks_tag_ancestry_against_production() -> None:
         "the release gate no longer checks that the tag is on the production branch"
     )
     step = gate.split("tools/check_promotion.py tag-ancestry", 1)[0].rsplit("- name:", 1)[1]
-    assert "github.ref_type == 'tag'" in step, (
-        "the ancestry check must run on tag pushes only, so a dispatch dry run still builds"
+    step += gate.split("tools/check_promotion.py tag-ancestry", 1)[1].split("- ", 1)[0]
+    conditions = re.findall(r"^\s+if: (.+)$", step, re.MULTILINE)
+    assert conditions == ["github.ref_type == 'tag'"], (
+        f"the ancestry step's condition must be exactly the tag test, got {conditions}"
     )
+    for token in ("continue-on-error", "|| true", "|| :"):
+        assert token not in step, f"the ancestry step softens its own failure ({token})"
+    assert "--fetch" in step, "the ancestry step must fetch the production branch it checks"
     assert gate.index("check_promotion.py tag-ancestry") < gate.index("make pre-pr"), (
         "the ancestry check must run before the slow gate, not after it"
     )

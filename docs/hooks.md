@@ -297,7 +297,9 @@ feature/* --squash--> dev --merge commit--> qa --merge commit--> main --tag vX.Y
   called the post-tag commit. It then promotes `dev → qa → main` unchanged, so
   the `release-tier` job has already run the release workflow's gate and smoke
   test on the exact commit. Tag the `main` merge commit; the release workflow's
-  `gate` refuses a tag on any commit not reachable from `main`. **Nothing is
+  `gate` refuses a tag on any commit that is not on `main`'s first-parent
+  chain -- a `dev` commit that merely reached `main` inside a promotion is
+  refused, because no release tier ran on it. **Nothing is
   committed to `main` after the tag**; if publishing fails, fix forward with
   the next patch version.
 - **After every release** open `sync/main-into-dev`, cut from `dev`, and merge

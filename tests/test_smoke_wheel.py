@@ -99,6 +99,28 @@ def test_smoke_fails_when_a_probe_exit_code_differs(
 
 
 @pytest.mark.integration
+def test_smoke_fails_a_probe_that_crashed_with_the_expected_code(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An uncaught exception exits 1 too: a failing verdict must not be a crash."""
+    tool = _tool()
+    dist = _dist(tmp_path, "planlint-1.0-py3-none-any.whl")
+
+    def runner(args):  # type: ignore[no-untyped-def]
+        if args[-3:] == ["validate", "--fail-on", "ERROR"] and "fixtures/failing" in args:
+            return subprocess.CompletedProcess(
+                args, 1, "", "Traceback (most recent call last):\n  ...\nRuntimeError: boom"
+            )
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    probes = tool.build_probes(".", "ERROR", [("fixtures/failing", 1)])
+    assert tool.smoke(dist, tmp_path / "v", probes, python="py", runner=runner) == 1
+    out = capsys.readouterr().out
+    assert "FAIL validate fixtures/failing: the console script crashed (exit 1)" in out
+    assert "RuntimeError: boom" in out
+
+
+@pytest.mark.integration
 @pytest.mark.parametrize("wheels", [(), ("a-1-py3-none-any.whl", "b-1-py3-none-any.whl")],
                          ids=["none", "two"])
 def test_smoke_requires_exactly_one_wheel(

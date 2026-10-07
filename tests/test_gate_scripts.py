@@ -373,6 +373,28 @@ def test_read_pyproject_str_reads_exactly_the_shape_this_repo_writes(
     assert common.read_pyproject_str(pyproject, "[tool.c]", "key") is None
     assert common.read_pyproject_str(tmp_path / "absent.toml", "[tool.b]", "key") is None
 
+@pytest.mark.integration
+def test_pyproject_readers_stop_at_a_commented_table_header(tmp_path: Path) -> None:
+    """adopt-branch-promotion-model review LOW-2: ``[tool.x]  # why`` still ends the table.
+
+    Judged by its last character, that header read as a key line, the scan
+    stayed in the previous table, and the next table's keys leaked into it --
+    for both readers, since they share the loop.
+    """
+    common = load_tool("common_commented_header", "_common.py")
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text(
+        '[tool.a]\nkept = 1\n\n[tool.b]  # a comment\nleak = 2\nname = "leak"\n', encoding="utf-8"
+    )
+    assert common.table_header("[tool.b]  # a comment") == "[tool.b]"
+    assert common.table_header('name = "[not a header]"') is None
+    assert common.read_pyproject_int(pyproject, "[tool.a]", "leak") is None
+    assert common.read_pyproject_str(pyproject, "[tool.a]", "name") is None
+    assert common.read_pyproject_int(pyproject, "[tool.b]", "leak") == 2
+    assert common.has_pyproject_key(pyproject, "[tool.b]", "name")
+    assert not common.has_pyproject_key(pyproject, "[tool.a]", "name")
+    assert common.table_lines(tmp_path / "absent.toml", "[tool.a]") == []
+
 # --- the executable contract, once rather than per script --------------------
 
 

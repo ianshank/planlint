@@ -157,6 +157,39 @@ def test_route_rejects_a_cross_repository_head_into_a_protected_branch(
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("base", ["staging", "live"])
+def test_route_treats_an_unknown_head_repository_as_foreign(tmp_path: Path, base: str) -> None:
+    """GitHub reports a deleted fork's head repository as null: that is not "this repository"."""
+    head = {"staging": "trunk", "live": "staging"}[base]
+    verdict = _tool().route(_topology(tmp_path), event="pull_request", base=base, head=head,
+                            head_repo="", base_repo="owner/repo")
+    assert not verdict.allowed
+    assert "an unknown repository" in verdict.reason and repr(head) in verdict.reason
+    # A base outside the protected pair is still open to anyone.
+    assert _tool().route(_topology(tmp_path), event="pull_request", base="trunk", head="x",
+                         head_repo="", base_repo="owner/repo").allowed
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("value", ["false", "'false'", "true", "False"])
+def test_route_enforcement_refuses_an_unreadable_switch(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], value: str
+) -> None:
+    """Valid TOML the reader does not read must not silently mean "enforced"."""
+    pyproject = _pyproject(tmp_path, extra=f"enforce_routes = {value}\n")
+    assert run_tool_main("check_promotion", TOOL, "--pyproject", str(pyproject), "branches",
+                         pass_argv0=False) == 2
+    assert "enforce_routes must be written" in capsys.readouterr().err
+
+
+@pytest.mark.integration
+def test_promotion_config_does_not_read_past_a_commented_table_header(tmp_path: Path) -> None:
+    """A ``[table]  # comment`` header ends the promotion table: its keys do not leak in."""
+    pyproject = _pyproject(tmp_path, extra='[tool.after]  # a comment\nenforce_routes = "false"\n')
+    assert _tool().load_topology(pyproject).enforce_routes is True
+
+
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "kwargs,tier",
     [
@@ -334,23 +367,57 @@ def test_aggregate_cli_reads_needs_and_logs_every_job(
 ) -> None:
     """The CLI path: a file of ``toJSON(needs)``, a verdict line, a DEBUG trail."""
     path = tmp_path / "needs.json"
-    path.write_text(json.dumps(_needs(build="success", release_tier="skipped")), encoding="utf-8")
+    needs = _needs(build="success", release_tier="skipped", promotion="success")
+    needs["promotion"]["outputs"] = {"release-tier": "false"}
+    path.write_text(json.dumps(needs), encoding="utf-8")
+    args = ("aggregate", "--needs", str(path), "--event", "pull_request",
+            "--release-tier-from", "promotion", "--release-tier-only", "release-tier")
     with captured_logger(caplog, "planlint.tools"):
-        code = run_tool_main(
-            "check_promotion", TOOL, "aggregate", "--needs", str(path), "--event", "pull_request",
-            "--release-tier", "false", "--release-tier-only", "release-tier", pass_argv0=False,
-        )
+        code = run_tool_main("check_promotion", TOOL, *args, pass_argv0=False)
     assert code == 0
-    assert capsys.readouterr().out.startswith("PASS all 2 required job(s)")
+    assert capsys.readouterr().out.startswith("PASS all 3 required job(s)")
     logged = " ".join(record.getMessage() for record in caplog.records)
     assert "build -> success" in logged and "release-tier -> skipped" in logged
 
-    code = run_tool_main(
-        "check_promotion", TOOL, "aggregate", "--needs", str(path), "--event", "pull_request",
-        "--release-tier", "TRUE", "--release-tier-only", "release-tier", pass_argv0=False,
-    )
-    assert code == 1
+    needs["promotion"]["outputs"] = {"release-tier": "true"}
+    path.write_text(json.dumps(needs), encoding="utf-8")
+    assert run_tool_main("check_promotion", TOOL, *args, pass_argv0=False) == 1
     assert "FAIL release-tier: skipped" in capsys.readouterr().out
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "outputs,extra",
+    [
+        ({"release-tier": ""}, ()),
+        ({}, ()),
+        ({"release-tier": "TRUE"}, ()),
+        ({"release-tier": ["true"]}, ()),
+        ({"release-tier": "false"}, ("--release-tier-from", "absent-job")),
+        ({"release-tier": "false"}, ("--no-source",)),
+    ],
+    ids=["empty", "missing", "wrong-case", "not-a-string", "unknown-job", "no-source"],
+)
+def test_aggregate_refuses_an_undecided_release_tier(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+    outputs: dict[str, object], extra: tuple[str, ...],
+) -> None:
+    """An empty tier output (a renamed step id) is exit 2, never "no release tier".
+
+    Read as false, it would excuse the skipped release-tier job it failed to start
+    and turn ci-ok green.
+    """
+    needs = _needs(promotion="success", release_tier="skipped")
+    needs["promotion"]["outputs"] = outputs
+    path = tmp_path / "needs.json"
+    path.write_text(json.dumps(needs), encoding="utf-8")
+    source = () if extra == ("--no-source",) else (extra or ("--release-tier-from", "promotion"))
+    code = run_tool_main(
+        "check_promotion", TOOL, "aggregate", "--needs", str(path), "--event", "push",
+        *source, "--release-tier-only", "release-tier", pass_argv0=False,
+    )
+    assert code == 2
+    assert "ERROR" in capsys.readouterr().err
 
 
 @pytest.mark.integration
@@ -393,31 +460,59 @@ def _git(repo: Path, *args: str) -> str:
 def test_tag_ancestry_accepts_a_commit_on_production_and_rejects_one_off_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Real git: a commit reachable from ``origin/<production>`` passes, a side commit fails."""
+    """Real git, the real promotion shape: only production's own commits pass.
+
+    trunk ``R`` (from before the model) -> integration commits ``A``, ``B``
+    -> ``--no-ff`` merge into the candidate -> ``--no-ff`` merge ``M`` into
+    production. ``M`` and ``R`` are first-parent commits of production and pass;
+    ``B`` is an *ancestor* of production but reached it only through a merge's
+    second parent -- it never ran the release tier -- and is refused; a commit
+    never promoted is refused; an annotated tag on ``M`` is peeled and passes.
+    """
     repo = tmp_path / "repo"
     repo.mkdir()
-    _git(repo, "init", "--quiet")
-    identity = ("-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false")
-    _git(repo, *identity, "commit", "--quiet", "--allow-empty", "-m", "released")
-    released = _git(repo, "rev-parse", "HEAD")
-    _git(repo, "update-ref", "refs/remotes/origin/live", released)
-    _git(repo, *identity, "commit", "--quiet", "--allow-empty", "-m", "never promoted")
-    side = _git(repo, "rev-parse", "HEAD")
+    identity = ("-c", "user.name=t", "-c", "user.email=t@example.invalid",
+                "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false")
+
+    def commit(message: str) -> str:
+        _git(repo, *identity, "commit", "--quiet", "--allow-empty", "-m", message)
+        return _git(repo, "rev-parse", "HEAD")
+
+    _git(repo, "init", "--quiet", "--initial-branch=live")
+    trunk = commit("pre-model trunk release")
+    _git(repo, "checkout", "--quiet", "-b", "trunk")
+    commit("feature a")
+    feature_b = commit("feature b")
+    _git(repo, "checkout", "--quiet", "-b", "staging", trunk)
+    _git(repo, *identity, "merge", "--quiet", "--no-ff", "-m", "promote to staging", "trunk")
+    _git(repo, "checkout", "--quiet", "live")
+    _git(repo, *identity, "merge", "--quiet", "--no-ff", "-m", "promote to live", "staging")
+    promoted = _git(repo, "rev-parse", "HEAD")
+    _git(repo, *identity, "tag", "-a", "v9.9.9", "-m", "annotated", promoted)
+    _git(repo, "update-ref", "refs/remotes/origin/live", promoted)
+    _git(repo, "checkout", "--quiet", "trunk")
+    never = commit("never promoted")
     pyproject = _pyproject(tmp_path)
     monkeypatch.chdir(repo)
 
-    args = ("--pyproject", str(pyproject), "tag-ancestry", "--sha")
-    assert run_tool_main("check_promotion", TOOL, *args, released, pass_argv0=False) == 0
-    assert f"PASS {released} is on origin/live" in capsys.readouterr().out
-    assert run_tool_main("check_promotion", TOOL, *args, side, pass_argv0=False) == 1
+    def check(sha: str) -> int:
+        return run_tool_main("check_promotion", TOOL, "--pyproject", str(pyproject),
+                             "tag-ancestry", "--sha", sha, pass_argv0=False)
+
+    for sha in (promoted, trunk, "v9.9.9"):
+        assert check(sha) == 0, sha
+        assert "is a commit origin/live itself held" in capsys.readouterr().out
+    assert check(feature_b) == 1
+    assert "only through a promotion merge's second parent" in capsys.readouterr().out
+    assert check(never) == 1
     assert "release tags belong on 'live' only" in capsys.readouterr().out
-    assert run_tool_main("check_promotion", TOOL, *args, "0" * 40, pass_argv0=False) == 2
-    assert "git merge-base failed" in capsys.readouterr().err
+    assert check("0" * 40) == 2
+    assert "cannot resolve" in capsys.readouterr().err
 
 
 @pytest.mark.integration
 def test_tag_ancestry_fetch_failure_is_exit_two() -> None:
-    """A fetch that fails answers nothing: exit 2, and merge-base is never asked."""
+    """A fetch that fails answers nothing: exit 2, and nothing else is asked."""
     calls: list[list[str]] = []
 
     def runner(args):  # type: ignore[no-untyped-def]
@@ -425,21 +520,43 @@ def test_tag_ancestry_fetch_failure_is_exit_two() -> None:
         return subprocess.CompletedProcess(args, 128, "", "fatal: no remote")
 
     code, message = _tool().tag_ancestry("abc", "live", remote="origin", fetch=True, runner=runner)
-    assert (code, calls) == (2, [["git", "fetch", "--no-tags", "origin", "live"]])
+    assert (code, calls) == (
+        2, [["git", "fetch", "--no-tags", "origin", "+refs/heads/live:refs/remotes/origin/live"]]
+    )
     assert message == "could not fetch origin/live: fatal: no remote"
 
 
 @pytest.mark.integration
-def test_tag_ancestry_fetches_before_checking() -> None:
+def test_tag_ancestry_fetches_with_an_explicit_refspec_before_checking() -> None:
+    """The remote-tracking ref is updated whatever ``remote.<name>.fetch`` says."""
     calls: list[list[str]] = []
 
     def runner(args):  # type: ignore[no-untyped-def]
         calls.append(list(args))
-        return subprocess.CompletedProcess(args, 0, "", "")
+        stdout = "c0ffee\n" if args[1] in ("rev-parse", "rev-list") else ""
+        return subprocess.CompletedProcess(args, 0, stdout, "")
 
-    code, _ = _tool().tag_ancestry("abc", "live", remote="upstream", fetch=True, runner=runner)
+    code, _ = _tool().tag_ancestry("v1", "live", remote="upstream", fetch=True, runner=runner)
     assert code == 0
     assert calls == [
-        ["git", "fetch", "--no-tags", "upstream", "live"],
-        ["git", "merge-base", "--is-ancestor", "abc", "upstream/live"],
+        ["git", "fetch", "--no-tags", "upstream", "+refs/heads/live:refs/remotes/upstream/live"],
+        ["git", "rev-parse", "--verify", "--quiet", "v1^{commit}"],
+        ["git", "rev-list", "--first-parent", "upstream/live"],
     ]
+
+
+@pytest.mark.integration
+def test_tag_ancestry_git_errors_are_exit_two() -> None:
+    """A rev-list or merge-base that errors is "could not answer", never a verdict."""
+    def failing_at(step: str):  # type: ignore[no-untyped-def]
+        def runner(args):  # type: ignore[no-untyped-def]
+            if args[1] == step:
+                return subprocess.CompletedProcess(args, 128, "", "fatal: boom")
+            stdout = "c0ffee\n" if args[1] == "rev-parse" else "other\n"
+            return subprocess.CompletedProcess(args, 0, stdout, "")
+        return runner
+
+    code, message = _tool().tag_ancestry("v1", "live", remote="o", fetch=False, runner=failing_at("rev-list"))
+    assert (code, message) == (2, "cannot list o/live: fatal: boom")
+    code, message = _tool().tag_ancestry("v1", "live", remote="o", fetch=False, runner=failing_at("merge-base"))
+    assert (code, message) == (2, "git merge-base failed: fatal: boom")
