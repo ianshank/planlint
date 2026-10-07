@@ -23,7 +23,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from openspec_graph import sarif
+from openspec_graph.cli import main
 from openspec_graph.rule_types import ERROR, INFO, WARN, Finding
 from openspec_graph.rules import rule_table
 from tests.support import run_cli, write_spec
@@ -62,6 +65,7 @@ def _results(repo: Path) -> list[dict]:
 # --- Shape ---
 
 
+@pytest.mark.e2e
 def test_sarif_output_has_the_required_2_1_0_shape(tmp_path: Path) -> None:
     """AC-SA-1: asserted structurally rather than against a fetched schema —
     the suite has no network, and a test that silently skips offline would be
@@ -77,6 +81,7 @@ def test_sarif_output_has_the_required_2_1_0_shape(tmp_path: Path) -> None:
     assert isinstance(log["runs"][0]["results"], list)
 
 
+@pytest.mark.e2e
 def test_sarif_and_json_report_the_same_finding_multiset(tmp_path: Path) -> None:
     """AC-SA-2: the no-divergence claim, checked rather than asserted. Both
     renderings come from one traversal, so this pins that they still do."""
@@ -96,6 +101,7 @@ def test_sarif_and_json_report_the_same_finding_multiset(tmp_path: Path) -> None
     assert sarif_keys == json_keys
 
 
+@pytest.mark.e2e
 def test_sarif_results_are_ordered_like_the_text_renderer(tmp_path: Path) -> None:
     """AC-SA-7: all three renderings of one run agree on order."""
     repo = _repo(tmp_path)
@@ -114,6 +120,7 @@ def test_sarif_results_are_ordered_like_the_text_renderer(tmp_path: Path) -> Non
     assert sarif_order == sorted(sarif_order)
 
 
+@pytest.mark.e2e
 def test_sarif_output_is_byte_stable_across_runs(tmp_path: Path) -> None:
     """AC-SA-11: a report that shuffles between runs cannot be diffed."""
     repo = _repo(tmp_path)
@@ -127,11 +134,13 @@ def test_sarif_output_is_byte_stable_across_runs(tmp_path: Path) -> None:
 # --- Severity ---
 
 
+@pytest.mark.unit
 def test_error_severity_maps_to_sarif_error() -> None:
     """AC-SA-3: an ERROR must never arrive as anything softer."""
     assert sarif._level(ERROR) == "error"
 
 
+@pytest.mark.unit
 def test_severity_map_covers_every_severity() -> None:
     """AC-SA-3: the map is total over the vocabulary the CLI uses, so no
     severity falls through to the fallback by accident."""
@@ -142,6 +151,7 @@ def test_severity_map_covers_every_severity() -> None:
     assert sarif._level(INFO) == "note"
 
 
+@pytest.mark.unit
 def test_an_unknown_severity_maps_up_not_to_none(tmp_path: Path) -> None:
     """AC-SA-3 (non-success): a severity this module has not been taught is a
     caller bug, and the safe failure is the loud one. Mapping it to "none"
@@ -152,6 +162,7 @@ def test_an_unknown_severity_maps_up_not_to_none(tmp_path: Path) -> None:
 # --- Locations ---
 
 
+@pytest.mark.unit
 def test_a_finding_with_no_path_is_emitted_without_a_location(tmp_path: Path) -> None:
     """AC-SA-4 (non-success): losing a finding to satisfy a schema is the
     failure this format must not introduce. An empty locations array is valid
@@ -166,6 +177,7 @@ def test_a_finding_with_no_path_is_emitted_without_a_location(tmp_path: Path) ->
     assert result["ruleId"] == "G006"
 
 
+@pytest.mark.unit
 def test_no_finding_is_ever_dropped_from_the_sarif_log(tmp_path: Path) -> None:
     """AC-SA-4 (non-success): every finding in, every finding out — including
     the pathless one that has nowhere to be annotated."""
@@ -180,6 +192,7 @@ def test_no_finding_is_ever_dropped_from_the_sarif_log(tmp_path: Path) -> None:
     assert len(log["runs"][0]["results"]) == len(findings)
 
 
+@pytest.mark.unit
 def test_a_line_of_zero_emits_no_region(tmp_path: Path) -> None:
     """AC-SA-5 (non-success): the case that matters most, because it is every
     finding. SARIF's startLine minimum is 1, so a 0 cannot be represented —
@@ -193,6 +206,7 @@ def test_a_line_of_zero_emits_no_region(tmp_path: Path) -> None:
     assert "region" not in physical, physical
 
 
+@pytest.mark.unit
 def test_a_real_line_emits_a_start_line(tmp_path: Path) -> None:
     """AC-SA-5: and a finding that does carry a line still points at it."""
     log = sarif.to_sarif(
@@ -204,6 +218,7 @@ def test_a_real_line_emits_a_start_line(tmp_path: Path) -> None:
     assert physical["region"]["startLine"] == 42
 
 
+@pytest.mark.e2e
 def test_artifact_uri_is_repository_relative_posix(tmp_path: Path) -> None:
     """AC-SA-6: an absolute runner path resolves to nothing on the machine
     reading the annotation."""
@@ -218,6 +233,7 @@ def test_artifact_uri_is_repository_relative_posix(tmp_path: Path) -> None:
         assert str(repo) not in uri
 
 
+@pytest.mark.e2e
 def test_artifact_location_carries_the_srcroot_base_id(tmp_path: Path) -> None:
     """AC-SA-6: the base id is what makes the relative uri resolvable."""
     repo = _repo(tmp_path)
@@ -233,6 +249,7 @@ def test_artifact_location_carries_the_srcroot_base_id(tmp_path: Path) -> None:
 # --- The driver's rule set ---
 
 
+@pytest.mark.e2e
 def test_driver_rules_mirror_the_rule_table(tmp_path: Path) -> None:
     """AC-SA-8: the whole registry, not only the rules that fired. GitHub
     attaches alert metadata by ruleId against this set, so a rule firing for
@@ -243,6 +260,7 @@ def test_driver_rules_mirror_the_rule_table(tmp_path: Path) -> None:
     assert driver_ids == [r["id"] for r in rule_table()]
 
 
+@pytest.mark.e2e
 def test_every_result_rule_index_resolves_to_its_rule_id(tmp_path: Path) -> None:
     """AC-SA-8: a ruleIndex pointing at the wrong rule is worse than none."""
     log = _sarif(_repo(tmp_path))
@@ -253,6 +271,7 @@ def test_every_result_rule_index_resolves_to_its_rule_id(tmp_path: Path) -> None
             assert rules[result["ruleIndex"]]["id"] == result["ruleId"]
 
 
+@pytest.mark.unit
 def test_driver_rule_dialects_are_a_list_not_exploded_characters() -> None:
     """The rule table renders dialects as a comma-joined string, so a naive
     list() would turn "harness,upstream" into single characters — a bug that
@@ -270,6 +289,7 @@ def test_driver_rule_dialects_are_a_list_not_exploded_characters() -> None:
 # --- Flag interactions ---
 
 
+@pytest.mark.e2e
 def test_json_flag_is_an_exact_alias_of_format_json(tmp_path: Path) -> None:
     """AC-SA-9: `--json` predates `--format` and must keep working, byte for
     byte, or every existing caller and CI template breaks."""
@@ -281,6 +301,7 @@ def test_json_flag_is_an_exact_alias_of_format_json(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.e2e
 def test_json_with_format_json_is_accepted(tmp_path: Path) -> None:
     """AC-SA-9: they agree, so passing both is redundant, not a conflict."""
     repo = _repo(tmp_path)
@@ -291,6 +312,7 @@ def test_json_with_format_json_is_accepted(tmp_path: Path) -> None:
     assert json.loads(result.stdout)["findings"]
 
 
+@pytest.mark.e2e
 def test_json_with_format_sarif_is_a_usage_error(tmp_path: Path) -> None:
     """AC-SA-10 (non-success): honouring either silently would hand a caller
     a format it did not ask for and cannot parse."""
@@ -303,29 +325,46 @@ def test_json_with_format_sarif_is_a_usage_error(tmp_path: Path) -> None:
     assert "--json" in result.stderr
 
 
-def test_sarif_returns_the_same_exit_code_as_the_text_run(tmp_path: Path) -> None:
+@pytest.mark.e2e
+def test_sarif_returns_the_same_exit_code_as_the_text_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """AC-SA-17 (R-SA-14): the format decides how findings are rendered, never
     whether the gate passes.
 
     A CI job that switched to SARIF to get annotations must not also, silently,
     stop failing — that would turn a gate into a decoration, which is the exact
     failure mode this project exists to catch elsewhere.
+
+    The six runs go in-process through `cli.main`; one real SARIF run on the
+    failing repository is the entry-point check, held to the in-process code
+    (shape-the-test-suite R-TSS-9).
     """
     failing = _repo(tmp_path / "failing")
     clean = _repo(tmp_path / "clean", with_findings=False)
 
+    def exit_code(repo: Path, *args: str) -> int:
+        code = main(["--target", str(repo), "validate", "--fail-on", "ERROR", *args])
+        capsys.readouterr()
+        return code
+
+    text_codes: dict[str, int] = {}
     for repo in (failing, clean):
-        text = run_cli(repo, "validate", "--fail-on", "ERROR").returncode
-        sarif_code = run_cli(repo, "validate", "--fail-on", "ERROR", "--format", "sarif").returncode
-        json_code = run_cli(repo, "validate", "--fail-on", "ERROR", "--json").returncode
+        text = exit_code(repo)
+        sarif_code = exit_code(repo, "--format", "sarif")
+        json_code = exit_code(repo, "--json")
         assert text == sarif_code == json_code, (repo.name, text, sarif_code, json_code)
+        text_codes[repo.name] = text
 
     # And the fixture actually exercises both outcomes, so the equality above
     # is not three zeroes agreeing with each other.
-    assert run_cli(failing, "validate", "--fail-on", "ERROR").returncode == 1
-    assert run_cli(clean, "validate", "--fail-on", "ERROR").returncode == 0
+    assert text_codes[failing.name] == 1
+    assert text_codes[clean.name] == 0
+    entry = run_cli(failing, "validate", "--fail-on", "ERROR", "--format", "sarif")
+    assert entry.returncode == text_codes[failing.name]
 
 
+@pytest.mark.e2e
 def test_graph_format_choices_are_unchanged(tmp_path: Path) -> None:
     """AC-SA-18 (C-SA-5): adding a format to `validate` must not leak into
     `graph`, whose own `--format` has a settled surface — and whose `dot`
@@ -356,6 +395,7 @@ def test_graph_format_choices_are_unchanged(tmp_path: Path) -> None:
 # --- The adopter-facing files ---
 
 
+@pytest.mark.integration
 def test_the_composite_action_declares_the_expected_steps() -> None:
     """AC-SA-14, re-pinned by `add-github-action-contract` (DEC-GA-002).
 
@@ -389,6 +429,7 @@ def test_the_composite_action_declares_the_expected_steps() -> None:
     assert "steps.planlint.outputs.sarif-path" in template
 
 
+@pytest.mark.integration
 def test_pre_commit_hooks_file_declares_a_validate_hook() -> None:
     """AC-SA-15: the adopter-facing hook definition."""
     hooks = (REPO_ROOT / ".pre-commit-hooks.yaml").read_text(encoding="utf-8")
@@ -397,6 +438,7 @@ def test_pre_commit_hooks_file_declares_a_validate_hook() -> None:
     assert "validate" in hooks
 
 
+@pytest.mark.integration
 def test_the_two_pre_commit_files_do_not_collide() -> None:
     """AC-SA-15: `.pre-commit-hooks.yaml` is what adopters consume;
     `.pre-commit-config.yaml` is what contributors run here. They are

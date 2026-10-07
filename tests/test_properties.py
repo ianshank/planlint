@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import string
 
+import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
@@ -83,6 +84,7 @@ _TEXT = st.one_of(
 # --- machinery.parse_makefile ----------------------------------------------
 
 
+@pytest.mark.unit
 @PROPERTY_SETTINGS
 @given(_TEXT)
 def test_parse_makefile_is_deterministic_with_sorted_unique_targets(text: str) -> None:
@@ -98,6 +100,7 @@ def test_parse_makefile_is_deterministic_with_sorted_unique_targets(text: str) -
     assert len(set(first.targets)) == len(first.targets)
 
 
+@pytest.mark.unit
 @PROPERTY_SETTINGS
 @given(
     st.text(max_size=400),
@@ -118,6 +121,7 @@ def test_parse_makefile_never_raises_on_arbitrary_text(
     assert facts.confidence in ("low", "high")
 
 
+@pytest.mark.unit
 @PROPERTY_SETTINGS
 @given(_TEXT)
 def test_strip_define_blocks_is_idempotent(text: str) -> None:
@@ -175,6 +179,7 @@ def _upstream_spec(draw: st.DrawFn) -> tuple[str, int]:
     return "\n".join(lines) + "\n", declared
 
 
+@pytest.mark.unit
 @PROPERTY_SETTINGS
 @given(_upstream_spec())
 def test_upstream_requirement_count_is_independent_of_heading_depth(
@@ -225,6 +230,7 @@ def _case_variant(text: str, mode: int) -> str:
     return (text.upper(), text.lower(), text.swapcase(), text.title(), text.casefold())[mode]
 
 
+@pytest.mark.unit
 @PROPERTY_SETTINGS
 @given(_criterion_text, _criterion_text, st.integers(0, 4), _whitespace, _whitespace)
 def test_is_negative_depends_on_wording_not_casing_or_padding(
@@ -248,6 +254,7 @@ def test_is_negative_depends_on_wording_not_casing_or_padding(
 # --- the suite's own contract -----------------------------------------------
 
 
+@pytest.mark.integration
 def test_property_settings_are_derandomized_and_nothing_is_xfailed() -> None:
     """A gate that fails one run in fifty gets overridden and then deleted.
 

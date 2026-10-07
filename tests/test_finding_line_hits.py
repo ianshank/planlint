@@ -34,6 +34,8 @@ from openspec_graph.rule_types import (
 )
 from tests.support import write_spec, write_speckit_spec
 
+pytestmark = pytest.mark.unit
+
 MAKEFILE = textwrap.dedent(
     """\
     .PHONY: test regression

@@ -17,6 +17,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from openspec_graph import delta, detect
 from openspec_graph.parse import parse_spec, threshold_values
 from tests.support import run_cli, write_spec
@@ -58,6 +60,7 @@ def _move_floor(repo: Path, old: int, new: int) -> None:
 # --- The attribution property ---
 
 
+@pytest.mark.e2e
 def test_delta_names_the_removed_make_target(tmp_path: Path) -> None:
     """AC-DL-2: the citation was executable at the baseline and is not now."""
     repo = _repo(tmp_path / "repo")
@@ -70,6 +73,7 @@ def test_delta_names_the_removed_make_target(tmp_path: Path) -> None:
     assert "make regression" in result.stdout
 
 
+@pytest.mark.e2e
 def test_delta_ignores_a_citation_already_broken_in_the_baseline(tmp_path: Path) -> None:
     """AC-DL-6 (non-success): the criterion that separates this verb from
     `validate`. A spec citing a target that never existed is a real finding —
@@ -93,6 +97,7 @@ def test_delta_ignores_a_citation_already_broken_in_the_baseline(tmp_path: Path)
     assert "neverexisted" in validate_out
 
 
+@pytest.mark.e2e
 def test_delta_on_an_identical_baseline_is_empty(tmp_path: Path) -> None:
     """AC-DL-5 (non-success): delta manufactures nothing. Same repo, same
     card, exit 0 and an empty list."""
@@ -105,6 +110,7 @@ def test_delta_on_an_identical_baseline_is_empty(tmp_path: Path) -> None:
     assert json.loads(result.stdout)["stale"] == []
 
 
+@pytest.mark.e2e
 def test_delta_reports_a_spec_citing_the_old_coverage_floor(tmp_path: Path) -> None:
     """AC-DL-1: the headline case. A spec that hard-codes the floor keeps
     passing every gate while stating a number the repository has changed."""
@@ -128,6 +134,7 @@ def test_delta_reports_a_spec_citing_the_old_coverage_floor(tmp_path: Path) -> N
     assert thresholds[0]["now"] == "95"
 
 
+@pytest.mark.e2e
 def test_delta_ignores_a_floor_that_did_not_move(tmp_path: Path) -> None:
     """AC-DL-1 (non-success): citing the floor is only stale once the floor
     moves. A spec naming the current number is correct, not a finding."""
@@ -146,6 +153,7 @@ def test_delta_ignores_a_floor_that_did_not_move(tmp_path: Path) -> None:
     assert [e for e in json.loads(result.stdout)["stale"] if e["kind"] == "threshold"] == []
 
 
+@pytest.mark.e2e
 def test_delta_names_the_removed_invariant(tmp_path: Path) -> None:
     """AC-DL-3: an invariant that was declared at the baseline and has since
     been deleted from the contract."""
@@ -164,6 +172,7 @@ def test_delta_names_the_removed_invariant(tmp_path: Path) -> None:
     assert invariants[0]["subject"] == "INV-1"
 
 
+@pytest.mark.e2e
 def test_delta_names_the_removed_adr(tmp_path: Path) -> None:
     """AC-DL-3: the same discipline for architecture decision records."""
     repo = _repo(tmp_path / "repo")
@@ -188,6 +197,7 @@ def test_delta_names_the_removed_adr(tmp_path: Path) -> None:
     assert adrs[0]["subject"] == "ADR-1"
 
 
+@pytest.mark.e2e
 def test_every_delta_entry_corresponds_to_a_machinery_change(tmp_path: Path) -> None:
     """AC-DL-4: the load-bearing property, checked mechanically rather than
     asserted in prose.
@@ -230,6 +240,7 @@ def test_every_delta_entry_corresponds_to_a_machinery_change(tmp_path: Path) -> 
         )
 
 
+@pytest.mark.e2e
 def test_every_kind_of_entry_is_attributed_to_its_own_machinery_change(
     tmp_path: Path,
 ) -> None:
@@ -272,6 +283,7 @@ def test_every_kind_of_entry_is_attributed_to_its_own_machinery_change(
 # --- The exit-code contract ---
 
 
+@pytest.mark.e2e
 def test_cli_delta_with_missing_baseline_is_a_usage_error(tmp_path: Path) -> None:
     """AC-DL-10: a missing baseline is a precondition failure, not a report."""
     repo = _repo(tmp_path / "repo")
@@ -282,6 +294,7 @@ def test_cli_delta_with_missing_baseline_is_a_usage_error(tmp_path: Path) -> Non
     assert "--baseline" in result.stderr
 
 
+@pytest.mark.e2e
 def test_cli_delta_with_a_non_object_baseline_is_a_usage_error(tmp_path: Path) -> None:
     """AC-DL-10: valid JSON that is not a card is still not a card."""
     repo = _repo(tmp_path / "repo")
@@ -294,6 +307,7 @@ def test_cli_delta_with_a_non_object_baseline_is_a_usage_error(tmp_path: Path) -
     assert "expected a JSON object" in result.stderr
 
 
+@pytest.mark.e2e
 def test_cli_delta_with_malformed_json_is_a_usage_error(tmp_path: Path) -> None:
     repo = _repo(tmp_path / "repo")
     bad = tmp_path / "broken.json"
@@ -304,6 +318,7 @@ def test_cli_delta_with_malformed_json_is_a_usage_error(tmp_path: Path) -> None:
     assert result.returncode == 2
 
 
+@pytest.mark.e2e
 def test_cli_delta_without_a_spec_tree_is_a_usage_error(tmp_path: Path) -> None:
     bare = tmp_path / "bare"
     bare.mkdir()
@@ -320,6 +335,7 @@ def test_cli_delta_without_a_spec_tree_is_a_usage_error(tmp_path: Path) -> None:
 # --- Output shape ---
 
 
+@pytest.mark.e2e
 def test_cli_delta_json_lists_stale_citations_with_schema_version(tmp_path: Path) -> None:
     """AC-DL-7: same envelope discipline as every other machine-readable
     output, and byte-identical on re-run."""
@@ -346,6 +362,7 @@ def test_cli_delta_json_lists_stale_citations_with_schema_version(tmp_path: Path
     assert "baseline" not in payload
 
 
+@pytest.mark.e2e
 def test_cli_delta_json_is_byte_identical_across_runs(tmp_path: Path) -> None:
     """AC-DL-7: the determinism every machine-readable output in this tool
     commits to. A report that shuffles between runs cannot be diffed, which
@@ -362,6 +379,7 @@ def test_cli_delta_json_is_byte_identical_across_runs(tmp_path: Path) -> None:
     assert json.loads(first)["stale"], "fixture produced no entries; ordering is untested"
 
 
+@pytest.mark.e2e
 def test_delta_paths_are_repository_relative(tmp_path: Path) -> None:
     """AC-DL-7: the same portability rule the findings envelope follows — a
     delta report produced on a runner has to mean something elsewhere."""
@@ -379,6 +397,7 @@ def test_delta_paths_are_repository_relative(tmp_path: Path) -> None:
         assert str(repo) not in entry["path"]
 
 
+@pytest.mark.e2e
 def test_cli_delta_exits_zero_on_an_identical_baseline(tmp_path: Path) -> None:
     """AC-DL-5: "the floor moved and no spec cited it" is a useful answer.
     Printing nothing would leave a reader unsure the baseline was read."""
@@ -394,6 +413,7 @@ def test_cli_delta_exits_zero_on_an_identical_baseline(tmp_path: Path) -> None:
     assert result.returncode == 0
 
 
+@pytest.mark.e2e
 def test_cli_delta_never_writes_to_the_target_repo(tmp_path: Path) -> None:
     """AC-DL-12 (non-success): `delta` is a read-only verb, like `detect`."""
     repo = _repo(tmp_path / "repo")
@@ -409,6 +429,7 @@ def test_cli_delta_never_writes_to_the_target_repo(tmp_path: Path) -> None:
 # --- The pure module ---
 
 
+@pytest.mark.unit
 def test_delta_skips_a_field_absent_from_an_older_baseline_card(tmp_path: Path) -> None:
     """AC-DL-8 (non-success): a card saved before a field existed never
     tracked that dimension. Reading its absence as "everything was removed"
@@ -425,6 +446,7 @@ def test_delta_skips_a_field_absent_from_an_older_baseline_card(tmp_path: Path) 
     assert entries == []
 
 
+@pytest.mark.e2e
 def test_delta_entries_are_stable_ordered(tmp_path: Path) -> None:
     repo = _repo(tmp_path / "repo")
     write_spec(repo, "aaa", "cap", (FX / "good_harness.md").read_text(encoding="utf-8"))
@@ -440,6 +462,7 @@ def test_delta_entries_are_stable_ordered(tmp_path: Path) -> None:
     assert keys == sorted(keys)
 
 
+@pytest.mark.unit
 def test_delta_entries_never_reach_the_finding_stream() -> None:
     """AC-DL-11 (non-success): a DeltaEntry must never be mistaken for a rule
     finding. If it grew a `rule`/`severity` shape it would start leaking into
@@ -458,6 +481,7 @@ def test_delta_entries_never_reach_the_finding_stream() -> None:
     assert "severity" not in entry.as_dict()
 
 
+@pytest.mark.unit
 def test_delta_ignores_an_ambiguous_threshold_line() -> None:
     """AC-DL-9: a line naming two threshold values states neither as a claim.
 
@@ -474,6 +498,7 @@ def test_delta_ignores_an_ambiguous_threshold_line() -> None:
     assert not delta._mentions_value(both, 90)
 
 
+@pytest.mark.unit
 def test_delta_threshold_matching_agrees_with_the_rule_engine() -> None:
     """AC-DL-9: the matcher *is* `threshold_values`, so a line either states
     exactly one threshold or it states none — and delta and G003 can never

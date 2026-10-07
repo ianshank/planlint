@@ -10,7 +10,7 @@ flowchart TD
     cat["references/rule-catalog.md<br/>GENERATED — do not hand-edit"]
     rules["openspec_graph/rules_*.py"] -->|"make skill-catalog"| cat
     skill --> plugin[".claude-plugin/ manifests<br/>GENERATED from SKILL.md frontmatter"]
-    cat --> gate["test_skill_contract.py<br/>stale copy fails make test"]
+    cat --> gate["test_skill_distribution.py<br/>stale copy fails make test"]
     plugin --> gate
 ```
 
@@ -24,7 +24,7 @@ flowchart TD
   `test_plugin_manifests_reject_an_unusable_description` now refuses.
 - **This is read by machines outside this repository**: a plugin installer, a
   retrieval index, an eval runner. Nothing else here would notice a malformed
-  manifest, so `test_skill_contract.py` and `test_agent_artifacts.py` are the
+  manifest, so `test_skill_distribution.py` and `test_release_surface.py` are the
   only feedback before someone else's tool breaks.
 
 Rule changes reach this directory through the `planlint-add-rule` skill; the

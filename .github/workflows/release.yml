@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 # The single-interpreter Python version, read by both setup-python steps and
-# held equal to ci.yml's by tests/test_workflow_hardening.py.
+# held equal to ci.yml's by tests/test_workflow_python.py.
 env:
   PYTHON_DEFAULT: "3.12"
 

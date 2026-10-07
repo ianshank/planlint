@@ -40,7 +40,7 @@ case "/$FILE_NORM" in
     exit 0
     ;;
   */.github/dependabot.yml|*/.github/actions/*/action.yml)
-    printf '{"decision": "block", "reason": "You just edited Dependabot config or a composite action. Run `pytest tests/test_ci_hardening.py -k dependabot` -- every directory holding an action.yml needs its own dependabot `directory:` entry or its third-party pins are never updated, and nothing else notices."}'
+    printf '{"decision": "block", "reason": "You just edited Dependabot config or a composite action. Run `pytest tests/test_workflow_pins.py -k dependabot` -- every directory holding an action.yml needs its own dependabot `directory:` entry or its third-party pins are never updated, and nothing else notices."}'
     exit 0
     ;;
   */Makefile|*/.github/workflows/*.yml|*/.github/workflows/*.yaml)
@@ -48,7 +48,7 @@ case "/$FILE_NORM" in
     exit 0
     ;;
   */skills/planlint-spec-governance/*|*/.claude-plugin/*)
-    printf '{"decision": "block", "reason": "You just edited the distributable Agent Skill or its plugin manifests. These are prose and metadata an external agent acts on, so nothing else catches drift in them. Before finishing: run `pytest tests/test_skill_contract.py tests/test_agent_skill_docs.py` -- they pin the read-only claim, the per-verb exit-code messages, the generated rule catalog, and manifest/version agreement."}'
+    printf '{"decision": "block", "reason": "You just edited the distributable Agent Skill or its plugin manifests. These are prose and metadata an external agent acts on, so nothing else catches drift in them. Before finishing: run `pytest tests/test_skill_contract.py tests/test_skill_distribution.py tests/test_agent_skill_docs.py` -- they pin the read-only claim, the per-verb exit-code messages, the generated rule catalog, and manifest/version agreement."}'
     exit 0
     ;;
   */evals/*)

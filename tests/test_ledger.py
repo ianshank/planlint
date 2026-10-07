@@ -8,8 +8,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from openspec_graph import ledger
 from openspec_graph.parse import ParsedSpec, Waiver
+
+pytestmark = pytest.mark.unit
 
 
 def _spec(path: str, waivers: tuple[Waiver, ...] = ()) -> ParsedSpec:

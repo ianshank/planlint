@@ -17,10 +17,15 @@ needed (mirrors ``test_dialect_card.py``'s style).
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
-from openspec_graph.rules import RULES
+import pytest
+
+from openspec_graph.rules import RULES, rule_table
+
+pytestmark = pytest.mark.integration
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -95,3 +100,34 @@ def test_c4_module_map_family_ranges_match_rules() -> None:
         assert re.search(pattern, text, re.DOTALL), (
             f"c4.md's module map doesn't claim {module}.py covers {low}-{high}"
         )
+
+
+# --- AC-CH-8 / C-CH-1: the rule set matches the committed baseline -----------
+# A future change that adds or removes a rule without updating the baseline
+# fails this test — forcing the change to be a conscious decision (C-CH-1).
+
+
+def test_rule_set_matches_baseline() -> None:
+    baseline_path = REPO_ROOT / "tests" / "baseline_rules.json"
+    assert baseline_path.exists(), "baseline_rules.json must be committed"
+    baseline = json.loads(baseline_path.read_text())
+    live = rule_table()
+    assert live == baseline, (
+        "the rule set changed; if this is intentional, regenerate "
+        "tests/baseline_rules.json with `planlint rules --json > tests/baseline_rules.json`"
+    )
+    # sanity: the baseline is non-empty and covers the rules we rely on
+    assert len(baseline) == len(RULES)
+
+
+# Moved from tests/test_graft_rules.py by shape-the-test-suite (R-TSS-1): the
+# one test there that reads the tree, beside the other baseline guard, so that
+# module stays one tier and inside the line bound.
+def test_rule_registry_baseline_is_unchanged() -> None:
+    """AC-UG-8: no rule id added, no finding emitted for an omitted GIVEN."""
+
+    baseline = json.loads(
+        (Path(__file__).resolve().parent / "baseline_rules.json").read_text(encoding="utf-8")
+    )
+    assert {r["id"] for r in baseline} == {r.ident for r in RULES}
+    assert len(baseline) == len(RULES)

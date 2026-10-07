@@ -7,9 +7,10 @@ the rule fires on exactly that violation.
 
 from __future__ import annotations
 
-import json
 import textwrap
 from pathlib import Path
+
+import pytest
 
 from openspec_graph import detect, rules
 from openspec_graph.cli import main
@@ -22,6 +23,8 @@ from tests.graft_support import (
     tree_findings_for,
 )
 from tests.support import write_spec
+
+pytestmark = pytest.mark.unit
 
 # --- clean baselines -------------------------------------------------------
 
@@ -445,16 +448,6 @@ def test_u002_unchanged_by_the_u003_fix(repo: Path) -> None:
     """AC-UG-7: a requirement with no scenario at all still fires U002."""
     body = NO_GIVEN_UPSTREAM + "\n### Requirement: the reader SHALL verify ids\n\nProse.\n"
     assert "U002" in rule_ids(findings_for(repo, body, "upstream"))
-
-
-def test_rule_registry_baseline_is_unchanged() -> None:
-    """AC-UG-8: no rule id added, no finding emitted for an omitted GIVEN."""
-
-    baseline = json.loads(
-        (Path(__file__).resolve().parent / "baseline_rules.json").read_text(encoding="utf-8")
-    )
-    assert {r["id"] for r in baseline} == {r.ident for r in rules.RULES}
-    assert len(baseline) == len(rules.RULES)
 
 
 def test_u004_fires_on_a_non_normative_requirement(repo: Path) -> None:

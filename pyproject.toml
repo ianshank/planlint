@@ -81,7 +81,21 @@ include = ["openspec_graph*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# Every test carries exactly one tier: a cost signal decided by what the test
+# uses, not by what it is called (shape-the-test-suite R-TSS-5, R-TSS-6;
+# DEC-TSS-005, DEC-TSS-006). A module-level `pytestmark` and a decorator both
+# count, so a module whose tests are not all one tier marks each test function
+# and carries no module tier, and a tier is never written through an alias.
+# tests/shape_support.py computes the criterion; tests/test_suite_shape.py
+# holds the guards. The tiers are registered here and not only through
+# `addopts`, which the durations command clears; `--strict-markers` makes any
+# other mark a collection error rather than a typo that passes.
+markers = [
+    "unit: its code under tests/ starts no process and reads none of this repository's own files outside tests/fixtures and tests/corpus",
+    "integration: its code under tests/ reads this repository's own files (a tools/ script run in-process, or source read through inspect, included) and starts no process",
+    "e2e: its code under tests/ starts a process -- subprocess, os, asyncio, pty or multiprocessing, directly or through a helper such as run_cli",
+]
+addopts = "-q --strict-markers"
 
 [tool.coverage.run]
 # One run (`make coverage-run`) measures both trees; `make test` and
@@ -153,7 +167,7 @@ tools_branch_fail_under = 91
 per_file_line_min = 85
 
 # Bounds for every `timeout-minutes` literal in `.github/workflows/*.yml`,
-# enforced by tests/test_workflow_hardening.py through
+# enforced by tests/test_workflow_posture.py through
 # `_common.read_pyproject_int` -- one integer per key, which is why two keys
 # rather than an inline table. Measured on CI run #171 at 9c4b6e9: the slowest
 # job, `test-windows`, took 5m42s; the `test` legs 2m14s-3m41s;
@@ -197,7 +211,7 @@ u004_min_recall_pct = 90
 
 # Per-action major floors for every third-party `uses:` in the workflows, the
 # composite action, the adopter templates and the README snippet, enforced by
-# tests/test_workflow_hardening.py. Every such action is pinned to a commit
+# tests/test_workflow_pins.py. Every such action is pinned to a commit
 # SHA with its release tag in a trailing comment (pin-actions-by-sha), and the
 # floor is read from that tag. A floor is a ratchet, not a pin: it is set to
 # the major this repository landed when it moved every action onto a Node 24

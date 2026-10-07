@@ -28,6 +28,8 @@ from tests.graft_support import (
 )
 from tests.support import write_spec, write_speckit_spec
 
+pytestmark = pytest.mark.unit
+
 
 def test_supports_symlinks_returns_false_when_symlink_to_is_not_implemented(
     monkeypatch: pytest.MonkeyPatch,

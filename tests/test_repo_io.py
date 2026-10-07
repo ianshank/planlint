@@ -12,6 +12,8 @@ import pytest
 from openspec_graph import detect, repo_io, thresholds
 from tests.support import captured_logger
 
+pytestmark = pytest.mark.unit
+
 
 def test_read_text_or_none_returns_none_and_logs_on_oserror(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture

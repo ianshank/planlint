@@ -74,6 +74,7 @@ def _citations() -> list[tuple[Path, str]]:
     return found
 
 
+@pytest.mark.integration
 def test_the_spec_corpus_actually_contains_citations() -> None:
     """Guard the guard: if the citation regex or the spec layout ever changes,
     this test file would otherwise pass by checking nothing at all."""
@@ -85,6 +86,7 @@ def test_the_spec_corpus_actually_contains_citations() -> None:
     )
 
 
+@pytest.mark.integration
 def test_every_spec_test_citation_resolves_to_a_real_test() -> None:
     """The property itself: no spec may cite a test that does not exist."""
     known = _collected_test_names()
@@ -100,6 +102,7 @@ def test_every_spec_test_citation_resolves_to_a_real_test() -> None:
     )
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "selector,expected",
     [

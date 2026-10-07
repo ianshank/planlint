@@ -81,6 +81,7 @@ def repo(tmp_path: Path) -> Path:
 # --- AC-EH-4: deterministic JSON output (byte-identical re-evaluation) -------
 
 
+@pytest.mark.e2e
 def test_validate_json_is_deterministic(repo: Path) -> None:
     _write_spec(repo, "c1", "cap", GOOD_HARNESS)
     out1 = _run_cli(repo, "validate", "--json").stdout
@@ -89,6 +90,7 @@ def test_validate_json_is_deterministic(repo: Path) -> None:
     json.loads(out1)  # must be parseable
 
 
+@pytest.mark.e2e
 def test_graph_json_is_deterministic(repo: Path) -> None:
     _write_spec(repo, "c1", "cap", GOOD_HARNESS)
     out1 = _run_cli(repo, "graph", "--format", "json").stdout
@@ -98,6 +100,7 @@ def test_graph_json_is_deterministic(repo: Path) -> None:
     assert g["broken_links"] == 0
 
 
+@pytest.mark.e2e
 def test_graph_format_mermaid_is_deterministic(repo: Path) -> None:
     # mermaid.to_mermaid() already has a pure-function determinism test
     # (tests/test_mermaid.py); this is the CLI-level counterpart every
@@ -109,6 +112,7 @@ def test_graph_format_mermaid_is_deterministic(repo: Path) -> None:
     assert out1.startswith("flowchart LR")
 
 
+@pytest.mark.e2e
 def test_rules_json_is_deterministic(repo: Path) -> None:
     # rules --json has no target dependency, but run against the repo anyway.
     out1 = _run_cli(repo, "rules", "--json").stdout
@@ -117,6 +121,7 @@ def test_rules_json_is_deterministic(repo: Path) -> None:
     json.loads(out1)
 
 
+@pytest.mark.e2e
 def test_findings_order_is_stable_across_specs(repo: Path) -> None:
     # Two change packages with violations; ordering must be stable (rule, then file).
     _write_spec(repo, "c1", "cap", GOOD_HARNESS.replace("make test", "make nope"))
@@ -134,6 +139,7 @@ def test_findings_order_is_stable_across_specs(repo: Path) -> None:
 # --- AC-EH-5: --verbose logs to stderr; JSON stdout stays parseable; fail closed
 
 
+@pytest.mark.e2e
 def test_verbose_logs_to_stderr_not_stdout(repo: Path) -> None:
     _write_spec(repo, "c1", "cap", GOOD_HARNESS)
     result = _run_cli(repo, "--verbose", "validate", "--json")
@@ -143,6 +149,7 @@ def test_verbose_logs_to_stderr_not_stdout(repo: Path) -> None:
     assert "planlint" not in result.stdout, "no log records on stdout"
 
 
+@pytest.mark.e2e
 def test_verbose_via_env_var(repo: Path) -> None:
     _write_spec(repo, "c1", "cap", GOOD_HARNESS)
     result = _run_cli(
@@ -152,6 +159,7 @@ def test_verbose_via_env_var(repo: Path) -> None:
     assert "planlint" in result.stderr.lower()
 
 
+@pytest.mark.e2e
 def test_malformed_spec_fails_closed(repo: Path) -> None:
     # A spec that cites a stage the Makefile lacks -> G004 ERROR -> exit 1.
     _write_spec(repo, "c1", "cap", GOOD_HARNESS.replace("make test", "make nope"))
@@ -160,6 +168,7 @@ def test_malformed_spec_fails_closed(repo: Path) -> None:
     assert "FAIL" in result.stdout
 
 
+@pytest.mark.e2e
 def test_graph_fails_closed_when_no_openspec_tree(tmp_path: Path) -> None:
     # No openspec/ -> graph exits 2, never emits a partial graph.
     (tmp_path / "Makefile").write_text(MAKEFILE)
@@ -169,6 +178,7 @@ def test_graph_fails_closed_when_no_openspec_tree(tmp_path: Path) -> None:
     assert result.stdout.strip() == "", "no partial graph on stdout"
 
 
+@pytest.mark.e2e
 def test_verbose_or_closed(repo: Path) -> None:
     # AC-EH-5, verified by `pytest -k verbose_or_closed`: an invalid convention
     # (a stage the repo lacks) fails closed, AND --verbose puts diagnostics on
@@ -184,6 +194,7 @@ def test_verbose_or_closed(repo: Path) -> None:
 # --- AC-EH-6: no hard-coded thresholds in Makefile / workflow -----------------
 
 
+@pytest.mark.e2e
 def test_no_hardcoded_passes_on_clean_repo() -> None:
     result = subprocess.run(
         [sys.executable, str(TOOLS / "check_no_hardcoded_thresholds.py")],
@@ -192,6 +203,7 @@ def test_no_hardcoded_passes_on_clean_repo() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.integration
 def test_no_hardcoded_fails_on_pinned_threshold(tmp_path: Path) -> None:
     # A Makefile recipe with a bare 2-digit number (not an exit code) trips it.
     makefile = tmp_path / "Makefile"
@@ -209,6 +221,7 @@ def test_no_hardcoded_fails_on_pinned_threshold(tmp_path: Path) -> None:
 # --- AC-EH-2 (non-success): a type error fails make typecheck ----------
 
 
+@pytest.mark.e2e
 def test_mypy_fails_on_a_type_error(tmp_path: Path) -> None:
     # A deliberately-broken module must fail mypy non-zero and name the file.
     pkg = tmp_path / "pkg"
@@ -223,6 +236,7 @@ def test_mypy_fails_on_a_type_error(tmp_path: Path) -> None:
     assert "broken.py" in result.stdout, "mypy must name the offending file"
 
 
+@pytest.mark.e2e
 @pytest.mark.skipif(shutil.which("make") is None, reason="make not on PATH")
 def test_typecheck_passes_on_clean_repo() -> None:
     result = subprocess.run(
@@ -235,6 +249,7 @@ def test_typecheck_passes_on_clean_repo() -> None:
 # --- AC-EH-3: secret scan catches a committed key ---------------------------
 
 
+@pytest.mark.e2e
 def test_secret_scan_fallback_catches_fake_key(tmp_path: Path, monkeypatch) -> None:
     # Build a fake repo with a tracked file containing an AWS-style key. The
     # token is assembled at runtime so the *test source* itself contains no
@@ -264,6 +279,7 @@ def test_secret_scan_fallback_catches_fake_key(tmp_path: Path, monkeypatch) -> N
     assert any(token in f or "potential secret" in f for f in findings), findings
 
 
+@pytest.mark.e2e
 def test_secret_scan_clean_repo_passes(repo: Path) -> None:
     # The real repo must scan clean (gitleaks or fallback).
     result = subprocess.run(
@@ -276,6 +292,7 @@ def test_secret_scan_clean_repo_passes(repo: Path) -> None:
 # --- AC-EH-7: backward compatibility — v0.1.0 CLI verbs/options survive -------
 
 
+@pytest.mark.e2e
 @pytest.mark.parametrize(
     "args",
     [
@@ -295,6 +312,7 @@ def test_cli_verbs_backward_compatible(repo: Path, args: tuple[str, ...]) -> Non
     assert result.returncode in (0, 1), f"{args} -> {result.returncode}\n{result.stderr}"
 
 
+@pytest.mark.e2e
 def test_graph_dot_still_rejected(repo: Path) -> None:
     result = _run_cli(repo, "graph", "--format", "dot")
     assert result.returncode == 2
@@ -304,6 +322,7 @@ def test_graph_dot_still_rejected(repo: Path) -> None:
 # --- AC-EH-8: docs-check passes ---------------------------------------------
 
 
+@pytest.mark.e2e
 def test_docs_check_passes() -> None:
     result = subprocess.run(
         [sys.executable, str(TOOLS / "check_docs.py")],
@@ -317,6 +336,7 @@ def test_docs_check_passes() -> None:
 # not a chase for 100%. Each test names the uncovered line it closes.
 
 
+@pytest.mark.unit
 def test_log_level_from_unknown_env_returns_default() -> None:
     # Closes log.py:28 — an unrecognized SPECGRAPH_LOG_LEVEL must fall back to
     # the default (WARNING), not raise and not crash the CLI. Asserts against
@@ -328,6 +348,7 @@ def test_log_level_from_unknown_env_returns_default() -> None:
     assert log_mod.level_from(verbose=True, env="BOGUS") == logging.DEBUG
 
 
+@pytest.mark.unit
 def test_graph_relative_to_outside_root_falls_back() -> None:
     # Closes graph.py:160-161 — a spec path not under the repo root must fall
     # back to its own posix-formatted string (never a native-separator one)
@@ -338,6 +359,7 @@ def test_graph_relative_to_outside_root_falls_back() -> None:
     assert graph_mod._relative_to(Path("/repo/openspec/x.md"), Path("/repo")) == "openspec/x.md"
 
 
+@pytest.mark.unit
 def test_finding_render_when_path_outside_root() -> None:
     # Closes rules.py:47-48 (the contextlib.suppress path) — a Finding whose
     # path is not under root still renders, showing the absolute path.
@@ -353,6 +375,7 @@ def test_finding_render_when_path_outside_root() -> None:
     assert "G004" in rendered
 
 
+@pytest.mark.unit
 def test_finding_as_dict_path_field_stays_absolute_and_native() -> None:
     # DEC-PS-002 originally made this absolute rendering unconditional, on the
     # premise that no consumer compares the field across two checkouts.
@@ -373,6 +396,7 @@ def test_finding_as_dict_path_field_stays_absolute_and_native() -> None:
     assert f.as_dict()["path"] == str(Path("/elsewhere/spec.md"))
 
 
+@pytest.mark.unit
 def test_finding_as_dict_with_a_root_renders_posix_relative() -> None:
     # The other half of DEC-FE-001: given a root, the same finding renders
     # relative to it in POSIX form, which is what makes the uploaded findings
@@ -383,6 +407,7 @@ def test_finding_as_dict_with_a_root_renders_posix_relative() -> None:
     assert rooted.as_dict(Path("/repo"))["path"] == "openspec/spec.md"
 
 
+@pytest.mark.e2e
 def test_init_dry_run_writes_nothing(repo: Path) -> None:
     # Closes cli.py:72-73 — `init --dry-run` lists the planned files but writes
     # nothing (no openspec/ tree created).
@@ -409,6 +434,7 @@ Prose obligation.
 """
 
 
+@pytest.mark.e2e
 def test_detect_warns_on_mixed_dialects(repo: Path) -> None:
     # Closes cli.py:62 + parse.py:284 — a repo containing both an upstream-form
     # spec and a harness-form spec is classified "mixed" and `detect` emits the
@@ -426,6 +452,7 @@ def test_detect_warns_on_mixed_dialects(repo: Path) -> None:
 # pattern fails `make test`, not a one-off manual grep.
 
 
+@pytest.mark.integration
 def test_graph_has_no_bare_truncation_magic_number() -> None:
     # AC-PR-3: the public graph JSON contract must not carry a bare [:200]
     # literal; the truncation limit is the named NODE_TEXT_LIMIT constant.
@@ -434,6 +461,7 @@ def test_graph_has_no_bare_truncation_magic_number() -> None:
     assert "NODE_TEXT_LIMIT" in source, "graph.py must define NODE_TEXT_LIMIT"
 
 
+@pytest.mark.integration
 def test_gate_scripts_have_no_duplicated_repo_root_literal() -> None:
     # AC-PR-4: no gate script may re-derive the repo root with the inline
     # Path(__file__).resolve().parent.parent literal; the scripts that need it
@@ -450,6 +478,7 @@ def test_gate_scripts_have_no_duplicated_repo_root_literal() -> None:
         )
 
 
+@pytest.mark.integration
 def test_common_module_is_stdlib_only() -> None:
     # AC-PR-6: tools/_common.py must import only stdlib modules (no third-party
     # deps), so the gate scripts stay runnable in a bare CI runner.
@@ -475,6 +504,7 @@ def test_common_module_is_stdlib_only() -> None:
     assert not third_party, f"_common.py must be stdlib-only, found: {third_party}"
 
 
+@pytest.mark.integration
 def test_pre_push_hook_is_not_forced_into_makefile_or_ci() -> None:
     # AC-PR-8: the pre-push hook is optional/docs-only; the Makefile and CI
     # workflow must never reference or install it (a forced slow hook is rejected).

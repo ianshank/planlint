@@ -45,6 +45,27 @@ coverage suite, so it is slower than the commit-time hook. Pre-commit + CI
 already cover the common case; the pre-push hook is for contributors who want
 a local net before the round-trip to CI.
 
+## Fast local loop
+
+`python -m pytest -m unit` runs the tier whose code under `tests/` starts no
+process and reads none of this repository's own files outside the labelled
+corpora under `tests/fixtures/` and `tests/corpus/` — about 13 s when
+`shape-the-test-suite` recorded it, against about 150 s for the whole suite.
+`python -m pytest -m "not unit"` runs the rest: `integration`, which reads the
+repository (the workflow, Makefile, docs and agent-artifact guards, every
+`tools/` script run in-process, and package source read through `inspect`),
+and `e2e`, which starts a process
+(`run_cli`, a nested pytest, ruff, mypy, bash). The criterion stops at
+`tests/`: the package's own `git rev-parse HEAD` and `tools/check_secrets.py`'s
+`git ls-files` run inside the code under test, so a few tests in the cheaper
+tiers still start `git`. Every test carries exactly one tier, and
+`tests/test_suite_shape.py` fails on a missing, doubled, aliased or wrong one.
+
+It is a command, not a Make target: `coverage-run` is the only recipe that
+invokes pytest (`test_the_suite_runs_once_through_coverage_run`), and the fast
+loop measures nothing. It is a local convenience, never a gate; the CI `test`
+row below still runs every tier.
+
 ## CI hooks (`.github/workflows/`)
 
 | Job | Trigger | Gate |
@@ -61,7 +82,8 @@ a local net before the round-trip to CI.
 | `release` (separate workflow) | `v*` tag | `make pre-pr`, then a clean-venv smoke test of the `planlint` console script, then trusted publishing to PyPI, which uploads PEP 740 attestations for both files |
 
 The workflow holds itself to the posture the gates inside it enforce
-(`harden-ci-workflows`; `tests/test_workflow_hardening.py` is the guard).
+(`harden-ci-workflows`; `tests/test_workflow_pins.py`, `tests/test_workflow_posture.py`
+and `tests/test_workflow_python.py` are the guard).
 Every third-party action is pinned to a commit SHA with its release tag in a
 trailing comment, every copy of one action must agree on both, and each sits
 at or above a per-action major floor in `pyproject.toml`
@@ -128,7 +150,7 @@ this repo's own history and are easy for an agent (or a human) to forget
 mid-edit:
 
 - Editing `skills/planlint-spec-governance/**` or `.claude-plugin/**` → reminds to
-  run `pytest tests/test_skill_contract.py tests/test_agent_skill_docs.py`. These
+  run `pytest tests/test_skill_contract.py tests/test_skill_distribution.py tests/test_agent_skill_docs.py`. These
   are prose and metadata an *external* agent acts on, so no other gate catches
   drift in them. The glob names the distributable skill specifically: a bare
   `*/skills/*` also matched `.claude/skills/`, nudging contributors toward a test
@@ -196,7 +218,7 @@ class above must produce a reason, an unrelated path must produce none, and
 ## Adding a custom rule
 
 Adding or changing a rule also requires regenerating the distributable
-skill's rule catalog with `make skill-catalog`; `tests/test_skill_contract.py`
+skill's rule catalog with `make skill-catalog`; `tests/test_skill_distribution.py`
 fails on a stale one, and the `.claude/` hook nudges for it.
 
 Rules live in `openspec_graph/rules.py` as `Rule(ident, severity, dialects,

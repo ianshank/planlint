@@ -5,6 +5,64 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed — the test suite split by concern (M2)
+
+- **`shape-the-test-suite`.** Every test module now sits at or under 700
+  lines, held by `tests/test_suite_shape.py` alongside the guard that keeps
+  `tests/` flat. `tests/test_ci_hardening.py` and
+  `tests/test_workflow_hardening.py` are gone, split by their own section seams
+  into `test_ci_workflow.py`, `test_ci_makefile.py`, `test_coverage_checkers.py`,
+  `test_graph_tools.py`, `test_threshold_guard.py`, `test_workflow_pins.py`,
+  `test_workflow_posture.py` and `test_workflow_python.py` (with the readers they
+  share in the uncollected `tests/workflow_support.py`); the release and
+  packaging halves of `test_agent_artifacts.py` and the distribution half of
+  `test_skill_contract.py` moved to `test_release_surface.py` and
+  `test_skill_distribution.py`. Every test kept its function name, so every
+  spec's verification line still resolves; the set of test names and the
+  collected count are unchanged by the moves. The records that named the two
+  removed modules — `select-zero-cost-guards` R-ZCG-10 and DEC-ZCG-010,
+  `harden-ci-workflows` R-HCW-15, R-HCW-16 and DEC-HCW-008, `pin-actions-by-sha`
+  R-ASP-8 and R-ASP-11, `prepare-release-0-3-0` DEC-REL-011 — are superseded by
+  name in this package (DEC-TSS-016), those packages being on `main`.
+- **Tiers.** Every test carries exactly one of three registered markers —
+  `unit` (its code under `tests/` starts no process and reads none of this
+  repository's files outside `tests/fixtures/` and `tests/corpus/`),
+  `integration` (reads the repository, a `tools/` script run in-process and
+  package source read through `inspect` included) or `e2e` (starts a
+  process) — decided mechanically by `tests/shape_support.py` from what the
+  test's own code under `tests/` uses, through helpers, fixtures, support
+  modules, classes and any import spelling. A process the code under test
+  starts itself, such as the package's `git rev-parse HEAD`, does not
+  count. `addopts` gains `--strict-markers`, so a misspelt mark
+  fails collection. `python -m pytest -m unit` is the fast local loop, a
+  command rather than a Make target because `coverage-run` stays the only
+  recipe that runs pytest. `test_rule_registry_baseline_is_unchanged` moved
+  from `test_graft_rules.py` to `test_rule_registry_docs.py`, and the Action
+  contract's runner simulator to the uncollected `tests/action_support.py`;
+  `read_pyproject()` in `tests/support.py` replaces two private copies.
+- **Routing.** `tests/support.run_cli` is now the only place a test spawns the
+  CLI against a target, and `write_spec` / `write_speckit_spec` the only
+  writers of the harness and SpecKit spec paths. `test_decomposition.py`'s
+  inline spawn and fixture writer, `test_e2e_corpus.py`'s harness and SpecKit
+  writes, and the hand-written specs in `test_detect_thresholds.py`,
+  `test_detect_speckit.py` and `test_skill_contract.py` route through them,
+  with the golden hashes unmoved. The release-workflow test reads its jobs
+  through `workflow_job_blocks` and its code through `_code_lines`, closing
+  `harden-ci-workflows` DEC-HCW-009's deferral. Two guards read each helper's
+  shape from its own body and name any copy.
+- **In-process loops.** `test_projections_are_byte_stable_across_runs`,
+  `test_an_unprojectable_file_exits_two_with_an_empty_stdout`,
+  `test_sarif_returns_the_same_exit_code_as_the_text_run` and
+  `test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict` run
+  their loops through `cli.main` and keep one real process each, held to the
+  in-process verdict; a guard holds that shape. Measured back to back on
+  `2daeca5` and the converted tree: 3.55 → 0.55 s, 1.45–1.52 → 0.50–0.59 s
+  per case, 3.18 → 0.55 s and 1.53 → 0.56 s. The whole suite read 161.17 s
+  before and 148.80 s after; three readings of an unchanged tree spread from
+  149.98 s to 157.68 s, so the totals are reported and no saving is claimed
+  on them. `test_report_has_no_intra_package_imports` moved to
+  `test_decomposition.py` to keep `test_report.py` inside the line bound.
+
 ### Changed — one suite run measures both trees (M2)
 
 - **`measure-coverage-once`.** The suite runs once: `make coverage-run`

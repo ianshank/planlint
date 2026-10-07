@@ -12,10 +12,13 @@ import ast
 import hashlib
 import json
 import re
-import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+import pytest
+
+from tests.support import run_cli, write_spec
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PKG = REPO_ROOT / "openspec_graph"
@@ -99,23 +102,17 @@ def _build_repo(root: Path) -> None:
         ("c1", "cap", "good_harness.md"),
         ("c2", "cap2", "good_upstream.md"),
     ]:
-        sp = root / "openspec" / "changes" / change / "specs" / cap / "spec.md"
-        sp.parent.mkdir(parents=True)
-        sp.write_text((FX / fname).read_text(encoding="utf-8"))
+        write_spec(root, change, cap, (FX / fname).read_text(encoding="utf-8"))
 
 
 def _run_cli(root: Path, *args: str) -> str:
-    r = subprocess.run(
-        [sys.executable, "-m", "openspec_graph.cli", "--target", str(root), *args],
-        # Decode as UTF-8 explicitly: cli.main() forces its own stdout to UTF-8
-        # (Defect D fix), so the platform default is wrong on any host whose
-        # codepage isn't UTF-8 -- notably the GitHub windows-latest runner
-        # (cp1252), where the absolute `target` path's escaped backslashes
-        # decode-then-reencode to different bytes and only the `validate` hash
-        # (the one verb carrying that path) drifts off golden. run_cli() in
-        # tests/support.py already pins UTF-8 for the same reason.
-        capture_output=True, text=True, encoding="utf-8", check=False,
-    )
+    # Through tests.support.run_cli (shape-the-test-suite R-TSS-8), which
+    # decodes as UTF-8 because cli.main() forces its own stdout to UTF-8
+    # (Defect D fix): the platform default is wrong on any host whose codepage
+    # isn't UTF-8 -- notably the GitHub windows-latest runner (cp1252), where
+    # the absolute `target` path's escaped backslashes decode-then-reencode to
+    # different bytes and only the `validate` hash drifts off golden.
+    r = run_cli(root, *args)
     assert r.returncode == 0, f"{' '.join(args)} failed: {r.stderr}"
     # Normalize the machine/build-state fields at the JSON level, not by
     # string-replacing the path. The CLI emits Path(args.target).resolve(),
@@ -185,6 +182,7 @@ def _imported_components(path: Path) -> set[str]:
 # --- AC-DG-1: public import surface unchanged -------------------------------
 
 
+@pytest.mark.unit
 def test_public_import_compatibility() -> None:
     # Every symbol tests and call sites import must remain importable from the
     # same paths after the facade split.
@@ -213,6 +211,7 @@ def test_public_import_compatibility() -> None:
 # --- AC-DG-2: byte-identical CLI/graph/rules JSON output --------------------
 
 
+@pytest.mark.e2e
 def test_output_byte_identical() -> None:
     with TemporaryDirectory() as td:
         root = Path(td)
@@ -245,6 +244,7 @@ def test_output_byte_identical() -> None:
 # --- AC-DG-3 (non-success): rules --json ordering must be stable ------------
 
 
+@pytest.mark.e2e
 def test_rules_json_ordering_stable() -> None:
     # Re-evaluating the same fixture repo twice must yield byte-identical
     # rules --json (stable ordering). A moved rule that changes ordering fails.
@@ -261,6 +261,7 @@ def test_rules_json_ordering_stable() -> None:
 # --- AC-DG-4: new modules import only stdlib (no third-party deps) ----------
 
 
+@pytest.mark.integration
 def test_new_modules_stdlib_only() -> None:
     stdlib = set(sys.stdlib_module_names)
     for name in _NEW_MODULES:
@@ -271,6 +272,36 @@ def test_new_modules_stdlib_only() -> None:
         )
 
 
+# Moved from tests/test_report.py by shape-the-test-suite (R-TSS-1), beside the
+# stdlib-only check it explains itself against, when the in-process loops took
+# that module past the line bound.
+@pytest.mark.integration
+def test_report_has_no_intra_package_imports() -> None:
+    """The zero-intra-package-import posture, checked rather than asserted.
+
+    `test_new_modules_stdlib_only` deliberately drops relative imports when it
+    resolves module roots, so it cannot see `from .rules import ...` -- several
+    modules on its list have intra-package imports and pass it. This module's
+    claim is stronger and needs its own check: it is handed plain data and the
+    schema versions it validates against, so it can never depend on evaluation
+    order.
+    """
+    tree = ast.parse((PKG / "report.py").read_text(encoding="utf-8"))
+    offenders: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            if node.level:
+                offenders.append(f"relative import of {node.module or '.'}")
+            elif node.module and node.module.split(".")[0] == PKG.name:
+                offenders.append(f"absolute import of {node.module}")
+        elif isinstance(node, ast.Import):
+            offenders += [
+                f"import of {alias.name}" for alias in node.names
+                if alias.name.split(".")[0] == PKG.name
+            ]
+    assert not offenders, f"openspec_graph/report.py imports its own package: {offenders}"
+
+@pytest.mark.integration
 def test_machinery_never_imports_subprocess() -> None:
     """DEC-MP-001 is non-negotiable: machinery.py must never shell out to
     inspect an untrusted Makefile. A static guard alongside the runtime
@@ -280,6 +311,7 @@ def test_machinery_never_imports_subprocess() -> None:
     assert not forbidden, f"machinery.py must never import {forbidden} (DEC-MP-001)"
 
 
+@pytest.mark.integration
 def test_only_detect_imports_subprocess() -> None:
     """DEC-WM-008/009: detect._current_sha() (`git rev-parse HEAD`, read-only
     plumbing -- a different risk class from machinery.py's own, stronger,
@@ -301,6 +333,7 @@ def test_only_detect_imports_subprocess() -> None:
 # --- AC-DG-5: shared helper is not duplicated inline ------------------------
 
 
+@pytest.mark.integration
 def test_helpers_not_duplicated_inline() -> None:
     # write_spec (imported as-is or aliased _write_spec) must come from
     # tests.support, never be redeclared -- a redeclaration silently drifts
@@ -326,6 +359,7 @@ def test_helpers_not_duplicated_inline() -> None:
 # --- AC-DG-8 (non-success): detect.py and cli.py stay unsplit --------------
 
 
+@pytest.mark.integration
 def test_detect_and_cli_remain_unsplit() -> None:
     # R-DG-6: detect.py and cli.py are out of scope. No new detect_*/cli_* module
     # may appear; a split that fragments either fails.
@@ -341,6 +375,7 @@ def test_detect_and_cli_remain_unsplit() -> None:
 # --- AC-DG-6 (non-success): parser/rule modules must not import cli or graph
 
 
+@pytest.mark.integration
 def test_import_boundary_discipline() -> None:
     # No module except cli.py and __init__.py may import cli or graph — including
     # via relative imports (from .graph import ... / from . import graph).

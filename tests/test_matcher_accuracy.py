@@ -42,6 +42,7 @@ def requirement_rows() -> list[dict[str, object]]:
 # --- the corpus is real -----------------------------------------------------
 
 
+@pytest.mark.integration
 def test_corpora_are_present_and_balanced(
     criteria_rows: list[dict[str, object]], requirement_rows: list[dict[str, object]]
 ) -> None:
@@ -56,6 +57,7 @@ def test_corpora_are_present_and_balanced(
         assert 0 < positives < len(rows), f"{name} corpus is single-label"
 
 
+@pytest.mark.integration
 def test_every_corpus_row_is_well_formed(
     criteria_rows: list[dict[str, object]], requirement_rows: list[dict[str, object]]
 ) -> None:
@@ -66,6 +68,7 @@ def test_every_corpus_row_is_well_formed(
             assert isinstance(row.get("label"), bool)
 
 
+@pytest.mark.integration
 def test_the_ambiguous_and_variant_files_assert_nothing() -> None:
     """Two files are kept as documentation, deliberately outside the score.
 
@@ -89,6 +92,7 @@ def test_the_ambiguous_and_variant_files_assert_nothing() -> None:
 # --- the floors -------------------------------------------------------------
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("rule", sorted(accuracy.FLOOR_KEYS))
 @pytest.mark.parametrize("metric", ["precision", "recall"])
 def test_a_floor_is_configured_for_every_rule_and_metric(rule: str, metric: str) -> None:
@@ -105,6 +109,7 @@ def test_a_floor_is_configured_for_every_rule_and_metric(rule: str, metric: str)
     )
 
 
+@pytest.mark.integration
 def test_g002_meets_its_configured_accuracy_floors(
     criteria_rows: list[dict[str, object]],
 ) -> None:
@@ -115,6 +120,7 @@ def test_g002_meets_its_configured_accuracy_floors(
     )
 
 
+@pytest.mark.integration
 def test_u004_meets_its_configured_accuracy_floors(
     requirement_rows: list[dict[str, object]],
 ) -> None:
@@ -125,6 +131,7 @@ def test_u004_meets_its_configured_accuracy_floors(
     )
 
 
+@pytest.mark.integration
 def test_the_check_mode_exit_code_matches_the_scores() -> None:
     """The reporting path and the gating path must agree.
 
@@ -138,6 +145,7 @@ def test_the_check_mode_exit_code_matches_the_scores() -> None:
 # --- the pattern table is data, and stays honest ----------------------------
 
 
+@pytest.mark.integration
 def test_no_negation_pattern_misfires_more_than_it_fires(
     criteria_rows: list[dict[str, object]],
 ) -> None:
@@ -156,6 +164,7 @@ def test_no_negation_pattern_misfires_more_than_it_fires(
     assert not offenders, f"patterns that misfire more than they fire: {offenders}"
 
 
+@pytest.mark.unit
 def test_every_negation_pattern_is_case_insensitive() -> None:
     """G002 must not depend on capitalisation.
 
@@ -171,6 +180,7 @@ def test_every_negation_pattern_is_case_insensitive() -> None:
     assert not uncased, f"negation patterns compiled without IGNORECASE: {uncased}"
 
 
+@pytest.mark.unit
 def test_negation_pattern_names_are_unique() -> None:
     """Names are the reporting key; a duplicate would silently merge two rows."""
     from openspec_graph.parse_semantics import NEGATION_PATTERNS
@@ -179,6 +189,7 @@ def test_negation_pattern_names_are_unique() -> None:
     assert len(names) == len(set(names)), "duplicate negation pattern name"
 
 
+@pytest.mark.unit
 def test_negation_evidence_names_the_matching_patterns() -> None:
     """The additive accessor: names in table order, and ``is_negative`` stays a bool.
 
@@ -205,6 +216,7 @@ def test_negation_evidence_names_the_matching_patterns() -> None:
     assert success.is_negative is False
 
 
+@pytest.mark.unit
 def test_negative_patterns_alias_excludes_the_annotation_tier() -> None:
     """The backwards-compatible alias is the prose patterns, and only those.
 
@@ -225,6 +237,7 @@ def test_negative_patterns_alias_excludes_the_annotation_tier() -> None:
     assert not any(p.search("Negative numbers are formatted.") for p in NEGATIVE_PATTERNS)
 
 
+@pytest.mark.unit
 def test_annotation_tier_never_fires_on_prose() -> None:
     """The tier boundary, stated as a test.
 
@@ -241,6 +254,7 @@ def test_annotation_tier_never_fires_on_prose() -> None:
 # --- the scorer's own failure paths ----------------------------------------
 
 
+@pytest.mark.integration
 def test_load_rows_rejects_malformed_corpus_files(tmp_path: Path) -> None:
     """A malformed row must be a loud corpus error, never a silent negative."""
     import pytest as _pytest
@@ -261,6 +275,7 @@ def test_load_rows_rejects_malformed_corpus_files(tmp_path: Path) -> None:
     assert len(accuracy.load_rows(tmp_path / "ok.jsonl")) == 1
 
 
+@pytest.mark.integration
 def test_floor_comparison_is_exact_at_the_boundary() -> None:
     """``int(0.29 * 100)`` is 28; a matcher exactly on its floor must pass."""
     score = accuracy.Score("G002", true_positives=29, false_positives=71, false_negatives=0, true_negatives=0)
@@ -269,6 +284,7 @@ def test_floor_comparison_is_exact_at_the_boundary() -> None:
     assert score.recall_meets(100)
 
 
+@pytest.mark.integration
 def test_check_reports_a_missing_floor_and_a_breach(
     monkeypatch: pytest.MonkeyPatch, criteria_rows: list[dict[str, object]]
 ) -> None:
@@ -281,6 +297,7 @@ def test_check_reports_a_missing_floor_and_a_breach(
     assert breached and all("below the configured floor" in m for m in breached)
 
 
+@pytest.mark.integration
 def test_main_report_and_check_exit_codes(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -295,6 +312,7 @@ def test_main_report_and_check_exit_codes(
 # --- the tier boundary and the waiver leak, through the real parsers -------
 
 
+@pytest.mark.unit
 def test_annotation_tier_matches_the_whole_marker_only() -> None:
     """``(negative)`` is a declaration; "negative" inside a block is a word.
 
@@ -318,6 +336,7 @@ def test_annotation_tier_matches_the_whole_marker_only() -> None:
     assert crits and crits[0].negation_evidence == ()
 
 
+@pytest.mark.unit
 def test_waiver_reason_text_is_invisible_to_both_matchers() -> None:
     """The recurring bug class, closed for the matchers as it was for
     ``verified_by``: a waiver's reason is not the criterion's prose."""
@@ -351,6 +370,7 @@ def test_waiver_reason_text_is_invisible_to_both_matchers() -> None:
     assert crits and crits[0].negation_evidence == ()
 
 
+@pytest.mark.unit
 def test_contracted_prohibition_is_normative() -> None:
     from openspec_graph.parse_model import Requirement
 

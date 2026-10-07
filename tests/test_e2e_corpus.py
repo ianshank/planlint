@@ -21,7 +21,10 @@ from pathlib import Path
 
 import pytest
 
-from tests.support import normalize_root, run_cli
+from openspec_graph.cli import main
+from tests.support import normalize_root, run_cli, write_spec, write_speckit_spec
+
+pytestmark = pytest.mark.e2e
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CORPUS = REPO_ROOT / "tests" / "corpus" / "targets"
@@ -37,10 +40,7 @@ def _card(repo: Path) -> dict[str, object]:
 
 
 def _harness_spec(repo: Path, body: str, change: str = "c1") -> Path:
-    spec = repo / "openspec" / "changes" / change / "specs" / "cap" / "spec.md"
-    spec.parent.mkdir(parents=True, exist_ok=True)
-    spec.write_text(body, encoding="utf-8")
-    return spec
+    return write_spec(repo, change, "cap", body)
 
 
 # --- detect, over every labelled shape, through the CLI --------------------
@@ -254,21 +254,31 @@ def _findings(repo: Path, *args: str) -> list[dict]:
     return found
 
 
-def test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict(tmp_path: Path) -> None:
+def test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """INFO exists so no currently-passing repository starts failing.
 
     Asserted at the boundary that matters: the exit code, not the severity
     constant. A repo with no makefile whose spec cites one still exits 0 at
-    the default threshold and 1 only when INFO is explicitly requested.
+    the default threshold and 1 only when INFO is explicitly requested. The
+    thresholds run in-process through `cli.main`; one real process at INFO is
+    the entry-point check (shape-the-test-suite R-TSS-9).
     """
     _harness_spec(tmp_path, _MAKEFILE_LESS_SPEC)
-    assert run_cli(tmp_path, "validate", "--fail-on", "ERROR").returncode == 0
-    assert run_cli(tmp_path, "validate", "--fail-on", "WARN").returncode == 0
-    assert run_cli(tmp_path, "validate", "--fail-on", "INFO").returncode == 1
+    codes: dict[str, int] = {}
+    for threshold in ("ERROR", "WARN", "INFO"):
+        codes[threshold] = main(["--target", str(tmp_path), "validate", "--fail-on", threshold])
+        capsys.readouterr()
+    assert codes == {"ERROR": 0, "WARN": 0, "INFO": 1}, codes
 
-    rules_seen = {f["rule"] for f in _findings(tmp_path, "--fail-on", "INFO")}
+    main(["--target", str(tmp_path), "validate", "--format", "json", "--fail-on", "INFO"])
+    payload = json.loads(capsys.readouterr().out)
+    assert isinstance(payload, dict), payload
+    rules_seen = {f["rule"] for f in payload["findings"]}
     assert "G010" in rules_seen
     assert "G004" not in rules_seen, "G004 must stay silent; G010 speaks for it"
+    assert run_cli(tmp_path, "validate", "--fail-on", "INFO").returncode == codes["INFO"]
 
 
 def test_a_waived_g010_still_fails_a_fail_on_info_run(tmp_path: Path) -> None:
@@ -325,8 +335,6 @@ def test_g010_is_projected_to_sarif_without_a_bogus_region(tmp_path: Path) -> No
 def test_s005_reaches_the_cli_carrying_the_dropped_bullet_locus(tmp_path: Path) -> None:
     """S005's contract is that the locus is the token the author must move."""
     (tmp_path / "Makefile").write_text("test:\n\t@echo t\n", encoding="utf-8")
-    feature = tmp_path / "specs" / "001-demo"
-    feature.mkdir(parents=True)
     body = (
         "# Feature Specification: Demo\n\n"
         "## Requirements *(mandatory)*\n\n"
@@ -335,7 +343,7 @@ def test_s005_reaches_the_cli_carrying_the_dropped_bullet_locus(tmp_path: Path) 
         "## Success Criteria *(mandatory)*\n\n"
         "- **SC-001**: It completes quickly.\n"
     )
-    (feature / "spec.md").write_text(body, encoding="utf-8")
+    write_speckit_spec(tmp_path, "001-demo", body)
     expected_line = next(
         i for i, ln in enumerate(body.splitlines(), 1) if ln.startswith("- **FR-001**")
     )

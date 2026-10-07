@@ -30,6 +30,7 @@ def spec_path(tmp_path: Path) -> Path:
 # --- Canonical SpecKit heading annotations ("*(mandatory)*") ---------------
 
 
+@pytest.mark.unit
 def test_parse_speckit_extracts_fr_and_sc_from_canonically_annotated_headings() -> None:
     # The real github/spec-kit template suffixes its mandatory H2 headings:
     # "## Requirements *(mandatory)*", "## Success Criteria *(mandatory)*"
@@ -57,6 +58,7 @@ def test_parse_speckit_extracts_fr_and_sc_from_canonically_annotated_headings() 
 # --- AC-SK-14: FR-/SC- mapping ----------------------------------------------
 
 
+@pytest.mark.unit
 def test_parse_speckit_maps_fr_and_sc_ids() -> None:
     reqs, criteria = parse_speckit(GOOD_SPECKIT)
     req_idents = {r.ident for r in reqs}
@@ -66,6 +68,7 @@ def test_parse_speckit_maps_fr_and_sc_ids() -> None:
     assert "SC-001" in crit_idents
 
 
+@pytest.mark.unit
 def test_parse_speckit_fr_decl_does_not_match_a_sibling_nfr_bullet() -> None:
     text = textwrap.dedent(
         """\
@@ -84,6 +87,7 @@ def test_parse_speckit_fr_decl_does_not_match_a_sibling_nfr_bullet() -> None:
     assert {r.ident for r in reqs} == {"FR-001"}
 
 
+@pytest.mark.unit
 def test_parse_speckit_fr_decl_ignores_a_bullet_under_an_unrelated_h3(spec_path: Path) -> None:
     # section_body()/speckit_section_body() return the *entire* H2 span --
     # an FR-shaped bullet sitting under some other H3 inside "## Requirements"
@@ -107,6 +111,7 @@ def test_parse_speckit_fr_decl_ignores_a_bullet_under_an_unrelated_h3(spec_path:
     assert {r.ident for r in reqs} == {"FR-001"}
 
 
+@pytest.mark.unit
 def test_parse_speckit_fr_decl_finds_nothing_with_no_functional_requirements_heading(
     spec_path: Path,
 ) -> None:
@@ -128,6 +133,7 @@ def test_parse_speckit_fr_decl_finds_nothing_with_no_functional_requirements_hea
 # --- AC-SK-15: Given/When/Then synthesis ------------------------------------
 
 
+@pytest.mark.unit
 def test_parse_speckit_synthesizes_user_story_criteria() -> None:
     _, criteria = parse_speckit(GOOD_SPECKIT)
     gwt_criteria = [c for c in criteria if c.ident.startswith("US1-AS")]
@@ -136,6 +142,7 @@ def test_parse_speckit_synthesizes_user_story_criteria() -> None:
     assert scenario_has_gwt(gwt_criteria[0])
 
 
+@pytest.mark.unit
 def test_parse_speckit_synthesizes_a_multi_line_gwt_scenario() -> None:
     # Milestone 5 finding: Given/When/Then each on their own line, within
     # the same numbered item, is an equally plausible SpecKit authoring
@@ -164,6 +171,7 @@ def test_parse_speckit_synthesizes_a_multi_line_gwt_scenario() -> None:
     assert "an evidence id is recorded" in gwt[0].note
 
 
+@pytest.mark.unit
 def test_parse_speckit_bounds_each_story_block_at_the_next_story_heading() -> None:
     text = textwrap.dedent(
         """\
@@ -192,6 +200,7 @@ def test_parse_speckit_bounds_each_story_block_at_the_next_story_heading() -> No
     assert "another precondition" in story2[0].note
 
 
+@pytest.mark.unit
 def test_parse_speckit_bounds_a_trailing_story_block_at_the_next_h2_section() -> None:
     # The last (only) user story has no following "### User Story" heading
     # to bound it -- it must still not sweep the unrelated "## Requirements"
@@ -220,6 +229,7 @@ def test_parse_speckit_bounds_a_trailing_story_block_at_the_next_h2_section() ->
 # --- AC-SK-17 (non-success): requirement_refs always empty ------------------
 
 
+@pytest.mark.unit
 def test_speckit_criteria_have_no_requirement_refs() -> None:
     _, criteria = parse_speckit(GOOD_SPECKIT)
     assert criteria
@@ -229,12 +239,14 @@ def test_speckit_criteria_have_no_requirement_refs() -> None:
 # --- AC-SK-12/13: parse_spec() dispatch -------------------------------------
 
 
+@pytest.mark.unit
 def test_parse_spec_dispatches_speckit_to_its_own_parser(spec_path: Path) -> None:
     spec = parse_spec(spec_path, "speckit")
     assert spec.dialect == "speckit"
     assert {r.ident for r in spec.requirements} == {"FR-001", "FR-002"}
 
 
+@pytest.mark.unit
 def test_parse_spec_auto_resolution_checks_upstream_then_speckit_then_harness(
     spec_path: Path,
 ) -> None:
@@ -246,6 +258,7 @@ def test_parse_spec_auto_resolution_checks_upstream_then_speckit_then_harness(
 # --- AC-SK-16 (non-success): the speckit branch's own escape hatch ---------
 
 
+@pytest.mark.unit
 def test_speckit_branch_rescues_to_upstream(tmp_path: Path) -> None:
     # Explicitly dialect="speckit", but the text has no FR-/SC- markers at
     # all -- parse_speckit() finds nothing -- while an upstream-style
@@ -267,6 +280,7 @@ def test_speckit_branch_rescues_to_upstream(tmp_path: Path) -> None:
     assert len(spec.requirements) == 1
 
 
+@pytest.mark.unit
 def test_no_reciprocal_speckit_rescue_hatch_for_harness(tmp_path: Path) -> None:
     # Explicitly dialect="harness" on text with real speckit content
     # (FR-/SC- bullets) but no harness R-/AC- declarations. parse_harness()
@@ -285,6 +299,7 @@ def test_no_reciprocal_speckit_rescue_hatch_for_harness(tmp_path: Path) -> None:
 # --- AC-SK-41 (parse.py half): shared predicates, not a local reimplementation
 
 
+@pytest.mark.unit
 def test_parse_py_uses_shared_marker_predicates_not_local_copies() -> None:
     assert parse.is_upstream_marked is parse_semantics.is_upstream_marked
     assert parse.is_speckit_marked is parse_semantics.is_speckit_marked
@@ -293,6 +308,7 @@ def test_parse_py_uses_shared_marker_predicates_not_local_copies() -> None:
 # --- AC-SK-43 (non-success): dispatch stays if/elif, not dict/registry-based
 
 
+@pytest.mark.integration
 def test_parse_spec_dispatch_is_not_dict_based() -> None:
     # C-SK-2: parse.py::parse_spec()'s three-way dispatch must not be
     # refactored into a dict/mapping keyed by dialect name -- confirmed by

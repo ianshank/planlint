@@ -22,6 +22,7 @@ import pytest
 from openspec_graph import delta, detect
 from openspec_graph.parse import parse_spec
 from openspec_graph.parse_semantics import threshold_values
+from tests.support import write_spec
 
 TABLE = detect.COVERAGE_REPORT_TABLE
 
@@ -29,6 +30,7 @@ TABLE = detect.COVERAGE_REPORT_TABLE
 # --- as_threshold_number ----------------------------------------------------
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
@@ -48,6 +50,7 @@ def test_as_threshold_number_accepts_plain_decimals_in_range(raw: object, expect
     assert type(value) is type(expected), "integral values must stay int; fractions float"
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "raw",
     [
@@ -82,6 +85,7 @@ def test_as_threshold_number_rejects_what_is_not_a_percentage(raw: object) -> No
     assert detect.as_threshold_number(raw) is None
 
 
+@pytest.mark.unit
 def test_as_threshold_number_can_refuse_strings_for_the_json_policy_path() -> None:
     """``governance-policy.json`` always took numbers only; a quoted value is
     a misconfiguration there, not a floor."""
@@ -96,12 +100,14 @@ def _scoped(text: str) -> int | float | None:
     return detect.scoped_fail_under(text, TABLE)
 
 
+@pytest.mark.unit
 def test_scoped_fail_under_reads_only_its_table() -> None:
     assert _scoped("[tool.coverage.report]\nfail_under = 90\n") == 90
     assert _scoped("[tool.other]\nfail_under = 50\n") is None
     assert _scoped("fail_under = 50\n[tool.coverage.report]\nshow_missing = true\n") is None
 
 
+@pytest.mark.unit
 def test_scoped_fail_under_ignores_lines_inside_multiline_strings() -> None:
     """``exclude_lines`` is a free-text list that lives in exactly this table."""
     text = '[tool.coverage.report]\nexclude_lines = """\nfail_under = 42\n"""\nfail_under = 90\n'
@@ -116,6 +122,7 @@ def test_scoped_fail_under_ignores_lines_inside_multiline_strings() -> None:
     assert _scoped(text) == 90
 
 
+@pytest.mark.unit
 def test_scoped_fail_under_ignores_lines_inside_multiline_arrays() -> None:
     text = (
         "[tool.coverage.report]\n"
@@ -129,6 +136,7 @@ def test_scoped_fail_under_ignores_lines_inside_multiline_arrays() -> None:
     assert _scoped(text) == 90
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "header",
     ["[tool.coverage.report]", "[ tool.coverage.report ]", '["tool"."coverage"."report"]',
@@ -138,20 +146,24 @@ def test_scoped_fail_under_normalises_equivalent_table_headers(header: str) -> N
     assert _scoped(f"{header}\nfail_under = 90\n") == 90
 
 
+@pytest.mark.unit
 def test_scoped_fail_under_does_not_treat_an_array_of_tables_as_the_table() -> None:
     assert _scoped("[[tool.coverage.report]]\nfail_under = 90\n") is None
 
 
+@pytest.mark.unit
 def test_scoped_fail_under_rejects_a_quoted_string_floor() -> None:
     assert _scoped('[tool.coverage.report]\nfail_under = "90"\n') is None
 
 
+@pytest.mark.unit
 def test_scoped_fail_under_is_bom_tolerant_as_a_pure_function() -> None:
     """Same principle as ``machinery.parse_makefile``: public API that takes
     text must not depend on the caller having decoded carefully."""
     assert _scoped("﻿[tool.coverage.report]\nfail_under = 90\n") == 90
 
 
+@pytest.mark.unit
 def test_scoped_fail_under_first_match_wins_and_subtables_do_not_count() -> None:
     assert _scoped("[tool.coverage.report]\nfail_under = 90\nfail_under = 80\n") == 90
     assert _scoped("[tool.coverage.report.extra]\nfail_under = 90\n") is None
@@ -160,12 +172,14 @@ def test_scoped_fail_under_first_match_wins_and_subtables_do_not_count() -> None
 # --- _read_ini_fail_under ---------------------------------------------------
 
 
+@pytest.mark.unit
 def test_read_ini_fail_under_reads_a_bom_prefixed_file(tmp_path: Path) -> None:
     path = tmp_path / ".coveragerc"
     path.write_bytes(b"\xef\xbb\xbf[report]\nfail_under = 75\n")
     assert detect._read_ini_fail_under(path, "report") == 75
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "body",
     [
@@ -182,6 +196,7 @@ def test_read_ini_fail_under_returns_none_rather_than_guessing(tmp_path: Path, b
     assert detect._read_ini_fail_under(path, "report") is None
 
 
+@pytest.mark.unit
 def test_read_ini_fail_under_keeps_a_fractional_floor(tmp_path: Path) -> None:
     path = tmp_path / ".coveragerc"
     path.write_text("[report]\nfail_under = 85.5\n", encoding="utf-8")
@@ -191,6 +206,7 @@ def test_read_ini_fail_under_keeps_a_fractional_floor(tmp_path: Path) -> None:
 # --- governance-policy.json path -------------------------------------------
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "policy",
     [
@@ -212,6 +228,7 @@ def test_governance_policy_without_a_numeric_floor_falls_through(tmp_path: Path,
     assert profile.threshold.value == 90
 
 
+@pytest.mark.unit
 def test_governance_policy_accepts_a_bom_and_a_fractional_floor(tmp_path: Path) -> None:
     (tmp_path / "governance-policy.json").write_bytes(
         b'\xef\xbb\xbf{"coverage": {"lines": 85.5}}'
@@ -224,6 +241,7 @@ def test_governance_policy_accepts_a_bom_and_a_fractional_floor(tmp_path: Path) 
 # --- read_text_or_none: not a regular file ---------------------------------
 
 
+@pytest.mark.unit
 @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs are a POSIX feature")
 def test_a_fifo_where_a_config_file_belongs_does_not_hang(tmp_path: Path) -> None:
     """``exists()`` is true for a FIFO and ``open()`` on one blocks until a
@@ -239,12 +257,14 @@ def test_a_fifo_where_a_config_file_belongs_does_not_hang(tmp_path: Path) -> Non
 # --- the float floor reaches every consumer correctly ---------------------
 
 
+@pytest.mark.unit
 def test_threshold_values_keeps_a_fraction_so_g003_compares_like_with_like() -> None:
     assert threshold_values("coverage >= 85.5%") == (85.5,)
     assert threshold_values("coverage >= 90%") == (90,)
     assert threshold_values("from 80% to 90%") == (80, 90)
 
 
+@pytest.mark.unit
 def test_g003_does_not_flag_a_criterion_that_cites_the_exact_fractional_floor(
     tmp_path: Path,
 ) -> None:
@@ -254,22 +274,23 @@ def test_g003_does_not_flag_a_criterion_that_cites_the_exact_fractional_floor(
 
     (tmp_path / "Makefile").write_text("test:\n\t@echo t\n", encoding="utf-8")
     (tmp_path / "pyproject.toml").write_text("[tool.coverage.report]\nfail_under = 85.5\n")
-    spec = tmp_path / "openspec" / "changes" / "c1" / "specs" / "cap" / "spec.md"
-    spec.parent.mkdir(parents=True)
-    spec.write_text(
+    spec = write_spec(
+        tmp_path,
+        "c1",
+        "cap",
         "# Spec\n\n## Requirements\n\n- R-XY-1: Coverage holds.\n\n"
         "## Acceptance Criteria\n\n"
         "- [ ] **AC-XY-1:** Line coverage is >= 85.5% as pyproject.toml gates it. (R-XY-1)\n"
         "  _Verified by:_ `pytest -k test_x` · stage: `make test`\n"
         "- [ ] **AC-XY-2 (non-success):** A drop below the floor fails `make test`. (R-XY-1)\n"
         "  _Verified by:_ `pytest -k test_y` · stage: `make test`\n",
-        encoding="utf-8",
     )
     profile = detect.profile(tmp_path)
     findings = rules.evaluate(parse_spec(spec, "harness"), profile)
     assert not [f for f in findings if f.rule == "G003"], [f.message for f in findings]
 
 
+@pytest.mark.unit
 def test_delta_reads_a_fractional_baseline_floor_and_ignores_booleans() -> None:
     assert delta._baseline_threshold({"threshold": {"value": 85.5}}) == 85.5
     assert delta._baseline_threshold({"threshold": {"value": 90}}) == 90
@@ -280,6 +301,7 @@ def test_delta_reads_a_fractional_baseline_floor_and_ignores_booleans() -> None:
 # --- BOM tolerance reaches spec parsing too --------------------------------
 
 
+@pytest.mark.unit
 def test_a_bom_prefixed_spec_keeps_its_first_line_criterion(tmp_path: Path) -> None:
     """``detect_dialect`` and ``parse_spec`` must see the same first line.
 
@@ -304,6 +326,7 @@ def test_a_bom_prefixed_spec_keeps_its_first_line_criterion(tmp_path: Path) -> N
 CORPUS = Path(__file__).resolve().parent / "corpus" / "targets"
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     ("shape", "needle"),
     [
@@ -319,6 +342,7 @@ def test_byte_specimens_survived_checkout(shape: str, needle: bytes) -> None:
     assert needle in (CORPUS / shape / "repo" / "Makefile").read_bytes()
 
 
+@pytest.mark.e2e
 def test_detection_is_byte_stable_across_hash_seeds() -> None:
     """Card bytes must not depend on the interpreter's hash seed.
 
@@ -345,6 +369,7 @@ def test_detection_is_byte_stable_across_hash_seeds() -> None:
     assert json.loads(outputs[0]), "the subprocess produced no cards"
 
 
+@pytest.mark.unit
 def test_hard_coded_reads_bullets_and_table_rows_only() -> None:
     """Pins G003's documented scope limit (docs/peer-review-2026-09.md F5).
 
@@ -363,6 +388,7 @@ def test_hard_coded_reads_bullets_and_table_rows_only() -> None:
     assert hard_coded("## Coverage at 97%") == ()
 
 
+@pytest.mark.unit
 @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs are a POSIX feature")
 def test_a_fifo_where_a_spec_file_belongs_does_not_hang(tmp_path: Path) -> None:
     """The same hazard at the paths that read the most files.
@@ -383,6 +409,7 @@ def test_a_fifo_where_a_spec_file_belongs_does_not_hang(tmp_path: Path) -> None:
     assert profile.speckit_root is None
 
 
+@pytest.mark.unit
 @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="FIFOs are a POSIX feature")
 def test_a_fifo_spec_raises_spec_read_error_rather_than_blocking(tmp_path: Path) -> None:
     """`parse_spec` owes a `SpecReadError`, not `None`.
@@ -404,6 +431,7 @@ def test_a_fifo_spec_raises_spec_read_error_rather_than_blocking(tmp_path: Path)
 # --- SC_DECL: the twin of the FR_DECL defect -------------------------------
 
 
+@pytest.mark.unit
 def test_sc_and_fr_declarations_share_one_grammar() -> None:
     """Built from `_bullet_decl`, so a fix cannot land on one and miss the other.
 
@@ -427,6 +455,7 @@ def test_sc_and_fr_declarations_share_one_grammar() -> None:
 # --- hard_coded: blank the real span, not the first identical one ----------
 
 
+@pytest.mark.unit
 def test_speckit_exemption_blanks_the_success_criteria_span_not_a_twin() -> None:
     """`text.index(body)` found the FIRST occurrence of the body text.
 

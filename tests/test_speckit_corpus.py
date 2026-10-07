@@ -26,6 +26,8 @@ from openspec_graph import detect, rules
 from openspec_graph.parse import parse_spec
 from tests.support import write_speckit_spec
 
+pytestmark = pytest.mark.unit
+
 GOOD_SPECKIT = Path(__file__).resolve().parent.joinpath("fixtures", "good_speckit.md").read_text(
     encoding="utf-8"
 )

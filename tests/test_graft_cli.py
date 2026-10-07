@@ -10,6 +10,8 @@ import json
 import textwrap
 from pathlib import Path
 
+import pytest
+
 from openspec_graph import detect, rules, scaffold
 from openspec_graph.cli import main
 from openspec_graph.parse import parse_spec
@@ -22,6 +24,8 @@ from tests.graft_support import (
     rule_ids,
 )
 from tests.support import write_spec
+
+pytestmark = pytest.mark.unit
 
 # --- scaffolding -----------------------------------------------------------
 

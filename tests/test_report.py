@@ -18,7 +18,6 @@ Three layers, in the order they fail:
 
 from __future__ import annotations
 
-import ast
 import json
 import subprocess
 import sys
@@ -27,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from openspec_graph import report
+from openspec_graph.cli import main
 from openspec_graph.dialect_card import SCHEMA_VERSION as CARD_SCHEMA
 from openspec_graph.rule_types import FINDINGS_SCHEMA_VERSION as ENVELOPE_SCHEMA
 from tests.support import run_cli
@@ -34,6 +34,9 @@ from tests.support import run_cli
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PKG = REPO_ROOT / "openspec_graph"
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "action"
+
+#: Every surface the `report` verb renders, in the order the action writes them.
+REPORT_FORMATS = ("sarif", "github-annotations", "github-summary", "github-outputs")
 
 # Each fixture's label, mirroring tests/fixtures/action/README.md's table. The
 # duplication is deliberate and one-directional: the README is what a reader
@@ -109,6 +112,7 @@ MALFORMED = {
 }
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize("label", sorted(MALFORMED), ids=lambda k: k.replace(" ", "-"))
 def test_a_malformed_envelope_raises_rather_than_crashing_a_renderer(label: str) -> None:
     """Every way an envelope can be wrong becomes one typed error.
@@ -124,6 +128,7 @@ def test_a_malformed_envelope_raises_rather_than_crashing_a_renderer(label: str)
     assert str(caught.value), "the error must carry a message an operator can act on"
 
 
+@pytest.mark.unit
 def test_a_well_formed_envelope_parses() -> None:
     """Guard the guard: a validator that rejected everything would make every
     rejection test above pass while the verb worked for nobody."""
@@ -132,6 +137,7 @@ def test_a_well_formed_envelope_parses() -> None:
     assert envelope.findings[0].rule == "G004"
 
 
+@pytest.mark.unit
 def test_an_unknown_finding_key_is_tolerated() -> None:
     """Additive keys do not bump the schema version, so a newer producer's
     envelope must still project rather than being refused for being richer."""
@@ -142,14 +148,17 @@ def test_an_unknown_finding_key_is_tolerated() -> None:
 # --- 2. the projections ------------------------------------------------------
 
 
+@pytest.mark.unit
 def test_blocking_findings_are_a_fail() -> None:
     assert report.status_of(_parse(blocking=2, findings=[_finding()])) == report.STATUS_FAIL
 
 
+@pytest.mark.unit
 def test_a_checked_clean_tree_is_a_pass() -> None:
     assert report.status_of(_parse(specs_checked=3)) == report.STATUS_PASS
 
 
+@pytest.mark.unit
 def test_a_tree_with_nothing_to_check_is_indeterminate_not_pass() -> None:
     """The defect this whole change exists to close, at the unit level.
 
@@ -160,6 +169,7 @@ def test_a_tree_with_nothing_to_check_is_indeterminate_not_pass() -> None:
     assert report.status_of(_parse(specs_checked=0)) == report.STATUS_INDETERMINATE
 
 
+@pytest.mark.e2e
 def test_an_empty_spec_tree_really_produces_that_envelope() -> None:
     """AC: the indeterminate case is reachable through the real CLI, not only
     through a constructed dict. Without this the unit test above could be
@@ -171,6 +181,7 @@ def test_an_empty_spec_tree_really_produces_that_envelope() -> None:
     assert report.status_of(envelope) == report.STATUS_INDETERMINATE
 
 
+@pytest.mark.unit
 def test_annotation_escaping_covers_every_documented_character() -> None:
     """Message data escapes %, CR and LF; property values escape those plus
     `:` and `,`. Getting this wrong truncates an annotation at the first colon,
@@ -189,6 +200,7 @@ def test_annotation_escaping_covers_every_documented_character() -> None:
     assert ": a, b" in line
 
 
+@pytest.mark.unit
 def test_a_line_of_zero_emits_no_line_property() -> None:
     """A finding with no locus (line 0) omits the workflow-command line=
     property rather than clamping to 1, which would annotate the first line
@@ -197,11 +209,13 @@ def test_a_line_of_zero_emits_no_line_property() -> None:
     assert "line=" not in line
 
 
+@pytest.mark.unit
 def test_a_real_line_emits_a_line_property() -> None:
     line = report.to_annotations(_parse(findings=[_finding(line=42)], blocking=1))[0]
     assert "line=42" in line
 
 
+@pytest.mark.unit
 def test_a_pathless_finding_is_annotated_without_a_file() -> None:
     """Non-success: a finding with no path is still emitted. Dropping it to
     satisfy a surface would lose a real result."""
@@ -211,6 +225,7 @@ def test_a_pathless_finding_is_annotated_without_a_file() -> None:
     assert "title=G004" in lines[0]
 
 
+@pytest.mark.unit
 def test_an_unknown_severity_maps_up_to_error() -> None:
     """Fail upward, never to `notice`: a severity this module has not been
     taught about is a bug, and the safe failure is the loud one."""
@@ -218,6 +233,7 @@ def test_an_unknown_severity_maps_up_to_error() -> None:
     assert line.startswith("::error ")
 
 
+@pytest.mark.unit
 def test_the_annotation_cap_is_per_severity_so_an_error_is_never_starved() -> None:
     """Non-success, and the reason the cap is per severity rather than shared.
 
@@ -239,6 +255,7 @@ def test_the_annotation_cap_is_per_severity_so_an_error_is_never_starved() -> No
     assert sum(1 for line in lines if line.startswith("::warning ")) == limit
 
 
+@pytest.mark.unit
 def test_a_capped_run_says_how_many_findings_were_withheld() -> None:
     limit = report.ANNOTATION_LIMIT_PER_SEVERITY
     findings = [_finding(message=f"e {i}", path=f"a/{i:03d}.md") for i in range(limit + 3)]
@@ -248,6 +265,7 @@ def test_a_capped_run_says_how_many_findings_were_withheld() -> None:
     assert "3 further finding(s)" in notices[0]
 
 
+@pytest.mark.unit
 def test_an_uncapped_run_emits_no_withheld_notice() -> None:
     """The other half of the boundary: a run under the cap must not claim
     anything was withheld."""
@@ -255,6 +273,7 @@ def test_an_uncapped_run_emits_no_withheld_notice() -> None:
     assert not [line for line in lines if line.startswith("::notice ")]
 
 
+@pytest.mark.unit
 def test_path_prefix_relocates_annotation_paths() -> None:
     """A subdirectory target's finding paths are relative to that target, while
     GitHub resolves `file=` against the repository root."""
@@ -263,6 +282,7 @@ def test_path_prefix_relocates_annotation_paths() -> None:
     assert "file=services/api/openspec/changes/c1/specs/cap/spec.md" in line
 
 
+@pytest.mark.unit
 def test_outputs_are_single_line_key_value_pairs() -> None:
     """`$GITHUB_OUTPUT` is line-oriented: a newline inside a value ends it
     early and the remainder is read as another key."""
@@ -276,6 +296,7 @@ def test_outputs_are_single_line_key_value_pairs() -> None:
         assert "=" not in key, key
 
 
+@pytest.mark.unit
 def test_rules_triggered_is_sorted_and_deduplicated() -> None:
     envelope = _parse(
         findings=[_finding(rule="H001"), _finding(rule="G004"), _finding(rule="H001")],
@@ -284,6 +305,7 @@ def test_rules_triggered_is_sorted_and_deduplicated() -> None:
     assert report.to_outputs(envelope)["rules-triggered"] == "G004,H001"
 
 
+@pytest.mark.unit
 def test_counts_cover_every_severity_even_at_zero() -> None:
     """A consumer must never have to tell "no errors" from "the key is
     missing"."""
@@ -292,11 +314,13 @@ def test_counts_cover_every_severity_even_at_zero() -> None:
     assert all(value == 0 for value in counts.values())
 
 
+@pytest.mark.unit
 def test_step_summary_is_deterministic() -> None:
     envelope = _parse(findings=[_finding()], blocking=1)
     assert report.to_step_summary(envelope) == report.to_step_summary(envelope)
 
 
+@pytest.mark.unit
 def test_step_summary_escapes_table_breaking_characters() -> None:
     """A `|` in a message would otherwise split the row into extra cells and
     silently shift every column after it."""
@@ -310,6 +334,7 @@ def test_step_summary_escapes_table_breaking_characters() -> None:
     assert delimiters == 5, f"expected four cells between five delimiters, got: {row}"
 
 
+@pytest.mark.unit
 def test_the_step_summary_table_is_capped_like_the_annotations() -> None:
     """The table would otherwise scroll a job summary past the point of use,
     and a truncated one that did not say so would read as the whole run."""
@@ -322,6 +347,7 @@ def test_the_step_summary_table_is_capped_like_the_annotations() -> None:
     assert "2 further finding(s) not listed" in summary
 
 
+@pytest.mark.unit
 def test_step_summary_names_the_indeterminate_case() -> None:
     """A reader who sees a red X on an empty tree needs to know why."""
     summary = report.to_step_summary(_parse(specs_checked=0))
@@ -343,6 +369,7 @@ def _card(**overrides: object) -> dict[str, object]:
     return payload
 
 
+@pytest.mark.unit
 def test_a_target_with_machinery_produces_no_discovery_warning() -> None:
     """The notes must stay quiet on an ordinary repository, or they are noise
     every adopter learns to skip."""
@@ -350,6 +377,7 @@ def test_a_target_with_machinery_produces_no_discovery_warning() -> None:
     assert report.discovery_notes(card) == []
 
 
+@pytest.mark.unit
 def test_a_target_with_no_make_targets_is_flagged() -> None:
     """The cited-stage rule returns early when the target has no Makefile, so a
     green run over such a repository proves less than it looks like it proves.
@@ -360,6 +388,7 @@ def test_a_target_with_no_make_targets_is_flagged() -> None:
     assert "G004" in notes[0]
 
 
+@pytest.mark.unit
 def test_a_target_with_no_coverage_floor_is_flagged() -> None:
     card = report.parse_card(_card(threshold=None), schema_version=CARD_SCHEMA)
     notes = report.discovery_notes(card)
@@ -367,6 +396,7 @@ def test_a_target_with_no_coverage_floor_is_flagged() -> None:
     assert "G003" in notes[0]
 
 
+@pytest.mark.unit
 def test_discovery_warnings_reach_the_annotations_and_the_summary() -> None:
     card = report.parse_card(_card(make_targets=[], threshold=None), schema_version=CARD_SCHEMA)
     envelope = _parse(specs_checked=1)
@@ -378,6 +408,7 @@ def test_discovery_warnings_reach_the_annotations_and_the_summary() -> None:
     assert "[!WARNING]" in report.to_step_summary(envelope, card=card)
 
 
+@pytest.mark.unit
 def test_discovery_outputs_are_omitted_without_a_card() -> None:
     """Absent is not zero: a consumer must be able to tell "not measured" from
     "measured as none"."""
@@ -391,6 +422,7 @@ def test_discovery_outputs_are_omitted_without_a_card() -> None:
     assert with_card["discovery-warnings"] == "1"
 
 
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "payload",
     [
@@ -413,32 +445,7 @@ def test_a_malformed_card_is_refused(payload: object) -> None:
 # --- module purity -----------------------------------------------------------
 
 
-def test_report_has_no_intra_package_imports() -> None:
-    """The zero-intra-package-import posture, checked rather than asserted.
-
-    `test_new_modules_stdlib_only` deliberately drops relative imports when it
-    resolves module roots, so it cannot see `from .rules import ...` -- several
-    modules on its list have intra-package imports and pass it. This module's
-    claim is stronger and needs its own check: it is handed plain data and the
-    schema versions it validates against, so it can never depend on evaluation
-    order.
-    """
-    tree = ast.parse((PKG / "report.py").read_text(encoding="utf-8"))
-    offenders: list[str] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            if node.level:
-                offenders.append(f"relative import of {node.module or '.'}")
-            elif node.module and node.module.split(".")[0] == PKG.name:
-                offenders.append(f"absolute import of {node.module}")
-        elif isinstance(node, ast.Import):
-            offenders += [
-                f"import of {alias.name}" for alias in node.names
-                if alias.name.split(".")[0] == PKG.name
-            ]
-    assert not offenders, f"openspec_graph/report.py imports its own package: {offenders}"
-
-
+@pytest.mark.unit
 def test_the_annotation_cap_is_a_named_constant() -> None:
     """A bare number in the action YAML would be exactly the hard-coded
     threshold this project fails other repositories for."""
@@ -455,6 +462,7 @@ def _written(tmp_path: Path, name: str, text: str) -> Path:
     return path
 
 
+@pytest.mark.e2e
 def test_report_sarif_is_byte_identical_to_validate_sarif(tmp_path: Path) -> None:
     """The identity that makes one `validate` run enough for every surface.
 
@@ -476,6 +484,7 @@ def test_report_sarif_is_byte_identical_to_validate_sarif(tmp_path: Path) -> Non
     assert projected.stdout == direct.stdout
 
 
+@pytest.mark.e2e
 def test_report_sarif_matches_on_a_clean_tree_too(tmp_path: Path) -> None:
     """The empty case still has to agree -- the driver's rule table is emitted
     whether or not anything fired."""
@@ -487,6 +496,7 @@ def test_report_sarif_matches_on_a_clean_tree_too(tmp_path: Path) -> None:
     assert projected.stdout == direct.stdout
 
 
+@pytest.mark.e2e
 @pytest.mark.parametrize(
     "fixture,exit_code,status,has_findings",
     FIXTURE_CONTRACT,
@@ -510,6 +520,7 @@ def test_each_fixture_produces_the_status_its_label_promises(
     assert (int(rendered["findings"]) > 0) is has_findings
 
 
+@pytest.mark.e2e
 def test_the_no_tree_fixture_writes_no_envelope() -> None:
     """The `error` status has no envelope behind it by construction: exit 2
     prints a diagnostic on stderr and nothing on stdout, so the action's own
@@ -520,22 +531,36 @@ def test_the_no_tree_fixture_writes_no_envelope() -> None:
     assert "no openspec/ directory" in result.stderr
 
 
+@pytest.mark.e2e
 @pytest.mark.parametrize(
     "payload",
     ["not json at all", "[1, 2, 3]", '{"schema_version": 99, "tool_version": "0.0.0"}', "null"],
     ids=["not-json", "an-array", "a-foreign-schema", "json-null"],
 )
-def test_an_unprojectable_file_exits_two_with_an_empty_stdout(tmp_path: Path, payload: str) -> None:
+def test_an_unprojectable_file_exits_two_with_an_empty_stdout(
+    tmp_path: Path, payload: str, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Non-success: never exit 1, and never a half-written document on stdout
-    beside a diagnostic."""
+    beside a diagnostic.
+
+    Every format runs in-process through `cli.main`; one real process, on the
+    first format, is the entry-point check, held to the same verdict
+    (shape-the-test-suite R-TSS-9)."""
     saved = _written(tmp_path, "broken.json", payload)
-    for fmt in ("sarif", "github-annotations", "github-summary", "github-outputs"):
-        result = run_cli(tmp_path, "report", "--findings", str(saved), "--format", fmt)
-        assert result.returncode == 2, f"{fmt}: {result.returncode}"
-        assert result.stdout.strip() == "", fmt
-        assert result.stderr.strip(), fmt
+    verdicts: dict[str, tuple[int, str, bool]] = {}
+    for fmt in REPORT_FORMATS:
+        code = main(["--target", str(tmp_path), "report", "--findings", str(saved), "--format", fmt])
+        out, err = capsys.readouterr()
+        assert code == 2, f"{fmt}: {code}"
+        assert out.strip() == "", fmt
+        assert err.strip(), fmt
+        verdicts[fmt] = (code, out.strip(), bool(err.strip()))
+    first = REPORT_FORMATS[0]
+    entry = run_cli(tmp_path, "report", "--findings", str(saved), "--format", first)
+    assert (entry.returncode, entry.stdout.strip(), bool(entry.stderr.strip())) == verdicts[first]
 
 
+@pytest.mark.e2e
 def test_a_missing_findings_file_exits_two(tmp_path: Path) -> None:
     result = run_cli(tmp_path, "report", "--findings", str(tmp_path / "absent.json"),
                      "--format", "github-outputs")
@@ -543,6 +568,7 @@ def test_a_missing_findings_file_exits_two(tmp_path: Path) -> None:
     assert "cannot read" in result.stderr
 
 
+@pytest.mark.e2e
 def test_a_version_mismatch_warns_but_still_renders(tmp_path: Path) -> None:
     """An envelope from another build is still the honest record of that run --
     a CI job projecting a downloaded artifact has a legitimate reason to read
@@ -564,6 +590,7 @@ def test_a_version_mismatch_warns_but_still_renders(tmp_path: Path) -> None:
     assert other.stdout == same.stdout, "the warning must not change what is rendered"
 
 
+@pytest.mark.e2e
 def test_report_ignores_the_global_target(tmp_path: Path) -> None:
     """The one verb that never reads a repository: it must project a saved
     envelope even when --target names a directory with nothing in it."""
@@ -576,6 +603,7 @@ def test_report_ignores_the_global_target(tmp_path: Path) -> None:
     assert "status=fail" in result.stdout
 
 
+@pytest.mark.e2e
 def test_a_card_from_detect_projects_without_a_warning(tmp_path: Path) -> None:
     """End to end over the real two files the action writes."""
     target = FIXTURES / "passing"
@@ -592,6 +620,7 @@ def test_a_card_from_detect_projects_without_a_warning(tmp_path: Path) -> None:
     assert rendered["discovery-warnings"] == "0"
 
 
+@pytest.mark.e2e
 def test_a_malformed_card_exits_two_without_projecting(tmp_path: Path) -> None:
     envelope = _written(tmp_path, "findings.json",
                         run_cli(FIXTURES / "passing", "validate", "--format", "json").stdout)
@@ -602,17 +631,33 @@ def test_a_malformed_card_exits_two_without_projecting(tmp_path: Path) -> None:
     assert result.stdout.strip() == ""
 
 
-def test_projections_are_byte_stable_across_runs(tmp_path: Path) -> None:
+@pytest.mark.e2e
+def test_projections_are_byte_stable_across_runs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Two runs over one envelope must agree, or the evidence bundle cannot be
-    compared between commits."""
-    envelope = _written(tmp_path, "findings.json",
-                        run_cli(FIXTURES / "failing", "validate", "--format", "json").stdout)
-    for fmt in ("sarif", "github-annotations", "github-summary", "github-outputs"):
-        first = run_cli(tmp_path, "report", "--findings", str(envelope), "--format", fmt)
-        second = run_cli(tmp_path, "report", "--findings", str(envelope), "--format", fmt)
-        assert first.stdout == second.stdout, fmt
+    compared between commits.
+
+    The runs go in-process through `cli.main`; one real process renders the
+    SARIF projection and must equal the in-process bytes, so the loop's
+    verdict is tied to the entry point (shape-the-test-suite R-TSS-9)."""
+    code = main(["--target", str(FIXTURES / "failing"), "validate", "--format", "json"])
+    assert code in (0, 1), capsys.readouterr().err
+    envelope = _written(tmp_path, "findings.json", capsys.readouterr().out)
+    firsts: dict[str, str] = {}
+    for fmt in REPORT_FORMATS:
+        argv = ["--target", str(tmp_path), "report", "--findings", str(envelope), "--format", fmt]
+        main(argv)
+        first = capsys.readouterr().out
+        main(argv)
+        second = capsys.readouterr().out
+        assert first == second, fmt
+        firsts[fmt] = first
+    entry = run_cli(tmp_path, "report", "--findings", str(envelope), "--format", "sarif")
+    assert entry.stdout == firsts["sarif"]
 
 
+@pytest.mark.unit
 def test_report_is_registered_as_a_read_only_verb() -> None:
     """Cross-check against the skill contract's own list, so the two cannot
     drift apart silently."""
@@ -621,12 +666,14 @@ def test_report_is_registered_as_a_read_only_verb() -> None:
     assert "report" in {argv[0] for argv in READ_ONLY_INVOCATIONS}
 
 
+@pytest.mark.integration
 def test_the_verb_appears_in_the_module_docstring() -> None:
     """The CLI docstring is the verb list a reader meets first."""
     source = (PKG / "cli.py").read_text(encoding="utf-8")
     assert "\n  report    " in source
 
 
+@pytest.mark.e2e
 def test_module_is_importable_without_the_rest_of_the_package() -> None:
     """Purity, observed rather than inferred: the module must import in a
     fresh interpreter with nothing else from this package loaded."""

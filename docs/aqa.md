@@ -45,7 +45,7 @@ tests instead: every third-party action sits at or above a per-action major
 floor in `pyproject.toml` (`[tool.specgraph.action_major_floors]`, read from
 the release tag in the pin's comment; a ratchet a bump never edits), and the
 Dockerfile's base tag must equal the workflows'
-`PYTHON_DEFAULT` — both in `tests/test_workflow_hardening.py`.
+`PYTHON_DEFAULT` — in `tests/test_workflow_pins.py` and `tests/test_workflow_python.py`.
 
 A missing floor or uninstrumented source is a **misconfiguration**, not a skip:
 the coverage floor scripts exit 2 with a clear message. A missing gate is a bug.
@@ -105,8 +105,9 @@ checklist silently missing `rules_speckit.py` after the SpecKit dialect
 landed) during the review that added this test.
 
 The same argument extends outward to everything an external reader acts on.
-`tests/test_agent_artifacts.py` holds the evaluation suite, `context7.json`,
-`llms.txt` and the Docker build context to their structural contracts, and
+`tests/test_agent_artifacts.py` holds the evaluation suite, `context7.json` and
+`llms.txt`, and `tests/test_release_surface.py` the Docker build context, to
+their structural contracts, and
 `tests/test_adopter_urls.py` holds *adopter-facing prose* to packaging
 metadata: every install command must name the distribution this tree actually
 builds, and the version floor the CI template hands an adopter must equal the

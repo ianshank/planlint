@@ -42,6 +42,7 @@ def _machinery(root: Path) -> None:
 # --- The helper itself ---
 
 
+@pytest.mark.unit
 def test_dedupe_keeps_one_entry_per_underlying_file(tmp_path: Path) -> None:
     real = tmp_path / "real.md"
     real.write_text("x", encoding="utf-8")
@@ -51,6 +52,7 @@ def test_dedupe_keeps_one_entry_per_underlying_file(tmp_path: Path) -> None:
     assert detect._dedupe_by_identity([real, link]) == [real]
 
 
+@pytest.mark.unit
 def test_dedupe_prefers_the_real_path_over_an_alias(tmp_path: Path) -> None:
     """The survivor must be the name a reviewer would recognise.
 
@@ -68,6 +70,7 @@ def test_dedupe_prefers_the_real_path_over_an_alias(tmp_path: Path) -> None:
     assert detect._dedupe_by_identity([link, real]) == [real]
 
 
+@pytest.mark.unit
 def test_dedupe_is_stable_when_neither_candidate_is_the_real_path(
     tmp_path: Path,
 ) -> None:
@@ -85,6 +88,7 @@ def test_dedupe_is_stable_when_neither_candidate_is_the_real_path(
     assert detect._dedupe_by_identity([second, first]) == [second]
 
 
+@pytest.mark.unit
 def test_dedupe_keeps_genuinely_distinct_files_with_identical_content(
     tmp_path: Path,
 ) -> None:
@@ -99,6 +103,7 @@ def test_dedupe_keeps_genuinely_distinct_files_with_identical_content(
     assert detect._dedupe_by_identity([first, second]) == [first, second]
 
 
+@pytest.mark.unit
 def test_dedupe_is_a_no_op_without_links(tmp_path: Path) -> None:
     paths = []
     for name in ("a.md", "b.md", "c.md"):
@@ -112,6 +117,7 @@ def test_dedupe_is_a_no_op_without_links(tmp_path: Path) -> None:
 # --- OpenSpec discovery ---
 
 
+@pytest.mark.unit
 def test_a_symlinked_change_package_is_discovered_once(tmp_path: Path) -> None:
     repo = tmp_path
     _machinery(repo)
@@ -124,6 +130,7 @@ def test_a_symlinked_change_package_is_discovered_once(tmp_path: Path) -> None:
     assert len(found) == 1, [str(p) for p in found]
 
 
+@pytest.mark.unit
 def test_profile_does_not_double_count_change_dirs(tmp_path: Path) -> None:
     repo = tmp_path
     _machinery(repo)
@@ -136,6 +143,7 @@ def test_profile_does_not_double_count_change_dirs(tmp_path: Path) -> None:
     assert len(profile.change_dirs) == 1, [str(d) for d in profile.change_dirs]
 
 
+@pytest.mark.e2e
 def test_validate_reports_one_spec_checked(tmp_path: Path) -> None:
     repo = tmp_path
     _machinery(repo)
@@ -151,6 +159,7 @@ def test_validate_reports_one_spec_checked(tmp_path: Path) -> None:
 # --- SpecKit discovery ---
 
 
+@pytest.mark.unit
 def test_a_symlinked_feature_is_discovered_once(tmp_path: Path) -> None:
     repo = tmp_path
     _machinery(repo)
@@ -163,6 +172,7 @@ def test_a_symlinked_feature_is_discovered_once(tmp_path: Path) -> None:
     assert len(found) == 1, [str(p) for p in found]
 
 
+@pytest.mark.unit
 def test_profile_does_not_double_count_feature_dirs(tmp_path: Path) -> None:
     repo = tmp_path
     _machinery(repo)
@@ -178,6 +188,7 @@ def test_profile_does_not_double_count_feature_dirs(tmp_path: Path) -> None:
 # --- The graph, where the duplication was visible ---
 
 
+@pytest.mark.e2e
 def test_the_graph_renders_one_node_per_real_requirement(tmp_path: Path) -> None:
     """The symptom that made this worth fixing: a duplicated spec produced
     duplicate requirement nodes, so the graph showed work that does not
@@ -194,6 +205,7 @@ def test_the_graph_renders_one_node_per_real_requirement(tmp_path: Path) -> None
     assert len(spec_nodes) == 1, spec_nodes
 
 
+@pytest.mark.e2e
 def test_the_real_package_keeps_its_own_name_under_change(tmp_path: Path) -> None:
     """The observable consequence of dedup, and the reason the tie-break is
     not merely cosmetic: `--change` addresses the surviving name. It must be
@@ -207,6 +219,7 @@ def test_the_real_package_keeps_its_own_name_under_change(tmp_path: Path) -> Non
     assert run_cli(repo, "validate", "--change", "real-change").returncode == 0
 
 
+@pytest.mark.e2e
 def test_an_alias_name_reports_no_specs_found(tmp_path: Path) -> None:
     """The other half, stated so it is a decision rather than a surprise: two
     directories that are one package resolve to one, so the alias name no
@@ -224,6 +237,7 @@ def test_an_alias_name_reports_no_specs_found(tmp_path: Path) -> None:
     assert "no specs found for change 'alias-change'" in result.stderr
 
 
+@pytest.mark.unit
 def test_two_real_features_are_still_two_nodes(tmp_path: Path) -> None:
     """Non-success criterion: dedup must not collapse distinct features. If
     this ever fails, the fix has started hiding real specs."""

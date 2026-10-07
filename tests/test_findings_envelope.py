@@ -19,6 +19,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from openspec_graph import __version__
 from openspec_graph.rule_types import FINDINGS_SCHEMA_VERSION, Finding
 from tests.support import normalize_root, run_cli, write_spec
@@ -51,6 +53,7 @@ def _envelope(repo: Path) -> dict:
     return json.loads(result.stdout)
 
 
+@pytest.mark.e2e
 def test_envelope_carries_a_schema_version(tmp_path: Path) -> None:
     """AC-FE-1: a consumer can tell which shape it received."""
     payload = _envelope(_repo(tmp_path))
@@ -58,6 +61,7 @@ def test_envelope_carries_a_schema_version(tmp_path: Path) -> None:
     assert payload["schema_version"] == FINDINGS_SCHEMA_VERSION
 
 
+@pytest.mark.e2e
 def test_envelope_carries_the_tool_version(tmp_path: Path) -> None:
     """AC-FE-2: and which build produced it."""
     payload = _envelope(_repo(tmp_path))
@@ -65,6 +69,7 @@ def test_envelope_carries_the_tool_version(tmp_path: Path) -> None:
     assert payload["tool_version"] == __version__
 
 
+@pytest.mark.e2e
 def test_existing_keys_keep_their_spelling(tmp_path: Path) -> None:
     """AC-FE-3: renaming a key is a second break that buys nothing. The
     envelope is additive over the shape callers already parse."""
@@ -80,6 +85,7 @@ def test_existing_keys_keep_their_spelling(tmp_path: Path) -> None:
     }
 
 
+@pytest.mark.e2e
 def test_target_stays_absolute(tmp_path: Path) -> None:
     """AC-FE-4: it is the base the relative finding paths resolve against, so
     relativizing it would leave nothing to resolve them from."""
@@ -90,6 +96,7 @@ def test_target_stays_absolute(tmp_path: Path) -> None:
     assert Path(payload["target"]).is_absolute()
 
 
+@pytest.mark.e2e
 def test_every_finding_path_is_relative_and_posix(tmp_path: Path) -> None:
     """AC-FE-5: the fix itself. No absolute prefix, no backslashes."""
     repo = _repo(tmp_path)
@@ -107,6 +114,7 @@ def test_every_finding_path_is_relative_and_posix(tmp_path: Path) -> None:
         assert (Path(payload["target"]) / path).exists(), path
 
 
+@pytest.mark.e2e
 def test_two_checkout_paths_produce_identical_json(tmp_path: Path) -> None:
     """AC-FE-6: the property the CI template actually needs. The same logical
     repository, cloned to two different directories, yields byte-identical
@@ -121,6 +129,7 @@ def test_two_checkout_paths_produce_identical_json(tmp_path: Path) -> None:
     assert one == two
 
 
+@pytest.mark.unit
 def test_normalize_root_handles_raw_and_json_escaped_forms(tmp_path: Path) -> None:
     """Direct unit pin for the helper: a bare native-path replace is POSIX-only
     (json.dumps doubles every backslash on Windows), so both forms must go."""
@@ -132,6 +141,7 @@ def test_normalize_root_handles_raw_and_json_escaped_forms(tmp_path: Path) -> No
     assert out.count("<ROOT>") == 2
 
 
+@pytest.mark.e2e
 def test_findings_are_sorted_like_the_text_renderer(tmp_path: Path) -> None:
     """AC-FE-7: the two renderings of one run agreed on content but not on
     order — JSON emitted evaluation order while the text path sorted. Any
@@ -153,6 +163,7 @@ def test_findings_are_sorted_like_the_text_renderer(tmp_path: Path) -> None:
     assert text_order == json_order
 
 
+@pytest.mark.e2e
 def test_blocking_count_still_matches_the_findings(tmp_path: Path) -> None:
     """Sorting must not disturb what the envelope reports."""
     repo = _repo(tmp_path)
@@ -167,6 +178,7 @@ def test_blocking_count_still_matches_the_findings(tmp_path: Path) -> None:
 # --- Non-success criteria (G002) ---
 
 
+@pytest.mark.unit
 def test_a_finding_outside_the_target_is_emitted_not_dropped(tmp_path: Path) -> None:
     """AC-FE-8 (non-success): relativizing must never silently discard a
     finding it cannot relativize.
@@ -184,6 +196,7 @@ def test_a_finding_outside_the_target_is_emitted_not_dropped(tmp_path: Path) -> 
     assert rendered["path"] == outside.as_posix()
 
 
+@pytest.mark.unit
 def test_as_dict_without_a_root_is_unchanged(tmp_path: Path) -> None:
     """AC-FE-9 (non-success): the root argument is opt-in. A caller that
     passes nothing gets exactly the previous absolute rendering, so no other
@@ -195,6 +208,7 @@ def test_as_dict_without_a_root_is_unchanged(tmp_path: Path) -> None:
     assert rendered["path"] == str(path)
 
 
+@pytest.mark.unit
 def test_a_finding_with_no_path_stays_none(tmp_path: Path) -> None:
     """A pathless finding is still serialized as null, not as the string
     "None" and not omitted."""
@@ -203,6 +217,7 @@ def test_a_finding_with_no_path_stays_none(tmp_path: Path) -> None:
     assert rendered["path"] is None
 
 
+@pytest.mark.e2e
 def test_clean_repo_still_reports_an_empty_findings_list(tmp_path: Path) -> None:
     """The envelope does not manufacture findings on a passing tree."""
     repo = _repo(tmp_path, with_findings=False)
@@ -216,6 +231,7 @@ def test_clean_repo_still_reports_an_empty_findings_list(tmp_path: Path) -> None
 # --- A2b: the legacy detect --json shape ---
 
 
+@pytest.mark.e2e
 def test_detect_json_warns_that_it_is_deprecated(tmp_path: Path) -> None:
     """AC-FE-10: removing a flag after the first release is a break for real
     adopters. Say so before anyone can depend on it."""
@@ -229,6 +245,7 @@ def test_detect_json_warns_that_it_is_deprecated(tmp_path: Path) -> None:
     assert result.stderr.strip().count("\n") == 0, result.stderr
 
 
+@pytest.mark.e2e
 def test_detect_json_stdout_is_unchanged(tmp_path: Path) -> None:
     """AC-FE-10 (non-success): the deprecation is a notice, not a behavior
     change. stdout stays byte-identical, so an existing caller keeps working
@@ -242,6 +259,7 @@ def test_detect_json_stdout_is_unchanged(tmp_path: Path) -> None:
     assert "deprecated" not in result.stdout
 
 
+@pytest.mark.e2e
 def test_detect_format_json_is_not_deprecated(tmp_path: Path) -> None:
     """The portable replacement must not inherit the warning."""
     repo = _repo(tmp_path, with_findings=False)
@@ -255,6 +273,7 @@ def test_detect_format_json_is_not_deprecated(tmp_path: Path) -> None:
 # --- The version lookup behind tool_version ---
 
 
+@pytest.mark.e2e
 def test_package_version_is_the_single_lookup_site(tmp_path: Path) -> None:
     """The envelope's `tool_version` must not cost a second metadata lookup.
 
@@ -292,6 +311,7 @@ except SystemExit:
     assert json.loads(result.stdout)["tool_version"] == __version__
 
 
+@pytest.mark.e2e
 def test_version_flag_output_is_unchanged(tmp_path: Path) -> None:
     """Splitting the bare lookup out of the argparse template must not change
     what `--version` prints — it is the preflight step the Agent Skill tells
@@ -302,6 +322,7 @@ def test_version_flag_output_is_unchanged(tmp_path: Path) -> None:
     assert result.stdout.split() == ["planlint", __version__]
 
 
+@pytest.mark.unit
 def test_run_cli_normalizes_tool_version() -> None:
     """The golden-output helper must erase `tool_version` before hashing.
 
