@@ -10,19 +10,23 @@ squash-merged. Neither `1c8917c` nor `d2b3cc6` is an ancestor of the branch.
 `git diff d2b3cc6 HEAD -- ':!openspec/changes/ratchet-test-types-and-docstrings'`
 was empty at `e558eba` when the round-2 revision was handed over, and every
 headline figure below was re-taken at `e558eba` and equals its `d2b3cc6`
-value. The container had four cores (`nproc`) and ran Python 3.13.16, mypy
-2.4.0, ruff 0.16.10, pytest 9.1.1 and hypothesis 6.168.5, with no `tomli`.
-Every line number below is re-checked against the branch head before the
-milestone that uses it, because a sibling package landing first may move a
-line without moving the fact. Every number here names the command that
-produced it. Every mypy run used `--cache-dir /dev/null` or a cache
+value. The round-3 points were measured at `25c65de`, the round-2 revision
+of this package committed on `e558eba`, where the headline counts re-taken
+(184 and 188 test errors in a gate-shaped run, 77 docstring findings in 30
+files) are unchanged. The container had four cores (`nproc`) and ran Python
+3.13.16, mypy 2.4.0, ruff 0.16.10, pytest 9.1.1 and hypothesis 6.168.5, with
+no `tomli`. Every line number below is re-checked against the branch head
+before the milestone that uses it, because a sibling package landing first
+may move a line without moving the fact. Every number here names the command
+that produced it. Every mypy run used `--cache-dir /dev/null` or a cache
 directory outside the worktree. Times are `TIMEFORMAT='%R s'; time
-<command>`.
+<command>`, or Python's `time.monotonic()` around a subprocess.
 
 At `e558eba`:
 - **The gate.** `planlint --target . validate --fail-on ERROR` exits 0
   before the round-2 revision's first write under `openspec/`, with 52 specs
-  and 0 error / 0 warn / 0 info.
+  and 0 error / 0 warn / 0 info. It does the same at `25c65de`, before the
+  round-3 revision's first write.
 - **Today's tests.** `python -m mypy tests --explicit-package-bases
   --cache-dir /dev/null` reports "Found 185 errors in 32 files (checked 61
   source files)". Counting only the trailing code of its `error:` lines
@@ -45,7 +49,10 @@ At `e558eba`:
   win32`, in 3.5 s. Both runs leave stderr empty and exit 1. The four extra
   objects are `attr-defined` on `os.mkfifo` in
   `tests/test_detect_thresholds.py`, lines 250, 251, 406 and 425; no error
-  is Linux-only.
+  is Linux-only. In the gate's shape at `25c65de` (a configuration with
+  `files` naming the three trees, no path, `MYPYPATH` unset), the counts
+  under `tests/` are the same 184 and 188, in 3.7 s and 3.9 s, with no error
+  outside `tests/`.
 - **A clean JSON run.** `python -m mypy --strict -O json --cache-dir
   /dev/null -c 'x: int = 1' | od -c` reads a lone `\n`, exit 0, under mypy
   2.4.0 and 1.11.0.
@@ -66,9 +73,10 @@ At `e558eba`:
   D100,D101,D102,D103 <tree> --statistics` reads 52 findings in 18 files of
   `openspec_graph/`, 25 in 12 files of `tools/`, and 584 in 47 files of
   `tests/`. The planned guard's command, `python -m ruff check --no-cache
-  --isolated --ignore-noqa --select D100,D101,D102,D103 --output-format json
-  --exit-zero openspec_graph tools`, prints 77 findings in 30 files (40
-  file-and-code pairs), exits 0 and leaves stderr empty.
+  --isolated --no-respect-gitignore --ignore-noqa --select
+  D100,D101,D102,D103 --output-format json --exit-zero openspec_graph
+  tools`, prints 77 findings in 30 files (40 file-and-code pairs), exits 0
+  and leaves stderr empty (at `25c65de`).
 - **The convention.** The sorted `D100`–`D103` finding set has one digest
   under no convention and under `google`, `numpy` and `pep257` (661 each).
   Google is the best fit of the wider family, with 37 findings against 67.
@@ -118,7 +126,7 @@ by its resolution.
      The entries only shrink and are compared as a multiset. Each waiver
      holds exactly one listed code plus `unused-ignore`. Every `# mypy:`
      comment token found with `tokenize` is named. Both bypasses are planted
-     cases.
+     cases. (Round 3 re-keyed the entries by waived line; see its item 5.)
    - Two more forms were found while re-measuring, by `python -m mypy -O
      json --strict -c …` outside the worktree, and are named the same way.
      A bare `# type: ignore` before a module's first statement silences the
@@ -271,7 +279,7 @@ every other run wrote nothing.
      with `per-file-ignores` cleared. Under those flags each of the three
      planted variants reads 8, and the tree reads 77 findings in 30 files
      (40 pairs), exit 0, empty stderr: the same as the round-1 command on
-     today's tree.
+     today's tree. (Round 3 adds `--no-respect-gitignore`; see its item 4.)
    - The shape guard names a `D` code under `extend-per-file-ignores` and
      any comment token, read with `tokenize`, holding a `noqa` directive
      that names a `D` code, under `openspec_graph/` or `tools/`. Today there
@@ -299,6 +307,8 @@ every other run wrote nothing.
      as applying to the tests, which errs toward naming it.
    - Planted cases: overrides for `tests.test_graph`, `tests.*.test_graph`
      and `*`, each named.
+   - Superseded by round-3 item 1: `compile_glob` misses spellings mypy
+     applies, and the guard now asks mypy's own resolution.
 3. **MEDIUM-3: counts can be lowered with no comment** (round-2 adversarial
    review), by a `tests/**/*.pyi` stub, `@typing.no_type_check`, code under
    `if not TYPE_CHECKING:` and a global `exclude`.
@@ -322,7 +332,7 @@ every other run wrote nothing.
      `test_no_stub_or_unchecked_name_under_tests`, names any `.pyi` under
      `tests/` and any such `NAME` token. DEC-TDR-016 records that a future
      legitimate use is a reviewed change to the guard, not a silent
-     addition.
+     addition. (Round 3 widens it and renames it; see its item 3.)
    - Planted cases: a `.pyi` path under `tests/`, a `no_type_check` name, a
      `TYPE_CHECKING` name, and a `[tool.mypy]` table with `exclude`.
 4. **MEDIUM-4: a stray mypy configuration silently narrows the gate**
@@ -360,6 +370,8 @@ every other run wrote nothing.
      path and code stay, and `MYPY_WAIVERS` read as (path, code) pairs is
      the same multiset before and after. A move to another file is a new
      waiver.
+   - The re-key rule is superseded by round-3 item 5: entries are keyed by
+     the waived line's text, and the rule is dropped.
 6. **MEDIUM-6: a clean `-O json` run prints a lone newline** (round-2
    adversarial review).
    - Measured: `python -m mypy --strict -O json --cache-dir /dev/null -c
@@ -378,7 +390,8 @@ every other run wrote nothing.
      `test_the_dev_extra_floors_mypy_and_pins_nothing` reads
      `[project.optional-dependencies] dev` through `tests/support.py`'s
      `read_pyproject()`, and asserts one entry for `mypy` whose specifier is
-     `>=1.11` and no `==` in any entry.
+     `>=1.11` and no `==` in any entry. (Round 3 reads entries with
+     `packaging`; see its item 7.)
    - Its tier is `integration` by `tests/shape_support.py`'s criterion: it
      starts no process, and it reaches `read_pyproject()`, whose path is
      built from `__file__` with no labelled segment (`tests/support.py:25`,
@@ -434,6 +447,261 @@ every other run wrote nothing.
     AC-TDR-21 and Milestones 2 and 3: each CI record names the run id, the
     head SHA it ran for and the merge SHA it tested.
 
+## Recorded (round-3 corrections, 2026-10-07)
+
+Measured at `25c65de`, before the round-3 revision's first write.
+`planlint --target . validate --fail-on ERROR` exits 0, with 52 specs and 0
+error / 0 warn / 0 info. Each finding of the round-3 adversarial review is
+followed by its resolution and the measurements behind it. mypy 2.4.0 is the
+system install; mypy 1.11.0 is the round-2 reviewer's scratch environment.
+The round-3 reviewer's probe configurations (`base.toml`, `slash.toml`,
+`comma.toml`, `list.toml`, `parent.toml`, `ws.toml`, `fi_pkg.toml`,
+`fi_narrow.toml`, `fi_narrow_gate.toml`, `gate.toml`) and its `envstubs`
+directory were read in place. The probes that needed a new file on disk (a
+planned `pyproject.toml`, a `pytest` stub, two ignore-file trees) wrote it to
+a scratch directory outside the worktree; every other run wrote nothing.
+mypy runs used `--cache-dir /dev/null`; Python runs used
+`PYTHONDONTWRITEBYTECODE=1` and `python -I`.
+
+1. **HIGH-1: R-TDR-2's `compile_glob` matcher missed override spellings mypy
+   applies** (round-3 adversarial review).
+   - `mypy/config_parser.py:382–387` splits a section's module list on `,`
+     and replaces `os.sep` and `os.altsep` with `.` before compiling.
+   - Counts, `python -m mypy --config-file <cfg> --cache-dir /dev/null
+     --platform linux -O json tests` with `MYPYPATH` unset, errors under
+     `tests/`: `base.toml` 184 (`no-untyped-def` 96); `slash.toml` (`module
+     = "tests/test_graph"`), `comma.toml` (`module =
+     "openspec_graph.cli,tests.test_graph"`) and `list.toml` (`module =
+     ["openspec_graph.cli", "tests.test_graph"]`) each 160 (72).
+   - `Options().compile_glob(p).match("tests.test_graph")`: false for
+     `tests/test_graph` and `openspec_graph.cli,tests.test_graph`; true for
+     `tests.*.test_graph` and `*`.
+   - Asking mypy: `_, o = mypy.main.process_options(["--config-file", cfg],
+     require_targets=False, stdout=io.StringIO(), stderr=io.StringIO())`,
+     then the keys where `o.snapshot()` and
+     `o.clone_for_module("tests.test_graph").snapshot()` differ. On 2.4.0
+     and 1.11.0 alike: `disable_error_code` and `disabled_error_codes` for
+     the slash, comma, list and `tests.*.test_graph` spellings; nothing for
+     `base.toml`, `parent.toml` (`module = "tests"`), `ws.toml` (`module = "
+     tests.test_graph"`), `fi_pkg.toml` and an in-memory `[mypy-*]`, except
+     that 1.11.0's snapshot also carries the bookkeeping set
+     `unused_configs`, which `clone_for_module` fills. On a configuration
+     whose one override is `tomli`, that set was the only differing field
+     for any test module, and only on 1.11.0.
+   - One departure from the review's probe, measured: with
+     `parse_config_file(o, lambda: None, cfg, …)` the strict flags are never
+     applied (global `disallow_untyped_defs` False), so an in-memory
+     override on `tests.test_graph` setting `disallow_untyped_defs = False`
+     showed no difference. Through `process_options` it showed `True` →
+     `False`, on both releases. R-TDR-2 therefore loads with
+     `process_options`, which calls `parse_config_file` with mypy's own
+     strict callback.
+   - Other relaxations through `process_options`, on both releases:
+     `follow_imports = skip` showed `follow_imports` `normal` → `skip`;
+     `ignore_errors = True` showed `ignore_errors`; `always_false = FOO`
+     showed `always_false`; `enable_error_code = explicit-override` showed
+     `enable_error_code` and `enabled_error_codes`.
+   - The derived configuration's re-check: a planned `pyproject.toml`
+     (written outside the worktree, the R-TDR-1 table with the `tests.*` and
+     `tomli` entries) and its derived INI without `tests.*` differ globally
+     only in `config_file` and `per_module_options`; the planned per-module
+     options less `tests.*` equal the derived ones (`True`). Over all 61
+     `tests.<stem>` modules, the planned options differ from the global in
+     `disable_error_code` and `disabled_error_codes` only, and the derived
+     in nothing (ignoring `unused_configs`); stderr empty; both releases.
+     The same derived INI with a `[mypy-tests/test_graph]` override added
+     shows `disable_error_code` and `disabled_error_codes` for
+     `tests.test_graph`, so the re-check names it. `process_options` plus
+     61 clones took 0.1 s (`time python -I -c …`).
+   - Signatures, read from each release's shipped source (1.11.0's compiled
+     functions carry no `inspect` signature): `parse_config_file(options,
+     set_strict_flags, filename, stdout=None, stderr=None)` at 2.4.0
+     `config_parser.py:317` and 1.11.0 `:232`; `Options.snapshot(self)` at
+     `options.py:448` and `:404`; `Options.clone_for_module(self, module)`
+     at `:597` and `:499`; `process_options(args, stdout=None, stderr=None,
+     require_targets=True, server_options=False, fscache=None,
+     program="mypy", header=HEADER)` at `main.py:1429` and `:441`, plus
+     `mypyc=False` at 2.4.0. `parse_config_file` sets
+     `MYPY_CONFIG_FILE_DIR` in `os.environ` (`config_parser.py:343`).
+   - Resolved in R-TDR-2, R-TDR-5, R-TDR-11, R-TDR-12, DEC-TDR-005,
+     DEC-TDR-015, AC-TDR-4, AC-TDR-5, AC-TDR-9 and Milestone 1. The guard
+     asks mypy, ignores `unused_configs` and nothing else, requires the
+     listed codes to appear as the difference (so a changed internal fails
+     red, never green), and restores `os.environ` after loading. The tests
+     entry must be spelled exactly `module = "tests.*"` or `["tests.*"]`,
+     and the derived configuration drops that entry and re-checks itself.
+     A bare `*` follows mypy's truth and is quiet. DEC-TDR-015's
+     `compile_glob` reasoning is retired.
+   - Planted: the slash, comma, list and `tests.*.test_graph` spellings; an
+     override on a test module that sets only `follow_imports`; one that
+     sets `disallow_untyped_defs = false`; a derived configuration keeping a
+     second override that repeats a listed code; a bare `*`, quiet.
+2. **MEDIUM-2: the occurrence run was not the gate's run** (round-3
+   adversarial review).
+   - Measured with a `python -I -c` runner that strips `MYPYPATH` and the
+     coverage variables, runs `python -m mypy --config-file <cfg>
+     --cache-dir /dev/null --platform linux -O json [tests]` and counts
+     errors under `tests/`: `fi_narrow.toml` with `tests` as a path, 176 and
+     `attr-defined` 7 (one more error outside `tests/`); `fi_narrow_gate.toml`
+     with `files` and no path, 184 and 19; `gate.toml`, 184 and 19.
+   - `MYPYPATH` set to the reviewer's `envstubs`: with `tests` as a path, 194
+     and `attr-defined` 28; in the `files` shape, 184 and 19. `MYPYPATH` set
+     to a scratch `pytest/__init__.pyi` whose `__getattr__` returns `Any`: in
+     the `files` shape, 928, of which 744 `untyped-decorator`. mypy prepends
+     `MYPYPATH` to the configured `mypy_path` (`mypy/modulefinder.py`).
+     `MYPY_CONFIG_FILE_DIR=/nonexistent`: 184, unchanged.
+   - `gate.toml` in the `files` shape under `--platform win32`: 188, no
+     error outside `tests/`, stderr empty; 3.7 s and 3.9 s for the two
+     platforms.
+   - Resolved in R-TDR-5, R-TDR-11, DEC-TDR-005, AC-TDR-5 and Milestone 1:
+     the derived configuration keeps `files` and every other key; the run
+     passes no path; findings are filtered to `tests/`; the environment is
+     `env_without_coverage()` without `MYPYPATH`. DEC-TDR-005 now lists every
+     way the run differs from the gate's.
+   - Planted: an environment holding `MYPYPATH`, which the run's
+     environment drops; a `follow_imports` override on the package, quiet.
+3. **MEDIUM-3: other always-false conditions hide code** (round-3
+   adversarial review).
+   - Measured with `python -m mypy --strict --warn-unreachable
+     --python-version 3.10 --platform linux --cache-dir /dev/null -c …`,
+     outside the worktree, over an untyped `def` under each form, on 2.4.0
+     and 1.11.0. "Success" (hidden) on both: `if sys.version_info >= (3,
+     11):`; `MYPY = False` then `if not MYPY:`; `if sys.platform ==
+     "darwin":`; `if sys.version_info < (3, 10):`; `if
+     sys.platform.startswith("darwin"):`; `if sys.version_info[0] < 3:`;
+     `if PY2:`; `if not PY3:`; a `match 1:` case guard `if sys.platform ==
+     "darwin"`; a module-level `assert sys.platform == "darwin"`. Hidden on
+     2.4.0 only: `x = True` then `if x and sys.version_info < (3, 10):`.
+     Reported (not hidden) on both: `while sys.version_info < (3, 10):`; a
+     conditional expression on `sys.version_info`; an `assert` on
+     `sys.platform` inside a function; `from sys import platform` then `if
+     platform == "darwin":`; `if False:`; the control.
+   - The rules are `mypy/reachability.py`'s `infer_condition_value` (`not`,
+     `and`, `or`; the names `PY2`, `PY3`, `MYPY`, `TYPE_CHECKING`; the
+     configured `always_true` and `always_false`), `consider_sys_version_info`
+     and `consider_sys_platform` (including `.startswith`), with
+     `is_sys_attr` matching the literal name `sys`. They are applied to
+     `if`, `match` and a module-level `assert` (`mypy/semanal_pass1.py`).
+   - Today, at `25c65de`: an `ast` pass over `tests/*.py` finds no
+     `if`/`elif`/`while`/conditional-expression/`assert`/`match`-guard test
+     that refers to `sys.version_info` or `sys.platform`. The one reference
+     is `tests/test_claude_hooks.py:100`, `@pytest.mark.skipif(sys.platform
+     == "win32", reason="POSIX execute bit")`. No `MYPY`, `PY2` or `PY3`
+     `NAME` token exists under `tests/`.
+   - Resolved in R-TDR-3, R-TDR-7, R-TDR-11, DEC-TDR-007, DEC-TDR-016,
+     AC-TDR-6, AC-TDR-8 and AC-TDR-9. The sibling guard names `MYPY`, `PY2`
+     and `PY3` names, and every `if`/`elif`, `while`, conditional
+     expression, `assert` and `match` guard whose test refers to
+     `sys.version_info` or `sys.platform`, read with `ast`. R-TDR-6's check
+     in `tests/support.py`'s `read_pyproject` is the one allowed site,
+     recorded by path and function, allowed once. Per-module `always_true`
+     and `always_false` fall to item 1's comparison.
+   - Beyond the review's list, and measured above: `PY2`/`PY3`, `match`
+     guards, module-level `assert`, and `.startswith`, so the rule is any
+     reference to `sys.version_info` or `sys.platform` in the test, not
+     only a comparison. `while` and conditional expressions are named
+     though they hid nothing here (DEC-TDR-016).
+   - Planted: each of the review's four forms, a `match` guard and a
+     module-level `assert`, each outside the allowed site; a `MYPY` name;
+     quiet: the allowed site, and a `skipif(sys.platform == "win32", …)`
+     argument.
+4. **MEDIUM-4: ignore files hide files from ruff under `--isolated`**
+   (round-3 adversarial review).
+   - Measured in two probe trees outside the worktree, each `pkg/m.py` with
+     two undocumented functions, by `python -m ruff check --no-cache
+     --isolated --ignore-noqa [--no-respect-gitignore] --select
+     D100,D101,D102,D103 --output-format json --exit-zero pkg`. With
+     `pkg/.ignore` naming `m.py`: 0 findings and "warning: No Python files
+     found under the given path(s)" without the flag; 3 findings with it. A
+     `pkg/.gitignore` naming `m.py` outside any git repository: 3 findings
+     either way, so the in-repository `.gitignore` case is covered by the
+     flag's scope and was not planted into the worktree. The round-3
+     reviewer measured an `openspec_graph/.ignore` naming `cli.py` taking
+     the tree's 77 findings to 69.
+   - Today's tree with the flag: 77 findings in 30 files, 40 pairs, exit 0,
+     stderr empty; the same as without. `find . -name .ignore -not -path
+     './.git/*'` finds none. `python -m ruff check --no-cache --isolated
+     --show-files openspec_graph tools` lists the same 43 files with and
+     without `--no-respect-gitignore`, which is every `.py` file `find
+     openspec_graph tools -name '*.py'` counts, so no ignore file hides one
+     there today.
+   - `python -m ruff check --isolated --no-respect-gitignore --show-settings`
+     lists the built-in `file_resolver.exclude` the flags leave in force
+     (`dist`, `venv`, `_build`, `node_modules` and the rest); that is a
+     residual gap in DEC-TDR-017.
+   - Resolved in R-TDR-9, R-TDR-11, DEC-TDR-009, AC-TDR-12, AC-TDR-13 and
+     Milestone 3: the command gains `--no-respect-gitignore`. Planted: a
+     tree under a temporary directory whose `.ignore` names its one module,
+     run through the same command, which must count it.
+5. **MEDIUM-5: a re-key could re-point a waiver** (round-3 adversarial
+   review).
+   - Measured at `25c65de`: the keys (path, code, waived line), with the
+     line's text before its comment token collapsed and stripped, read with
+     `tokenize` by a `python -I -c` script, are distinct for all ten ignores
+     under `tests/`, and no waived line's text occurs twice in its file. The
+     eight waivers' texts are in the proposal's table.
+   - Resolved in R-TDR-7, R-TDR-11, DEC-TDR-006, DEC-TDR-017, AC-TDR-8,
+     AC-TDR-9 and Milestones 1 and 2. Entries are keyed by (path, code,
+     waived line) and the re-key rule is dropped. A rename or a move within
+     the file needs no edit; a comment moved onto other code changes the key
+     and is named; an edit to the waived line updates the entry in the same
+     commit, so the diff shows both texts.
+   - One correction to the review's wording: a move to another file changes
+     the key's path, so the entry's path is updated in that commit, with its
+     code and text unchanged. The residual gaps, a coordinated edit of a
+     waived line and its entry and a move between two identical lines, are
+     DEC-TDR-017's.
+   - Planted: a recorded waiver whose comment moves to another line, named.
+6. **LOW-6: the `noqa` grammar** (round-3 adversarial review).
+   - Measured at `25c65de` by passing `openspec_graph/cli.py` on stdin to
+     `python -m ruff check --no-cache --select D100,D101,D102,D103 --config
+     "lint.per-file-ignores = {}" --output-format json --exit-zero
+     --stdin-filename openspec_graph/cli.py -` (8 findings unmodified).
+     Appended to line 206, 7 findings: `#noqa:D103`, `# NOQA:D103`,
+     `# NoQa: D103`, `#  noqa  :  D103`, `# noqa: S607 D103`, `# noqa: S607,
+     D103`, `# noqa:D103,S607`, `# see docs # noqa: D103`, `# noqa: D103 #
+     because`, `# noqa`. 8 findings: `# noqa: S607 -- D103 is documented
+     elsewhere`; `# noqa: d103` and `# noqa:`, each with "warning: Invalid
+     `# noqa` directive". As their own line at line 301, 0 findings: `# ruff:
+     noqa: D103`, `#ruff:noqa:D103`, `# ruff: noqa`, `# flake8: noqa`,
+     `# flake8: noqa: D103`; 8: `# RUFF: NOQA: D103`.
+   - Resolved in R-TDR-8, R-TDR-11, DEC-TDR-009, AC-TDR-10, AC-TDR-13 and
+     Milestone 3, with the grammar as measured. One deliberate superset: the
+     reader matches `ruff:` and `flake8:` in any case, so it names `# RUFF:
+     NOQA: D103`, which ruff does not honour.
+   - Planted: `#noqa:D103`, `# NOQA:D103`, `#  noqa  :  D103`, `# noqa: S607
+     D103`, `# see docs # noqa: D103`, a mid-file `# ruff: noqa: D103`, and
+     `# flake8: noqa: D103`; quiet: `# noqa: S607 -- D103 is documented
+     elsewhere`.
+7. **LOW-7: stubs in every tree, an exact `mypy_path`, and a parsed dev
+   extra** (round-3 adversarial review).
+   - `find openspec_graph tools tests -name '*.pyi'` finds none at
+     `25c65de`. The reviewer's `openspec_graph/graph.pyi` figure (19 to 17)
+     is credited, not reproduced, because it needs a file in the tree.
+   - `process_options` parses `mypy_path = "tools"` to `["tools"]` on 2.4.0
+     and 1.11.0.
+   - `python -I -c "import packaging, importlib.metadata as md; …"`:
+     `packaging` 26.3, and `md.requires("pytest")` holds `packaging>=22`;
+     the 1.11.0 environment also imports `packaging` 26.3 beside pytest
+     9.1.1. `Requirement` gives `tomli; python_version < "3.11"` an empty
+     specifier and a separate marker, gives `mypy>=1.11`, `mypy==1.11.0`,
+     `mypy>=1.10` and `mypy~=1.11` the operators `>=`, `==`, `>=` and `~=`,
+     and gives a planted `tomli; python_version == "3.10"` no operator.
+   - Resolved in R-TDR-1, R-TDR-7, R-TDR-16, C-TDR-1, DEC-TDR-002,
+     DEC-TDR-014, DEC-TDR-016, AC-TDR-3, AC-TDR-8, AC-TDR-22 and Milestone
+     1. Planted: a `.pyi` under `openspec_graph/`; a `mypy_path` holding
+     more than `tools`; a bare `mypy`, `mypy==1.11.0`, `mypy>=1.10` and
+     `mypy~=1.11`; quiet: the marker `python_version == "3.10"`.
+8. **The threat model** (round-3 adversarial review). Recorded as the new
+   DEC-TDR-017, cited by AC-TDR-19, with a Non-Goal in the proposal. The
+   guards defend against accidental and casual loosening. A deliberate
+   change that edits the code and the guard's constants in one commit is
+   review's to catch. The known residual gaps are listed there: a
+   coordinated edit of a waived line and its entry; a move between two
+   identical lines; mechanisms released after this package; ruff's
+   built-in exclusion list; and mypy internals that change meaning but not
+   name. A later finding inside those gaps is accepted risk.
+
 ## Milestone 0 — Grounding pass at the branch head
 
 - Re-run the gate and record its exit code before the first edit:
@@ -441,33 +709,40 @@ every other run wrote nothing.
 - Re-take the header's measurements and record what moved, with the commit:
   - `python -m mypy tests --explicit-package-bases --cache-dir /dev/null`,
     counted by the code of `error:` lines only;
-  - `MYPYPATH=tools python -m mypy tests --explicit-package-bases -O json
-    --cache-dir /dev/null` under `--platform linux` and under `--platform
-    win32`, each counted by `code` over `severity == "error"` objects, blank
-    lines skipped, with the two error sets compared and their stderr and
-    exit codes recorded;
+  - a gate-shaped JSON run under `--platform linux` and under `--platform
+    win32`: a configuration with `files` naming the three trees, no path,
+    `MYPYPATH` unset, `--cache-dir /dev/null`, each counted by `code` over
+    `severity == "error"` objects under `tests/`, blank lines skipped, with
+    the two error sets compared and their stderr and exit codes recorded;
   - `python -m mypy openspec_graph tools --explicit-package-bases`, with and
     without `MYPYPATH=tools`;
   - `python -m mypy --config-file pyproject.toml --cache-dir /dev/null`;
+  - `process_options(["--config-file", "pyproject.toml"],
+    require_targets=False)`, and the fields in which each `tests.<stem>`
+    module's `clone_for_module` snapshot differs from the global one,
+    where none is expected;
   - the per-file distribution of the seven listed codes;
   - the ruff statistics per tree, and the per-file list over
     `openspec_graph` and `tools` (`--isolated --output-format concise`);
   - the guard's command, `python -m ruff check --no-cache --isolated
-    --ignore-noqa --select D100,D101,D102,D103 --output-format json
-    --exit-zero openspec_graph tools`;
+    --no-respect-gitignore --ignore-noqa --select D100,D101,D102,D103
+    --output-format json --exit-zero openspec_graph tools`;
   - the convention digest;
   - `make thresholds` and `make stage-citations`;
   - `wc -l tests/AGENTS.md`, `wc -l tests/test_*.py | sort -n | tail -4`
     and `wc -l tests/test_detect_thresholds.py`;
-  - `grep -n "type: ignore" tests/*.py`, with each comment's enclosing
-    function read by AST;
+  - `grep -n "type: ignore" tests/*.py`, with each comment's waived-line
+    key read with `tokenize`, and any key whose text recurs in its file;
   - `grep -rn "mypy:" tests/`, where none is expected;
-  - `find tests -name '*.pyi'` and a `tokenize` pass for `no_type_check`,
-    `no_type_check_decorator` and `TYPE_CHECKING` names under `tests/`,
-    where none is expected;
+  - `find openspec_graph tools tests -name '*.pyi'`, a `tokenize` pass for
+    the six names R-TDR-7 lists under `tests/`, and an `ast` pass for
+    branch tests on `sys.version_info` or `sys.platform`, where none is
+    expected;
   - a `tokenize` pass for `noqa` comment tokens under `openspec_graph/` and
-    `tools/`, where none naming a `D` code is expected;
-  - `[tool.mypy]`'s key set, read with `tomllib`.
+    `tools/`, read by R-TDR-8's grammar, where none naming a `D` code is
+    expected, and `find . -name .ignore -not -path './.git/*'`;
+  - `[tool.mypy]`'s key set, read with `tomllib`;
+  - `python -c "import packaging"` and its version.
 
   Use a scratch cache directory or `/dev/null` for every mypy run, never the
   tree's `.mypy_cache`.
@@ -476,10 +751,10 @@ every other run wrote nothing.
   other code that occurs, and every error that only one platform reports, is
   fixed in Milestone 2 (R-TDR-3). If a sibling has added a code outside the
   sixteen, or a platform-only error, it joins the fixed set and is recorded
-  here by site. If one of the seven is gone, it is not listed. If a stub, a
-  `no_type_check` or a `TYPE_CHECKING` name has appeared, it is recorded
-  here and raised with its author before Milestone 1, because the sibling
-  guard would name it (DEC-TDR-016).
+  here by site. If one of the seven is gone, it is not listed. If a stub, an
+  unchecked name or a version or platform branch has appeared, it is
+  recorded here and raised with its author before Milestone 1, because the
+  sibling guard would name it (DEC-TDR-016).
 - Record the cold wall time of the type gate before the change, by the
   recipe's own command with a throwaway cache: `TIMEFORMAT='%R s'; time
   python -m mypy openspec_graph tools --cache-dir /dev/null`. It took 0.9 s
@@ -495,11 +770,12 @@ every other run wrote nothing.
   - `python -c "import tomli"` fails here, and `tomli` is still the dev
     extra's 3.10-only entry (DEC-TDR-007);
   - `_pytest/py.typed` and `hypothesis/py.typed` exist (C-TDR-1);
-  - the installed mypy accepts `-O json`, its `mypy.options.Options` still
-    has `compile_glob`, and the dev extra's `mypy` entry is still unfloored
-    (DEC-TDR-014, DEC-TDR-015);
+  - the installed mypy accepts `-O json`; `mypy.main.process_options`,
+    `Options.snapshot` and `Options.clone_for_module` exist with the
+    signatures round-3 item 1 records; and the dev extra's `mypy` entry is
+    still unfloored (DEC-TDR-014, DEC-TDR-015);
   - the eight inline ignores of the proposal still carry `arg-type` or
-    `attr-defined`;
+    `attr-defined`, with the waived-line texts the proposal lists;
   - `select-zero-cost-guards`' R-ZCG-3, DEC-ZCG-004, C-ZCG-2 and DEC-ZCG-012
     still read as quoted, and so does `shape-the-test-suite`'s C-TSS-6.
 - **Gate:** `make validate`
@@ -514,22 +790,49 @@ every other run wrote nothing.
     this package's criteria;
   - `MYPY_TESTS_CEILINGS: dict[str, int] = {}` and `MYPY_WAIVERS:
     tuple[tuple[str, str, str], ...] = ()`, each under the comment that
-    R-TDR-4 or R-TDR-7 requires. `MYPY_WAIVERS`' comment states that an
-    entry is removed, or re-keyed as R-TDR-7 defines, and never added.
+    R-TDR-4 or R-TDR-7 requires. `MYPY_WAIVERS`' entries are (path, code,
+    waived line), and its comment states that an entry is removed and never
+    added, and that an edit to a waived line updates its entry in the same
+    commit.
 
   The pure helpers each take their input as an argument, so the planted
   test is `unit`:
   - **The recipe and key-set check.** The `typecheck` recipe's lines and a
     parsed `[tool.mypy]` table go in. Out come the offenders: a recipe that
     is not exactly `python -m mypy --config-file pyproject.toml`, a path
-    argument, a missing or extra key, and a `files`, `mypy_path`,
-    `explicit_package_bases`, `strict`, `warn_unreachable` or
-    `python_version` that differs from R-TDR-1.
-  - **The derived configuration.** A parsed `[tool.mypy]` table goes in,
-    and mypy INI text comes out. Every global key but `files` is kept.
-    Every override that does not apply to the tests becomes a
-    `[mypy-<module>]` section. Booleans are written `True`/`False`, and
-    lists are comma-joined.
+    argument, a missing or extra key, a `mypy_path` other than `"tools"` or
+    `["tools"]`, and a `files`, `explicit_package_bases`, `strict`,
+    `warn_unreachable` or `python_version` that differs from R-TDR-1.
+  - **The mypy loader.** A configuration path goes in.
+    `mypy.main.process_options(["--config-file", path],
+    require_targets=False, stdout=io.StringIO(), stderr=io.StringIO())`
+    loads it, and out come the `Options` and the stderr text. It restores
+    `os.environ` afterwards, because `parse_config_file` sets
+    `MYPY_CONFIG_FILE_DIR`. Planted configurations name no `files`, so
+    loading them reads nothing of the tree.
+  - **The option comparison.** Loaded `Options`, the stderr text, the
+    module names and the listed codes go in. For each module, the fields in
+    which `options.clone_for_module(module).snapshot()` differs from
+    `options.snapshot()`, `unused_configs` aside, come out, and with them
+    the named offenders: nonempty stderr; any differing field but
+    `disable_error_code` and `disabled_error_codes`, with module, field and
+    both values; and an added disabled-code set that is not exactly the
+    listed codes.
+  - **The tests entry.** The parsed `overrides` list goes in. Out come the
+    entries spelled exactly `module = "tests.*"` or `module = ["tests.*"]`,
+    and the offenders: more than one; a key beside `module` and
+    `disable_error_code`; an empty list; a code outside R-TDR-2's seven.
+  - **The derived configuration and its re-check.** A parsed `[tool.mypy]`
+    table goes in, and mypy INI text comes out, keeping every key, `files`
+    among them, and every override but the tests entry. Booleans are
+    written `True`/`False`, and lists are comma-joined. The re-check takes
+    the loaded derived and `pyproject.toml` options and names: a global
+    field that differs but for `config_file` and `per_module_options`;
+    per-module options that differ from `pyproject.toml`'s less the tests
+    entry; and any test module whose options differ from the global ones.
+  - **The run's environment.** An environment mapping goes in, and
+    `env_without_coverage()`'s result for it, with `MYPYPATH` also removed,
+    comes out.
   - **The JSON counter.** stdout, stderr and the return code go in. Out
     come the error objects, or the named failures: a nonempty stderr, an
     exit code other than 0 or 1, a non-blank stdout line that is not a JSON
@@ -546,39 +849,43 @@ every other run wrote nothing.
     unlisted; listed without a ceiling; and a ceiling without a listed
     code. An absent override lists nothing.
   - **The comment reader.** A module's text goes in, read with `tokenize`.
-    Out come four lists:
+    Out come three lists:
     - each `type: ignore` found inside a comment token by mypy's own
-      pattern (`#\s*type:\s*ignore`), with its line and its bracketed codes,
-      or none for a bare one;
+      pattern (`#\s*type:\s*ignore`), with its line, its bracketed codes or
+      none for a bare one, and its waived-line key: the physical line's text
+      before the comment token's start column, whitespace runs collapsed to
+      one space, ends stripped;
     - each comment token whose text after `#` and whitespace begins with
       `mypy:`;
-    - each physical line that begins with `# mypy: `;
-    - each `NAME` token that is `no_type_check`, `no_type_check_decorator`
-      or `TYPE_CHECKING`, with its line.
-  - **The enclosing-function lookup.** A parsed module and a line go in, and
-    the dotted name of the innermost `def` comes out, or `<module>`.
-  - **The waiver comparison.** The ignores with their (path, function), the
-    listed codes and `MYPY_WAIVERS` go in. Out come the unrecorded ignores,
-    the recorded entries the tree lacks, and the malformed brackets: no
-    code besides `unused-ignore` (a bare ignore among them), more than one,
-    `unused-ignore` without a listed code, and a listed code without
-    `unused-ignore`. One enforced code without `unused-ignore` is well
-    formed.
-  - **The override-scope matcher.** A `module` pattern and the dotted names
-    of the modules under `tests/` go in. Out comes whether the pattern
-    applies, decided by `mypy.options.Options().compile_glob(pattern)`
-    matched against each name. Under it, `.*` matches zero or more
-    components and a leading `*` matches any module, so
-    `tests.*.test_graph` and `*` both apply.
-  - **The dev-extra check.** The parsed `dev` list goes in. Out come the
-    offenders: no `mypy` entry, a `mypy` entry whose specifier is not
-    `>=1.11`, and any entry holding `==`.
+    - each physical line that begins with `# mypy: `.
+  - **The stub, name and condition reader.** A tree's paths and a module's
+    text go in. Out come: every `.pyi` path under `openspec_graph/`,
+    `tools/` or `tests/`; each `NAME` token, found with `tokenize`, that is
+    `no_type_check`, `no_type_check_decorator`, `TYPE_CHECKING`, `MYPY`,
+    `PY2` or `PY3`; and, read with `ast`, each test of an `If`, `While`,
+    `IfExp` or `Assert`, and each `match_case` guard, whose subtree holds an
+    `Attribute` named `version_info` or `platform` on the `Name` `sys`, with
+    the dotted name of the innermost enclosing `def`. A test inside
+    `tests/support.py`'s `read_pyproject` is allowed once.
+  - **The waiver comparison.** The ignores with their (path, code, key) and
+    `MYPY_WAIVERS` go in, compared as multisets. Out come the unrecorded
+    ignores, the recorded entries the tree lacks, and the malformed
+    brackets: no code besides `unused-ignore` (a bare ignore among them),
+    more than one, `unused-ignore` without a listed code, and a listed code
+    without `unused-ignore`. One enforced code without `unused-ignore` is
+    well formed.
+  - **The dev-extra check.** The parsed `dev` list goes in, each entry read
+    with `packaging.requirements.Requirement`. Out come the offenders: no
+    entry named `mypy` or more than one; a `mypy` specifier that is not
+    exactly `>=1.11`; and any entry whose specifier holds a clause with
+    operator `==` or `===`. Markers are not read.
 
   The module's own text must pass its own guard. Planted ignore and `# mypy:`
   text lives in single-line strings with `\n` escapes, so no line of the
   module begins with `# mypy: `, and no planted comment is a real one. The
-  names `no_type_check`, `no_type_check_decorator` and `TYPE_CHECKING`
-  appear only inside strings, never as `NAME` tokens.
+  six names, and the `sys.version_info` and `sys.platform` of planted
+  conditions, appear only inside strings, never as tokens or `ast` nodes of
+  the module itself.
 - The planned tests are named here, so AC-TDR-3, 4, 5, 8, 9, 16 and 22 can
   be re-pointed when they exist.
   - `test_typecheck_reads_its_trees_from_the_mypy_files_list`
@@ -587,67 +894,84 @@ every other run wrote nothing.
     keys are exactly `files`, `explicit_package_bases`, `mypy_path`,
     `strict`, `warn_unreachable`, `python_version` and, while any override
     exists, `overrides`; `files` holds `openspec_graph`, `tools` and
-    `tests`; `explicit_package_bases` is true; `mypy_path` holds `tools`;
-    and `strict`, `warn_unreachable` and `python_version` are as R-TDR-1
-    requires.
+    `tests`; `explicit_package_bases` is true; `mypy_path` is `"tools"` or
+    `["tools"]`; and `strict`, `warn_unreachable` and `python_version` are
+    as R-TDR-1 requires.
   - `test_the_tests_override_is_one_entry_listing_exactly_the_ceilinged_codes`
-    (`integration`): at most one `[[tool.mypy.overrides]]` entry applies to
-    a module under `tests/`, by the matcher above. While one does, its
-    `module` is `tests.*`, its keys are exactly `module` and
-    `disable_error_code`, its list is not empty, and its codes are a subset
-    of R-TDR-2's seven and equal to `MYPY_TESTS_CEILINGS`' keys. With none,
-    `MYPY_TESTS_CEILINGS` is empty. An override that applies to no test
-    module is not judged.
+    (`integration`): the tests entry is at most one, spelled exactly, with a
+    non-empty list of R-TDR-2's codes equal to `MYPY_TESTS_CEILINGS`' keys.
+    `pyproject.toml`, loaded through mypy, gives every `tests.<stem>` module
+    options that differ from the global ones only in the listed codes. With
+    no entry, `MYPY_TESTS_CEILINGS` is empty and no module differs.
   - `test_every_listed_mypy_code_matches_its_ceiling_on_both_platforms`
-    (`e2e`): the derived configuration is written under `tmp_path`. For
-    each platform it runs `[sys.executable, "-m", "mypy", "--config-file",
-    <it>, "--cache-dir", <tmp_path>/cache-<platform>, "--platform",
-    <platform>, "-O", "json", "tests"]` from the repository root, under
-    `env_without_coverage()`. Each run's stderr and exit code are checked,
-    its output counted with blank lines skipped, the two platforms
-    compared, and the counts compared to the ceilings.
+    (`e2e`): the derived configuration is written under `tmp_path` and
+    re-checked through mypy. For each platform it runs `[sys.executable,
+    "-m", "mypy", "--config-file", <it>, "--cache-dir",
+    <tmp_path>/cache-<platform>, "--platform", <platform>, "-O", "json"]`,
+    with no path, from the repository root, in the run's environment. Each
+    run's stderr and exit code are checked, its output counted with blank
+    lines skipped and filtered to `tests/`, the two platforms compared, and
+    the counts compared to the ceilings.
   - `test_every_inline_ignore_is_a_recorded_waiver` (`integration`): every
     `.py` file under `tests/`. Its ignores are compared with `MYPY_WAIVERS`
-    as multisets, and their brackets checked against the listed codes.
-    Every `# mypy:` comment token or line is named, with its path and line.
-  - `test_no_stub_or_unchecked_name_under_tests` (`integration`): every
-    `.pyi` file under `tests/`, and every `no_type_check`,
-    `no_type_check_decorator` or `TYPE_CHECKING` `NAME` token in a `.py`
-    file under `tests/`, is named with its path and line (DEC-TDR-016).
+    as multisets of (path, code, waived line), and their brackets checked
+    against the listed codes. Every `# mypy:` comment token or line is
+    named, with its path and line.
+  - `test_no_stub_name_or_condition_hides_code_from_mypy` (`integration`):
+    every `.pyi` file in the three trees, every one of the six names under
+    `tests/`, and every branch test on `sys.version_info` or `sys.platform`
+    under `tests/` outside the one allowed site, is named with its path and
+    line (DEC-TDR-016).
   - `test_the_dev_extra_floors_mypy_and_pins_nothing` (`integration`):
-    `read_pyproject()["project"]["optional-dependencies"]["dev"]` holds one
-    entry for `mypy`, whose specifier is `>=1.11`, and no entry holding `==`
-    (R-TDR-16).
+    `read_pyproject()["project"]["optional-dependencies"]["dev"]`, read with
+    `Requirement`, holds one `mypy` entry whose specifier is exactly
+    `>=1.11`, and no entry whose specifier holds `==` or `===` (R-TDR-16).
   - `test_a_planted_ratchet_violation_is_named` (`unit`), one parameter
-    per case of R-TDR-11's mypy half:
+    per case of R-TDR-11's mypy half, with each planted configuration
+    written under `tmp_path`:
     - a stale code; a code occurring but unlisted; a code above its
       ceiling; a code below its ceiling, named `lower …`;
     - a code listed without a ceiling; a ceiling without a code;
     - a recipe of `python -m mypy` with no configuration file named; a
-      recipe with a path argument; a `[tool.mypy]` table with `exclude`;
-    - a second option on the tests override; a tests override with an
-      empty list; overrides for `tests.test_graph`, `tests.*.test_graph`
-      and `*`, each judged as applying to the tests;
+      recipe with a path argument; a `[tool.mypy]` table with `exclude`; a
+      `mypy_path` of `["tools", "tests"]`;
+    - a second option on the tests entry; a tests entry with an empty list;
+    - overrides spelled `tests/test_graph`,
+      `openspec_graph.cli,tests.test_graph`, `["openspec_graph.cli",
+      "tests.test_graph"]` and `tests.*.test_graph`; an override on
+      `tests.test_graph` setting only `follow_imports = "skip"`; one setting
+      `disallow_untyped_defs = false`;
+    - a derived configuration that drops an option, keeps the tests entry,
+      or keeps a second override repeating a listed code for
+      `tests.test_graph`;
+    - an environment holding `MYPYPATH`, which the run's environment drops;
     - a `note` object not counted, and an `error` object with `tests\`
       counted;
     - a non-JSON stdout line; an error without a code; a nonempty stderr;
       an exit code of 2;
     - two platforms' outputs that differ by one error;
-    - a derived configuration from a planted table that keeps every option
-      and drops the tests override;
     - a new `# type: ignore[no-untyped-def, unused-ignore]` that is not
       recorded; a recorded waiver that is gone; an ignore holding two codes
       besides `unused-ignore`; `unused-ignore` beside `index` with `index`
       unlisted; a listed code without `unused-ignore`; a bare
-      `# type: ignore`; and `#type:ignore[...]` with no spaces, read;
+      `# type: ignore`; a recorded waiver whose comment moves to the next
+      line; and `#type:ignore[...]` with no spaces, read;
     - a `# mypy: disable-error-code=...` comment, and a docstring line that
       begins with `# mypy: `;
-    - a `.pyi` path under `tests/`; a `no_type_check` name; a
-      `TYPE_CHECKING` name;
-    - a `dev` list with a bare `mypy`; a `dev` list with `ruff==0.4.2`;
+    - a `.pyi` path under `openspec_graph/` and under `tests/`; a
+      `no_type_check` name; a `TYPE_CHECKING` name; a `MYPY` name; `if
+      sys.version_info >= (3, 11):`, `MYPY = False` then `if not MYPY:`,
+      `if sys.platform == "darwin":` and `if sys.version_info < (3, 10):`
+      in a module other than the allowed site; a `match` guard on
+      `sys.platform`; a module-level `assert` on it;
+    - a `dev` list with a bare `mypy`; with `mypy==1.11.0`; with
+      `mypy>=1.10`; with `mypy~=1.11`; with `ruff==0.4.2`;
     - and the well-formed shape of each, quiet: among them, stdout `"\n"`
-      with exit 0, and a recorded `# type: ignore[index]` with `index`
-      unlisted.
+      with exit 0; a recorded `# type: ignore[index]` with `index`
+      unlisted; a bare `*` override; a `follow_imports` override on
+      `openspec_graph.*`; the allowed version check in `read_pyproject`; a
+      `skipif(sys.platform == "win32", …)` decorator argument; and a `dev`
+      entry `tomli; python_version == "3.10"`.
 - Run `python -m pytest tests/test_static_ratchets.py -q -o addopts=""` and
   record the red:
   - the recipe guard names the recipe's two paths, its missing
@@ -656,18 +980,19 @@ every other run wrote nothing.
   - the occurrence guard names every occurring code as unlisted, and the
     `os.mkfifo` errors as platform-only;
   - the waiver guard names every inline ignore of the tree as unrecorded.
-    There are ten at `e558eba`, by `grep -n "type: ignore" tests/*.py`;
+    There are ten at `25c65de`, by `grep -n "type: ignore" tests/*.py`;
   - the dev-extra guard names the unfloored `mypy` entry.
 
   Record that the override guard passes here, because no override and no
   ceiling is R-TDR-2's clean end state; its red run is taken in Milestone 2
-  (R-TDR-11). Record that the stub-and-name guard passes from its first
-  run, as Milestone 0's measurement predicts. Record whether the planted
-  test passes from its first run, since its helpers are written with it.
+  (R-TDR-11). Record that the stub, name and condition guard passes from its
+  first run, as Milestone 0's measurement predicts. Record whether the
+  planted test passes from its first run, since its helpers are written
+  with it.
 - Run `python -m pytest tests/test_suite_shape.py -q -o addopts=""`, and
-  record that the new module's tiers agree with the criterion, the dev-extra
-  guard's `integration` among them. Record `wc -l
-  tests/test_static_ratchets.py` against DEC-TDR-012's budget.
+  record that the new module's tiers agree with the criterion, the
+  dev-extra guard's and the override guard's `integration` among them.
+  Record `wc -l tests/test_static_ratchets.py` against DEC-TDR-012's budget.
 - Nothing is committed at the end of this milestone. Its work lands in the
   W6.5 commit, with the change it covers.
 - **Gate:** `make test`. Exactly this milestone's red guards fail; that is
@@ -677,14 +1002,15 @@ every other run wrote nothing.
 
 - Fix the nine codes in `tests/`, each by annotation, narrowing, a typed
   local or a corrected call. A fix is never a new ignore, a `# mypy:`
-  comment, a stub, a `no_type_check`, a `TYPE_CHECKING` branch, a cast to
-  `Any`, a `noqa` or a removed assertion (R-TDR-3, C-TDR-3). The sites, at
-  `e558eba`:
+  comment, a stub, a `no_type_check`, a branch mypy treats as unreachable, a
+  cast to `Any`, a `noqa` or a removed assertion (R-TDR-3, C-TDR-3). The
+  sites, at `e558eba`:
   - `tests/support.py` `read_pyproject`: `if sys.version_info >= (3, 11):
     import tomllib as toml_reader` / `else: import tomli as toml_reader`,
     with no inline ignore, then `parsed: dict[str, Any] =
     toml_reader.load(handle)` and `return parsed` (R-TDR-6). This clears
-    `import-not-found`, the `unused-ignore` and one `no-any-return`.
+    `import-not-found`, the `unused-ignore` and one `no-any-return`. Its
+    version check is the one site the stub, name and condition guard allows.
   - `tests/conftest.py` `_reset_version_cache` becomes `-> Iterator[None]`.
   - `tests/shape_support.py:590` `_class_facts`: the `nodes` list is typed
     so that `cls.bases` and `cls.decorator_list` (`list[expr]`) fit.
@@ -730,13 +1056,13 @@ every other run wrote nothing.
     unchanged.
 
   Record `wc -l` after.
-- Re-run the guard's measurement by hand with nothing listed: `MYPYPATH=tools
-  python -m mypy tests --explicit-package-bases -O json --cache-dir
-  /dev/null`, under `--platform linux` and under `--platform win32`. Record
-  that none of the nine codes occurs, that the two error sets are equal,
-  that stderr is empty, and the seven's per-code counts. These are the
-  counts the commit records: the plan's "per-code counts so the list only
-  shrinks".
+- Re-run the guard's measurement by hand with nothing listed, in the gate's
+  shape: a configuration with `files` naming the three trees and no tests
+  entry, no path, `MYPYPATH` unset, `-O json --cache-dir /dev/null`, under
+  `--platform linux` and under `--platform win32`. Record that none of the
+  nine codes occurs under `tests/`, that the two error sets are equal, that
+  stderr is empty, and the seven's per-code counts. These are the counts the
+  commit records: the plan's "per-code counts so the list only shrinks".
 - Fill `MYPY_TESTS_CEILINGS` from the occurrence guard's own failure
   messages on this tree: with the constant empty, they name each code's
   count. Then run the override guard and record its red: with the ceilings
@@ -745,7 +1071,7 @@ every other run wrote nothing.
 - `pyproject.toml`:
   - `[tool.mypy]`: `files`, `explicit_package_bases`, `mypy_path` and the
     two overrides of the proposal's What Changes, each with its comment, and
-    no other key;
+    no other key; the tests entry spelled exactly `module = "tests.*"`;
   - the dev extra's `"mypy"` becomes `"mypy>=1.11"`, under a comment naming
     1.11 as the release that added `-O json` and
     `tests/test_static_ratchets.py` as the reader (R-TDR-16,
@@ -759,9 +1085,9 @@ every other run wrote nothing.
   eight comments `unused-ignore` beside its code (DEC-TDR-006), and re-run:
   exit 0.
 - Fill `MYPY_WAIVERS` from the waiver guard's own failure messages on this
-  tree, which name each unrecorded waiver. Record both constants here with
-  the commit. At `e558eba` the waivers are the proposal's eight (path,
-  function, code) triples.
+  tree, which name each unrecorded waiver with its key. Record both
+  constants here with the commit. At `25c65de` the waivers are the
+  proposal's eight (path, code, waived line) triples.
 - Run `python -m pytest tests/test_static_ratchets.py
   tests/test_ci_workflow.py tests/test_enterprise.py
   tests/test_threshold_guard.py -q -o addopts=""` and record it green. Among
@@ -815,9 +1141,16 @@ every other run wrote nothing.
     table goes in, and the offenders come out, from `select`,
     `per-file-ignores` and `extend-per-file-ignores`;
   - a pure helper for `noqa` comments: a module's text goes in, read with
-    `tokenize`, and out comes each comment token holding a `noqa`
-    directive, at file level (`# ruff: noqa: …`, `# flake8: noqa: …`) or on
-    a line, that names a `D` code, with its line;
+    `tokenize`, and out comes each comment token holding a directive, by
+    R-TDR-8's grammar, whose code list holds a `D` code, with its line. A
+    line directive is matched anywhere in the token: `#`, optional
+    whitespace, `noqa` in any case, optional whitespace, `:`, optional
+    whitespace, then codes of upper-case letters and digits separated by
+    commas and whitespace, ending at the first token that is not a code. A
+    file-level directive is a token on its own line reading `ruff: noqa` or
+    `flake8: noqa`, in any case, followed by `:` and a code list;
+  - a pure helper for the ruff command, returning its argument list, so the
+    tree run and the planted ignore-file run share it;
   - a pure helper for ruff's JSON: the findings, a root, stderr and the
     return code go in. Out comes a file-to-code-to-count mapping, with
     paths relative and in POSIX form, or a named failure for a nonempty
@@ -836,21 +1169,28 @@ every other run wrote nothing.
     table.
   - `test_every_docstring_exemption_matches_its_ceiling` (`e2e`). It runs
     `[sys.executable, "-m", "ruff", "check", "--no-cache", "--isolated",
-    "--ignore-noqa", "--select", "D100,D101,D102,D103", "--output-format",
-    "json", "--exit-zero", "openspec_graph", "tools"]` from the repository
-    root, under `env_without_coverage()`. It checks exit 0 and empty
-    stderr, counts the findings, and compares them exactly: stale, above
-    the ceiling, below it as `lower …`, and offending but unlisted.
+    "--no-respect-gitignore", "--ignore-noqa", "--select",
+    "D100,D101,D102,D103", "--output-format", "json", "--exit-zero",
+    "openspec_graph", "tools"]` from the repository root, under
+    `env_without_coverage()`. It checks exit 0 and empty stderr, counts the
+    findings, and compares them exactly: stale, above the ceiling, below it
+    as `lower …`, and offending but unlisted. It also writes, under
+    `tmp_path`, a package holding one module with one undocumented function
+    and an `.ignore` naming that module, runs the same command over it, and
+    requires that finding counted.
   - The docstring half of `test_a_planted_ratchet_violation_is_named`:
     - a pair with no finding; a pair offending but unlisted; a pair above
       its ceiling; a pair below its ceiling; a pair without a ceiling;
     - a `D` code under `openspec_graph/*`; a `D` code under
       `tests/test_x.py`; a `D` code under `extend-per-file-ignores`;
-    - a module whose first line is `# ruff: noqa: D103`; a `def` line
-      ending `# noqa: D103`;
+    - a `def` line ending, in turn, `#noqa:D103`, `# NOQA:D103`,
+      `#  noqa  :  D103`, `# noqa: S607 D103` and `# see docs # noqa:
+      D103`; a module with `# ruff: noqa: D103` on its own line in the
+      middle; a module with `# flake8: noqa: D103`;
     - a Windows path in ruff's JSON, normalised; a nonempty ruff stderr;
-    - and the well-formed shape of each, quiet, among them a `# noqa: S607`
-      comment, which names no `D` code.
+    - and the well-formed shape of each, quiet, among them `# noqa: S607`
+      and `# noqa: S607 -- D103 is documented elsewhere`, which name no
+      `D` code.
 
   Record the red: the shape guard finds `D` unselected, and the occurrence
   guard names every offending pair as unlisted.
@@ -882,8 +1222,9 @@ every other run wrote nothing.
   module is over budget, split it as DEC-TDR-012 says before committing.
 - `CHANGELOG.md`, the W6.6 half: the four codes; the per-file entries, with
   their count; the `tests/` policy exemption and why; the count taken with
-  no configuration and no `noqa`; the convention measured, recorded and not
-  configured; and the "ratchet first" step of DEC-ZCG-012.
+  no configuration, no ignore file and no `noqa`; the convention measured,
+  recorded and not configured; and the "ratchet first" step of
+  DEC-ZCG-012.
 - Run `make pre-pr`, and record the exit code. Commit: this is the W6.6
   commit. Push it alone, and record its CI run: the lint gate and the
   docstring guards are green on every `test` leg and on `test-windows`,
@@ -918,11 +1259,11 @@ every other run wrote nothing.
   | AC-TDR-3 | `test_typecheck_reads_its_trees_from_the_mypy_files_list` |
   | AC-TDR-4 | `test_the_tests_override_is_one_entry_listing_exactly_the_ceilinged_codes` |
   | AC-TDR-5 | `test_every_listed_mypy_code_matches_its_ceiling_on_both_platforms` |
-  | AC-TDR-8 | `test_every_inline_ignore_is_a_recorded_waiver` and `test_no_stub_or_unchecked_name_under_tests` |
+  | AC-TDR-8 | `test_every_inline_ignore_is_a_recorded_waiver` and `test_no_stub_name_or_condition_hides_code_from_mypy` |
   | AC-TDR-9 | `test_a_planted_ratchet_violation_is_named` |
   | AC-TDR-10 | `test_docstring_exemptions_are_file_entries_matching_their_ceilings`, beside its two existing selectors (exactly `D100`–`D103` among `D` rules; `D` codes only on concrete package and tool files plus `tests/*`; none in `extend-per-file-ignores` or a `noqa`) |
   | AC-TDR-12 | `test_docstring_exemptions_are_file_entries_matching_their_ceilings` and `test_every_docstring_exemption_matches_its_ceiling` |
-  | AC-TDR-13 | `test_a_planted_ratchet_violation_is_named` |
+  | AC-TDR-13 | `test_a_planted_ratchet_violation_is_named` and `test_every_docstring_exemption_matches_its_ceiling` (the planted ignore file) |
   | AC-TDR-14 | `test_docstring_exemptions_are_file_entries_matching_their_ceilings` (no `pydocstyle` table; no `D` rule beyond the four) |
   | AC-TDR-16 | `test_the_dev_extra_floors_mypy_and_pins_nothing`, beside its five existing selectors (the dev-extra half of "no tool version is pinned") |
   | AC-TDR-22 | `test_the_dev_extra_floors_mypy_and_pins_nothing` |
@@ -947,7 +1288,8 @@ every other run wrote nothing.
 - Re-take the header's measurements on the finished tree, with the commit:
   - the per-code counts under both platforms, with the override lifted.
     These are equal to each other and to the ceilings;
-  - `MYPY_WAIVERS` against `grep -n "type: ignore" tests/*.py`;
+  - `MYPY_WAIVERS` against `grep -n "type: ignore" tests/*.py` and the
+    waived-line keys;
   - the per-file docstring counts, equal to their ceilings;
   - `wc -l tests/AGENTS.md`, and the new module's line count;
   - the guards' durations.
