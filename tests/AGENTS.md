@@ -11,6 +11,7 @@ flowchart TD
         sup["support.py<br/>run_cli, run_tool_main, load_tool<br/>env_without_coverage, capability probes"]
         gs["graft_support.py<br/>fixture constants + findings_for"]
         cf["conftest.py<br/>the repo fixture"]
+        ws["workflow_support.py<br/>workflow readers, never asserting"]
     end
     subgraph subject["split by subject, not by source module"]
         d["test_graft_detection.py"]
@@ -18,6 +19,7 @@ flowchart TD
         c["test_graft_cli.py"]
         w["test_graft_witness.py"]
         g["test_gate_scripts.py<br/>each tools/ gate FIRES"]
+        s["test_suite_shape.py<br/>flat, bounded, tiered"]
     end
     shared --> subject
     subject --> floors["make test — both trees' floors, read scoped<br/>make coverage-tools — tools/ only, same report"]

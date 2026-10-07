@@ -61,7 +61,8 @@ a local net before the round-trip to CI.
 | `release` (separate workflow) | `v*` tag | `make pre-pr`, then a clean-venv smoke test of the `planlint` console script, then trusted publishing to PyPI, which uploads PEP 740 attestations for both files |
 
 The workflow holds itself to the posture the gates inside it enforce
-(`harden-ci-workflows`; `tests/test_workflow_hardening.py` is the guard).
+(`harden-ci-workflows`; `tests/test_workflow_pins.py`, `tests/test_workflow_posture.py`
+and `tests/test_workflow_python.py` are the guard).
 Every third-party action is pinned to a commit SHA with its release tag in a
 trailing comment, every copy of one action must agree on both, and each sits
 at or above a per-action major floor in `pyproject.toml`
@@ -128,7 +129,7 @@ this repo's own history and are easy for an agent (or a human) to forget
 mid-edit:
 
 - Editing `skills/planlint-spec-governance/**` or `.claude-plugin/**` → reminds to
-  run `pytest tests/test_skill_contract.py tests/test_agent_skill_docs.py`. These
+  run `pytest tests/test_skill_contract.py tests/test_skill_distribution.py tests/test_agent_skill_docs.py`. These
   are prose and metadata an *external* agent acts on, so no other gate catches
   drift in them. The glob names the distributable skill specifically: a bare
   `*/skills/*` also matched `.claude/skills/`, nudging contributors toward a test
@@ -196,7 +197,7 @@ class above must produce a reason, an unrelated path must produce none, and
 ## Adding a custom rule
 
 Adding or changing a rule also requires regenerating the distributable
-skill's rule catalog with `make skill-catalog`; `tests/test_skill_contract.py`
+skill's rule catalog with `make skill-catalog`; `tests/test_skill_distribution.py`
 fails on a stale one, and the `.claude/` hook nudges for it.
 
 Rules live in `openspec_graph/rules.py` as `Rule(ident, severity, dialects,

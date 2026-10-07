@@ -5,6 +5,26 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed — the test suite split by concern (M2)
+
+- **`shape-the-test-suite`.** Every test module now sits at or under 700
+  lines, held by `tests/test_suite_shape.py` alongside the guard that keeps
+  `tests/` flat. `tests/test_ci_hardening.py` and
+  `tests/test_workflow_hardening.py` are gone, split by their own section seams
+  into `test_ci_workflow.py`, `test_ci_makefile.py`, `test_coverage_checkers.py`,
+  `test_graph_tools.py`, `test_threshold_guard.py`, `test_workflow_pins.py`,
+  `test_workflow_posture.py` and `test_workflow_python.py` (with the readers they
+  share in the uncollected `tests/workflow_support.py`); the release and
+  packaging halves of `test_agent_artifacts.py` and the distribution half of
+  `test_skill_contract.py` moved to `test_release_surface.py` and
+  `test_skill_distribution.py`. Every test kept its function name, so every
+  spec's verification line still resolves; the set of test names and the
+  collected count are unchanged by the moves. The records that named the two
+  removed modules — `select-zero-cost-guards` R-ZCG-10 and DEC-ZCG-010,
+  `harden-ci-workflows` R-HCW-15, R-HCW-16 and DEC-HCW-008, `pin-actions-by-sha`
+  R-ASP-8 and R-ASP-11, `prepare-release-0-3-0` DEC-REL-011 — are superseded by
+  name in this package (DEC-TSS-016), those packages being on `main`.
+
 ### Changed — one suite run measures both trees (M2)
 
 - **`measure-coverage-once`.** The suite runs once: `make coverage-run`

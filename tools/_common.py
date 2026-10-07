@@ -154,7 +154,7 @@ def read_pyproject_int(pyproject: Path, section: str, key: str) -> int | None:
     The path is an argument rather than :func:`repo_root`, deliberately. The
     coverage gates read the ``pyproject.toml`` of whichever tree they are
     pointed at, so they can be exercised against a synthetic one (see
-    ``tests/test_ci_hardening.py``, which writes a floor of 95 into a temp
+    ``tests/test_coverage_checkers.py``, which writes a floor of 95 into a temp
     directory and asserts the gate honours it). Anchoring at this repository's
     own root would make the gate untestable and would silently ignore the
     config of the tree actually being measured.

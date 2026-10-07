@@ -153,7 +153,7 @@ tools_branch_fail_under = 91
 per_file_line_min = 85
 
 # Bounds for every `timeout-minutes` literal in `.github/workflows/*.yml`,
-# enforced by tests/test_workflow_hardening.py through
+# enforced by tests/test_workflow_posture.py through
 # `_common.read_pyproject_int` -- one integer per key, which is why two keys
 # rather than an inline table. Measured on CI run #171 at 9c4b6e9: the slowest
 # job, `test-windows`, took 5m42s; the `test` legs 2m14s-3m41s;
@@ -197,7 +197,7 @@ u004_min_recall_pct = 90
 
 # Per-action major floors for every third-party `uses:` in the workflows, the
 # composite action, the adopter templates and the README snippet, enforced by
-# tests/test_workflow_hardening.py. Every such action is pinned to a commit
+# tests/test_workflow_pins.py. Every such action is pinned to a commit
 # SHA with its release tag in a trailing comment (pin-actions-by-sha), and the
 # floor is read from that tag. A floor is a ratchet, not a pin: it is set to
 # the major this repository landed when it moved every action onto a Node 24

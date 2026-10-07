@@ -11,7 +11,7 @@ Two halves, and the second is the point:
   ``pull_request_target``, evidence rooted outside the workspace. Text-level,
   because no test in this repository imports a YAML parser and
   ``C-GA-3`` keeps it that way -- the block extractor below is the same
-  line-scanning approach ``tests/test_ci_hardening.py`` already uses on
+  line-scanning approach ``tests.support.workflow_job_blocks`` already uses on
   ``ci.yml`` (DEC-AQA-005).
 * **Executable.** The action's own ``run:`` blocks are extracted and run
   against the labelled fixture targets with GitHub's environment simulated, so

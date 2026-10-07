@@ -45,7 +45,7 @@ def repo(tmp_path: Path) -> Path:
     reports. A conftest fixture is shared without the importer naming it,
     which is the mechanism pytest provides for exactly this.
 
-    `tests/test_ci_hardening.py` defines its own `repo` with different
+    `tests/test_graph_tools.py` defines its own `repo` with different
     contents. That is not a conflict: pytest resolves a fixture defined in a
     test module ahead of a conftest one, so its definition still wins there.
     """

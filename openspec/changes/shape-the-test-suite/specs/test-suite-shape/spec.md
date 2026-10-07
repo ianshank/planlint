@@ -235,7 +235,9 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   `tests/test_decomposition.py:102–105` become `write_spec`; a path built
   for a read-error fixture (a FIFO, a directory named `spec.md`, an
   unreadable file) or asserted rather than written is not a writer.
-  `tests/test_agent_artifacts.py`'s `_workflow_jobs` MUST be replaced by
+  The release workflow's `_workflow_jobs` near-copy (in
+  `tests/test_agent_artifacts.py` until the split moves it, unchanged, to
+  `tests/test_release_surface.py`) MUST be replaced by
   `tests/support.workflow_job_blocks`, closing DEC-HCW-009's deferral.
   Two guard tests MUST read the shapes by AST — a `subprocess.run` call
   whose argv list holds the two literals and `--target`; a `write_text`
@@ -784,8 +786,8 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   openspec_graph.cli` and `--target` to `subprocess.run`, and no test
   module writes the harness or the SpecKit spec path by hand, read by AST
   over the tree; `tests/test_decomposition.py`'s golden hashes are unmoved
-  with its `_run_cli` routed through `run_cli`; `_workflow_jobs` is gone
-  from `tests/test_agent_artifacts.py`. The two guards are written with
+  with its `_run_cli` routed through `run_cli`; no test module defines
+  `_workflow_jobs`. The two guards are written with
   this change and run red on the unrouted tree; until they exist the hash
   test and the stage are the citation. (R-TSS-8, R-TSS-12, DEC-TSS-009)
   _Verified by:_ `pytest -k "test_output_byte_identical or test_public_import_compatibility"` · stage: `make test`

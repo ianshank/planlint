@@ -351,9 +351,10 @@ The agent-facing surface is held to the same bar rather than trusted as prose.
 leaves a target tree byte-identical, by hashing every file before and after
 rather than reading `git status` (which is blind to ignored paths and useless
 on a non-git target), and pins the exact exit-code messages the skill quotes.
-`tests/test_agent_artifacts.py` validates the evaluation suite, the retrieval
-config, and the release workflow, because those are read only by tools outside
-this repo and would otherwise fail first in someone else's runner.
+`tests/test_agent_artifacts.py` validates the evaluation suite and the retrieval
+config, and `tests/test_release_surface.py` the release workflow, because those
+are read only by tools outside this repo and would otherwise fail first in
+someone else's runner.
 
 Two labelled corpora sit under the same gate: `tests/corpus/targets/` holds
 synthetic target repositories with the dialect card a correct `detect` should

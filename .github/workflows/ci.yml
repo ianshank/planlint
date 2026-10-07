@@ -7,7 +7,7 @@ on:
 
 # Every job runs with a read-only token unless its own block says otherwise;
 # a widening is declared on the job, under a comment naming the step that
-# needs it. tests/test_workflow_hardening.py holds both halves.
+# needs it. tests/test_workflow_posture.py holds both halves.
 permissions:
   contents: read
 

@@ -85,12 +85,18 @@ collected count; the red runs are recorded here and never committed.
 
 - Re-run the gate and record its exit code before the first edit:
   `planlint --target . validate --fail-on ERROR`.
+  **Recorded (stage 1, 2026-10-07, on `26e4f8c` + the moves):** exit 0 (51 specs, 0/0/0) before the first move.
 - Re-take the measurements in the header and record what moved:
   `git rev-parse --short HEAD`; `wc -l tests/test_*.py | sort -n | tail -8`;
   `grep -c "def test_"` over the six modules; `grep -n "^# --- "` over the
   five over-bound modules; the marker, `pyproject.toml`, `subprocess.run`,
   `"openspec_graph.cli"`, `"spec.md"`, `write_speckit_spec` and helper-less
   greps; `wc -l tests/AGENTS.md`.
+  **Recorded (stage 1, 2026-10-07, on `26e4f8c` + the moves):** at `bb4e4ad` (main `f7118a0` + the draft): the header's figures held, with
+  `test_gate_scripts.py` 849 lines and 19722 in total; 45 modules; markers only
+  `parametrize` and `skipif`; 16 `subprocess.run` modules; 15 helper-less;
+  `tests/AGENTS.md` 51 lines. The durations command, re-run at `bb4e4ad`: 1602
+  passed in 157.68 s (load average 1.38 at the end).
 - Record the baseline every split and every stage commit is checked
   against, as the commands Milestones 1–3 and 7 re-run: the sorted
   test-name set, `python - <<'PY'` over `ast` collecting every
@@ -101,6 +107,7 @@ collected count; the red runs are recorded here and never committed.
   --ignore=tests/test_suite_shape.py | tail -1`. At `f7118a0`: 1057 names,
   `2f62db0aee56ef40`, 1602 collected. The exclusion is what makes every
   later comparison a comparison with this figure (R-TSS-2, DEC-TSS-015).
+  **Recorded (stage 1, 2026-10-07, on `26e4f8c` + the moves):** re-taken at `bb4e4ad`: 1057 names, `2f62db0aee56ef40`, 1602 collected.
 - Record the pointer set R-TSS-4 re-points, as the grep Milestone 3 re-runs:
   `grep -rn "test_ci_hardening\|test_workflow_hardening\|test_gate_scripts\.py\|test_agent_artifacts\.py\|test_skill_contract\.py" --include=*.py --include=*.md --include=*.sh --include=*.yml --include=*.toml . | grep -v "^./.git/\|^./openspec/changes/\|^./docs/reflection-plan\|^./build/"`.
   At `f7118a0` the live pointers are `tests/conftest.py:48`,
@@ -168,6 +175,14 @@ collected count; the red runs are recorded here and never committed.
   start, which is the expected shape, and its planted half — a
   `tests/<dir>/test_x.py` under a temporary copy — is red in
   `test_a_mismarked_or_unmarked_planted_module_is_named` (Milestone 4).
+  **Recorded (stage 1, 2026-10-07, on `26e4f8c` + the moves):** red as expected — `test modules over 700 lines … [('test_agent_artifacts.py',
+  836), ('test_ci_hardening.py', 1378), ('test_gate_scripts.py', 849),
+  ('test_skill_contract.py', 821), ('test_workflow_hardening.py', 1237)]`; the
+  flatness test green. The moves were made by a script that copies each top-level
+  node with its decorators and its comment block, bodies byte-for-byte, and prunes
+  imports with `ruff --fix` (F401, F811, I001); it refuses to place a helper two
+  destinations need without a decision, so each shared helper below is a recorded
+  choice.
 - Create the new modules with a docstring naming what each holds and whose
   criteria it verifies (R-TSS-2), then move the sections of
   `tests/test_ci_hardening.py` by seam, bodies untouched, imports pruned to
@@ -240,7 +255,20 @@ collected count; the red runs are recorded here and never committed.
   tests/test_spec_test_citations.py -q` green; `wc -l` of each new module
   under the bound; the bound guard still red on the four remaining
   over-bound modules.
-- **Gate:** `make test`
+- **Gate:** `make test`, with the bound guard the one failure until
+  Milestone 3 (written red first, it cannot be green while a module is over
+  the bound); every moved test green.
+  **Recorded (stage 1, 2026-10-07, on `26e4f8c` + the moves):** hash `2f62db0aee56ef40`, 1057 names, 1602 collected — equal. Sizes:
+  `test_ci_workflow.py` 448, `test_ci_makefile.py` 293, `test_coverage_checkers.py`
+  572, `test_graph_tools.py` 228, `test_threshold_guard.py` 225, `test_gate_scripts.py`
+  380, `test_rule_registry_docs.py` 116. `REPO_ROOT`, `TOOLS` and
+  `_COVERAGE_REPORT` are per-module constants, written once in each module that
+  uses them. The nested pytest in `test_suite_survives_an_ambient_coverage_file`
+  names its own module through `Path(__file__).name`, so a later move cannot
+  orphan it again. `make test`: exit 2, wall 169 s, the bound guard the only failure
+  (three modules still over: `test_agent_artifacts.py` 836, `test_skill_contract.py`
+  821, `test_workflow_hardening.py` 1237 — the header expected four because it
+  counted `test_gate_scripts.py`, whose split is part of this milestone).
 
 ## Milestone 2 — Split `test_workflow_hardening.py`
 
@@ -287,17 +315,24 @@ collected count; the red runs are recorded here and never committed.
   tests/test_workflow_posture.py tests/test_workflow_python.py
   tests/test_ci_workflow.py -q` green; `wc -l` of each under the bound; the
   bound guard red on the two remaining modules.
-- **Gate:** `make test`
+- **Gate:** `make test`, the bound guard again the one failure.
+  **Recorded (stage 1, 2026-10-07, on `26e4f8c` + the moves):** hash and count equal; sizes `tests/workflow_support.py` 169,
+  `test_workflow_pins.py` 538, `test_workflow_posture.py` 329,
+  `test_workflow_python.py` 278, `test_ci_workflow.py` 387 after the Dependabot
+  section left it. The shared readers in `tests/workflow_support.py` are the
+  listed ones plus `_job_permission_blocks` (which `_uncommented_permission_blocks`
+  calls), `_FROM` and `_dockerfile_from` (read by the pins and the Python modules),
+  and the module's path and table constants. The four modules' tests and the
+  citation test green; the bound guard red on `test_agent_artifacts.py` and
+  `test_skill_contract.py` only.
 
 ## Milestone 3 — Split `test_agent_artifacts.py` and `test_skill_contract.py`, re-point every pointer
 
 - `tests/test_release_surface.py` (new) ← `tests/test_agent_artifacts.py`'s
   release workflow (445–554, 2 tests), generated artifacts (554–604, 3) and
-  packaging surface (604–682, 3) sections; its `_workflow_jobs` (448) and
-  `_uncommented` (477) helpers are replaced by
-  `tests.support.workflow_job_blocks` and
-  `tests.workflow_support._uncommented_permission_blocks` where the body is
-  the same, the release-specific assertion kept (R-TSS-8, DEC-HCW-009's
+  packaging surface (604–682, 3) sections, its `_workflow_jobs` (448) and
+  `_uncommented` (477) helpers moving with them unchanged so this stage
+  stays pure moves; Milestone 5 routes them (R-TSS-8, DEC-HCW-009's
   deferral closed; no import from a collected module).
   `test_agent_artifacts.py` keeps evals (150–319), `context7.json`
   (319–355), `llms.txt` (355–445), the nested `AGENTS.md` contract
@@ -314,6 +349,12 @@ collected count; the red runs are recorded here and never committed.
   sort -n | tail -8` with every module at or under the bound;
   `test_no_test_module_exceeds_the_line_bound` green for the first time —
   record it.
+  **Recorded (stage 1, 2026-10-07, on `26e4f8c` + the moves):** hash and count equal; `wc -l tests/test_*.py | sort -n | tail -8` tops
+  out at `test_action_contract.py` 700 and `test_graft_rules.py` 684, 19530 in
+  total; the bound guard green, 2 passed. `test_agent_artifacts.py` 568,
+  `test_release_surface.py` 251, `test_skill_contract.py` 466,
+  `test_skill_distribution.py` 334; the skill module's path constants and its
+  `_load_tool = load_tool` alias are written in both halves.
 - Re-point every live pointer of Milestone 0's grep to the module that now
   holds the guard it names, and record the after-grep: `tests/conftest.py:48`
   → `tests/test_graph_tools.py`; `tools/_common.py:157` →
@@ -372,6 +413,15 @@ collected count; the red runs are recorded here and never committed.
   citation test; record green. Commit the first stage (Milestones 0–3),
   recording the baseline hash and count in the commit message, and record
   PR #42's CI run on it: every leg green.
+  **Recorded (stage 1, 2026-10-07, on `26e4f8c` + the moves):** every pointer of Milestone 0's grep re-pointed as listed — with
+  `pyproject.toml:156` to `tests/test_workflow_posture.py` (the timeout bounds) and
+  `:200` to `tests/test_workflow_pins.py` (the major floors), and
+  `.claude/agents/planlint-verifier.md:22, 24` to `tests/test_release_surface.py`,
+  which holds the Docker-context and root-markdown tests; the after-grep finds
+  the two module names only in the new modules' "Moved from" docstrings,
+  `tests/support.py`'s history sentence and dated records. `make docs-check`
+  passes; the agent-artifact, release-surface, hooks, adopter, rule-registry,
+  citation, skill and suite-shape modules: 330 passed. `make test`: exit 0, wall 166 s, all four scoped floors met (`openspec_graph/` 2276/2292 and 744/762, `tools/` 946/981 and 323/344 — the two extra `tools/` statements are the scope normalisation of #41's review fix, already on `main`).
 - **Gate:** `make docs-check`, then `make test`
 
 ## Milestone 4 — Tiers, their guards seen red first
@@ -525,7 +575,12 @@ collected count; the red runs are recorded here and never committed.
   `test_detect_thresholds` now import from `tests/support.py`; the other
   thirteen have nothing to route.
 - `tests/test_agent_artifacts.py` / `tests/test_release_surface.py`:
-  confirm `_workflow_jobs` is gone (Milestone 3) and `grep -rn
+  replace `_workflow_jobs` with `tests.support.workflow_job_blocks` (the
+  missing-`jobs:` assertion kept at the call site) and `_uncommented` with a
+  join over `tests.workflow_support._code_lines` — the comment stripper it
+  duplicates; `_uncommented_permission_blocks`, which an earlier draft named,
+  lists uncommented permission blocks and is a different function — then
+  confirm `_workflow_jobs` is gone and `grep -rn
   "def _workflow_jobs\|def _ci_job_blocks" tests/` finds only the alias in
   `tests/test_ci_workflow.py`.
 - Re-run `grep -ln "subprocess.run" tests/test_*.py`, `grep -ln

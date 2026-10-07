@@ -256,10 +256,10 @@ byte-identical at `bb4e4ad`, the commit that carries this draft),
   gains the runnable-as-a-script contract.
 - `tests/test_agent_artifacts.py` — gives its release-workflow,
   generated-artifacts and packaging-surface sections to
-  `tests/test_release_surface.py` (new); its `_workflow_jobs` near-copy and
-  `_uncommented` are replaced by `tests/support.workflow_job_blocks` and
-  `tests/workflow_support.py`'s `_uncommented_permission_blocks` on the way
-  (DEC-HCW-009's deferral, closed); keeps evals, `context7.json`,
+  `tests/test_release_surface.py` (new), its `_workflow_jobs` near-copy and
+  `_uncommented` moving with them unchanged; the routing stage replaces them
+  with `tests/support.workflow_job_blocks` and `tests/workflow_support.py`'s
+  `_code_lines` (DEC-HCW-009's deferral, closed); keeps evals, `context7.json`,
   `llms.txt`, the nested `AGENTS.md` contract and the cited-command check.
 - `tests/test_skill_contract.py` — gives its generated-catalog,
   manifest-agreement, shipped-CI-asset, packaging-and-gate-coverage and

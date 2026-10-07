@@ -18,7 +18,7 @@
 # README snippet is pinned to a commit SHA with its release tag in a trailing
 # comment (pin-actions-by-sha). Dependabot rewrites SHA and comment as one
 # update and classifies the update from the comment, which is why
-# tests/test_workflow_hardening.py requires the comment. The publisher,
+# tests/test_workflow_pins.py requires the comment. The publisher,
 # `pypa/gh-action-pypi-publish`, is on a tagged commit rather than a branch
 # and stays out of the `actions-minor` group. This closed the deferred row in
 # `docs/next-steps.md` ("SHA-pinning the third-party actions"); the earlier
@@ -32,7 +32,7 @@ updates:
     # composite action under .github/actions/planlint/ has to be listed too --
     # and listing both in one entry yields one grouped pull request that moves
     # every copy under .github/ together, which the agreement guard in
-    # tests/test_workflow_hardening.py needs now that every ref is a pinned
+    # tests/test_workflow_pins.py needs now that every ref is a pinned
     # SHA with its release tag (pin-actions-by-sha).
     directories: ["/", "/.github/actions/planlint"]
     schedule:

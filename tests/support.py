@@ -256,10 +256,12 @@ def workflow_job_blocks(text: str) -> dict[str, str]:
     can't false-fail and a renamed job can't false-pass. The body keeps every
     line, comments included, so a caller that needs code only strips them.
 
-    Moved here from ``tests/test_ci_hardening.py`` (which keeps
-    ``_ci_job_blocks`` as an alias) when ``tests/test_workflow_hardening.py``
-    became its second user; ``tests/test_agent_artifacts.py`` still carries
-    its own near-copy, which is W7.4's business (DEC-HCW-009).
+    Moved here from ``tests/test_ci_hardening.py`` (whose ``_ci_job_blocks``
+    alias now lives in ``tests/test_ci_workflow.py``) when
+    ``tests/test_workflow_hardening.py`` became its second user; both
+    modules were split by concern in ``shape-the-test-suite``.
+    ``tests/test_release_surface.py`` still carries its own near-copy,
+    which that package routes here (R-TSS-8, closing DEC-HCW-009's deferral).
     """
     lines = text.splitlines()
     try:
