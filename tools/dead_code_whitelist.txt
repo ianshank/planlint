@@ -1,0 +1,4 @@
+# Names `make dead-code` must not list: each is used by code vulture does not read.
+# Never add a name nothing uses; delete that symbol instead (report-dead-code-and-spec-status, R-RDS-6).
+whitespace_split  # set on a shlex.shlex lexer in tools/_common.py (the workflow lexer) and read by the standard library
+commenters  # likewise

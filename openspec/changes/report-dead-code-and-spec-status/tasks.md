@@ -648,7 +648,7 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
     Milestone 0 (`openspec_graph/` 2276/2292 and 744/762, `tools/` 946/981
     and 323/344).
 
-## Milestone 2 — The workflow lexer moved into `_common`, then the dead-code report, its guards seen red first
+## Milestone 2 — The workflow lexer moved into `_common`, then the dead-code report, its guards seen red first [DONE]
 
 - The lexer move (R-RDS-24, DEC-RDS-009), first and on its own:
   - Capture before, outside the tree (the session's scratch directory):
@@ -866,6 +866,131 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   per-file list. A floor that would fail is answered with a test, never a
   lower floor (C-RDS-5).
 - **Gate:** `make test`
+  **Recorded (Milestone 2, 2026-10-07, on `b40f9f1` + the Milestone 2 tree):**
+  - *The lexer move, first and alone.* Before, outside the tree:
+    `python tools/stage_citations.py > before.txt` (exit 0) and `python
+    tools/stage_citations.py --format json > before.json` (exit 0). The moved
+    names went to `tools/_common.py` with their comments: `WORKFLOW_DIR`,
+    `ReportError`, `_RUN_KEY`, `_BLOCK_INDICATOR`, `_YAML_QUOTED`,
+    `_SHELL_SEPARATORS`, `_SHELL_ASSIGNMENT`, `run_scripts`,
+    `_shell_tokens`, `shell_invocations`, `workflow_invocations` and
+    `workflow_stages`. The last three take a keyword-only `stage_ref:
+    re.Pattern[str]`, and `_common` gains `import shlex` and `from
+    collections.abc import Sequence`, both stdlib. The debug line reads
+    `workflow-stages: %s invokes %s`. `tools/stage_citations.py` imports
+    `ReportError`, `logger` and `repo_root`, re-exports `run_scripts as
+    run_scripts`, and imports the three lexer functions under private
+    aliases. Its `shell_invocations(script)`, `workflow_invocations(text)`
+    and `workflow_stages(root, only=())` are one-line wrappers passing
+    `stage_ref=MAKE_REF`, documented in one comment above them. It no longer
+    imports `re`, `shlex` or `WORKFLOW_DIR`.
+    - `python -m pytest tests/test_stage_citations.py -q -o addopts=""`
+      unedited: 51 passed. `python -m pytest tests/test_enterprise.py -q -o
+      addopts="" -k test_common_module_is_stdlib_only`: 1 passed.
+    - `python -c "import sys; sys.path.insert(0, 'tools'); import
+      stage_citations as sc; print(sorted(sc.shell_invocations('make test
+      && echo make lint')))"` prints `['test']`.
+    - After, captured the same way (both exit 0): `diff before.txt
+      after.txt` exit 0 and `diff before.json after.json` exit 0, both
+      empty. `PLANLINT_LOG_LEVEL=DEBUG python tools/stage_citations.py`
+      logs `DEBUG planlint.tools: workflow-stages: ci.yml invokes
+      ['docs-check', 'e2e-live', 'lint', 'test', 'typecheck']`.
+    - `ruff check tools`: all checks passed. `mypy tools`: no issues in 13
+      source files.
+  - *Red first: `tests/test_dead_code.py`,* written before the script and
+    before the `pyproject.toml` edit. `python -m pytest
+    tests/test_dead_code.py -q -p no:cacheprovider -o addopts="" -rA`: 30
+    failed, 7 passed. 26 failed with `FileNotFoundError: [Errno 2] No such
+    file or directory: '/home/user/planlint/tools/dead_code.py'` from
+    `load_tool` (or the import test's read). The dev-extra guard failed
+    with `the dev extra lists vulture 0 times, not once: []`. Two failed with
+    `[tool.specgraph] dead_code_min_confidence is not an integer`: the
+    confidence guard, and the installed-vulture test, which reads the
+    configured value. The 7 that passed are the six planted cases of the
+    dev-extra guard and `test_no_github_file_or_recipe_line_names_vulture`,
+    whose planted workflow and recipe are named inside it. That guard was
+    shown red on the real tree with a local plant, reverted with `git
+    checkout .github/workflows/ci.yml` and never committed: a line `# pip
+    install vulture` appended to `ci.yml` gave `assert ['ci.yml:419'] ==
+    []`.
+  - *Red first: the two list entries.*
+    `test_every_report_target_stays_out_of_the_ladder` with `dead-code`
+    required: `Left contains one more item: 'dead-code is not a report
+    target'`. `test_gate_script_is_runnable_as_a_script` with the presence
+    assertion first and `"dead_code.py"` listed: 1 failed, `AssertionError:
+    dead_code.py is listed but absent`, and the other 12 entries passed.
+  - *`pyproject.toml`.* `"vulture>=2.15",` after `"hypothesis",` under the
+    extra's comment paragraph, and `dead_code_min_confidence = 60` after
+    `per_file_line_min` under its comment. `python
+    tools/check_no_hardcoded_thresholds.py`: `PASS: no hard-coded thresholds
+    in Makefile or workflow YAML`. `planlint --target . detect`: `coverage
+    floor 97 from pyproject.toml:[tool.coverage.report].fail_under`,
+    unchanged. `python -m pip install "vulture>=2.15"`: `Requirement already
+    satisfied: vulture>=2.15 … (2.16)`.
+  - *The script, the whitelist and the target.* `tools/dead_code.py` as
+    planned, with one change of shape, recorded as a deviation. The
+    command is built by `vulture_argv(root, trees, confidence)` and run by
+    `run_vulture(root, argv)`; `main(argv, run=run_vulture)` hands the
+    injected runner that argv. So
+    `test_the_confidence_is_read_from_the_specgraph_table_and_passed_to_vulture`
+    asserts the argv the runner receives, `tests` included only when it
+    exists, as the plan words it. The plan's `run_vulture(root, trees,
+    confidence)` would have built `tests` inside the real runner, out of the
+    injected one's sight. The body of `main` is `report(root, run)`, with
+    `ReportError` mapped to 2. `tools/dead_code_whitelist.txt` has its
+    two-line header and the two entries. The `Makefile` gains `dead-code` in
+    `.PHONY` and the target with the planned help text and recipe; the
+    `ci:` and `pre-pr:` lines are unchanged. `make thresholds`: PASS. `make
+    help` lists `dead-code      Report unreferenced code under the coverage
+    source trees (vulture) — a report, not a gate`.
+    `ruff check tools tests`: all checks passed. `mypy tools`: no issues in
+    14 source files.
+  - *Beyond the plan's list.* `test_findings_are_sorted_by_path_then_line`
+    holds R-RDS-4's sort clause, which no planned test named, and a blank
+    stdout line. The plan's unreadable-`pyproject.toml` and vulture-absent
+    cases are parametrised cases of `test_dead_code_exits_two_when_it_cannot_run`
+    (10 cases), through a spoiler that takes `monkeypatch`.
+  - *Green.* `python -m pytest tests/test_dead_code.py tests/test_ci_makefile.py
+    tests/test_gate_scripts.py tests/test_stage_citations.py -q -o
+    addopts=""`: 146 passed. `python -m pytest tests/test_suite_shape.py
+    tests/test_suite_routing.py -q -p no:cacheprovider`: 52 passed — every
+    new test carries the tier the criterion computes. The six planted
+    dev-extra cases are `unit`; every other new test loads the script or
+    reads the tree and is `integration`. The installed-vulture test is
+    `integration` too, because the vulture process is started by the script
+    under test (DEC-TSS-017). `wc -l`: `tests/test_dead_code.py` 582,
+    `tests/test_gate_scripts.py` 409, `tests/test_ci_makefile.py` 428.
+  - *`make dead-code` at the branch head* (`b40f9f1` + this tree; `python
+    tools/dead_code.py` exits 1, which `make` reports as `make: ***
+    [Makefile:98: dead-code] Error 1` and exit 2; 0.67 s by `time`):
+
+    ```
+    python tools/dead_code.py
+    dead-code: openspec_graph, tools at confidence 60 (vulture 2.16; tests/ read as a user); 2 whitelist entries read
+    openspec_graph/parse_model.py:58: unused property 'has_selector' (60% confidence)
+    openspec_graph/parse_semantics.py:510: unused function 'speckit_section_body' (60% confidence)
+    openspec_graph/parse_semantics.py:546: unused function 'speckit_subsection_body' (60% confidence)
+    tools/matcher_accuracy.py:119: unused method 'precision_pct' (60% confidence)
+    tools/matcher_accuracy.py:123: unused method 'recall_pct' (60% confidence)
+    5 unreferenced symbols; 0 stale whitelist entries
+    ```
+
+    The drafting expectation, exactly: the five symbols, no stale entry,
+    exit 1. Both whitelist entries suppressed a finding, now at
+    `tools/_common.py`, where the lexer moved.
+  - *Coverage.* `make test`, on the tree this record closes: exit 0.
+    `openspec_graph/ line coverage 99.3% (2276/2292) meets floor 97%`,
+    `openspec_graph/ branch coverage 97.6% (744/762) meets floor 95%`,
+    `tools/ line coverage 96.5% (1128/1169) meets floor 94%`, `tools/ branch
+    coverage 94.4% (385/408) meets floor 91%` (1127/1169 and 384/408 before
+    the sort test gained its blank line). Per file: `tools/dead_code.py` 97 % (`vulture_version`'s
+    missing-metadata branch, the not-a-directory root and the `__main__`
+    line are unrun), `tools/_common.py` 98 % and
+    `tools/stage_citations.py` 97 %. The one new miss there is the
+    `shell_invocations` wrapper, which no test reaches, as before the move;
+    the recorded `python -c` above runs it. `make coverage-per-file`: exit
+    0, `no module below 85% line coverage`, so neither script is on the
+    list.
 
 ## Milestone 3 — The spec-status report, its guards seen red first
 

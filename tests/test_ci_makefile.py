@@ -341,7 +341,12 @@ def test_makefile_has_coverage_per_file_report_target() -> None:
 
 #: The report targets this repository must carry; each is required by name so
 #: the test is red before the target exists.
-_REQUIRED_REPORT_TARGETS = ("matcher-accuracy", "coverage-per-file", "stage-citations")
+_REQUIRED_REPORT_TARGETS = (
+    "matcher-accuracy",
+    "coverage-per-file",
+    "stage-citations",
+    "dead-code",
+)
 
 @pytest.mark.integration
 def test_every_report_target_stays_out_of_the_ladder() -> None:
