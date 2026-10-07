@@ -835,3 +835,60 @@ def hand_written_specs(root: Path, shapes: RoutedShapes) -> list[str]:
                 if writer is not None:
                     found.append(f"{path.name}:{node.lineno} ({writer})")
     return sorted(set(found))
+
+
+# -- converted loops (R-TSS-9) -------------------------------------------------------
+
+#: The entry point a converted loop runs in-process.
+IN_PROCESS_ENTRY = "main"
+_LOOPS = (ast.For, ast.AsyncFor, ast.While, ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+
+
+def _inside_loop(node: ast.AST, parents: dict[ast.AST, ast.AST], stop: ast.AST) -> bool:
+    current = parents.get(node)
+    while current is not None and current is not stop:
+        if isinstance(current, _LOOPS):
+            return True
+        current = parents.get(current)
+    return False
+
+
+def converted_loop_violations(root: Path, converted: dict[str, tuple[str, ...]]) -> list[str]:
+    """Each named test that does not run its loop in-process with exactly one
+    ``run_cli`` outside any loop as its entry-point check."""
+    found: list[str] = []
+    for module, tests in sorted(converted.items()):
+        tree = ast.parse((root / module).read_text(encoding="utf-8"), filename=module)
+        parents = _parents(tree)
+        functions = {
+            node.name: node
+            for node in tree.body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        for test in tests:
+            function = functions.get(test)
+            if function is None:
+                found.append(f"{module}::{test}: not found")
+                continue
+            calls = [
+                node
+                for node in ast.walk(function)
+                if isinstance(node, ast.Call)
+                and (
+                    (isinstance(node.func, ast.Name) and node.func.id == ROUTED_SPAWN)
+                    or (isinstance(node.func, ast.Attribute) and node.func.attr == ROUTED_SPAWN)
+                )
+            ]
+            looped = [call for call in calls if _inside_loop(call, parents, function)]
+            entry = any(
+                (isinstance(node, ast.Name) and node.id == IN_PROCESS_ENTRY)
+                or (isinstance(node, ast.Attribute) and node.attr == IN_PROCESS_ENTRY)
+                for node in ast.walk(function)
+            )
+            if len(calls) != 1:
+                found.append(f"{module}::{test}: {len(calls)} {ROUTED_SPAWN} calls, not 1")
+            if looped:
+                found.append(f"{module}::{test}: {ROUTED_SPAWN} inside a loop")
+            if not entry:
+                found.append(f"{module}::{test}: no reference to {IN_PROCESS_ENTRY}")
+    return found

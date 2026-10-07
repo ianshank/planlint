@@ -803,6 +803,62 @@ collected count; the red runs are recorded here and never committed.
   shape, the four per-test figures before and after and the totals with
   their commits.
 - **Gate:** `make test`
+  **Recorded (Milestone 6, 2026-10-07, on `2daeca5` + the Milestone 6 tree):**
+  - *Red first.* `test_the_converted_loops_keep_exactly_one_subprocess`, before
+    any conversion, named all four bodies. `test_projections_are_byte_stable_across_runs`
+    had 3 `run_cli` calls, one inside a loop, and no `main`.
+    `test_an_unprojectable_file_exits_two_with_an_empty_stdout` had 1 call,
+    inside its loop, and no `main`. `test_sarif_returns_the_same_exit_code_as_the_text_run`
+    had 5 calls, three inside a loop, and no `main`.
+    `test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict` had
+    3 calls and no `main`. The guard also names a `run_cli` inside a loop,
+    because one call in a loop is still one process per iteration.
+    `test_a_planted_loop_with_the_wrong_subprocess_count_is_named` names two
+    calls, none, one inside a loop and no `main`, and stays quiet on the
+    converted shape.
+  - *Converted.* Each loop runs through `cli.main` with `capsys`, and one
+    `run_cli` outside the loop is held to the in-process verdict on the
+    same property. That is the SARIF bytes for the projections, the
+    first format's exit code, empty stdout and non-empty stderr for the
+    unprojectable file, the failing repository's SARIF exit code for the
+    parity test, and the INFO exit code for G010. Every earlier assertion
+    is still made. `tests/test_report.py`'s two copies of the format list
+    became one `REPORT_FORMATS` constant. The conversion took
+    `tests/test_report.py` to 720 lines, and `test_no_test_module_exceeds_the_line_bound`
+    named it. `test_report_has_no_intra_package_imports` therefore moved to
+    `tests/test_decomposition.py`, beside the `test_new_modules_stdlib_only`
+    its docstring explains itself against (692 and 394 lines after). Its
+    citations are by name.
+  - *C-TSS-5.* `git diff 2daeca5 -- tests/test_cli_surface.py
+    tests/test_wheel_metadata.py tests/test_action_contract.py
+    tests/test_coverage_checkers.py tests/test_gate_scripts.py
+    tests/test_skill_contract.py tests/test_findings_envelope.py
+    tests/test_detect_thresholds.py` prints nothing.
+    `test_module_is_importable_without_the_rest_of_the_package` is outside
+    every hunk of `tests/test_report.py`.
+  - *Durations (R-TSS-11),* in this container, back to back: before on
+    `2daeca5` at 02:38Z and after on the converted tree at 02:45Z. The
+    Appendix A command gave `1631 passed in 161.17s` before (load 0.95) and
+    `1637 passed in 148.80s` after (load 0.96); six more items, the new
+    guards. The header's three readings of an unchanged tree spread from
+    149.98 s to 157.68 s, so the totals are recorded side by side and no
+    claim is made on their difference. The plan's 200 s row is met before
+    and after. Before, the slowest twelve held three of the four:
+    `test_projections_are_byte_stable_across_runs` 3.60 s,
+    `test_sarif_returns_the_same_exit_code_as_the_text_run` 2.96 s, and
+    three `test_an_unprojectable_file_exits_two_with_an_empty_stdout` cases
+    at 1.62–1.75 s. After, the twelve hold none of them; its tail is 1.59 s.
+    The four-test command, per test, before → after:
+    `test_projections_are_byte_stable_across_runs` 3.55 → 0.55 s;
+    `test_sarif_returns_the_same_exit_code_as_the_text_run` 3.18 → 0.55 s;
+    `test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict`
+    1.53 → 0.56 s; `test_an_unprojectable_file_exits_two_with_an_empty_stdout`
+    1.45–1.52 → 0.50–0.59 s per case. The command's total went from 14.80 s
+    to 4.08 s.
+  - *Gate.* `make test`: exit 0, wall 167 s; `openspec_graph/` 99.3%
+    (2276/2292) lines and 97.6% (744/762) branches, unchanged and not lowered;
+    `tools/` 96.4% (946/981) and 93.9% (323/344); floors unchanged.
+    Baseline: 1057 names, sha256 prefix `2f62db0aee56ef40`, unchanged.
 
 ## Milestone 7 — Confirm, re-point, and record for the plan
 

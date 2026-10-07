@@ -272,6 +272,35 @@ def test_new_modules_stdlib_only() -> None:
         )
 
 
+# Moved from tests/test_report.py by shape-the-test-suite (R-TSS-1), beside the
+# stdlib-only check it explains itself against, when the in-process loops took
+# that module past the line bound.
+@pytest.mark.integration
+def test_report_has_no_intra_package_imports() -> None:
+    """The zero-intra-package-import posture, checked rather than asserted.
+
+    `test_new_modules_stdlib_only` deliberately drops relative imports when it
+    resolves module roots, so it cannot see `from .rules import ...` -- several
+    modules on its list have intra-package imports and pass it. This module's
+    claim is stronger and needs its own check: it is handed plain data and the
+    schema versions it validates against, so it can never depend on evaluation
+    order.
+    """
+    tree = ast.parse((PKG / "report.py").read_text(encoding="utf-8"))
+    offenders: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            if node.level:
+                offenders.append(f"relative import of {node.module or '.'}")
+            elif node.module and node.module.split(".")[0] == PKG.name:
+                offenders.append(f"absolute import of {node.module}")
+        elif isinstance(node, ast.Import):
+            offenders += [
+                f"import of {alias.name}" for alias in node.names
+                if alias.name.split(".")[0] == PKG.name
+            ]
+    assert not offenders, f"openspec_graph/report.py imports its own package: {offenders}"
+
 @pytest.mark.integration
 def test_machinery_never_imports_subprocess() -> None:
     """DEC-MP-001 is non-negotiable: machinery.py must never shell out to

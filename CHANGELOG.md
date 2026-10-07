@@ -47,6 +47,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   through `workflow_job_blocks` and its code through `_code_lines`, closing
   `harden-ci-workflows` DEC-HCW-009's deferral. Two guards read each helper's
   shape from its own body and name any copy.
+- **In-process loops.** `test_projections_are_byte_stable_across_runs`,
+  `test_an_unprojectable_file_exits_two_with_an_empty_stdout`,
+  `test_sarif_returns_the_same_exit_code_as_the_text_run` and
+  `test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict` run
+  their loops through `cli.main` and keep one real process each, held to the
+  in-process verdict; a guard holds that shape. Measured back to back on
+  `2daeca5` and the converted tree: 3.55 → 0.55 s, 1.45–1.52 → 0.50–0.59 s
+  per case, 3.18 → 0.55 s and 1.53 → 0.56 s. The whole suite read 161.17 s
+  before and 148.80 s after; three readings of an unchanged tree spread from
+  149.98 s to 157.68 s, so the totals are reported and no saving is claimed
+  on them. `test_report_has_no_intra_package_imports` moved to
+  `test_decomposition.py` to keep `test_report.py` inside the line bound.
 
 ### Changed — one suite run measures both trees (M2)
 

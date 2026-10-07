@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from openspec_graph.cli import main
 from tests.support import normalize_root, run_cli, write_spec, write_speckit_spec
 
 pytestmark = pytest.mark.e2e
@@ -253,21 +254,31 @@ def _findings(repo: Path, *args: str) -> list[dict]:
     return found
 
 
-def test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict(tmp_path: Path) -> None:
+def test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """INFO exists so no currently-passing repository starts failing.
 
     Asserted at the boundary that matters: the exit code, not the severity
     constant. A repo with no makefile whose spec cites one still exits 0 at
-    the default threshold and 1 only when INFO is explicitly requested.
+    the default threshold and 1 only when INFO is explicitly requested. The
+    thresholds run in-process through `cli.main`; one real process at INFO is
+    the entry-point check (shape-the-test-suite R-TSS-9).
     """
     _harness_spec(tmp_path, _MAKEFILE_LESS_SPEC)
-    assert run_cli(tmp_path, "validate", "--fail-on", "ERROR").returncode == 0
-    assert run_cli(tmp_path, "validate", "--fail-on", "WARN").returncode == 0
-    assert run_cli(tmp_path, "validate", "--fail-on", "INFO").returncode == 1
+    codes: dict[str, int] = {}
+    for threshold in ("ERROR", "WARN", "INFO"):
+        codes[threshold] = main(["--target", str(tmp_path), "validate", "--fail-on", threshold])
+        capsys.readouterr()
+    assert codes == {"ERROR": 0, "WARN": 0, "INFO": 1}, codes
 
-    rules_seen = {f["rule"] for f in _findings(tmp_path, "--fail-on", "INFO")}
+    main(["--target", str(tmp_path), "validate", "--format", "json", "--fail-on", "INFO"])
+    payload = json.loads(capsys.readouterr().out)
+    assert isinstance(payload, dict), payload
+    rules_seen = {f["rule"] for f in payload["findings"]}
     assert "G010" in rules_seen
     assert "G004" not in rules_seen, "G004 must stay silent; G010 speaks for it"
+    assert run_cli(tmp_path, "validate", "--fail-on", "INFO").returncode == codes["INFO"]
 
 
 def test_a_waived_g010_still_fails_a_fail_on_info_run(tmp_path: Path) -> None:

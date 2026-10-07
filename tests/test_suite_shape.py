@@ -28,6 +28,7 @@ from tests.shape_support import (
     SUPPORT_MODULE,
     TIERS,
     Program,
+    converted_loop_violations,
     criterion_disagreements,
     hand_written_specs,
     inline_cli_spawns,
@@ -485,4 +486,70 @@ def test_a_planted_inline_spawn_or_hand_written_spec_is_named(tmp_path: Path, ca
     _plant(root, {"test_planted.py": text})
     shapes = routed_shapes(TESTS_DIR / SUPPORT_MODULE)
     found = inline_cli_spawns(root, shapes) if guard == "spawn" else hand_written_specs(root, shapes)
+    assert bool(found) is named, f"{case}: {found}"
+
+
+# --- Milestone 6: the converted loops keep one subprocess each (R-TSS-9) -----------
+
+#: The four tests R-TSS-9 converts, by module: each loop runs through
+#: `cli.main` in-process, and one `run_cli` stays as the entry-point check.
+CONVERTED_LOOPS = {
+    "test_report.py": (
+        "test_projections_are_byte_stable_across_runs",
+        "test_an_unprojectable_file_exits_two_with_an_empty_stdout",
+    ),
+    "test_sarif.py": ("test_sarif_returns_the_same_exit_code_as_the_text_run",),
+    "test_e2e_corpus.py": ("test_g010_reaches_the_cli_without_changing_a_fail_on_error_verdict",),
+}
+
+
+@pytest.mark.integration
+def test_the_converted_loops_keep_exactly_one_subprocess() -> None:
+    """R-TSS-9: each converted body holds exactly one `run_cli`, outside any
+    loop, and references `main`, so its verdicts run in-process and stay tied
+    to one real process."""
+    found = converted_loop_violations(TESTS_DIR, CONVERTED_LOOPS)
+    assert found == [], "\n".join(found)
+
+
+_PLANTED_LOOPS = {
+    "two-run-cli-calls": ("""
+        def test_loop(tmp_path):
+            run_cli(tmp_path, "validate")
+            run_cli(tmp_path, "rules")
+            main(["--target", str(tmp_path), "validate"])
+    """, True),
+    "no-run-cli-call": ("""
+        def test_loop(tmp_path):
+            main(["--target", str(tmp_path), "validate"])
+    """, True),
+    "run-cli-inside-a-loop": ("""
+        def test_loop(tmp_path):
+            for fmt in ("a", "b"):
+                run_cli(tmp_path, "report", "--format", fmt)
+            main(["--target", str(tmp_path), "validate"])
+    """, True),
+    "no-reference-to-main": ("""
+        def test_loop(tmp_path):
+            run_cli(tmp_path, "validate")
+    """, True),
+    "one-entry-check-and-main": ("""
+        def test_loop(tmp_path, capsys):
+            for fmt in ("a", "b"):
+                main(["--target", str(tmp_path), "report", "--format", fmt])
+            assert run_cli(tmp_path, "validate").returncode == 0
+    """, False),
+}
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("case", sorted(_PLANTED_LOOPS))
+def test_a_planted_loop_with_the_wrong_subprocess_count_is_named(tmp_path: Path, case: str) -> None:
+    """R-TSS-9, R-TSS-12: the loop guard names a body with two `run_cli`
+    calls, with none, with one inside a loop, or with no `main`, and stays
+    quiet on the converted shape."""
+    text, named = _PLANTED_LOOPS[case]
+    root = tmp_path / TESTS_DIR.name
+    _plant(root, {"test_planted.py": text})
+    found = converted_loop_violations(root, {"test_planted.py": ("test_loop",)})
     assert bool(found) is named, f"{case}: {found}"

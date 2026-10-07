@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from openspec_graph import sarif
+from openspec_graph.cli import main
 from openspec_graph.rule_types import ERROR, INFO, WARN, Finding
 from openspec_graph.rules import rule_table
 from tests.support import run_cli, write_spec
@@ -325,27 +326,42 @@ def test_json_with_format_sarif_is_a_usage_error(tmp_path: Path) -> None:
 
 
 @pytest.mark.e2e
-def test_sarif_returns_the_same_exit_code_as_the_text_run(tmp_path: Path) -> None:
+def test_sarif_returns_the_same_exit_code_as_the_text_run(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """AC-SA-17 (R-SA-14): the format decides how findings are rendered, never
     whether the gate passes.
 
     A CI job that switched to SARIF to get annotations must not also, silently,
     stop failing — that would turn a gate into a decoration, which is the exact
     failure mode this project exists to catch elsewhere.
+
+    The six runs go in-process through `cli.main`; one real SARIF run on the
+    failing repository is the entry-point check, held to the in-process code
+    (shape-the-test-suite R-TSS-9).
     """
     failing = _repo(tmp_path / "failing")
     clean = _repo(tmp_path / "clean", with_findings=False)
 
+    def exit_code(repo: Path, *args: str) -> int:
+        code = main(["--target", str(repo), "validate", "--fail-on", "ERROR", *args])
+        capsys.readouterr()
+        return code
+
+    text_codes: dict[str, int] = {}
     for repo in (failing, clean):
-        text = run_cli(repo, "validate", "--fail-on", "ERROR").returncode
-        sarif_code = run_cli(repo, "validate", "--fail-on", "ERROR", "--format", "sarif").returncode
-        json_code = run_cli(repo, "validate", "--fail-on", "ERROR", "--json").returncode
+        text = exit_code(repo)
+        sarif_code = exit_code(repo, "--format", "sarif")
+        json_code = exit_code(repo, "--json")
         assert text == sarif_code == json_code, (repo.name, text, sarif_code, json_code)
+        text_codes[repo.name] = text
 
     # And the fixture actually exercises both outcomes, so the equality above
     # is not three zeroes agreeing with each other.
-    assert run_cli(failing, "validate", "--fail-on", "ERROR").returncode == 1
-    assert run_cli(clean, "validate", "--fail-on", "ERROR").returncode == 0
+    assert text_codes[failing.name] == 1
+    assert text_codes[clean.name] == 0
+    entry = run_cli(failing, "validate", "--fail-on", "ERROR", "--format", "sarif")
+    assert entry.returncode == text_codes[failing.name]
 
 
 @pytest.mark.e2e

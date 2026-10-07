@@ -18,7 +18,6 @@ Three layers, in the order they fail:
 
 from __future__ import annotations
 
-import ast
 import json
 import subprocess
 import sys
@@ -27,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from openspec_graph import report
+from openspec_graph.cli import main
 from openspec_graph.dialect_card import SCHEMA_VERSION as CARD_SCHEMA
 from openspec_graph.rule_types import FINDINGS_SCHEMA_VERSION as ENVELOPE_SCHEMA
 from tests.support import run_cli
@@ -34,6 +34,9 @@ from tests.support import run_cli
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PKG = REPO_ROOT / "openspec_graph"
 FIXTURES = REPO_ROOT / "tests" / "fixtures" / "action"
+
+#: Every surface the `report` verb renders, in the order the action writes them.
+REPORT_FORMATS = ("sarif", "github-annotations", "github-summary", "github-outputs")
 
 # Each fixture's label, mirroring tests/fixtures/action/README.md's table. The
 # duplication is deliberate and one-directional: the README is what a reader
@@ -442,33 +445,6 @@ def test_a_malformed_card_is_refused(payload: object) -> None:
 # --- module purity -----------------------------------------------------------
 
 
-@pytest.mark.integration
-def test_report_has_no_intra_package_imports() -> None:
-    """The zero-intra-package-import posture, checked rather than asserted.
-
-    `test_new_modules_stdlib_only` deliberately drops relative imports when it
-    resolves module roots, so it cannot see `from .rules import ...` -- several
-    modules on its list have intra-package imports and pass it. This module's
-    claim is stronger and needs its own check: it is handed plain data and the
-    schema versions it validates against, so it can never depend on evaluation
-    order.
-    """
-    tree = ast.parse((PKG / "report.py").read_text(encoding="utf-8"))
-    offenders: list[str] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            if node.level:
-                offenders.append(f"relative import of {node.module or '.'}")
-            elif node.module and node.module.split(".")[0] == PKG.name:
-                offenders.append(f"absolute import of {node.module}")
-        elif isinstance(node, ast.Import):
-            offenders += [
-                f"import of {alias.name}" for alias in node.names
-                if alias.name.split(".")[0] == PKG.name
-            ]
-    assert not offenders, f"openspec_graph/report.py imports its own package: {offenders}"
-
-
 @pytest.mark.unit
 def test_the_annotation_cap_is_a_named_constant() -> None:
     """A bare number in the action YAML would be exactly the hard-coded
@@ -561,15 +537,27 @@ def test_the_no_tree_fixture_writes_no_envelope() -> None:
     ["not json at all", "[1, 2, 3]", '{"schema_version": 99, "tool_version": "0.0.0"}', "null"],
     ids=["not-json", "an-array", "a-foreign-schema", "json-null"],
 )
-def test_an_unprojectable_file_exits_two_with_an_empty_stdout(tmp_path: Path, payload: str) -> None:
+def test_an_unprojectable_file_exits_two_with_an_empty_stdout(
+    tmp_path: Path, payload: str, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Non-success: never exit 1, and never a half-written document on stdout
-    beside a diagnostic."""
+    beside a diagnostic.
+
+    Every format runs in-process through `cli.main`; one real process, on the
+    first format, is the entry-point check, held to the same verdict
+    (shape-the-test-suite R-TSS-9)."""
     saved = _written(tmp_path, "broken.json", payload)
-    for fmt in ("sarif", "github-annotations", "github-summary", "github-outputs"):
-        result = run_cli(tmp_path, "report", "--findings", str(saved), "--format", fmt)
-        assert result.returncode == 2, f"{fmt}: {result.returncode}"
-        assert result.stdout.strip() == "", fmt
-        assert result.stderr.strip(), fmt
+    verdicts: dict[str, tuple[int, str, bool]] = {}
+    for fmt in REPORT_FORMATS:
+        code = main(["--target", str(tmp_path), "report", "--findings", str(saved), "--format", fmt])
+        out, err = capsys.readouterr()
+        assert code == 2, f"{fmt}: {code}"
+        assert out.strip() == "", fmt
+        assert err.strip(), fmt
+        verdicts[fmt] = (code, out.strip(), bool(err.strip()))
+    first = REPORT_FORMATS[0]
+    entry = run_cli(tmp_path, "report", "--findings", str(saved), "--format", first)
+    assert (entry.returncode, entry.stdout.strip(), bool(entry.stderr.strip())) == verdicts[first]
 
 
 @pytest.mark.e2e
@@ -644,15 +632,29 @@ def test_a_malformed_card_exits_two_without_projecting(tmp_path: Path) -> None:
 
 
 @pytest.mark.e2e
-def test_projections_are_byte_stable_across_runs(tmp_path: Path) -> None:
+def test_projections_are_byte_stable_across_runs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Two runs over one envelope must agree, or the evidence bundle cannot be
-    compared between commits."""
-    envelope = _written(tmp_path, "findings.json",
-                        run_cli(FIXTURES / "failing", "validate", "--format", "json").stdout)
-    for fmt in ("sarif", "github-annotations", "github-summary", "github-outputs"):
-        first = run_cli(tmp_path, "report", "--findings", str(envelope), "--format", fmt)
-        second = run_cli(tmp_path, "report", "--findings", str(envelope), "--format", fmt)
-        assert first.stdout == second.stdout, fmt
+    compared between commits.
+
+    The runs go in-process through `cli.main`; one real process renders the
+    SARIF projection and must equal the in-process bytes, so the loop's
+    verdict is tied to the entry point (shape-the-test-suite R-TSS-9)."""
+    code = main(["--target", str(FIXTURES / "failing"), "validate", "--format", "json"])
+    assert code in (0, 1), capsys.readouterr().err
+    envelope = _written(tmp_path, "findings.json", capsys.readouterr().out)
+    firsts: dict[str, str] = {}
+    for fmt in REPORT_FORMATS:
+        argv = ["--target", str(tmp_path), "report", "--findings", str(envelope), "--format", fmt]
+        main(argv)
+        first = capsys.readouterr().out
+        main(argv)
+        second = capsys.readouterr().out
+        assert first == second, fmt
+        firsts[fmt] = first
+    entry = run_cli(tmp_path, "report", "--findings", str(envelope), "--format", "sarif")
+    assert entry.stdout == firsts["sarif"]
 
 
 @pytest.mark.unit
