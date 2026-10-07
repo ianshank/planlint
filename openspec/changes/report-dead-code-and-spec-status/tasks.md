@@ -514,7 +514,7 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
     invoked by no scanned workflow: ci, coverage-tools, security, thresholds,
     validate, wheel-check`.
 
-## Milestone 1 — The report-target guard extended and the CI-table reader scoped, seen red first
+## Milestone 1 — The report-target guard extended and the CI-table reader scoped, seen red first [DONE]
 
 - `tests/test_ci_makefile.py`, written before the refactor and run red
   (R-RDS-14, R-RDS-19, DEC-RDS-011). Add three helpers beside
@@ -577,6 +577,76 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   and record. If the criterion disagrees with a mark, the mark moves, never
   the criterion.
 - **Gate:** `make test`
+  **Recorded (Milestone 1, 2026-10-07, on `18b902f` + the Milestone 1 tree):**
+  - *Red first: the report-target guard.* The two planned tests were written
+    before any helper. `python -m pytest tests/test_ci_makefile.py -q -p
+    no:cacheprovider -o addopts="" -k "report_target_stays_out or
+    composed_into_the_ladder"`: 5 failed —
+    `test_every_report_target_stays_out_of_the_ladder` with `NameError: name
+    '_report_targets' is not defined`, and each of the four planted cases of
+    `test_a_report_target_composed_into_the_ladder_is_named` with `NameError:
+    name '_report_target_violations' is not defined`. The planted cases are
+    the plan's three — `pre-pr` composing the report directly, `ci`
+    reaching it through `test`, and the target missing from `.PHONY` — and a
+    fourth, help text that does not begin "Report". The intermediate case is
+    named twice, once per aggregate: `ci composes the audit report via ci ->
+    test -> audit` and `pre-pr composes the audit report via pre-pr -> ci ->
+    test -> audit`.
+  - *The helpers.* `_phony_targets`, `_report_targets`, `_reachable`
+    (breadth-first to a fixed point, so each path is the shortest) and
+    `_report_target_violations`, beside `_prerequisites`. With them both new
+    tests pass.
+  - *The real-tree test red on a planted ladder edit,* run locally on a copy
+    of the `Makefile` and restored by copying it back (`git diff --stat
+    Makefile` then printed nothing; never committed):
+    `coverage-tools: coverage-run matcher-accuracy`. The new test failed with
+    `pre-pr composes the matcher-accuracy report via pre-pr -> coverage-tools
+    -> matcher-accuracy`. `test_makefile_has_matcher_accuracy_report_target`,
+    still reading direct prerequisites only at that point, passed on the same
+    plant — the gap DEC-RDS-011 names.
+  - *The delegation.* `test_makefile_has_matcher_accuracy_report_target` and
+    `test_makefile_has_coverage_per_file_report_target` assert
+    `_report_target_violations(...) == []` in place of their `.PHONY` and
+    aggregate checks, with names, docstrings and every other assertion kept.
+    `_one_run_violations` ends `found += _report_target_violations(makefile_text,
+    _REPORT_TARGET)`, and `_ONE_RUN_MAKEFILE`'s report target reads `##
+    Report the per-file minimum`.
+    `test_a_recipe_that_pins_a_cov_source_or_skips_the_run_dependency_is_named`:
+    6 passed, unedited; its "pre-pr composing the report" case is named by
+    the helper's `pre-pr composes the coverage-per-file report via pre-pr ->
+    coverage-per-file`.
+  - *Red first: the CI-table reader.* `python -m pytest
+    tests/test_ci_workflow.py -q -p no:cacheprovider -o addopts="" -k
+    second_table` against the unscoped reader: 1 failed, `assert ['fast',
+    'test', 'release', 'dead-code'] == ['test', 'release']`. The planted text
+    holds a table before the CI hooks section and one after it. The reader now
+    reads only the section under the heading that begins `## CI hooks`, up to
+    the next `## ` heading, through `tests.support.markdown_section`. That
+    helper is shared because Milestone 4's reports-table reader needs the
+    same cut. The reader's docstring says so.
+    `test_hooks_ci_table_lists_every_ci_job` and
+    `test_every_hooks_ci_table_row_names_a_job_or_workflow` stay green
+    unedited.
+  - *Found while applying it.* Scoping turned
+    `test_a_hooks_row_naming_no_job_is_named` (AC-MCO's citation, not named by
+    this plan) red: `assert [] == ['gone-job']`. Its planted table had no
+    heading, so under a reader that reads the CI hooks section only it is no
+    CI table at all. Its planted text gains the line `## CI hooks
+    (`.github/workflows/`)` above the table. Its name, docstring and
+    assertion are unchanged, and it is green.
+  - *Tiers and bounds.* `python -m pytest tests/test_suite_shape.py
+    tests/test_suite_routing.py tests/test_ci_makefile.py
+    tests/test_ci_workflow.py -q -p no:cacheprovider`: 87 passed. The
+    real-tree test is `integration`; the two planted tests are `unit`, which
+    the criterion computes, since they reach no tree path. `wc -l`:
+    `tests/test_ci_makefile.py` 423, `tests/test_ci_workflow.py` 431,
+    `tests/support.py` 373.
+  - *Lint.* The first write tripped ruff's `SIM102` (a nested `if` in
+    `_report_targets`); the helper was restructured, not waived. `make lint`:
+    exit 0. `make thresholds`: PASS.
+  - *Gate.* `make test`: exit 0, with the four scoped lines unchanged from
+    Milestone 0 (`openspec_graph/` 2276/2292 and 744/762, `tools/` 946/981
+    and 323/344).
 
 ## Milestone 2 — The workflow lexer moved into `_common`, then the dead-code report, its guards seen red first
 

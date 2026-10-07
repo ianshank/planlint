@@ -265,6 +265,28 @@ def captured_logger(caplog: pytest.LogCaptureFixture, name: str) -> Iterator[Non
         target.removeHandler(caplog.handler)
 
 
+def markdown_section(text: str, heading: str) -> str:
+    """The lines under the first line that begins ``heading``, up to the next
+    line that begins ``## ``; ``""`` when no line begins ``heading``.
+
+    So a reader of one table in a document reads that table only. Shared by
+    the two ``docs/hooks.md`` readers: the CI hooks table
+    (``tests/test_ci_workflow.py``) and the reports table
+    (``tests/test_ci_makefile.py``), added by
+    ``report-dead-code-and-spec-status`` (DEC-RDS-010).
+    """
+    lines = text.splitlines()
+    start = next((i for i, line in enumerate(lines) if line.startswith(heading)), None)
+    if start is None:
+        return ""
+    body: list[str] = []
+    for line in lines[start + 1 :]:
+        if line.startswith("## "):
+            break
+        body.append(line)
+    return "\n".join(body)
+
+
 def workflow_job_blocks(text: str) -> dict[str, str]:
     """Job name -> body, line-scanned out of a workflow's ``jobs:`` mapping.
 
