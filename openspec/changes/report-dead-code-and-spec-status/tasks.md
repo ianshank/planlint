@@ -1764,3 +1764,17 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
      - Before the fix, both ran under `timeout 20` and were killed at the limit (exit 124): they blocked. Both pass after.
      - They skip where `os.mkfifo` is absent, through the `getattr` form #44's R-TDR-3 asks for.
   - *After.* Run with `-o addopts=""`, `tests/test_ci_makefile.py`, `tests/test_dead_code.py`, `tests/test_spec_status.py` and `tests/test_static_ratchets.py` give 104 passed. `make lint` and `make typecheck` (111 files) are clean. Both reports' output on this tree is byte-identical to the previous record's (`diff` empty).
+
+  **Recorded (self-review of the Copilot fixes, 2026-10-07, on `72750c9` + the fix):** item 3 above went too far in one direction.
+  - *The regression.* The proposal's word pattern changed from `\w+` to `[A-Za-z-]+`. That admitted `in-review` but dropped digits and `_`. With the trailing `\.?\*\*` required, `> **Status: proposed_v2.**` and `> **Status: v2.**` then matched nothing and read as absent, escaping R-RDS-11's `header-unrecognised`. That is the class of defect the finding was about.
+  - *A related gap.* The spec header's `[A-Za-z-]+` has no terminator, so `> **Status:** DRAFT_2` was read as `DRAFT`, and counted as draft, rather than as the word written.
+  - *Measured* with `python3 -c` over the three patterns:
+    - `\w+`: `in-review` → `None`, `proposed_v2` → `proposed_v2`;
+    - `[A-Za-z-]+`: `in-review` → `in-review`, `proposed_v2` → `None`;
+    - `[\w-]+`: both read whole.
+  - *Fixed.* Both readers now share `_STATUS_WORD = r"([\w-]+)"`, a superset of each earlier shape, so each word is read whole, as R-RDS-11's "its word kept as written" says. The real tree's proposal words are `proposed` (3) and `implemented` (1), read by `grep -hoE` over `openspec/changes/*/proposal.md`.
+  - *Tests.* Two planted cases join `test_a_missing_or_unrecognised_status_header_is_a_finding`: `underscored-proposal-word` and `suffixed-spec-word`. Both were red before the fix (2 failed, 6 passed) and are green after.
+  - *Checks after the fix.*
+    - `python -m pytest tests/test_spec_status.py tests/test_static_ratchets.py -q -o addopts=""` gives 44 passed.
+    - `python tools/spec_status.py` output is byte-identical to the merged-tree record (`diff` empty).
+    - `make lint` and `make typecheck` are clean.

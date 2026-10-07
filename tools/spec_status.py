@@ -93,8 +93,12 @@ FINDINGS = ("header-unrecognised", "headers-disagree", "draft-but-complete", "se
 
 CHANGES = Path("openspec") / "changes"
 
-HEADER_STATUS = re.compile(r"^> \*\*Status:\*\* ([A-Za-z-]+)", re.MULTILINE)
-PROPOSAL_STATUS = re.compile(r"^> \*\*Status: ([A-Za-z-]+)\.?\*\*", re.MULTILINE)
+#: The status word, as written: letters, digits, ``_`` and ``-`` -- so
+#: ``in-review``, ``proposed_v2`` and ``DRAFT_2`` are each read whole and
+#: judged against the vocabulary, never truncated to a word in it or missed.
+_STATUS_WORD = r"([\w-]+)"
+HEADER_STATUS = re.compile(r"^> \*\*Status:\*\* " + _STATUS_WORD, re.MULTILINE)
+PROPOSAL_STATUS = re.compile(r"^> \*\*Status: " + _STATUS_WORD + r"\.?\*\*", re.MULTILINE)
 
 _CRITERION = re.compile(r"^- \[([ xX])\] \*\*AC-", re.MULTILINE)
 _MILESTONE = re.compile(r"^## Milestone\b.*$", re.MULTILINE)

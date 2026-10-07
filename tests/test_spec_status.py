@@ -186,11 +186,13 @@ def test_a_proposal_status_that_disagrees_with_its_spec_header_is_a_finding(
         (_spec("> **Status:** draft"), None),
         (_spec(), _proposal("shipped")),
         (_spec(), _proposal("in-review")),
+        (_spec(), _proposal("proposed_v2")),
+        (_spec("> **Status:** DRAFT_2"), None),
         (None, None),
     ],
     ids=[
         "no-header", "IMPLEMENTED", "lower-case-draft", "proposal-word",
-        "hyphenated-proposal-word", "no-spec",
+        "hyphenated-proposal-word", "underscored-proposal-word", "suffixed-spec-word", "no-spec",
     ],
 )
 def test_a_missing_or_unrecognised_status_header_is_a_finding(
