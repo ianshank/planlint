@@ -90,8 +90,9 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   for the subject its sections share. No test function MAY be renamed, and
   no test function MAY be deleted: the sorted set of `def test_*` names
   read by AST over `tests/test_*.py` excluding `tests/test_suite_shape.py`
-  — the one module this package creates with tests of its own — and the
-  collected count over the same set (`--ignore=tests/test_suite_shape.py`)
+  and `tests/test_suite_routing.py` — the two modules this package creates
+  with tests of its own — and the collected count over the same set
+  (`--ignore` of both)
   MUST be identical to Milestone 0's after every split and at every stage
   commit, both recorded in `tasks.md`. A helper MUST move with its only
   user; a helper two of the resulting collected modules need MUST move to
@@ -173,7 +174,8 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   exactly three markers under `markers` — `unit`, `integration`, `e2e` —
   each with its criterion of R-TSS-6 in the description, and `addopts`
   MUST carry `--strict-markers` so an unregistered marker fails collection
-  loudly. The markers MUST be registered under `markers`, not only through
+  loudly, and a tier registered twice MUST be named rather than collapsed.
+  The markers MUST be registered under `markers`, not only through
   `addopts`, because the Appendix A durations command clears `addopts`.
   `testpaths` MUST be unchanged. Every collected test MUST carry exactly one
   of the three, counted at the item level: a module-level `pytestmark` —
@@ -279,7 +281,9 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   `tests/test_release_surface.py`) MUST be replaced by
   `tests/support.workflow_job_blocks`, closing DEC-HCW-009's deferral.
   Two guard tests MUST read the shapes by AST, each read from the routed
-  helper's own body in `tests/support.py` rather than restated — a `subprocess.run` call
+  helper's own body in `tests/support.py` rather than restated, the process
+  start resolved under any import spelling and the argv through the locals
+  and module constants it is built in — a `subprocess.run` call
   whose argv list holds the two literals and `--target`; a `write_text`
   call on a path expression whose chain holds `openspec`, `changes`,
   `specs` and `spec.md`, or `specs` and `spec.md` directly under a
@@ -510,8 +514,8 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   through helpers, classes, constants and fixtures, the signals of R-TSS-6,
   and agreement asserted in both directions. The criterion lives in the
   uncollected `tests/shape_support.py`, beside `workflow_support.py`, so
-  `tests/test_suite_shape.py` holds assertions and planted texts and stays
-  inside the bound it enforces. Both directions because a stale `e2e` mark on a test that no
+  `tests/test_suite_shape.py` and `tests/test_suite_routing.py` hold
+  assertions and planted texts and stay inside the bound they enforce. Both directions because a stale `e2e` mark on a test that no
   longer spawns is a test the fast tier is wrongly missing, and a `unit`
   mark on a test that does spawn is a slow test the fast tier is wrongly
   paying for; one direction would guard half the property. Fixture
@@ -683,7 +687,11 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   bought nothing a commit boundary does not); one undivided commit (a
   durations pair across a move cannot attribute its delta, and a review of
   moves mixed with edits is a review of neither).
-- **DEC-TSS-015:** the guards live in one new module, `tests/test_suite_shape.py`,
+- **DEC-TSS-015:** the guards live in new modules of their own —
+  `tests/test_suite_shape.py` for flatness, the bound and the tiers, and
+  `tests/test_suite_routing.py` for the two routed shapes and the four loops,
+  split from the first by R-TSS-1 when the review's planted spawn shapes took
+  it to the bound —
   rather than beside `test_helpers_not_duplicated_inline` in
   `tests/test_decomposition.py`. That module pins the package's module
   layout and golden hashes and reaches the bound's neighbourhood with the
@@ -692,8 +700,8 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   is a subject, and the capability this package is named for. The existing
   guard stays where it is: a move of a cited test for tidiness is exactly
   the kind of churn the citation test exists to make unnecessary. Because
-  this module is the one place the package adds tests, the baseline of
-  R-TSS-2 excludes it, so every comparison is against Milestone 0's
+  these modules are the only places the package adds tests, the baseline
+  of R-TSS-2 excludes both, so every comparison is against Milestone 0's
   figures and not a moving target.
 - **DEC-TSS-016:** eight records of four shipped packages are superseded by
   name, each with the property it protected and the module that now
@@ -786,8 +794,9 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
   _Verified by:_ `pytest -k "test_the_tests_directory_stays_flat or test_no_test_module_exceeds_the_line_bound"` · stage: `make test`
 
 - [x] **AC-TSS-2:** the sorted AST set of `def test_*` names over
-  `tests/test_*.py` excluding `tests/test_suite_shape.py`, and the
-  collected count over the same set, are identical to Milestone 0's after
+  `tests/test_*.py` excluding `tests/test_suite_shape.py` and
+  `tests/test_suite_routing.py`, and the collected count over the same set,
+  are identical to Milestone 0's after
   each split and at each stage commit, recorded in `tasks.md`; every
   `pytest -k` selector in every spec under `openspec/changes/` still
   resolves to a test function; no module redeclares `write_spec`.
@@ -885,7 +894,9 @@ DEC-HCW-008, R-ASP-8 and R-ASP-11, DEC-REL-011.
 
 - [x] **AC-TSS-11 (non-success):** on planted module texts, the routing
   guards' helpers name a `subprocess.run` whose argv holds the two literals
-  and `--target`, and a `write_text` on a hand-built harness path and on a
+  and `--target` — spelt directly, through a module alias, through a
+  from-import, or with the argv built in a local — and a `write_text` on a
+  hand-built harness path and on a
   hand-built SpecKit path, and do not name a `--version` spawn without
   `--target`, a FIFO at a spec path, an assertion on a spec path, or a
   main-spec path no routed writer owns. (R-TSS-8, R-TSS-12, DEC-TSS-009)

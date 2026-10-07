@@ -288,10 +288,12 @@ byte-identical at `bb4e4ad`, the commit that carries this draft),
   each tier agrees with its mechanical criterion (fixture parameters
   resolved like called helpers, the `fixtures`/`corpus` exemption applied
   to every `__file__`-rooted path, the tree-readers of `tests/support.py`
-  followed into their bodies), no tier is written through an alias, no test module
-  spawns the CLI in `run_cli`'s shape or writes a harness spec by hand, and
-  the four converted loops keep exactly one subprocess — each shown red on
-  a planted counter-example.
+  followed into their bodies), and no tier is written through an alias —
+  each shown red on a planted counter-example.
+- `tests/test_suite_routing.py` — new, split from `test_suite_shape.py` by
+  R-TSS-1: no test module spawns the CLI in `run_cli`'s shape or writes a
+  harness spec by hand, and the four converted loops keep exactly one
+  subprocess — each shown red on a planted counter-example.
 - `pyproject.toml` — `[tool.pytest.ini_options]` gains `markers` (`unit`,
   `integration`, `e2e`, each with its criterion in the description) and
   `--strict-markers` in `addopts`; the comments at lines 156 and 200 that
@@ -345,7 +347,7 @@ byte-identical at `bb4e4ad`, the commit that carries this draft),
 - `openspec/changes/shape-the-test-suite/tasks.md` — records, dated with
   the commit and naming the command: line counts, the test-name set and the
   collected count (over the pre-existing modules, `tests/test_suite_shape.py`
-  excluded) at Milestone 0 and after each split and at each stage's commit,
+  and `tests/test_suite_routing.py` excluded) at Milestone 0 and after each split and at each stage's commit,
   the red runs of every guard, the durations before (above) and after with
   their spread, the per-test figures of the four loops, the fast tier's
   collected count and wall time.

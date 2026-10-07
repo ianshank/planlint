@@ -20,7 +20,7 @@ flowchart TD
         c["test_graft_cli.py"]
         w["test_graft_witness.py"]
         g["test_gate_scripts.py<br/>each tools/ gate FIRES"]
-        s["test_suite_shape.py<br/>flat, bounded, tiered"]
+        s["test_suite_shape.py · test_suite_routing.py<br/>flat, bounded, tiered, routed"]
     end
     shared --> subject
     subject --> floors["make test — both trees' floors, read scoped<br/>make coverage-tools — tools/ only, same report"]

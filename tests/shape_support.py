@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import ast
 import logging
+import textwrap
 from collections import Counter, deque
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
@@ -306,6 +307,42 @@ def _split(qualified: str) -> tuple[str, str]:
     return module, name
 
 
+def import_bindings(tree: ast.AST) -> dict[str, str]:
+    """Local name -> the dotted name an import bound it to, from any import in
+    ``tree`` -- a function-local one included: a collision can only add a signal."""
+    bindings: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.asname:
+                    bindings[alias.asname] = alias.name
+                else:
+                    head = alias.name.split(".")[0]
+                    bindings[head] = head
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            for alias in node.names:
+                bindings[alias.asname or alias.name] = f"{node.module}.{alias.name}"
+    return bindings
+
+
+def dotted_name(node: ast.AST, bindings: dict[str, str]) -> str | None:
+    """The dotted name ``node`` has through ``bindings``: ``sp.run`` -> ``subprocess.run``."""
+    if isinstance(node, ast.Name):
+        return bindings.get(node.id)
+    if isinstance(node, ast.Attribute):
+        inner = dotted_name(node.value, bindings)
+        return f"{inner}.{node.attr}" if inner else None
+    return None
+
+
+def plant(root: Path, files: dict[str, str]) -> None:
+    """Write planted module texts under ``root``, dedented; a key may climb out of it."""
+    for relative, text in files.items():
+        target = (root / relative).resolve()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(textwrap.dedent(text).lstrip("\n"), encoding="utf-8")
+
+
 class _Module:
     """One parsed module: what it defines, what its names are bound to, and
     which of its constants are rooted at ``__file__``."""
@@ -320,22 +357,9 @@ class _Module:
         self.classes: dict[str, ast.ClassDef] = {}
         self.constants: dict[str, ast.expr] = {}
         #: local name -> the dotted name an import bound it to.
-        self.bindings: dict[str, str] = {}
+        self.bindings = import_bindings(self.tree)
         for statement in self.tree.body:
             self._index(statement)
-        # Imports anywhere -- a function-local import included -- bind module-wide:
-        # a name collision can only add a signal, which errs upward.
-        for node in ast.walk(self.tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.asname:
-                        self.bindings[alias.asname] = alias.name
-                    else:
-                        head = alias.name.split(".")[0]
-                        self.bindings[head] = head
-            elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
-                for alias in node.names:
-                    self.bindings[alias.asname or alias.name] = f"{node.module}.{alias.name}"
         self.fixtures = {name for name, fn in self.functions.items() if _is_fixture(fn)}
         self.autouse = sorted(name for name, fn in self.functions.items() if _is_autouse(fn))
         self.rooted: set[str] = set()
@@ -366,12 +390,7 @@ class _Module:
 
     def dotted(self, node: ast.AST) -> str | None:
         """The dotted name an import gave ``node``: ``sp.run`` -> ``subprocess.run``."""
-        if isinstance(node, ast.Name):
-            return self.bindings.get(node.id)
-        if isinstance(node, ast.Attribute):
-            inner = self.dotted(node.value)
-            return f"{inner}.{node.attr}" if inner else None
-        return None
+        return dotted_name(node, self.bindings)
 
     def support_target(self, qualified: str) -> tuple[_Module, str] | None:
         """``tests.<stem>.<name>[...]`` -> that module and the name, if it exists."""
@@ -826,15 +845,13 @@ def _dict_resolver(assigned: dict[str, ast.expr]) -> Resolver:
     return resolve
 
 
-def _process_start(call: ast.Call) -> tuple[str, str] | None:
-    func = call.func
-    if (
-        isinstance(func, ast.Attribute)
-        and isinstance(func.value, ast.Name)
-        and func.attr in PROCESS_STARTS.get(func.value.id, frozenset())
-    ):
-        return func.value.id, func.attr
-    return None
+def _process_start(call: ast.Call, bindings: dict[str, str]) -> tuple[str, str] | None:
+    """``(module, function)`` when ``call`` starts a process, under any import spelling."""
+    qualified = dotted_name(call.func, bindings)
+    if qualified is None:
+        return None
+    module, name = _split(qualified)
+    return (module, name) if name in PROCESS_STARTS.get(module, frozenset()) else None
 
 
 def _argv(call: ast.Call) -> ast.expr | None:
@@ -843,14 +860,20 @@ def _argv(call: ast.Call) -> ast.expr | None:
     return next((kw.value for kw in call.keywords if kw.arg == "args"), None)
 
 
-def _string_constants(expression: ast.AST | None) -> list[str]:
-    if expression is None:
+def _string_constants(
+    expression: ast.AST | None, assigned: dict[str, ast.expr] | None = None, depth: int = 0
+) -> list[str]:
+    """The string literals of ``expression``, a name in ``assigned`` read through its value:
+    ``argv = [...]; run(argv)`` holds what ``run([...])`` holds."""
+    if expression is None or depth > 8:
         return []
-    return [
-        sub.value
-        for sub in ast.walk(expression)
-        if isinstance(sub, ast.Constant) and isinstance(sub.value, str)
-    ]
+    found: list[str] = []
+    for sub in ast.walk(expression):
+        if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+            found.append(sub.value)
+        elif isinstance(sub, ast.Name) and assigned and sub.id in assigned:
+            found += _string_constants(assigned[sub.id], assigned, depth + 1)
+    return found
 
 
 def routed_shapes(support: Path) -> RoutedShapes:
@@ -860,10 +883,13 @@ def routed_shapes(support: Path) -> RoutedShapes:
         node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
     }
     spawn = functions[ROUTED_SPAWN]
+    bindings = import_bindings(tree)
     call = next(
-        node for node in ast.walk(spawn) if isinstance(node, ast.Call) and _process_start(node)
+        node
+        for node in ast.walk(spawn)
+        if isinstance(node, ast.Call) and _process_start(node, bindings)
     )
-    module, function = _process_start(call) or ("", "")
+    module, function = _process_start(call, bindings) or ("", "")
     writers: dict[str, tuple[str, ...]] = {}
     for name in ROUTED_WRITERS:
         writer = functions[name]
@@ -888,19 +914,28 @@ def _functions_and_module(tree: ast.Module) -> list[ast.AST]:
 
 
 def inline_cli_spawns(root: Path, shapes: RoutedShapes) -> list[str]:
-    """Every spawn under ``root`` with ``run_cli``'s argv literals, outside the helper."""
-    found: list[str] = []
+    """Every spawn under ``root`` with ``run_cli``'s argv literals, outside the helper --
+    however the process start is imported, and with the argv read through the locals
+    and module constants it was built in."""
+    found: set[str] = set()
+    target = (shapes.spawn_module, shapes.spawn_function)
     for path in _routed_modules(root):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call) or _process_start(node) != (
-                shapes.spawn_module,
-                shapes.spawn_function,
-            ):
-                continue
-            if shapes.spawn_literals <= set(_string_constants(_argv(node))):
-                found.append(f"{path.name}:{node.lineno}")
-    return found
+        bindings = import_bindings(tree)
+        constants = {
+            name: statement.value
+            for statement in tree.body
+            if isinstance(statement, (ast.Assign, ast.AnnAssign)) and statement.value is not None
+            for name in _assigned_names(statement)
+        }
+        for scope in _functions_and_module(tree):
+            assigned = {**constants, **(_locals(scope) if scope is not tree else {})}
+            for node in ast.walk(scope):
+                if not isinstance(node, ast.Call) or _process_start(node, bindings) != target:
+                    continue
+                if shapes.spawn_literals <= set(_string_constants(_argv(node), assigned)):
+                    found.add(f"{path.name}:{node.lineno}")
+    return sorted(found)
 
 
 def _writer_for(segments: list[str], shapes: RoutedShapes) -> str | None:
