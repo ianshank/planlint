@@ -1490,7 +1490,7 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
     lines: `openspec_graph/` 2276/2292 and 744/762, `tools/` 1305/1354 and
     434/460, every floor where it was.
 
-## Milestone 5 — Confirm, re-point and hand off
+## Milestone 5 — Confirm, re-point and hand off [DONE]
 
 - Re-point the stage-only verification lines in
   `specs/hygiene-reports/spec.md` to the tests Milestones 1–4 named, now that
@@ -1548,3 +1548,132 @@ one pull request on `claude/m2-report-targets`, one commit per milestone.
   superseded by measurement (DEC-RDS-002). The open remainder of W8.5 is
   `docs/next-steps.md` item 24.
 - **Gate:** `make pre-pr`
+  **Recorded (Milestone 5, 2026-10-07, on `babb671` + the Milestone 5 tree):**
+  - *A guard added here, red first.* AC-RDS-10's first clause — `dead-code`
+    and `spec-status` have no prerequisites and run exactly their script —
+    had no test. `test_the_hygiene_report_targets_run_exactly_their_script`
+    (`tests/test_ci_makefile.py`, `integration`) now holds it. It was shown
+    red on two local plants of the `Makefile`, each restored by copying it
+    back, with `git diff --stat Makefile` empty after, never committed:
+    `dead-code: lint ##` gave `AssertionError: dead-code has
+    prerequisites`, and a second recipe line under `spec-status` gave
+    `AssertionError: spec-status`. `wc -l tests/test_ci_makefile.py`: 511.
+  - *Re-pointed.* Every stage-only verification line now names its tests,
+    with each stage kept: AC-RDS-3, 4, 5, 6, 7, 8, 11 and 15 by the mapping
+    above; AC-RDS-1, 2, 9, 10 and 12 keep their existing selectors and add
+    the mapped tests. Beyond the mapping, AC-RDS-3 also names
+    `test_findings_are_sorted_by_path_then_line`, with a sentence for the
+    sort. AC-RDS-7 names `test_spec_status_runs_over_this_repository`, the
+    one-row-per-package run on this tree. AC-RDS-10 names the guard above.
+    Each criterion's "planned; until they exist the stage is the citation"
+    sentence is gone, and AC-RDS-15 says its four guards are cited by name.
+    `python -m pytest tests/test_spec_test_citations.py -q`: 6 passed.
+  - *Validated.* `planlint --target . validate --fail-on ERROR --change
+    report-dead-code-and-spec-status`: exit 0, 1 spec, 0 error / 0 warn /
+    0 info (with the two `INFO G006 skipped` / `G009 skipped` notes of a
+    scoped run). `planlint --target . validate --fail-on ERROR`: exit 0,
+    52 specs, 0 / 0 / 0.
+  - *C-RDS-6.* `git diff --stat 6679c2a..HEAD -- openspec/changes` at
+    `babb671` lists one file, this package's `tasks.md`; this milestone adds
+    its `spec.md`. No other package's file changed.
+  - *C-RDS-1.* `git diff --stat 6679c2a..HEAD -- openspec_graph README.md
+    tests/baseline_rules.json` prints nothing, and `dependencies = []` is an
+    unchanged line of `pyproject.toml`. `python -m pytest
+    tests/test_decomposition.py -k byte_identical -q`: 1 passed.
+    `test_rule_set_matches_baseline`, `test_runtime_dependencies_stay_empty`
+    and `test_dependabot_does_not_add_a_pip_ecosystem`: 3 passed.
+  - *C-RDS-3 and the dated records.* `git diff --stat 6679c2a..HEAD --
+    .github docs/reflection-plan-2026-10.md 'docs/peer-review*.md'` prints
+    nothing. `git diff 6679c2a..HEAD -- Makefile` touches neither the `ci:`
+    nor the `pre-pr:` line, and `git diff 6679c2a..HEAD -- CHANGELOG.md`
+    removes no line.
+  - *C-RDS-2 at every milestone.* Milestones 1 to 4 recorded `make
+    thresholds` PASS above. Milestone 0 changed only this file. Its commit,
+    `18b902f`, was checked out into a throwaway `git worktree` and
+    `python tools/check_no_hardcoded_thresholds.py` run there: `PASS: no
+    hard-coded thresholds in Makefile or workflow YAML`, exit 0.
+  - *Ticked.* AC-RDS-1 to AC-RDS-21, each against the record that holds it:
+    - 1, 2, 3, 4, 5, 6: Milestone 2's red runs and green, the confidence
+      guard, and `make thresholds` at every milestone.
+    - 7, 8, 9: Milestone 3's red run and green, and Milestone 2's
+      unedited `tests/test_stage_citations.py`.
+    - 10, 11: Milestones 1 and 3, and the guard above.
+    - 12: Milestones 1 and 4. 13: Milestone 4.
+    - 14: Milestones 2 and 3, each entry red on the presence assertion.
+    - 15: the shape and routing runs of Milestones 1 to 3.
+    - 16, 17: the diffs and tests above.
+    - 18, 19: Milestones 0 to 4.
+    - 20: Milestone 4's `make pre-pr` and the one below.
+    - 21: Milestone 2's move record.
+
+    **AC-RDS-22 is not ticked.** Item 24 is in `docs/next-steps.md` and this
+    package's header reads `DRAFT`. But its last clause, "the pull request
+    asks the maintainer to settle it at merge", has no evidence yet. This
+    implementation is committed locally and not pushed, and PR #43 was the
+    planning pull request, merged into #42's branch at `1c6b8b8`, before
+    any of it. It is ticked when the implementing pull request's description
+    carries the hand-off below.
+  - *`make spec-status` once more,* after the ticks and Milestone 5's
+    `[DONE]`: exit 2 from `make`, 1 from the script, and Milestone 4's
+    output line for line but for this package's own row:
+
+    ```
+    report-dead-code-and-spec-status         spec DRAFT                           21/22     milestones 6/6   Unreleased  thresholds, validate        -
+    51 package(s); 10 finding(s): 0 header-unrecognised, 1 headers-disagree, 9 draft-but-complete, 0 settled-but-empty
+    ```
+
+    The row carries no finding yet, rather than the `draft-but-complete`
+    the plan expected, because AC-RDS-22 is open (21 of 22). With every
+    criterion ticked it is `draft-but-complete`: `finding()` on this row
+    with `criteria_ticked` replaced by `criteria_declared`
+    (`dataclasses.replace`, a one-off read-only check) returns
+    `draft-but-complete`. That is the report working as designed
+    (DEC-RDS-008), and it is the maintainer's to settle.
+    `make dead-code`: byte-identical to Milestone 4's output, exit 1 from
+    the script.
+  - *Hand-off, for the implementing pull request's description:*
+
+    > **Settle this package's `Status` header at merge.** Its milestones
+    > are `[DONE]` and its criteria ticked, and its `spec.md` header is
+    > left `DRAFT` because promoting a header is the maintainer's decision
+    > (`.claude/agents/spec-drafter.md`; precedents `3bc3321`,
+    > `parse-repo-machinery-structurally`, and `49cb9ed`,
+    > `harden-ci-gates`). Within today's vocabulary the settled value is
+    > `APPROVED`. Every other header on Milestone 3's worklist belongs to
+    > `settle-package-status-headers` (`docs/next-steps.md` item 24),
+    > which decides the vocabulary, including whether there is a
+    > "shipped" value an agent may set at closure. Before it edits any
+    > shipped header, it writes down the exception to the records
+    > convention. If it records status anywhere but the header, it teaches
+    > `tools/spec_status.py` to read that record. H005's header leak —
+    > `parse_spec`'s unanchored `STATUS` — sits beside it.
+
+    Milestone 2's `make dead-code` list goes to the M4 package for
+    W5.1–3: `has_selector`, `precision_pct` and `recall_pct`, the plan's
+    three. `speckit_section_body` and `speckit_subsection_body` are this
+    measurement's additions, as are the three `report.__all__` names
+    (`STATUSES`, `STATUS_ERROR`, `FindingRecord`), which vulture cannot see
+    (DEC-RDS-012).
+  - *For the plan, recorded here because the plan is a dated record.* Both
+    reports exist, `make dead-code` and `make spec-status`. Neither is in
+    the ladder or in any CI job. The plan's D4 figure of 80 was superseded
+    by measurement: the confidence is 60, vulture's unused-definition
+    level, in `[tool.specgraph]` (DEC-RDS-002). The open remainder of W8.5
+    is `docs/next-steps.md` item 24.
+  - *Departures from this plan, all recorded in their milestones.*
+    - Milestone 1: the shared `tests.support.markdown_section`, and the
+      heading line added to `test_a_hooks_row_naming_no_job_is_named`'s
+      planted table.
+    - Milestone 2: `vulture_argv` and `run_vulture(root, argv)` in place of
+      `run_vulture(root, trees, confidence)`, plus the extra sort test.
+    - Milestone 3: `build_rows` and `render`, and the dropped
+      undecodable-`spec.md` test.
+    - This milestone: the extra guard above, and AC-RDS-22 left open.
+  - *Gate, before the final commit.* `make pre-pr` on the finished tree:
+    exit 0 in 177 s of wall time (`date +%s` before and after), ending
+    `pre-pr: all enterprise gates passed`. Ruff clean, mypy clean over 45
+    source files, `52 spec(s) checked · 0 error · 0 warn · 0 info`, secrets
+    and thresholds PASS, docs-check passed. The four scoped lines are
+    `openspec_graph/` 99.3 % (2276/2292) and 97.6 % (744/762), and `tools/`
+    96.4 % (1305/1354) and 94.3 % (434/460), against floors 97/95 and 94/91,
+    every one where it was. Neither report ran in it.

@@ -362,6 +362,18 @@ def test_every_report_target_stays_out_of_the_ladder() -> None:
     violations = [item for name in reports for item in _report_target_violations(makefile, name)]
     assert violations == []
 
+#: The two hygiene reports and the one script each runs (R-RDS-8, R-RDS-13).
+_HYGIENE_REPORTS = {"dead-code": "dead_code.py", "spec-status": "spec_status.py"}
+
+@pytest.mark.integration
+def test_the_hygiene_report_targets_run_exactly_their_script() -> None:
+    """R-RDS-8, R-RDS-13: `dead-code` and `spec-status` have no prerequisites
+    and a recipe of their one script and nothing else."""
+    makefile = _makefile_text()
+    for target, script in _HYGIENE_REPORTS.items():
+        assert _prerequisites(makefile, target) == [], f"{target} has prerequisites"
+        assert _recipe_lines(makefile, target) == [f"python tools/{script}"], target
+
 _PLANTED_REPORT_MAKEFILE = textwrap.dedent(
     """\
     .PHONY: test lint audit ci pre-pr

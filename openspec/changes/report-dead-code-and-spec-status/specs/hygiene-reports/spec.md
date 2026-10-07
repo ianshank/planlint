@@ -878,30 +878,29 @@ into this branch — all the same day. Each command is in the proposal.
 
 ## Acceptance Criteria
 
-- [ ] **AC-RDS-1:** `pyproject.toml`'s dev extra lists vulture with a lower
+- [x] **AC-RDS-1:** `pyproject.toml`'s dev extra lists vulture with a lower
   bound and no exact pin or upper bound, `[project] dependencies` is still
   empty, and Dependabot has no pip ecosystem. No file under `.github/` and no
-  `Makefile` recipe line names vulture. Two planned tests show these red on
-  planted files:
+  `Makefile` recipe line names vulture. Two tests show these red on planted
+  files:
   - the dev-extra test names a planted file with an exact pin or a runtime
     entry;
   - the `.github/`-and-recipe test names a planted workflow and a planted
     recipe line that name vulture.
 
-  Until they exist the stage covers them. (R-RDS-1, R-RDS-19, C-RDS-1,
-  DEC-RDS-001)
-  _Verified by:_ `pytest -k "test_runtime_dependencies_stay_empty or test_dependabot_does_not_add_a_pip_ecosystem or test_threshold_guard_fails_on_a_pinned_tool_version"` · stage: `make test`
+  (R-RDS-1, R-RDS-19, C-RDS-1, DEC-RDS-001)
+  _Verified by:_ `pytest -k "test_runtime_dependencies_stay_empty or test_dependabot_does_not_add_a_pip_ecosystem or test_threshold_guard_fails_on_a_pinned_tool_version or test_vulture_is_a_floored_dev_extra_and_never_a_runtime_dependency or test_an_exact_vulture_pin_or_a_runtime_vulture_is_named or test_no_github_file_or_recipe_line_names_vulture"` · stage: `make test`
 
-- [ ] **AC-RDS-2:** `[tool.specgraph] dead_code_min_confidence` is set at
+- [x] **AC-RDS-2:** `[tool.specgraph] dead_code_min_confidence` is set at
   vulture's unused-definition level, and `pyproject.toml` has no
   `[tool.vulture]` table. Neither new script carries a numeric literal equal
-  to the configured value; a planned test holds that and names a planted
+  to the configured value; a test holds that and names a planted
   script text that does. The threshold guard prints PASS on the finished tree
   at every milestone and still fails on a planted literal in a recipe.
   (R-RDS-2, R-RDS-19, C-RDS-2, DEC-RDS-002)
-  _Verified by:_ `pytest -k "test_threshold_guard_passes_on_a_clean_tree or test_threshold_guard_fails_on_a_hard_coded_coverage_floor"` · stage: `make thresholds`
+  _Verified by:_ `pytest -k "test_threshold_guard_passes_on_a_clean_tree or test_threshold_guard_fails_on_a_hard_coded_coverage_floor or test_the_confidence_lives_only_in_the_specgraph_table"` · stage: `make thresholds`
 
-- [ ] **AC-RDS-3:** against canned vulture output on a planted root:
+- [x] **AC-RDS-3:** against canned vulture output on a planted root:
   - a finding under a reported tree is listed in vulture's line form, and
     one under `tests/` is not;
   - a finding whose name is a whitelist entry is suppressed, and an entry
@@ -913,11 +912,11 @@ into this branch — all the same day. Each command is in the proposal.
   - the script imports nothing from `tools/` but `_common`, and neither
     vulture nor `openspec_graph`.
 
-  The tests are planned in `tasks.md`; until they exist the stage is the
-  citation. (R-RDS-3, R-RDS-4, C-RDS-8, DEC-RDS-003, DEC-RDS-004)
-  _Verified by:_ stage: `make test`
+  Findings are listed sorted by path, then line. (R-RDS-3, R-RDS-4, C-RDS-8,
+  DEC-RDS-003, DEC-RDS-004)
+  _Verified by:_ `pytest -k "test_the_confidence_is_read_from_the_specgraph_table_and_passed_to_vulture or test_findings_outside_the_reported_trees_are_dropped_and_tests_count_as_users or test_a_whitelisted_name_is_suppressed_and_an_entry_suppressing_nothing_is_stale or test_unreachable_code_is_reported_and_never_whitelisted or test_windows_separators_in_vulture_output_name_the_same_tree or test_findings_are_sorted_by_path_then_line or test_the_header_names_the_trees_the_confidence_the_version_and_the_entries or test_dead_code_imports_only_the_standard_library_and_common"` · stage: `make test`
 
-- [ ] **AC-RDS-4 (non-success):** the dead-code script exits 2, with a
+- [x] **AC-RDS-4 (non-success):** the dead-code script exits 2, with a
   message and no traceback, when:
   - vulture is not installed (with no process started and no import-error
     text on stderr);
@@ -932,28 +931,25 @@ into this branch — all the same day. Each command is in the proposal.
 
   Vulture's stderr carrying a `SyntaxWarning` beside exit 0 or 3 changes
   neither the list nor the exit code. The script exits 1, never 3, on
-  findings, and 0 with the saying-so line on none. The tests are planned;
-  until they exist the stage is the citation. (R-RDS-3, R-RDS-5, DEC-RDS-005,
-  DEC-RDS-006)
-  _Verified by:_ stage: `make test`
+  findings, and 0 with the saying-so line on none. (R-RDS-3, R-RDS-5,
+  DEC-RDS-005, DEC-RDS-006)
+  _Verified by:_ `pytest -k "test_dead_code_exits_two_when_it_cannot_run or test_a_declared_tree_that_is_absent_or_holds_no_python_exits_two or test_vulture_stderr_is_logged_and_never_decides_the_exit or test_dead_code_exits_zero_when_nothing_is_listed"` · stage: `make test`
 
-- [ ] **AC-RDS-5 (non-success):** every entry of the real whitelist names a
+- [x] **AC-RDS-5 (non-success):** every entry of the real whitelist names a
   binding in a reported tree, and a planted whitelist entry naming no binding
   is named by the binding function — with no vulture process started.
-  Neither test asserts that an entry suppresses a finding. The tests are
-  planned; until they exist the stage is the citation. (R-RDS-6, R-RDS-7,
-  R-RDS-19, DEC-RDS-004)
-  _Verified by:_ stage: `make test`
+  Neither test asserts that an entry suppresses a finding. (R-RDS-6,
+  R-RDS-7, R-RDS-19, DEC-RDS-004)
+  _Verified by:_ `pytest -k "test_every_dead_code_whitelist_entry_names_a_binding_in_a_reported_tree or test_a_whitelist_entry_naming_no_binding_is_named"` · stage: `make test`
 
-- [ ] **AC-RDS-6:** run through `main` with the real process, the installed
+- [x] **AC-RDS-6:** run through `main` with the real process, the installed
   vulture on a planted tree reports a planted unused function under a
   reported tree and the script exits 1. The same tree with that function
-  called from a planted `tests/` module exits 0. The test is planned; until
-  it exists the stage is the citation. (R-RDS-3, R-RDS-5, R-RDS-18,
-  DEC-RDS-001, DEC-RDS-005)
-  _Verified by:_ stage: `make test`
+  called from a planted `tests/` module exits 0. (R-RDS-3, R-RDS-5,
+  R-RDS-18, DEC-RDS-001, DEC-RDS-005)
+  _Verified by:_ `pytest -k test_the_installed_vulture_reports_a_planted_unused_function` · stage: `make test`
 
-- [ ] **AC-RDS-7:** on planted packages, the spec-status script raises each
+- [x] **AC-RDS-7:** on planted packages, the spec-status script raises each
   finding of R-RDS-11 on exactly its case:
   - `draft-but-complete` — milestones all `[DONE]` and criteria all ticked
     under a `DRAFT` header — including the task-checkbox form for a package
@@ -980,13 +976,12 @@ into this branch — all the same day. Each command is in the proposal.
   `parse_spec(...).status`; a spec outside that scope is not compared. A
   symlinked alias of a planted package gives one row, where the filesystem
   supports symlinks. The script prints one text row per package with every
-  column, exits 1, and imports nothing from `tools/` but `_common`. The tests
-  are planned; until they exist the stage is the citation. (R-RDS-9,
-  R-RDS-10, R-RDS-11, R-RDS-12, R-RDS-23, C-RDS-7, C-RDS-8, DEC-RDS-007,
-  DEC-RDS-009, DEC-RDS-014)
-  _Verified by:_ stage: `make test`
+  column, exits 1, and imports nothing from `tools/` but `_common`.
+  (R-RDS-9, R-RDS-10, R-RDS-11, R-RDS-12, R-RDS-23, C-RDS-7, C-RDS-8,
+  DEC-RDS-007, DEC-RDS-009, DEC-RDS-014)
+  _Verified by:_ `pytest -k "test_a_draft_package_whose_tasks_and_criteria_are_complete_is_a_finding or test_task_checkboxes_count_when_a_package_has_no_milestone_headings or test_a_settled_package_with_no_task_done_and_no_criterion_ticked_is_a_finding or test_a_proposal_status_that_disagrees_with_its_spec_header_is_a_finding or test_a_missing_or_unrecognised_status_header_is_a_finding or test_a_status_line_outside_the_header_block_is_never_the_header or test_a_status_line_inside_a_comment_is_never_the_header or test_the_header_reader_agrees_with_parse_spec_on_every_uncommented_real_header or test_a_symlinked_alias_of_a_package_is_one_row or test_spec_status_runs_over_this_repository or test_spec_status_imports_only_the_standard_library_common_and_openspec_graph"` · stage: `make test`
 
-- [ ] **AC-RDS-8 (non-success):** none of these raises a finding:
+- [x] **AC-RDS-8 (non-success):** none of these raises a finding:
   - a `DRAFT` package with every criterion ticked but a milestone not `[DONE]`;
   - an `APPROVED` package with its milestones done and no criterion ticked;
   - a package named in a CHANGELOG sentence that is not an entry.
@@ -1002,19 +997,17 @@ into this branch — all the same day. Each command is in the proposal.
   A `spec.md` is read as `parse_spec` reads it, with undecodable bytes
   replaced, so no `spec.md` decode failure exits 2; that is read directly. An
   absent `CHANGELOG.md` or workflow directory does not change the exit code.
-  The tests are planned; until they exist the stage is the citation.
   (R-RDS-11, R-RDS-12, DEC-RDS-006, DEC-RDS-007, DEC-RDS-013)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k "test_partial_evidence_is_listed_and_is_not_a_finding or test_a_changelog_entry_is_read_in_both_shapes_and_a_mention_is_not_an_entry or test_spec_status_exits_two_when_it_cannot_run or test_absent_changelog_and_workflows_are_empty_columns_not_failures"` · stage: `make test`
 
-- [ ] **AC-RDS-9:** the workflow column lists a verification-line stage that
+- [x] **AC-RDS-9:** the workflow column lists a verification-line stage that
   no planted workflow runs, and omits one a planted workflow runs in command
   position. The reused reader's own behaviour — `run:` scripts read, other
   YAML fields ignored, a filter honoured — stays green unedited after the
-  reader moves into `_common`. The column's own test is planned; until it
-  exists the stage covers it. (R-RDS-9, R-RDS-10, R-RDS-24, DEC-RDS-009)
-  _Verified by:_ `pytest -k "test_run_block_commands_are_scanned_but_yaml_fields_are_not or test_the_workflow_filter_restricts_who_is_credited or test_a_repository_without_workflows_credits_nobody"` · stage: `make test`
+  reader moves into `_common`. (R-RDS-9, R-RDS-10, R-RDS-24, DEC-RDS-009)
+  _Verified by:_ `pytest -k "test_run_block_commands_are_scanned_but_yaml_fields_are_not or test_the_workflow_filter_restricts_who_is_credited or test_a_repository_without_workflows_credits_nobody or test_the_workflow_column_names_verification_stages_no_workflow_runs"` · stage: `make test`
 
-- [ ] **AC-RDS-10:** read from the `Makefile`:
+- [x] **AC-RDS-10:** read from the `Makefile`:
   - the `dead-code` and `spec-status` targets are `.PHONY`, documented with
     help text beginning "Report", have no prerequisites, and run exactly
     their script;
@@ -1028,34 +1021,31 @@ into this branch — all the same day. Each command is in the proposal.
   - no recipe but `coverage-run`'s invokes pytest;
   - the `ci:` and `pre-pr:` lines are unchanged.
 
-  The new test is planned; until it exists the existing tests and the stage
-  are the citation. (R-RDS-8, R-RDS-13, R-RDS-14, C-RDS-3, DEC-RDS-006,
-  DEC-RDS-011)
-  _Verified by:_ `pytest -k "test_makefile_has_matcher_accuracy_report_target or test_makefile_has_coverage_per_file_report_target or test_the_suite_runs_once_through_coverage_run or test_a_recipe_that_pins_a_cov_source_or_skips_the_run_dependency_is_named"` · stage: `make test`
+  The `ci:` and `pre-pr:` lines are read directly, against the base.
+  (R-RDS-8, R-RDS-13, R-RDS-14, C-RDS-3, DEC-RDS-006, DEC-RDS-011)
+  _Verified by:_ `pytest -k "test_makefile_has_matcher_accuracy_report_target or test_makefile_has_coverage_per_file_report_target or test_the_suite_runs_once_through_coverage_run or test_a_recipe_that_pins_a_cov_source_or_skips_the_run_dependency_is_named or test_every_report_target_stays_out_of_the_ladder or test_the_hygiene_report_targets_run_exactly_their_script"` · stage: `make test`
 
-- [ ] **AC-RDS-11 (non-success):** through the same helper, each of these
+- [x] **AC-RDS-11 (non-success):** through the same helper, each of these
   planted `Makefile` texts is named, with the target and the path by which
   it is reached:
   - a report target composed into `pre-pr` directly;
   - one composed through an intermediate target of `ci`;
   - one missing from `.PHONY`.
 
-  The tests are planned; until they exist the stage is the citation.
   (R-RDS-14, R-RDS-19, DEC-RDS-011)
-  _Verified by:_ stage: `make test`
+  _Verified by:_ `pytest -k test_a_report_target_composed_into_the_ladder_is_named` · stage: `make test`
 
-- [ ] **AC-RDS-12:** docs/hooks.md's reports section has a row for every
+- [x] **AC-RDS-12:** docs/hooks.md's reports section has a row for every
   report target and no row for anything else, and says — in the spec-status
   row or the text under the table — that the spec-status report stays red
   until `settle-package-status-headers` lands. A planted text missing a row,
   and one with a row naming no report target, are each named. The CI-table
   guards still pass on the real file, and a planted second table is not read
-  as CI rows. The new tests are planned; until they exist the existing
-  CI-table tests and the stage are the citation; the stays-red sentence is
-  read directly. (R-RDS-15, R-RDS-19, DEC-RDS-008, DEC-RDS-010)
-  _Verified by:_ `pytest -k "test_every_hooks_ci_table_row_names_a_job_or_workflow or test_hooks_ci_table_lists_every_ci_job or test_hooks_test_row_names_the_matrix_bounds"` · stage: `make test`
+  as CI rows. The stays-red sentence is also read directly. (R-RDS-15,
+  R-RDS-19, DEC-RDS-008, DEC-RDS-010)
+  _Verified by:_ `pytest -k "test_every_hooks_ci_table_row_names_a_job_or_workflow or test_hooks_ci_table_lists_every_ci_job or test_hooks_test_row_names_the_matrix_bounds or test_every_report_target_has_a_row_in_the_hooks_reports_table or test_a_report_target_without_a_hooks_row_is_named or test_a_second_table_in_hooks_is_not_read_as_ci_rows"` · stage: `make test`
 
-- [ ] **AC-RDS-13:** `docs/architecture/c4.md` §4, `tools/AGENTS.md` and
+- [x] **AC-RDS-13:** `docs/architecture/c4.md` §4, `tools/AGENTS.md` and
   `docs/aqa.md` describe both scripts in their groups with their argv
   convention. `tools/AGENTS.md` stays within its line budget with its
   precedence clause and resolving links, every required document is present
@@ -1063,7 +1053,7 @@ into this branch — all the same day. Each command is in the proposal.
   agent-file budget and the docs gate are the tests. (R-RDS-16)
   _Verified by:_ `pytest -k "test_nested_agents_file_stays_short or test_nested_agents_file_states_its_precedence or test_agent_index_links_resolve"` · stage: `make docs-check`
 
-- [ ] **AC-RDS-14:** `python tools/dead_code.py` and `python
+- [x] **AC-RDS-14:** `python tools/dead_code.py` and `python
   tools/spec_status.py`, run from a throwaway cwd with no arguments, reach
   their own exit path with 0, 1 or 2 and no load-failure marker on stderr.
   The test first asserts that each listed script is a file, so each entry was
@@ -1071,7 +1061,7 @@ into this branch — all the same day. Each command is in the proposal.
   R-RDS-12, R-RDS-18, R-RDS-19, DEC-RDS-005)
   _Verified by:_ `pytest -k test_gate_script_is_runnable_as_a_script` · stage: `make test`
 
-- [ ] **AC-RDS-15:** every new test carries exactly the tier the criterion
+- [x] **AC-RDS-15:** every new test carries exactly the tier the criterion
   computes for it, every new or edited test module is within the line bound,
   and no new test writes a planted spec path by hand. The guards that hold
   this are, in `tests/test_suite_shape.py`,
@@ -1079,23 +1069,22 @@ into this branch — all the same day. Each command is in the proposal.
   `test_every_tier_marker_matches_its_mechanical_criterion` and
   `test_no_test_module_exceeds_the_line_bound`, and, in
   `tests/test_suite_routing.py`,
-  `test_no_test_module_writes_a_spec_path_by_hand`, on this package's base
-  branch. They are cited by the stage, because they do not exist on `main`.
-  (R-RDS-18, DEC-RDS-013)
-  _Verified by:_ stage: `make test`
+  `test_no_test_module_writes_a_spec_path_by_hand`, which exist on this
+  package's base branch and are cited by name. (R-RDS-18, DEC-RDS-013)
+  _Verified by:_ `pytest -k "test_every_test_carries_exactly_one_tier_marker or test_every_tier_marker_matches_its_mechanical_criterion or test_no_test_module_exceeds_the_line_bound or test_no_test_module_writes_a_spec_path_by_hand"` · stage: `make test`
 
-- [ ] **AC-RDS-16:** the rule inventory, the golden `validate`/`graph`/`rules`
+- [x] **AC-RDS-16:** the rule inventory, the golden `validate`/`graph`/`rules`
   hashes and the empty runtime-dependency list are unchanged. (C-RDS-1)
   _Verified by:_ `pytest -k "test_rule_set_matches_baseline or test_output_byte_identical or test_runtime_dependencies_stay_empty"` · stage: `make test`
 
-- [ ] **AC-RDS-17 (non-success):** the diff deletes, renames, deprecates or
+- [x] **AC-RDS-17 (non-success):** the diff deletes, renames, deprecates or
   privatises no symbol; it changes no file of another change package, its
   `Status` header included; and every `pytest -k` selector in every spec under
   `openspec/changes/` still resolves to a test function. (R-RDS-21, C-RDS-6,
   DEC-RDS-008, DEC-RDS-012)
   _Verified by:_ `pytest -k test_every_spec_test_citation_resolves_to_a_real_test` · stage: `make test`
 
-- [ ] **AC-RDS-18:** `CHANGELOG.md` `[Unreleased]` carries this package's
+- [x] **AC-RDS-18:** `CHANGELOG.md` `[Unreleased]` carries this package's
   `Added` entry with the items R-RDS-17 names — among them that the
   spec-status report stays red until `settle-package-status-headers` lands —
   in the bullet shape the spec-status report reads as an entry, and every
@@ -1103,7 +1092,7 @@ into this branch — all the same day. Each command is in the proposal.
   directly; the test holds the link shape. (R-RDS-17)
   _Verified by:_ `pytest -k test_every_changelog_version_links_to_its_release_tag` · stage: `make test`
 
-- [ ] **AC-RDS-19:** `tasks.md` records, each dated with its commit and naming
+- [x] **AC-RDS-19:** `tasks.md` records, each dated with its commit and naming
   its command:
   - the red run of every guard;
   - vulture's output before the change at the plan's figure and at the
@@ -1121,13 +1110,13 @@ into this branch — all the same day. Each command is in the proposal.
   R-RDS-20, C-RDS-4, DEC-RDS-008)
   _Verified by:_ stage: `make validate`
 
-- [ ] **AC-RDS-20:** the whole ladder is green with every floor where it was,
+- [x] **AC-RDS-20:** the whole ladder is green with every floor where it was,
   ruff and strict mypy clean over both new scripts with no new exemption,
   and neither report target run by any step of the ladder or of CI. (C-RDS-3,
   C-RDS-5)
   _Verified by:_ stage: `make pre-pr`
 
-- [ ] **AC-RDS-21:** `tools/_common.py` holds `workflow_stages` and its
+- [x] **AC-RDS-21:** `tools/_common.py` holds `workflow_stages` and its
   lexer, takes the stage grammar as a parameter, and stays stdlib-only; the
   moved debug log line carries a neutral label, not `stage-citations:`.
   `tools/stage_citations.py` imports from `_common` only the names it uses,
