@@ -386,7 +386,10 @@ feature/* --squash--> dev --merge commit--> qa --merge commit--> main --tag vX.Y
   `release.yml`.
 - **Owner-only settings, outside this tree:** a ruleset per branch (pull
   request required, `ci-ok` required, the merge methods above, no force-push
-  or deletion, the owner as the only bypass), a tag ruleset on `v*` (owner
+  or deletion, the owner as the only bypass; restricting deletion is also
+  what stops *Automatically delete head branches* from deleting `dev` or
+  `qa` when a promotion they head merges -- until the rulesets exist, turn
+  that setting off), a tag ruleset on `v*` (owner
   creates; no update or delete), and the `pypi` environment limited to `v*`
   tags. `main` stays the default branch, because the plugin marketplace
   install, the changelog URL and adopters all resolve it and it holds
