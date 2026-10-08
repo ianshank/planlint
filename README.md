@@ -51,16 +51,6 @@ planlint --target /path/to/clone graph --format mermaid  # a picture, not just J
 planlint --version                           # print the installed version and exit
 ```
 
-> **Not on PyPI yet.** `v0.3.0` is the first release intended for a package
-> index and the tag has not been pushed, so `pip install planlint` 404s today.
-> Until it resolves, install from the repository —
-> `pip install git+https://github.com/ianshank/planlint@a1b686864282e27c754ec1d49ac6f931e1e140e1`
-> — or use the composite Action below, which installs the CLI from its own
-> checkout and needs no index at all. Between the 0.3.0 version bump and the
-> tag, that git install gives 0.2.0-era code, which the skill's
-> `planlint-min-version` rejects: use the Action, or wait for the tag. Delete
-> this note when the tag is cut.
-
 The distribution and the command are both `planlint`, with no hyphen.
 `plan-lint` on PyPI is an unrelated project, analysing LLM agent plans; this
 one gates OpenSpec and SpecKit change packages against a repository's real
@@ -410,7 +400,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: ianshank/planlint/.github/actions/planlint@a1b686864282e27c754ec1d49ac6f931e1e140e1
+      - uses: ianshank/planlint/.github/actions/planlint@v0.3.0
         with:
           target: "."
           fail-on: ERROR
@@ -422,10 +412,8 @@ no package index to wait for. The composite steps are bash and the documented
 runner is `ubuntu-latest`; Windows CI in this repository covers the pytest
 suite, not this action.
 
-`v0.3.0` is the first public tag and is **not on GitHub until the release
-workflow cuts it**. Pin the commit SHA above until then. After the tag
-exists, switch the ref to `@v0.3.0`. A full commit SHA remains valid either
-way.
+Pin a release tag, as above, or a full commit SHA; both select the adapter
+and the CLI together.
 
 The action runs the gate once, annotates the pull request, writes a job
 summary, and uploads the complete evidence bundle — the findings envelope,
@@ -458,7 +446,7 @@ each; both default to empty, which omits the flag entirely.
 | `dialect` | `--dialect <harness\|upstream\|speckit\|auto>` — override detection | the detected dialect is used |
 
 ```yaml
-      - uses: ianshank/planlint/.github/actions/planlint@a1b686864282e27c754ec1d49ac6f931e1e140e1
+      - uses: ianshank/planlint/.github/actions/planlint@v0.3.0
         with:
           change: add-payment-retry
           dialect: speckit

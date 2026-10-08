@@ -13,8 +13,8 @@ does not exist is a **PyPI release**: no `v0.3.0` tag has been pushed, so
 `pip install planlint`, the skill preflight, and the Action `version:`
 index override still 404. That is the remaining critical path. Adopter
 templates pin a commit SHA until the release-prep pull request switches them
-to `@v0.3.0`, just before the tag (§3 step 8). Everything else on this page is hygiene
-that should not delay §3.
+to `@v0.3.0`, just before the tag (§3 step 8). Everything else on this page is
+hygiene that should not delay §3.
 
 ---
 

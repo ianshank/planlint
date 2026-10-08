@@ -270,7 +270,9 @@ its bullets are filled in after the fact with what was observed.
   for each, expecting success; (7) in a fresh venv,
   `pip install planlint==0.3.0`, `planlint --version`, and
   `planlint --target <this clone> validate --fail-on ERROR` expecting exit
-  0; (8) the post-tag commit: every own-action ref to `@v0.3.0`
+  0; (8) the ref-flip commit (a post-tag commit when written; the
+  release-prep pull request before the tag since
+  `adopt-branch-promotion-model` DEC-BPM-020): every own-action ref to `@v0.3.0`
   (`templates/spec-gate.yml`, its `skills/` copy, `README.md` ×2), the
   `.pre-commit-hooks.yaml` example to `rev: v0.3.0`, the README "Not on
   PyPI yet" note deleted, the README `git+` install line replaced by
@@ -319,21 +321,21 @@ its bullets are filled in after the fact with what was observed.
 - Precondition: `pin-actions-by-sha` and `write-down-policies` are merged
   to `main`, then Milestones 1 and 2 of this package, and the merge commit's
   `make pre-pr` and CI are green. Record the merge commit's SHA here
-  (R-REL-14). The release commit is that merge commit, or a follow-up on
-  `main` that only sets the changelog date (DEC-REL-002) — or, if the
-  interim-window option of DEC-REL-007 was taken, the follow-up that also
-  points the README's `git+` line at the merge SHA.
+  (R-REL-14). Since `adopt-branch-promotion-model` DEC-BPM-020 the release
+  commit is the `main` merge commit of the 0.3.0 promotion, never a commit
+  on `main` after it.
   **Recorded (2026-10-07, from the `measure-coverage-once` branch):** `pin-actions-by-sha`,
   `write-down-policies` and Milestones 1–2 of this package reached `main` together as
   the squash merge `5246931` (PR #39); `main` CI run #202 on that commit
   (`actions/runs/37547872906`) succeeded with every job green. The tag, the trusted
-  publisher and the post-tag flip remain the maintainer's steps below; nothing here
-  claims them done.
-- `docs/distribution-plan.md` §0: re-run every row on the merge commit and
-  replace the branch-head dry-run results with these, recording the merge
-  commit's SHA beside them; this edit rides in the post-tag commit of step
-  (8) (R-REL-11).
-- Run §3 steps (1)–(3) of the runbook. Record here: the `workflow_dispatch`
+  publisher and the ref flip remain the steps below; nothing here claims them
+  done.
+- **First:** run §3 step (8) as the release-prep pull request into `dev`,
+  with the changelog cut and step (1)'s checks on its head, and promote it
+  `dev` → `qa` → `main` by merge commits (`adopt-branch-promotion-model`
+  DEC-BPM-020). The `main` merge commit is the release commit for every
+  step below (AC-REL-22, DEC-REL-007).
+- Run §3 steps (2)–(3) of the runbook on that commit. Record here: the `workflow_dispatch`
   run id, and that `gate` and `build` succeeded with `publish` skipped.
 - Run §3 steps (4)–(5). Record here: the tag's commit SHA and the date the
   tag was pushed (which the `[0.3.0]` heading must read), the `release.yml`
@@ -346,11 +348,10 @@ its bullets are filled in after the fact with what was observed.
 - Run §3 step (7). Record here: the `planlint --version` output from the
   fresh venv and the exit code of `validate --fail-on ERROR` against this
   repository — the plan's M1 exit criterion (AC-REL-21).
-- Run §3 step (8) as the release-prep pull request into `dev`, before the
-  tag (`adopt-branch-promotion-model` DEC-BPM-020), and confirm `make pre-pr`
-  is green on it. Record its SHA and the `main` merge commit's SHA here, in a
-  later pull request into `dev` -- nothing is committed to `main` after the
-  tag (AC-REL-22, DEC-REL-007).
+- Record here, in a later pull request into `dev` -- nothing is committed
+  to `main` after the tag: the release-prep pull request's SHA, the `main`
+  merge commit's SHA, and `docs/distribution-plan.md` §0's rows re-run on
+  that merge commit (R-REL-11, AC-REL-22).
 - Run §3 steps (9)–(10). Record the GitHub release URL and the Context7
   submission date here.
 - Check AC-REL-19, 20, 21 and 22 in `specs/release-readiness/spec.md` only

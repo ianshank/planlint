@@ -53,7 +53,8 @@ environment contents into its machine-readable output.
 
 ## Supported versions
 
-Pre-1.0. Only the latest released version is supported. `v0.1.0` was tagged
+Pre-1.0. Only the latest released version is supported: `0.3.0`, the first
+release published to PyPI. `v0.1.0` was tagged
 under the previous distribution name (`openspec-graph`) and was never published
 to a package index; it receives no fixes.
 
