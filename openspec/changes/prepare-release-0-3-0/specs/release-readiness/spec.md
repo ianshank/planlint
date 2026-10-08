@@ -158,15 +158,19 @@ another package's verification line.
   naming the file and line. `CHANGELOG.md` is excluded because its sections
   are a dated record; a planted stale reference anywhere else MUST be
   reported.
-- R-REL-9: Until the `v0.3.0` tag exists, the own-action `uses:` ref in
-  `templates/spec-gate.yml`, its byte-identical copy under `skills/`, the
-  two `README.md` snippets and the `.pre-commit-hooks.yaml` example MUST
-  stay the 40-hex SHA they hold today, and each file's comment or prose
-  MUST name `@v0.3.0` (or `rev: v0.3.0`) as the ref to switch to. After
-  the tag exists, every one of those refs MUST become `@v0.3.0` or
-  `rev: v0.3.0` in one post-tag commit, the two template copies MUST stay
-  byte-identical, and `README.md`'s "Not on PyPI yet" note MUST be deleted
-  in that same commit.
+- R-REL-9: Until the 0.3.0 release-prep pull request, the own-action
+  `uses:` ref in `templates/spec-gate.yml`, its byte-identical copy under
+  `skills/`, the two `README.md` snippets and the `.pre-commit-hooks.yaml`
+  example MUST stay the 40-hex SHA they hold today, and each file's comment
+  or prose MUST name `@v0.3.0` (or `rev: v0.3.0`) as the ref to switch to.
+  In that pull request -- into the integration branch, promoted to
+  production and tagged on the production merge commit, so the flip lands
+  before the tag and nothing follows it on production -- every one of those
+  refs MUST become `@v0.3.0` or `rev: v0.3.0` in one commit, the two
+  template copies MUST stay byte-identical, and `README.md`'s "Not on PyPI
+  yet" note MUST be deleted in that same commit. (Timing per
+  `adopt-branch-promotion-model` DEC-BPM-020; this requirement originally
+  placed the flip in a post-tag commit on `main`.)
 - R-REL-10: The `pypa/gh-action-pypi-publish` step in
   `.github/workflows/release.yml` MUST declare `attestations: true` under
   `with:`, preceded by a comment stating: that this is the action's default
@@ -180,18 +184,21 @@ another package's verification line.
   assert anything about the step's `uses:` ref. The step's `uses:` line and
   every other line of the workflow MUST be unchanged by this package.
 - R-REL-11: `docs/distribution-plan.md` §3 MUST be rewritten as the 0.3.0
-  runbook, in order: the pre-tag checks (`make pre-pr`, both generator
-  `--check` modes, `make e2e-live`, a local wheel build installed into a
-  fresh venv whose `planlint --version` prints `0.3.0`); the one-time PyPI
-  pending trusted publisher and the GitHub `pypi` environment; a
-  `workflow_dispatch` dry run of `release.yml` on the release commit with
-  `publish` skipped; tagging that commit `v0.3.0` and pushing; watching
-  `gate`, `build` and `publish`; verifying attestations on the published
-  files through the Integrity API and an ephemerally run verifier against
-  this repository's identity; installing `planlint==0.3.0` into a fresh venv
-  and running `validate --fail-on ERROR` on this repository; the post-tag
-  ref flip of R-REL-9; the GitHub release cut from the `[0.3.0]` section;
-  the Context7 submission. Its `@v0.2.0` mentions MUST become `@v0.3.0`
+  runbook, in order: the release-prep pull request carrying the ref flip of
+  R-REL-9 and the changelog cut, with the pre-tag checks (`make pre-pr`,
+  both generator `--check` modes, `make e2e-live`, a local wheel build
+  installed into a fresh venv whose `planlint --version` prints `0.3.0`) on
+  its head, promoted to production (`adopt-branch-promotion-model`
+  DEC-BPM-020); the one-time PyPI pending trusted publisher and the GitHub
+  `pypi` environment; a `workflow_dispatch` dry run of `release.yml` on the
+  release commit with `publish` skipped; tagging that commit `v0.3.0` and
+  pushing; watching `gate`, `build` and `publish`; verifying attestations on
+  the published files through the Integrity API and an ephemerally run
+  verifier against this repository's identity; installing `planlint==0.3.0`
+  into a fresh venv and running `validate --fail-on ERROR` on this
+  repository; the GitHub release cut from the `[0.3.0]` section; the
+  Context7 submission. The runbook keeps its step numbers, so the ref flip
+  stays numbered (8) while running first. Its `@v0.2.0` mentions MUST become `@v0.3.0`
   and its exit criterion MUST become M1's. Its §0 MUST be re-measured on the
   branch head before the merge as a dry run, and again on the merge commit
   with that commit's SHA recorded, after the merge.
@@ -216,8 +223,8 @@ another package's verification line.
   the result of each of its three jobs, the Integrity API response and the
   verifier's verdict for both published files, the fresh-venv
   `planlint --version` output and the exit code of `validate --fail-on ERROR`
-  on this repository, the SHA of the merge commit and of the post-tag flip
-  commit and the GitHub release URL — MUST be recorded in this package's
+  on this repository, the SHA of the release (production merge) commit and
+  of the ref-flip commit and the GitHub release URL — MUST be recorded in this package's
   `tasks.md` with their dates, after the fact, and MUST NOT be claimed
   before they are observed.
 - C-REL-1: No change to `requires-python`, the `Programming Language ::
@@ -417,36 +424,32 @@ another package's verification line.
   extra (every contributor pays for a release-day tool); a post-publish job
   (above); and relying on the PyPI web page's "Provenance" badge alone
   (presence without verification).
-- **DEC-REL-007** (amended after adversarial review, MEDIUM-4)**:** the
-  own-action ref flips from the SHA to `@v0.3.0` only after the tag exists,
-  as one post-tag commit, and the interim SHA is not advanced by this
-  package. `test_ci_template_pins_the_floor_the_skill_enforces` holds both
-  states — a 40-hex SHA with `@v{__version__}` named in the file before the
-  tag, `v{__version__}` after — so the flip is a one-line edit per file the
-  suite accepts in either order, never a window in which an adopter is
-  handed a 404. The cost of that tolerance is stated plainly: no test
-  demands the flip, so nothing goes red if the post-tag commit is forgotten;
-  the runbook step (R-REL-11, step 8) is the sole trigger, and AC-REL-22
-  stays unchecked until the commit's SHA is recorded. There is also an
-  interim window the tests do not see: from the commit that bumps
-  `__version__` until the tag, the README's `git+https://…@a1b6868…` line
-  and the own-action `@a1b6868…` refs install the code of that commit,
-  which reports `planlint 0.2.0`, while the skill's `planlint-min-version`
-  reads `0.3.0` and refuses it. The composite Action is unaffected — it
-  installs from its own checkout and consults no floor. So the README note
-  says where each audience stands: between the bump and the tag, the git
-  install gives 0.2.0-era code the skill rejects; use the Action, or wait
-  for the tag (R-REL-13). The SHA is not moved to the release commit inside
-  this package because a commit cannot name itself, and the tag arrives in
-  the same sitting. If the sitting is expected to slip, the maintainer's
-  alternative is a one-line follow-up commit on `main` after the merge that
-  points the README's `git+` line at the merge SHA — a subsequent commit
-  can name the merge commit — which closes the window for the git install
-  without touching the own-action refs, which keep working and wait for the
-  tag. `harden-ci-workflows` C-HCW-3 and DEC-HCW-012 already name
-  `docs/distribution-plan.md` as the owner of this switch, which is why the
-  runbook step lives there. The README's "Not on PyPI yet" note is deleted
-  in the post-tag commit, as it says to be.
+- **DEC-REL-007** (amended after adversarial review, MEDIUM-4; rewritten for
+  the timing of `adopt-branch-promotion-model` DEC-BPM-020)**:** the
+  own-action ref flips from the SHA to `@v0.3.0` in the 0.3.0 release-prep
+  pull request, one commit, before the tag; that pull request promotes
+  `dev` → `qa` → `main` and the tag is cut on the `main` merge commit, so
+  nothing is committed to `main` after the tag. The interim SHA is not
+  advanced by this package.
+  `test_ci_template_pins_the_floor_the_skill_enforces` holds both states —
+  a 40-hex SHA with `@v{__version__}` named in the file, or
+  `v{__version__}` — so the flip is a one-line edit per file the suite
+  accepts either way. The cost of that tolerance is stated plainly: no test
+  demands the flip, so nothing goes red if the release-prep pull request
+  omits it; the runbook step (R-REL-11, step 8) is the sole trigger, and
+  AC-REL-22 stays unchecked until the commit's SHA is recorded. Two interim
+  windows sit outside what the tests see. Before the release-prep pull
+  request, the README's `git+https://…@a1b6868…` line and the own-action
+  `@a1b6868…` refs install code that reports `planlint 0.2.0`, which the
+  skill's `planlint-min-version` (`0.3.0`) refuses; the composite Action is
+  unaffected, and the README note says so (R-REL-13). After it, from the
+  `qa` → `main` merge until the publish, `main`'s README names
+  `pip install planlint` and `@v0.3.0` refs that do not resolve yet --
+  minutes, closed by running the publish steps in the same sitting as that
+  merge; if the sitting slips, the remedy is to finish the release, never a
+  commit on `main`. `harden-ci-workflows` C-HCW-3 and DEC-HCW-012 already
+  name `docs/distribution-plan.md` as the owner of this switch, which is why
+  the runbook step lives there.
 - **DEC-REL-008:** the runbook goes in `docs/distribution-plan.md` §3 and
   the recurring checklist in `docs/hooks.md`; no new document. §3 is already
   this runbook for 0.2.0, step by step, with the publisher registration,
@@ -524,7 +527,7 @@ another package's verification line.
 - **DEC-REL-012** (new after adversarial review, LOW-6)**:** the `version`
   input's example in `.github/actions/planlint/action.yml` (`e.g. "0.2.0"`,
   line 34 at `ea40bc2`) is updated to `"0.3.0"` in Milestone 1 with the rest
-  of the bump set, not in the post-tag commit. It is a version literal in
+  of the bump set, not in the ref-flip commit. It is a version literal in
   adopter-facing prose, the same kind of hand-written copy as the SKILL.md
   prose and the README note, and `0.2.0` will never be on the index the
   input installs from; `0.3.0` is in exactly the same state before the tag
@@ -692,7 +695,9 @@ another package's verification line.
   C-REL-6, DEC-REL-009)
   _Verified by:_ stage: `make e2e-live`
 
-- [ ] **AC-REL-22 (observed after the tag):** the post-tag commit flips
+- [ ] **AC-REL-22 (observed after the tag):** the ref-flip commit -- the
+  release-prep pull request since `adopt-branch-promotion-model`
+  DEC-BPM-020, not a commit after the tag -- flips
   every own-action ref to `@v0.3.0` or `rev: v0.3.0`, deletes the README's
   "Not on PyPI yet" note, updates `SECURITY.md`'s supported version and the
   SKILL.md prose, and the suite is green on it; its SHA, the merge commit's

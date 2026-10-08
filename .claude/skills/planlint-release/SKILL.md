@@ -14,8 +14,9 @@ order of operations.
 ## Before anything
 
 Run `python tools/check_promotion.py branches`. If `enforce_routes` is not yet
-true, the integration and candidate branches may not exist: the first release
-is the trunk runbook in `docs/distribution-plan.md` §3, not this skill.
+true, the integration and candidate branches may not exist: finish Phase 2 of
+`adopt-branch-promotion-model` first. 0.3.0 is this skill's first release;
+`docs/distribution-plan.md` §3 is its checklist, in this same order.
 
 ## 1. Release-prep pull request, into the integration branch
 

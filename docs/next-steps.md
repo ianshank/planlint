@@ -236,12 +236,13 @@ with the trigger that reopens it — not omitted.
 
 ## Deferred by the branch promotion model (`adopt-branch-promotion-model`)
 
-The owner's Phase 2, in its `tasks.md` Milestone 6, after `v0.3.0` is tagged
-on trunk and that package merges: create `dev` and `qa` from `main`; in the
-same change set `enforce_routes = "true"` and Dependabot's `target-branch`
-(`test_route_enforcement_and_dependabot_flip_together` holds the two
-together); add the branch and `v*` tag rulesets, with `ci-ok` the one required
-check; and limit the `pypi` environment to `v*` tags. Retargeting an open pull
+Phase 2 is under way (`tasks.md` Milestone 6): `dev` and `qa` exist, created
+from `main` at `e30289d`, and `enforce_routes = "true"` landed with
+Dependabot's `target-branch` (`test_route_enforcement_and_dependabot_flip_together`
+holds the two together). Still the owner's, in repository settings: the branch
+and `v*` tag rulesets, with `ci-ok` the one required check, and the `pypi`
+environment limited to `v*` tags. 0.3.0 now ships through the promotion flow
+(the package merged before the tag). Retargeting an open pull
 request does not re-run CI (DEC-BPM-008); a re-run or a push does.
 
 ## Deferred / out of scope

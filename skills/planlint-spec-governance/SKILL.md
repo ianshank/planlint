@@ -175,8 +175,7 @@ treated as "unknown" rather than as an error.
 `assets/spec-gate.yml` is a ready workflow. Copy it into the target
 repository's own workflows directory. It calls this project's composite
 action. The Action installs the CLI from its own checkout, so the `uses:`
-ref pins the adapter and the CLI together. Until `v0.3.0` is tagged, that
-ref is a commit SHA; after the tag exists, switch it to `@v0.3.0`. The
+ref pins the adapter and the CLI together: pin `@v0.3.0`. The
 composite steps are bash and the template's runner is `ubuntu-latest`. The
 workflow runs the gate once, annotates the pull request, writes a job
 summary, and uploads the complete evidence bundle as a workflow artifact.
