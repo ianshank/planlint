@@ -35,6 +35,9 @@ updates:
     # tests/test_workflow_pins.py needs now that every ref is a pinned
     # SHA with its release tag (pin-actions-by-sha).
     directories: ["/", "/.github/actions/planlint"]
+    # Version updates land on the integration branch (adopt-branch-promotion-model);
+    # security updates still target the default branch and go in as hotfix/ branches.
+    target-branch: "dev"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -62,6 +65,9 @@ updates:
     # tag and the digest together. Labels, as above, are a request: Dependabot
     # ignores a label the repository has not created.
     directory: "/"
+    # Version updates land on the integration branch (adopt-branch-promotion-model);
+    # security updates still target the default branch and go in as hotfix/ branches.
+    target-branch: "dev"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

@@ -166,7 +166,10 @@ another package's verification line.
   the tag exists, every one of those refs MUST become `@v0.3.0` or
   `rev: v0.3.0` in one post-tag commit, the two template copies MUST stay
   byte-identical, and `README.md`'s "Not on PyPI yet" note MUST be deleted
-  in that same commit.
+  in that same commit. (Amended by `adopt-branch-promotion-model`
+  DEC-BPM-020: that one commit is the release-prep pull request into `dev`,
+  which promotes to `main` and is tagged there -- the refs flip just before
+  the tag, not after it; every other property here is unchanged.)
 - R-REL-10: The `pypa/gh-action-pypi-publish` step in
   `.github/workflows/release.yml` MUST declare `attestations: true` under
   `with:`, preceded by a comment stating: that this is the action's default
@@ -189,8 +192,9 @@ another package's verification line.
   `gate`, `build` and `publish`; verifying attestations on the published
   files through the Integrity API and an ephemerally run verifier against
   this repository's identity; installing `planlint==0.3.0` into a fresh venv
-  and running `validate --fail-on ERROR` on this repository; the post-tag
-  ref flip of R-REL-9; the GitHub release cut from the `[0.3.0]` section;
+  and running `validate --fail-on ERROR` on this repository; the ref flip
+  of R-REL-9 (in the release-prep pull request, before the tag, since
+  `adopt-branch-promotion-model` DEC-BPM-020); the GitHub release cut from the `[0.3.0]` section;
   the Context7 submission. Its `@v0.2.0` mentions MUST become `@v0.3.0`
   and its exit criterion MUST become M1's. Its §0 MUST be re-measured on the
   branch head before the merge as a dry run, and again on the merge commit
@@ -417,7 +421,10 @@ another package's verification line.
   extra (every contributor pays for a release-day tool); a post-publish job
   (above); and relying on the PyPI web page's "Provenance" badge alone
   (presence without verification).
-- **DEC-REL-007** (amended after adversarial review, MEDIUM-4)**:** the
+- **DEC-REL-007** (amended after adversarial review, MEDIUM-4; its timing
+  amended again by `adopt-branch-promotion-model` DEC-BPM-020, under which
+  the flip rides the release-prep pull request and lands on `main` with the
+  promotion the tag is cut from)**:** the
   own-action ref flips from the SHA to `@v0.3.0` only after the tag exists,
   as one post-tag commit, and the interim SHA is not advanced by this
   package. `test_ci_template_pins_the_floor_the_skill_enforces` holds both
@@ -692,7 +699,9 @@ another package's verification line.
   C-REL-6, DEC-REL-009)
   _Verified by:_ stage: `make e2e-live`
 
-- [ ] **AC-REL-22 (observed after the tag):** the post-tag commit flips
+- [ ] **AC-REL-22 (observed after the tag):** the ref-flip commit -- the
+  release-prep pull request since `adopt-branch-promotion-model`
+  DEC-BPM-020, not a commit after the tag -- flips
   every own-action ref to `@v0.3.0` or `rev: v0.3.0`, deletes the README's
   "Not on PyPI yet" note, updates `SECURITY.md`'s supported version and the
   SKILL.md prose, and the suite is green on it; its SHA, the merge commit's
