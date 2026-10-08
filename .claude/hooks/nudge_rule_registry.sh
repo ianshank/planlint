@@ -40,11 +40,15 @@ case "/$FILE_NORM" in
     exit 0
     ;;
   */.github/dependabot.yml|*/.github/actions/*/action.yml)
-    printf '{"decision": "block", "reason": "You just edited Dependabot config or a composite action. Run `pytest tests/test_workflow_pins.py -k dependabot` -- every directory holding an action.yml needs its own dependabot `directory:` entry or its third-party pins are never updated, and nothing else notices."}'
+    printf '{"decision": "block", "reason": "You just edited Dependabot config or a composite action. Run `pytest tests/test_workflow_pins.py -k dependabot` -- every directory holding an action.yml needs its own dependabot `directory:` entry or its third-party pins are never updated, and nothing else notices. A `target-branch:` must name the integration branch exactly when [tool.specgraph.promotion] enforce_routes is true: run `pytest tests/test_ci_promotion.py -k dependabot`."}'
     exit 0
     ;;
   */Makefile|*/.github/workflows/*.yml|*/.github/workflows/*.yaml)
-    printf '{"decision": "block", "reason": "You just edited a Makefile or CI workflow file. Run `make thresholds` (or `python tools/check_no_hardcoded_thresholds.py` if make is unavailable) before finishing -- this repo requires every threshold to be read from its real locator, never hard-coded here."}'
+    printf '{"decision": "block", "reason": "You just edited a Makefile or CI workflow file. Run `make thresholds` (or `python tools/check_no_hardcoded_thresholds.py` if make is unavailable) before finishing -- this repo requires every threshold to be read from its real locator, never hard-coded here. For a workflow, also run `pytest tests/test_ci_promotion.py tests/test_ci_workflow.py tests/test_release_surface.py`: a new ci.yml job must join the ci-ok needs list and the docs/hooks.md CI table, a job with an if: must be declared to the aggregator, and no promotion job may soften its own failure."}'
+    exit 0
+    ;;
+  */tools/check_promotion.py|*/tools/smoke_wheel.py|*/tools/_common.py)
+    printf '{"decision": "block", "reason": "You just edited a promotion-model gate script or the shared tools helpers. Run `pytest tests/test_promotion.py tests/test_promotion_gates.py tests/test_smoke_wheel.py tests/test_gate_scripts.py`, then `make coverage-tools` -- a gate whose failing path is untested reports PASS on the thing it was added to catch. Exit 2 is never a pass, and no branch name may appear in the tool: it reads them from pyproject.toml."}'
     exit 0
     ;;
   */skills/planlint-spec-governance/*|*/.claude-plugin/*)
@@ -61,6 +65,13 @@ case "/$FILE_NORM" in
     ;;
   */tests/corpus/targets/*)
     printf '{"decision": "block", "reason": "You just edited the labelled detection corpus. Each expected.json is a hand-written label of what a correct detector should report -- never regenerate it from the detector, or the test asserts the code equals itself. Before finishing: state the expectation in tests/corpus/targets/README.md (the test checks the shape is documented), keep the bytes exact (the corpus is -text in .gitattributes), and run `pytest tests/test_detect_corpus.py` (see the planlint-add-detect-shape skill)."}'
+    exit 0
+    ;;
+  # After the corpus arm on purpose: a labelled shape's own pyproject.toml
+  # under tests/corpus/targets/ must get the corpus reminder, and bash takes
+  # the first matching arm.
+  */pyproject.toml)
+    printf '{"decision": "block", "reason": "You just edited pyproject.toml, which holds the coverage and accuracy floors and the [tool.specgraph.promotion] branch topology. Floors move up, never down -- run `make thresholds`. For the promotion table, run `pytest tests/test_promotion.py tests/test_ci_promotion.py`: ci.yml on.push.branches must equal the three branch names, and enforce_routes flips to true only together with the dependabot target-branch."}'
     exit 0
     ;;
   */tests/fixtures/phrasing/*|*/openspec_graph/parse_semantics.py|*/openspec_graph/parse_model.py)

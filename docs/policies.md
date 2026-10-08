@@ -12,8 +12,8 @@ agent-written waivers, no hand-run `witness` — is
 [`skills/planlint-spec-governance/SKILL.md`](../skills/planlint-spec-governance/SKILL.md)'s
 and outranks every `AGENTS.md`; disclosure and the threat model are
 [`SECURITY.md`](../SECURITY.md)'s; the gate ladder — what runs at commit
-time, in continuous integration and before a pull request — is
-[`hooks.md`](hooks.md)'s.
+time, in continuous integration and before a pull request — and the branch
+promotion model are [`hooks.md`](hooks.md)'s.
 
 - [Versioning and deprecation](#versioning-and-deprecation) — Semantic
   Versioning read for a 0.x package, one `schema_version` integer per stored

@@ -19,7 +19,11 @@ fact behind it.
   Read it before running anything beyond the command above.
 - [`llms.txt`](llms.txt) is the short machine-facing index of this project.
 - [`docs/hooks.md`](docs/hooks.md) is the contributor gate ladder: what runs at
-  commit time, in continuous integration, and before a pull request.
+  commit time, in continuous integration, and before a pull request -- and which
+  base a pull request targets under the branch promotion model (the
+  integration branch for features and fixes; production only from the
+  release-candidate branch or a hotfix branch). The branch names are in
+  `pyproject.toml` `[tool.specgraph.promotion]`.
 
 This file is a pointer, not a second skill. When it disagrees with `SKILL.md`,
 `SKILL.md` wins.

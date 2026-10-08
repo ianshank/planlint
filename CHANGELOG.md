@@ -5,6 +5,52 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added — the `dev → qa → main` branch promotion model
+
+- **`adopt-branch-promotion-model`.** Three long-lived branches: `dev`
+  (integration, squash merges), `qa` (release candidate) and `main`
+  (production only), promoted by merge commits, with release tags on `main`
+  merge commits only. The names live in `pyproject.toml`
+  `[tool.specgraph.promotion]`; `tools/_common.py` gains `read_pyproject_str`
+  to read them on the 3.10 leg.
+- **`tools/check_promotion.py`**, a stdlib-only gate: `route` refuses a pull
+  request into `qa` from anything but `dev`, and into `main` from anything but
+  `qa` or `hotfix/*`, and from any fork into either, and decides whether the run
+  needs the release tier (a refusal is a `WARN` while `enforce_routes` is
+  `"false"`, until `dev` and `qa` exist); `aggregate` is the new **`ci-ok`** job, the single
+  required status check, failing on any failed, cancelled or wrongly skipped job;
+  `tag-ancestry` makes the release workflow refuse a tag on a commit that is
+  not on `main`'s first-parent chain (a production merge commit, or trunk
+  history from before the model).
+- **`tools/smoke_wheel.py`**: the clean-venv console-script smoke test, now one
+  tool run by both the release workflow's `build` job and a new `release-tier`
+  CI job on every pull request and push into `qa` or `main`, which also runs
+  `make pre-pr` and the installed CLI against the `passing` and `failing` action
+  fixtures. The release tier now runs before a tag exists, not only after.
+- CI `push` triggers become `[main, qa, dev]`; the unused `master` is dropped.
+  The release workflow's `publish` job restates `contents: read`, which its own
+  `permissions:` block had replaced. The process, back-merge, hotfix and rollback
+  steps are in `docs/hooks.md` under *Branching and promotion*.
+- **Harness.** A `PreToolUse` guard, `.claude/hooks/guard_promotion.py`, denies
+  a direct push to `qa` or `main`, a force-push or delete of a long-lived
+  branch, and a pull request the route refuses, and asks before a `v*` tag push
+  or a squash merge, reading the branch names through `check_promotion.py`.
+  The `PostToolUse` nudge gains arms for `pyproject.toml`, the promotion tools
+  and the workflow job list. A `planlint-release` contributor skill carries the
+  release, promotion, back-merge, hotfix and rollback order; the
+  `planlint-verifier` agent knows the CI-only gates; and a test holds every
+  agent and skill named in both harness indexes.
+- **Shared readers.** `tools/_common.py` gains `table_header`, `table_lines` and
+  `has_pyproject_key`; `read_pyproject_int`, `read_pyproject_str` and
+  `coverage_sources` now end a table at a commented header instead of reading
+  the next table's keys into it.
+- **Tests.** The promotion guards live in `tests/test_ci_promotion.py` and
+  `tests/test_promotion_gates.py` (shared helpers in the uncollected
+  `tests/promotion_support.py`), each with a planted counter-example. The
+  release workflow runs the tag-ancestry check from the default branch's own
+  tool and configuration, and smokes the wheel with the same fixture probes as
+  CI.
+
 ### Added — two hygiene reports: dead code and spec status (M2)
 
 - **`report-dead-code-and-spec-status`.** Two report targets, composed into

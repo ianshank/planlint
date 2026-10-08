@@ -1,7 +1,9 @@
 # Hooks
 
 Pre-commit and CI hooks enforce the same gate as `make pre-pr`, so a commit can
-never bypass what CI checks.
+never bypass what CI checks. CI additionally enforces the promotion route and,
+into the release-candidate and production branches, the release tier (see
+*Branching and promotion*).
 
 ## Pre-commit
 
@@ -80,7 +82,10 @@ row below still runs every tier.
 | `graph-diff` | PR only | `tools/diff_spec_graph.py` base→head (AC-CH-5/6) |
 | `security` | push + PR | gitleaks + no-hardcoded-thresholds (hard) |
 | `docs` | push + PR | `make docs-check` (hard) |
-| `release` (separate workflow) | `v*` tag | `make pre-pr`, then a clean-venv smoke test of the `planlint` console script, then trusted publishing to PyPI, which uploads PEP 740 attestations for both files |
+| `promotion` | push + PR | `tools/check_promotion.py route`: a PR into the release-candidate branch must come from the integration branch, one into production from the candidate or a hotfix branch, never from a fork; emits whether the run needs the release tier (hard) |
+| `release-tier` | PR into / push to the candidate or production branch | `make pre-pr`, sdist + wheel build, `tools/check_wheel_metadata.py`, and `tools/smoke_wheel.py` — the release workflow's own smoke tool — plus the installed CLI against the `passing` and `failing` action fixtures (hard) |
+| `ci-ok` | push + PR | `tools/check_promotion.py aggregate` over every other job: the **single required status check** for the branch rulesets; fails on any failed, cancelled or wrongly skipped job (hard) |
+| `release` (separate workflow) | `v*` tag | `tools/check_promotion.py tag-ancestry` (the tag must be on the production branch), `make pre-pr`, then `tools/smoke_wheel.py` in a clean venv, then trusted publishing to PyPI, which uploads PEP 740 attestations for both files |
 
 The workflow holds itself to the posture the gates inside it enforce
 (`harden-ci-workflows`; `tests/test_workflow_pins.py`, `tests/test_workflow_posture.py`
@@ -98,7 +103,7 @@ commit listing on a pull request). Every job carries a `timeout-minutes`
 inside the range `[tool.specgraph] ci_job_timeout_minutes_min..max` in
 `pyproject.toml`, so a hung step costs minutes rather than GitHub's six-hour
 default. A `concurrency` group cancels a pull-request run when a newer push to
-the same branch arrives; a push to `main` keys on its SHA, so it is neither
+the same branch arrives; a push to a promotion branch keys on its SHA, so it is neither
 cancelled nor left pending to be superseded. The single-interpreter Python
 version is `env: PYTHON_DEFAULT` at the top of each workflow and nowhere else
 (the `PYTHON_DEFAULT` cells above); a new single-version job reads
@@ -121,8 +126,8 @@ checkers under `--scope`. pytest-cov's own total gates nothing on that run —
 it is the diluted figure for everything measured — so neither tree's headroom
 hides the other's regression. `coverage-tools` remains a documented target
 that depends on the run and re-reads `tools/` alone; it has no job of its own
-and is reached in CI as a prerequisite of the `make pre-pr` the release
-workflow runs. Locally it is part of `make pre-pr`, not `make ci`, which stays
+and is reached in CI as a prerequisite of the `make pre-pr` that the
+`release-tier` job and the release workflow run. Locally it is part of `make pre-pr`, not `make ci`, which stays
 the fast inner loop. Every leg that runs the suite uploads its `coverage.json`
 as an artifact; those per-leg reports are what the floors are set from — two
 points under the minimum green leg, never down.
@@ -131,10 +136,14 @@ The `graph-diff` job checks out the PR head SHA (not the synthetic merge
 commit) so `merge-base` resolves to the true branch point (DEC-CH-001).
 
 `release` lives in its own workflow file because it is tag-triggered, not
-push/PR-triggered. Its clean-venv step is not redundant with the `test`
-matrix: the suite runs the CLI as `python -m openspec_graph.cli`, so nothing
-else ever exercises the console script a wheel actually installs, or proves
-the package really declares no runtime dependencies.
+push/PR-triggered. Its clean-venv step (`tools/smoke_wheel.py`) is not
+redundant with the `test` matrix: the suite runs the CLI as
+`python -m openspec_graph.cli`, so only this tool exercises the console script
+a wheel actually installs and proves the package declares no runtime
+dependencies. It is the same tool, with the same fixture probes, that
+`release-tier` runs before any tag exists, and
+`test_the_real_wheel_passes_the_shared_smoke_tool` runs it inside the suite
+when the build frontend is available.
 
 Note that `tools/check_no_hardcoded_thresholds.py` scans **every** file under
 `.github/workflows/`, not a named one — a workflow added later would otherwise
@@ -184,7 +193,24 @@ mid-edit:
   `tests/baseline_rules.json` and run `tests/test_rule_registry_docs.py`
   (see the `planlint-add-rule` skill below).
 - Editing the `Makefile` or a `.github/workflows/*.yml` file → reminds to run
-  `make thresholds`.
+  `make thresholds`, and for a workflow
+  `pytest tests/test_ci_promotion.py tests/test_ci_workflow.py tests/test_release_surface.py`:
+  a new `ci.yml` job must join `ci-ok`'s `needs` and the CI table above, a job
+  with an `if:` must be declared to the aggregator, and no promotion job may
+  soften its own failure.
+- Editing `pyproject.toml` → reminds that floors move up, never down
+  (`make thresholds`), and for the `[tool.specgraph.promotion]` table to run
+  `pytest tests/test_promotion.py tests/test_ci_promotion.py`: the push-branch
+  list must equal the table, and `enforce_routes` flips only together with
+  Dependabot's `target-branch`.
+- Editing `tools/check_promotion.py`, `tools/smoke_wheel.py` or
+  `tools/_common.py` → reminds to run
+  `pytest tests/test_promotion.py tests/test_promotion_gates.py tests/test_smoke_wheel.py tests/test_gate_scripts.py`
+  and then `make coverage-tools`.
+- Editing `.github/dependabot.yml` or a composite action → reminds to run
+  `pytest tests/test_workflow_pins.py -k dependabot`, and that a
+  `target-branch:` must name the integration branch exactly when routes are
+  enforced.
 - Editing anything under `evals/` → reminds to run
   `pytest tests/test_agent_artifacts.py`. The `planlint-add-eval-case` skill
   under `.claude/skills/` carries the full checklist. The suite's structure is asserted,
@@ -219,6 +245,24 @@ mid-edit:
   criterion from any of this repo's own change packages. The
   `planlint-add-phrasing-case` skill carries the checklist.
 
+A second hook, `PreToolUse`, runs **before** a Bash command or a GitHub
+pull-request tool call: `.claude/hooks/guard_promotion.py`
+(`adopt-branch-promotion-model`). It denies a direct push to the candidate or
+production branch (a push with no refspec is judged against the checked-out
+branch), a force-push or delete of any long-lived branch, `--all`/`--mirror`,
+a GitHub tool writing a file straight to either protected branch, and a pull
+request -- the GitHub tool or `gh pr create` -- whose route
+`tools/check_promotion.py route` refuses (it proceeds while `enforce_routes` is
+off, as in CI); it asks before a `v*` tag push or `--tags` (a tag publishes to
+PyPI), a squash merge (promotions are merge commits) and a retarget onto a
+protected branch (a retarget does not re-run CI). It sees through `VAR=value`
+prefixes, `env`, git's own options and multi-line commands, not through
+`bash -c`. Branch names come from
+`[tool.specgraph.promotion]` through that tool, never from the guard. Input
+it cannot parse it lets through: it is a seat belt for the window before the
+rulesets exist, not the gate. `tests/test_claude_guard.py` holds both
+directions.
+
 `.claude/hooks/nudge_rule_registry.sh` implements every check above via a
 single shell script (no `jq` dependency — not guaranteed to be on `PATH` in
 every dev environment this repo is used from). Despite the JSON key's name,
@@ -231,9 +275,11 @@ See also `.claude/agents/` (spec-drafter, spec-adversary, planlint-verifier —
 this repo's own dogfooded OpenSpec change-package workflow) and the
 contributor skills under `.claude/skills/`: `planlint-add-rule` (the checklist
 the first hook case above points at), `planlint-add-eval-case`,
-`planlint-add-detect-shape`, `planlint-add-phrasing-case`, and
+`planlint-add-detect-shape`, `planlint-add-phrasing-case`,
 `planlint-change-package` (the draft → gate → adversarial review → revise
-loop that `spec-drafter` and `spec-adversary` run inside). `spec-drafter`
+loop that `spec-drafter` and `spec-adversary` run inside), and
+`planlint-release` (release prep, the two promotions, the tag, the back-merge,
+hotfix and rollback, under *Branching and promotion* above). `spec-drafter`
 carries a shell for read-only checks so it can run the gate its own hook asks
 for; it writes only under its package. The hook script
 itself is held to its wiring by `tests/test_claude_hooks.py`: every path
@@ -276,6 +322,76 @@ not?). `evaluate_tree()` stays two parallel blocks rather than a registry
 for two instances; revisit that only if a third whole-tree rule arrives
 (`DEC-AD-003`).
 
+## Branching and promotion
+
+`adopt-branch-promotion-model`. Three long-lived branches, named in
+`pyproject.toml` `[tool.specgraph.promotion]` and nowhere else that a tool
+reads (`ci.yml`'s `on.push.branches` is the one literal copy, held equal to the
+table by `test_ci_push_branches_match_the_promotion_config`):
+
+```
+feature/* --squash--> dev --merge commit--> qa --merge commit--> main --tag vX.Y.Z--> PyPI
+                       ^                                          |
+                       +------- sync/main-into-dev (merge) -------+   after each release
+```
+
+| Branch | Holds | Pull requests from | Merge method | CI |
+|---|---|---|---|---|
+| dev (integration) | the next release, integrating | any branch (`feature/*`, `dependabot/*`, `sync/*`) | squash; a merge commit for `sync/*` | every job above; `release-tier` skipped |
+| qa (release candidate) | exactly the bits that will ship | `dev` only | merge commit | every job, `release-tier` included |
+| main (production) | released code only | `qa`, or `hotfix/*` | merge commit | every job, `release-tier` included |
+
+- **`ci-ok` is the only required status check.** Every other job is in its
+  `needs`, and `tools/check_promotion.py aggregate` fails it on any failed,
+  cancelled or wrongly skipped job. A matrix job's check names change with its
+  matrix and a skipped required check reads as passing, so neither is required
+  by name.
+- **The route is enforced in CI, not only by convention.** The `promotion` job
+  fails a pull request into `qa` whose head is not `dev`, one into `main` whose
+  head is neither `qa` nor `hotfix/*`, and any head from a fork into either.
+  Until `dev` and `qa` exist, `[tool.specgraph.promotion] enforce_routes` is
+  `"false"` and a refused route is printed as a `WARN` instead of failing; the
+  change that creates the two branches sets it to `"true"`.
+  Known limit: retargeting an open pull request's base does not re-run CI (the
+  `edited` event is not a trigger, because an all-skipped run would report a
+  passing `ci-ok`); push a commit or re-run the workflow after retargeting.
+- **Promotions are merge commits, never squashes.** A squash gives the target
+  a commit the source does not have, so the branches diverge on every release
+  and the next promotion conflicts. `graph-diff` on a promotion pull request
+  therefore diffs the whole release since the previous promotion, not one
+  feature (an accepted widening of DEC-CH-001).
+- **A release is cut from a release-prep pull request on `dev`**: the version
+  bump, the changelog cut, and every own-action ref flip that the 0.3.0 runbook
+  called the post-tag commit. It then promotes `dev → qa → main` unchanged, so
+  the `release-tier` job has already run the release workflow's gate and smoke
+  test on the exact commit. Tag the `main` merge commit; the release workflow's
+  `gate` refuses a tag on any commit that is not on `main`'s first-parent
+  chain -- a `dev` commit that merely reached `main` inside a promotion is
+  refused, because no release tier ran on it. **Nothing is
+  committed to `main` after the tag**; if publishing fails, fix forward with
+  the next patch version.
+- **After every release** open `sync/main-into-dev`, cut from `dev`, and merge
+  `main` into it with a merge commit. `qa` is never back-merged; it catches up
+  at the next promotion.
+- **Hotfix:** `hotfix/*` from `main`, pull request into `main` (the release
+  tier runs because the base is `main`), tag, then the same `sync/` back-merge.
+  Dependabot security updates always target the default branch (`main`) and
+  the route refuses them there: re-open the change as a `hotfix/*` branch.
+- **Rollback:** PyPI versions are immutable. Yank the release, revert the
+  promotion merge with `git revert -m 1` through a pull request, and release
+  the next patch version. Never force-push `main`.
+- **Tags and back-merge pull requests are made by a person or a personal or
+  App token, never `GITHUB_TOKEN`**: events it causes do not start workflows,
+  so its pull request would never report `ci-ok` and its tag would never run
+  `release.yml`.
+- **Owner-only settings, outside this tree:** a ruleset per branch (pull
+  request required, `ci-ok` required, the merge methods above, no force-push
+  or deletion, the owner as the only bypass), a tag ruleset on `v*` (owner
+  creates; no update or delete), and the `pypi` environment limited to `v*`
+  tags. `main` stays the default branch, because the plugin marketplace
+  install, the changelog URL and adopters all resolve it and it holds
+  released code.
+
 ## Releasing
 
 The `.claude-plugin/` manifests carry a `version`, generated from
@@ -296,7 +412,7 @@ to bump rather than three to keep in step by hand.
 The alternative — omitting `version` from the manifests so Claude Code falls
 back to the resolved commit sha — was rejected: the manifests are pinned to the
 package version by `AC-SD-7`, and releases here are already tag-driven, so a
-sha-tracking plugin would refresh on every unrelated commit to `main` while the
+sha-tracking plugin would refresh on every unrelated commit to the default branch while the
 distribution it invokes stayed put.
 
 The release checklist, in order (`prepare-release-0-3-0`): edit `__version__`
@@ -314,6 +430,9 @@ ref in the adopter corpus; then the hand edits no test names -- the SKILL.md
 `[Unreleased]` body moves verbatim under `## [X.Y.Z] — <date>`, the date being
 the day the tag is pushed) and the runbook in `docs/distribution-plan.md` §3.
 A future bump is one literal, one regeneration and one suite run.
+From the release after 0.3.0, that whole list -- including the
+runbook's post-tag ref flip -- lands as one release-prep pull request on
+`dev` and promotes as described under *Branching and promotion* above.
 
 ## Adding a new pure derived-output module
 

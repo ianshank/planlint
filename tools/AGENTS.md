@@ -8,12 +8,13 @@ added to catch. Three of these did exactly that until
 ```mermaid
 flowchart LR
     cfg["pyproject.toml<br/>fail_under, branch_fail_under<br/>tools_line/branch_fail_under"] --> gates
-    subgraph gates["tools/ — no third-party deps; the 7 gates are stdlib-only"]
+    subgraph gates["tools/ — no third-party deps; the 9 gates are stdlib-only"]
         direction TB
         cov["check_coverage_floor<br/>check_branch_coverage<br/>--scope sums one subtree"]
         sec["check_secrets<br/>gitleaks, else a real fallback"]
         thr["check_no_hardcoded_thresholds<br/>the G003 rule, on this repo"]
         gen["render_* — one writer each,<br/>--check mode is the gate"]
+        rel["check_promotion · smoke_wheel<br/>route, ci-ok, tag ancestry; wheel smoke"]
     end
     gates --> verdict["exit 0 / 1 / 2"]
 ```
@@ -30,7 +31,7 @@ Three things this directory gets wrong if you are not watching:
   fails the build over it, and a governance tool that pins its own numbers
   argues against its own rule.
 - **No third-party dependencies, ever.** Shared helpers go in
-  [`_common.py`](_common.py). The seven gate scripts are also **stdlib-only**
+  [`_common.py`](_common.py). The nine gate scripts are also **stdlib-only**
   and run in a bare CI runner before anything is installed; the generators
   and reports (`matcher_accuracy`, `render_mermaid`, `render_plugin_manifests`,
   `render_rule_catalog`, `stage_citations`, `spec_status`) import
@@ -42,16 +43,15 @@ what `main` expects. Program name first: the five hand-rolled `check_*`
 coverage/docs/thresholds/secrets scripts, plus `matcher_accuracy`,
 `stage_citations`, `dead_code`, `spec_status`, `diff_spec_graph` and
 `render_mermaid`, which strip it with `parse_args(argv[1:])`. Arguments only:
-`render_plugin_manifests`, `render_rule_catalog` and `check_wheel_metadata`
-(whose `main` defaults `argv` to `None`). `run_tool_main`'s `pass_argv0` picks.
+`render_plugin_manifests`, `render_rule_catalog`, `check_wheel_metadata`,
+`check_promotion` and `smoke_wheel` (the last three default `argv` to `None`). `run_tool_main`'s `pass_argv0` picks.
 
 Test behaviour in-process against `main(argv)` — a subprocess is invisible to
 coverage. The `python tools/<script>.py` path is covered once for the whole
 directory by `test_gate_script_is_runnable_as_a_script`; adding a script means
 adding one line to its parametrize list.
 
-Verify with `make pre-pr`, or the `planlint-verifier` subagent, which runs the
-whole ladder and reports per-gate remediation.
+Verify with `make pre-pr`, or the `planlint-verifier` subagent (whole ladder, per-gate remediation).
 
 Precedence: where this disagrees with the operating contract in
 [`SKILL.md`](../skills/planlint-spec-governance/SKILL.md), `SKILL.md` wins;

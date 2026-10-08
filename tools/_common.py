@@ -145,6 +145,58 @@ def read_json(path: Path) -> dict[str, Any]:
     return data
 
 
+def table_header(line: str) -> str | None:
+    """The ``[table]`` a pyproject line opens, comment stripped, or ``None``.
+
+    A header may carry a trailing comment (``[tool.x]  # why``); judging the
+    raw line by its last character would read that line as a key and keep the
+    scan inside the PREVIOUS table, so the next table's keys would leak into
+    it. Shared by every reader below so they cannot disagree about where a
+    table ends.
+
+    Known limits, each matching the shape this repository writes or failing
+    closed: a ``#`` inside a quoted table name is read as a comment; a spaced
+    ``[ a.b ]`` header is not matched (the table reads as absent); a
+    multi-line array element written as ``["x"]`` on its own line reads as a
+    header.
+    """
+    code = line.split("#", 1)[0].strip()
+    return code if code.startswith("[") and code.endswith("]") else None
+
+
+def table_lines(pyproject: Path, section: str) -> list[str]:
+    """The stripped, non-blank lines inside one ``pyproject.toml`` table.
+
+    ``[]`` when the file or the table is absent. The table ends at the next
+    header, however that header is commented.
+    """
+    if not pyproject.exists():
+        return []
+    in_section = False
+    found: list[str] = []
+    for line in pyproject.read_text(encoding="utf-8").splitlines():
+        header = table_header(line)
+        if header is not None:
+            in_section = header == section
+            continue
+        stripped = line.strip()
+        if in_section and stripped:
+            found.append(stripped)
+    return found
+
+
+def has_pyproject_key(pyproject: Path, section: str, key: str) -> bool:
+    """Whether ``key = ...`` is assigned in the table, whatever its value's shape.
+
+    Lets a caller tell "absent" from "present but not in the shape I read" --
+    the difference between a default and a misconfiguration.
+    """
+    # Bare, or quoted either way: a quoted key is the same TOML key, and this
+    # reader's callers must see it as present rather than silently default.
+    pattern = re.compile(rf"""(?:{re.escape(key)}|"{re.escape(key)}"|'{re.escape(key)}')\s*=""")
+    return any(pattern.match(line) for line in table_lines(pyproject, section))
+
+
 def read_pyproject_int(pyproject: Path, section: str, key: str) -> int | None:
     """Read one integer key out of one ``pyproject.toml`` table, stdlib only.
 
@@ -164,20 +216,33 @@ def read_pyproject_int(pyproject: Path, section: str, key: str) -> int | None:
     Returns ``None`` when the file, the table, or the key is absent. Callers
     treat that as a misconfiguration and fail loudly; it is never a skip.
     """
-    if not pyproject.exists():
-        return None
-    in_section = False
     pattern = re.compile(rf"{re.escape(key)}\s*=\s*(\d+)")
-    for line in pyproject.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]"):
-            in_section = stripped == section
-            continue
-        if not in_section:
-            continue
-        match = pattern.match(stripped)
+    for line in table_lines(pyproject, section):
+        match = pattern.match(line)
         if match:
             return int(match.group(1))
+    return None
+
+
+def read_pyproject_str(pyproject: Path, section: str, key: str) -> str | None:
+    """Read one double-quoted string key out of one ``pyproject.toml`` table.
+
+    The string sibling of :func:`read_pyproject_int`, on the same
+    table-tracking loop and for the same reason: these gate scripts run on the
+    3.10 leg, where ``tomllib`` does not exist. Accepts exactly the shape this
+    repository writes -- ``key = "value"`` on one line, an optional trailing
+    comment -- and nothing richer: no escapes, no single quotes, no multi-line
+    strings. A value outside that shape is not read, so the caller's "absent"
+    path names the key instead of a mangled value going through.
+
+    Returns ``None`` when the file, the table or the key is absent, or the value
+    is empty. Callers treat that as a misconfiguration and fail loudly.
+    """
+    pattern = re.compile(rf'{re.escape(key)}\s*=\s*"([^"\\]*)"\s*(?:#.*)?$')
+    for line in table_lines(pyproject, section):
+        match = pattern.match(line)
+        if match:
+            return match.group(1) or None
     return None
 
 
@@ -282,8 +347,9 @@ def coverage_sources(pyproject: Path) -> list[str]:
     array_text: str | None = None
     for line in pyproject.read_text(encoding="utf-8").splitlines():
         stripped = line.strip()
-        if stripped.startswith("[") and stripped.endswith("]") and array_text is None:
-            in_section = stripped == COVERAGE_RUN_SECTION
+        header = table_header(line)
+        if header is not None and array_text is None:
+            in_section = header == COVERAGE_RUN_SECTION
             continue
         if not in_section:
             continue

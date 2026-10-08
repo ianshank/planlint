@@ -545,3 +545,38 @@ def test_make_target_guard_sees_digit_bearing_targets() -> None:
     # a doubled space or a tab is a citation planlint reads and must not be one
     # this guard skips.
     assert _MAKE_TARGET_REF.findall("`make  e2e-lve` and `make\te2e-lve`") == ["e2e-lve", "e2e-lve"]
+
+
+#: The two hand-kept prose indexes of this repository's own agents and skills.
+_HARNESS_INDEXES = (
+    REPO_ROOT / "docs" / "hooks.md",
+    REPO_ROOT / "docs" / "agents-skills-harness.md",
+)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("index", _HARNESS_INDEXES, ids=lambda p: p.name)
+def test_harness_docs_list_every_agent_and_skill(index: Path) -> None:
+    """A new agent or skill is named where contributors look for them.
+
+    Both indexes are hand-kept prose, so a skill added without them is
+    invisible to the next contributor, and nothing else would notice --
+    adopt-branch-promotion-model added one and found the gap.
+    """
+    text = index.read_text(encoding="utf-8")
+    names = [p.stem for p in (REPO_ROOT / ".claude" / "agents").glob("*.md")]
+    names += [p.parent.name for p in (REPO_ROOT / ".claude" / "skills").glob("*/SKILL.md")]
+    assert names, "found no agents or skills; this guard would be vacuous"
+    missing = sorted(name for name in names if not re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", text))
+    assert not missing, f"{index.name} does not name: {missing}"
+
+
+@pytest.mark.integration
+def test_release_skill_uses_only_real_promotion_subcommands() -> None:
+    """The release skill drives check_promotion.py; every subcommand it cites must exist."""
+    skill = (REPO_ROOT / ".claude" / "skills" / "planlint-release" / "SKILL.md").read_text(encoding="utf-8")
+    cited = set(re.findall(r"check_promotion\.py (\w[\w-]*)", skill))
+    tool = (REPO_ROOT / "tools" / "check_promotion.py").read_text(encoding="utf-8")
+    real = set(re.findall(r'add_parser\(\s*"([\w-]+)"', tool))
+    assert cited, "the release skill cites no check_promotion.py subcommand"
+    assert cited <= real, f"the release skill cites unknown subcommands: {sorted(cited - real)}"

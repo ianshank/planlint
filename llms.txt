@@ -30,7 +30,7 @@ planlint evaluates plans; it does not author them. Read-only by default.
 - [Architecture](docs/architecture/c4.md): context, container, component, code
 - [Agents, skills, and the harness](docs/agents-skills-harness.md): why this is a deterministic harness
 - [Quality gates](docs/aqa.md): the gate ladder and how to reproduce it
-- [Hooks](docs/hooks.md): CI gates and how to add a rule
+- [Hooks](docs/hooks.md): CI gates, the dev -> qa -> main branch model (pull requests target dev), and how to add a rule
 
 ## Optional
 

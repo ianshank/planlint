@@ -44,6 +44,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      # A release tag belongs on a commit that reached the production branch
+      # through the promotion model (adopt-branch-promotion-model); one on any
+      # other commit would publish code that skipped the release-candidate
+      # tier. The branch is read from pyproject.toml, not named here. Tag runs
+      # only: a workflow_dispatch dry run on a branch builds and never
+      # publishes, so it has nothing to check.
+      #
+      # The tool and its configuration come from the production branch, not
+      # from the tagged commit: a tag's author controls the tagged tree, so a
+      # check read from it could be edited to pass. The repository's default
+      # branch is the authority the configured production branch must equal.
+      - name: Require the tagged commit to be on the production branch
+        if: github.ref_type == 'tag'
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git fetch --no-tags origin "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
+          git worktree add --detach "$RUNNER_TEMP/production" "origin/$DEFAULT_BRANCH"
+          python "$RUNNER_TEMP/production/tools/check_promotion.py" --pyproject "$RUNNER_TEMP/production/pyproject.toml" tag-ancestry --sha "$GITHUB_SHA" --fetch --expect-production "$DEFAULT_BRANCH"
+
       - name: Full enterprise gate
         run: make pre-pr
 
@@ -74,13 +94,13 @@ jobs:
       # The console script is the thing users get and the thing no other job
       # here touches. A fresh venv also proves the package really declares no
       # runtime dependencies: a missing one would surface as an ImportError.
+      # The same tool ci.yml's release-tier job runs before any tag exists, so
+      # this step repeats a check the candidate already passed.
       - name: Smoke-test the console script in a clean environment
-        run: |
-          python -m venv /tmp/smoke
-          /tmp/smoke/bin/pip install --quiet dist/*.whl
-          /tmp/smoke/bin/planlint --version
-          /tmp/smoke/bin/planlint --target . detect
-          /tmp/smoke/bin/planlint --target . validate --fail-on ERROR
+        run: >-
+          python tools/smoke_wheel.py dist --venv /tmp/smoke
+          --expect tests/fixtures/action/passing=0
+          --expect tests/fixtures/action/failing=1
 
       - name: Confirm the tag matches the packaged version
         run: |
@@ -104,9 +124,11 @@ jobs:
     timeout-minutes: 10
     environment: pypi
     # Trusted publishing: pypa/gh-action-pypi-publish mints the OIDC token
-    # through id-token: write. Nothing else in this job needs more than the
-    # top-level contents: read.
+    # through id-token: write. Nothing else in this job needs more than
+    # contents: read, restated here because a job-level block replaces the
+    # top-level one rather than adding to it.
     permissions:
+      contents: read
       id-token: write
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
