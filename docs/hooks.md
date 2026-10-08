@@ -349,9 +349,9 @@ feature/* --squash--> dev --merge commit--> qa --merge commit--> main --tag vX.Y
 - **The route is enforced in CI, not only by convention.** The `promotion` job
   fails a pull request into `qa` whose head is not `dev`, one into `main` whose
   head is neither `qa` nor `hotfix/*`, and any head from a fork into either.
-  Until `dev` and `qa` exist, `[tool.specgraph.promotion] enforce_routes` is
-  `"false"` and a refused route is printed as a `WARN` instead of failing; the
-  change that creates the two branches sets it to `"true"`.
+  `[tool.specgraph.promotion] enforce_routes` is `"true"`: `dev` and `qa`
+  exist (created from `main` at `e30289d`). While it was `"false"`, before
+  they existed, a refused route printed only a `WARN`.
   Known limit: retargeting an open pull request's base does not re-run CI (the
   `edited` event is not a trigger, because an all-skipped run would report a
   passing `ci-ok`); push a commit or re-run the workflow after retargeting.

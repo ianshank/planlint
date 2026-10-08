@@ -260,12 +260,12 @@ production_branch = "main"
 # A head branch under this prefix may promote straight to production (an
 # urgent fix); it is back-merged into the integration branch afterwards.
 hotfix_prefix = "hotfix/"
-# "false" until the integration and candidate branches exist on origin: until
-# then every pull request targets production from some other branch, and an
-# enforced route would fail every one of them. The route job still prints each
-# refusal as a WARN. Flipped to "true" in the same change that creates the
-# branches (adopt-branch-promotion-model, DEC-BPM-013); absent means "true".
-enforce_routes = "false"
+# Enforced: a refused route fails the promotion job (it was "false", WARN
+# only, until the integration and candidate branches existed; they were created
+# from main at e30289d on 2026-10-08). Flipped together with Dependabot's
+# target-branch -- test_route_enforcement_and_dependabot_flip_together holds the
+# two in step. Absent means "true" (adopt-branch-promotion-model, DEC-BPM-013).
+enforce_routes = "true"
 
 [project.optional-dependencies]
 # tomli backports stdlib tomllib (3.11+) for coverage.process_startup()'s

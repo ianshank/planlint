@@ -204,6 +204,10 @@ digits only.
   criterion below claims one before it is observed and recorded in
   `tasks.md`.
 - C-BPM-4: This change MUST NOT merge before `v0.3.0` is tagged on trunk.
+  As recorded in `tasks.md` Milestone 6, it merged first (`e30289d`,
+  2026-10-08); the consequence is that 0.3.0 ships through the promotion flow
+  rather than the trunk runbook, and nothing in this package's checks depends
+  on the order.
 
 ---
 

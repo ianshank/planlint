@@ -145,13 +145,22 @@ finding resolved or recorded:
 
 ## Milestone 6 — Owner actions, outside the tree (Phase 2)
 
-- [ ] Precondition: `v0.3.0` tagged on trunk and published under the 0.3.0
-  runbook; this change merged after it. Record both commits.
-- [ ] Create `dev` and `qa` from `main`'s tip; record the SHA. In the same
-  sitting, a pull request into `dev` setting `enforce_routes = "true"` and
-  adding `target-branch: "dev"` to each `.github/dependabot.yml` entry
-  (DEC-BPM-011, DEC-BPM-013), promoted to `qa` and `main` as the first
-  promotion.
+- [x] Precondition **not held, recorded rather than rewritten**: this change
+  merged into `main` as `e30289d` on 2026-10-08 with no `v0.3.0` tag on origin
+  (C-BPM-4). Nothing broke -- the tag-ancestry step runs `main`'s own tool, and
+  `e30289d` is on `main`'s first-parent chain -- but the trunk runbook in
+  `docs/distribution-plan.md` §3 no longer applies: 0.3.0 ships through the
+  promotion flow, its step-8 ref flips and CHANGELOG date in a release-prep
+  pull request into `dev` (the `planlint-release` skill).
+- [x] `dev` and `qa` created from `main` at `e30289d` on 2026-10-08, with the
+  GitHub branch API (the PreToolUse guard rightly refuses a direct
+  `git push` to `qa`); all three branches at one SHA.
+- [x] In the same sitting, a pull request into `dev` setting
+  `enforce_routes = "true"` and `target-branch: "dev"` on both
+  `.github/dependabot.yml` entries (DEC-BPM-011, DEC-BPM-013), held together
+  by `test_route_enforcement_and_dependabot_flip_together`.
+- [ ] That pull request promoted `dev` → `qa` → `main` by merge commits, as
+  the first promotion; record both runs.
 - [ ] Rulesets: `main` and `qa` — pull request required, `ci-ok` required,
   merge commits only, no force-push, no deletion; `dev` — pull request
   required, `ci-ok` required, squash **and** merge commits allowed (the
