@@ -162,7 +162,14 @@ finding resolved or recorded:
   `.github/dependabot.yml` entries (DEC-BPM-011, DEC-BPM-013), held together
   by `test_route_enforcement_and_dependabot_flip_together`.
 - [ ] That pull request promoted `dev` → `qa` → `main` by merge commits, as
-  the first promotion; record both runs.
+  the first promotion; record both runs. **Observed so far:** #47 merged into
+  `dev` as `e22cfc8` (squash) on 2026-10-08; the `dev` push run 37725910018
+  had `ci-ok` success, with `release-tier` and `graph-diff` skipped as a push
+  to the integration branch should. The `dev` → `qa` pull request is #49;
+  its first run, 37725971039 on `e22cfc8`, had `promotion` success,
+  `release-tier` success (its first run on a promotion: `make pre-pr`,
+  build, metadata, smoke with both fixture probes) and `ci-ok` success.
+  Still open: #49's merge commit, the `qa` → `main` run, and its merge.
 - [ ] Rulesets: `main` and `qa` — pull request required, `ci-ok` required,
   merge commits only, no force-push, no deletion; `dev` — pull request
   required, `ci-ok` required, squash **and** merge commits allowed (the
