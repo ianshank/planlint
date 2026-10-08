@@ -5,6 +5,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-08
+
+> `v0.3.0` is the first tag pushed under the `planlint` name and the first
+> release published to PyPI. `v0.2.0` was never tagged: the section below
+> records the version that existed in the tree from 2026-09-12 and was
+> installable from git by commit. Every entry under this heading sat under
+> Unreleased until the tag — milestones M0, M1 and M2 of the October 2026
+> reflection plan and the branch promotion model included, folded in by the
+> release-prep pull request — and the deprecation window stated under
+> `Deprecated` follows the rule in `docs/policies.md`.
+
 ### Added — the `dev → qa → main` branch promotion model
 
 - **`adopt-branch-promotion-model`.** Three long-lived branches: `dev`
@@ -255,16 +266,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   under the minimum green leg, never down: `fail_under` 90 → 97 and
   `branch_fail_under` 80 → 95 (minimum leg Windows 3.12: 2274/2292 and 743/762);
   `tools_line_fail_under` 90 → 94 and `tools_branch_fail_under` 80 → 91 (every leg equal: 944/979 and 323/344).
-
-## [0.3.0] — 2026-10-07
-
-> `v0.3.0` is the first tag pushed under the `planlint` name and the first
-> release published to PyPI. `v0.2.0` was never tagged: the section below
-> records the version that existed in the tree from 2026-09-12 and was
-> installable from git by commit. Every entry under this heading sat under
-> Unreleased until the tag — milestones M0 and M1 of the October 2026
-> reflection plan included — and the deprecation window stated under
-> `Deprecated` follows the rule in `docs/policies.md`.
 
 ### Changed — the CI workflows now hold themselves to their own gates (M0)
 
