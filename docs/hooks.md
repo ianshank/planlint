@@ -361,8 +361,8 @@ feature/* --squash--> dev --merge commit--> qa --merge commit--> main --tag vX.Y
   therefore diffs the whole release since the previous promotion, not one
   feature (an accepted widening of DEC-CH-001).
 - **A release is cut from a release-prep pull request on `dev`**: the version
-  bump, the changelog cut, and every own-action ref flip that the 0.3.0 runbook
-  called the post-tag commit. It then promotes `dev → qa → main` unchanged, so
+  bump, the changelog cut, and every own-action ref flip (before the model,
+  a commit on `main` after the tag). It then promotes `dev → qa → main` unchanged, so
   the `release-tier` job has already run the release workflow's gate and smoke
   test on the exact commit. Tag the `main` merge commit; the release workflow's
   `gate` refuses a tag on any commit that is not on `main`'s first-parent
@@ -430,9 +430,9 @@ ref in the adopter corpus; then the hand edits no test names -- the SKILL.md
 `[Unreleased]` body moves verbatim under `## [X.Y.Z] — <date>`, the date being
 the day the tag is pushed) and the runbook in `docs/distribution-plan.md` §3.
 A future bump is one literal, one regeneration and one suite run.
-From the release after 0.3.0, that whole list -- including the
-runbook's post-tag ref flip -- lands as one release-prep pull request on
-`dev` and promotes as described under *Branching and promotion* above.
+From 0.3.0 on, that whole list -- the runbook's ref flip included --
+lands as one release-prep pull request on `dev` and promotes as described
+under *Branching and promotion* above.
 
 ## Adding a new pure derived-output module
 

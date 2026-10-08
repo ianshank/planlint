@@ -18,8 +18,8 @@ interprets it, a CI release tier that runs exactly what the release workflow
 runs whenever a pull request targets `qa` or `main`, one aggregating status
 check that rulesets can require, and a tag-ancestry check in the release
 gate. Creating the branches, the rulesets and the environment rule are the
-owner's actions outside the tree, after this lands and after `v0.3.0` is
-tagged on trunk.
+owner's actions outside the tree, after this lands. 0.3.0 is the first
+release the model carries (DEC-BPM-020).
 
 **Evidence:** measured on `claude/branch-promotion-model`, 2026-10-07; a
 sibling package landing first may move a line without moving the fact.
@@ -125,10 +125,11 @@ sibling package landing first may move a line without moving the fact.
 - `docs/hooks.md`: CI table rows for `promotion`, `release-tier` and `ci-ok`,
   and a "Branching and promotion" section stating the model, the merge
   methods, the required check and the base-retarget limitation.
-- `docs/distribution-plan.md`: the §3 runbook stays the 0.3.0 trunk release
-  it was written for; a paragraph after it states that from the next release
-  the tag goes only on a `main` merge commit and the post-tag ref flip moves
-  into a release-prep pull request on `dev`.
+- `docs/distribution-plan.md`: the §3 runbook runs 0.3.0 through the
+  promotion model -- the ref flip moves out of a post-tag commit into the
+  release-prep pull request on `dev`, and the tag goes only on the `main`
+  merge commit (DEC-BPM-020; the runbook first stayed trunk-only under the
+  superseded DEC-BPM-010).
 - `[tool.specgraph.promotion] enforce_routes = "false"` for the bootstrap
   window: until `dev` and `qa` exist, `route` reports a refused route as a
   `WARN` rather than failing every pull request into `main`; Phase 2 sets it
@@ -143,7 +144,7 @@ sibling package landing first may move a line without moving the fact.
   `ci-ok`, merge methods, no force-push or deletion), the `v*` tag ruleset,
   and the `pypi` environment's deployment rule for `v*` tags are the owner's
   actions in repository settings. They are listed in `tasks.md` as Phase 2,
-  after this merges and after `v0.3.0` ships.
+  after this merges.
 - **No Dependabot `target-branch` yet.** Dependabot reads its configuration
   from the default branch, so `target-branch: dev` would take effect the
   moment this merges, before `dev` exists. It moves in Phase 2 with the
@@ -158,8 +159,9 @@ sibling package landing first may move a line without moving the fact.
 - **No `edited` trigger.** A pull request whose base is retargeted is not
   re-judged until its next push or re-run; documented, not fixed
   (DEC-BPM-008).
-- **No merge before `v0.3.0`.** The 0.3.0 release finishes on trunk under the
-  runbook it was written against (DEC-BPM-010).
+- **No post-tag commit, for 0.3.0 either.** The package first planned to
+  merge after a trunk `v0.3.0` (DEC-BPM-010); it merged before the tag, so
+  0.3.0 ships through the promotion model instead (DEC-BPM-020).
 
 ## Affected Capabilities
 

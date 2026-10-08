@@ -346,8 +346,11 @@ its bullets are filled in after the fact with what was observed.
 - Run §3 step (7). Record here: the `planlint --version` output from the
   fresh venv and the exit code of `validate --fail-on ERROR` against this
   repository — the plan's M1 exit criterion (AC-REL-21).
-- Run §3 step (8), commit, and confirm `make pre-pr` is green on the
-  post-tag commit. Record its SHA here (AC-REL-22, DEC-REL-007).
+- Run §3 step (8) as the release-prep pull request into `dev`, before the
+  tag (`adopt-branch-promotion-model` DEC-BPM-020), and confirm `make pre-pr`
+  is green on it. Record its SHA and the `main` merge commit's SHA here, in a
+  later pull request into `dev` -- nothing is committed to `main` after the
+  tag (AC-REL-22, DEC-REL-007).
 - Run §3 steps (9)–(10). Record the GitHub release URL and the Context7
   submission date here.
 - Check AC-REL-19, 20, 21 and 22 in `specs/release-readiness/spec.md` only

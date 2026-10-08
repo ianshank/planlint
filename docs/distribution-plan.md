@@ -12,8 +12,8 @@ already works from any git ref of this repository (checkout install). What
 does not exist is a **PyPI release**: no `v0.3.0` tag has been pushed, so
 `pip install planlint`, the skill preflight, and the Action `version:`
 index override still 404. That is the remaining critical path. Adopter
-templates pin a commit SHA until the tag exists; switch them to `@v0.3.0`
-in the same sitting as the publish. Everything else on this page is hygiene
+templates pin a commit SHA until the release-prep pull request switches them
+to `@v0.3.0`, just before the tag (§3 step 8). Everything else on this page is hygiene
 that should not delay §3.
 
 ---
@@ -91,12 +91,24 @@ Each row was checked against the checkout or the live index, not inferred.
 | A wrapper script is needed so agents can invoke the CLI | The project already declined a wrapper, for reasons that still hold |
 | Copies of the skill are needed under other agents' directories | The marketplace source form in use is the documented one, and the skill carries no repository-relative references |
 
-## 3. Phase 0 — the 0.3.0 release
+## 3. Phase 0 — the 0.3.0 release, through promotion
 
-Manual, outside the repository, in this order (`prepare-release-0-3-0`,
-R-REL-11). Steps (1) and (8) touch the tree; everything between them does
-not. The release commit is the merge of the M1 branch, or a follow-up on
-`main` that only sets the changelog date.
+0.3.0 is the first release the `dev → qa → main` model carries
+(`adopt-branch-promotion-model` DEC-BPM-020, which amends
+`prepare-release-0-3-0` R-REL-11's step 8). The step numbers below are the
+ones other documents cite; the order to run them in is:
+
+- **Release-prep pull request into `dev`** (squash): step (8)'s edits, plus
+  the changelog cut -- the `[Unreleased]` body folded into `[0.3.0]` and the
+  heading dated the day the tag will be pushed. Step (1) runs on its head.
+- **`dev → qa`**, a merge commit: `release-tier` re-runs the release
+  workflow's gate and wheel smoke on the exact bits.
+- **`qa → main`**, a merge commit. Call it M; M is the release commit.
+- **On M**: steps (2)–(7), then (9) and (10). Nothing is committed to `main`
+  after the tag; anything to record (M's SHA, run ids) goes in a later pull
+  request into `dev`.
+
+The `planlint-release` skill holds the same order for every later release.
 
 GitHub surface, before the tag:
 
@@ -110,12 +122,13 @@ GitHub surface, before the tag:
 
 Then the release sequence:
 
-1. **Pre-tag checks on the release commit.** `make pre-pr` exit 0; both
+1. **Pre-tag checks, on the release-prep head (and by `release-tier` on
+   M).** `make pre-pr` exit 0; both
    generators fresh (`python tools/render_plugin_manifests.py --check` and
    `python tools/render_rule_catalog.py --check` exit 0); `make e2e-live`
    exit 0; a local `python -m build` installed into a fresh venv whose
    `planlint --version` prints `planlint 0.3.0`. These are the §0 rows,
-   re-run on the commit that will carry the tag.
+   re-run on the bits that will carry the tag.
 2. **One-time registration.** Register a **pending trusted publisher** on
    PyPI: project `planlint`, owner `ianshank`, repository `planlint`,
    workflow `release.yml`, environment `pypi`. Create the GitHub environment
@@ -127,10 +140,13 @@ Then the release sequence:
    release commit. `gate` and `build` run; `publish` is
    `if: github.ref_type == 'tag'` and is skipped. Stop here if either job is
    red; do not push a tag until both are green.
-4. **Tag.** Tag the release commit `v0.3.0` and push the tag. The `[0.3.0]`
-   heading in `CHANGELOG.md` must read the day the tag is pushed; if the
-   sitting slipped past the date written there, amend it in the commit that
-   gets tagged.
+4. **Tag.** Tag M -- the `qa → main` merge commit, never a `dev` commit;
+   `gate` refuses any commit off `main`'s first-parent chain -- `v0.3.0`, and
+   push the tag by hand or with a personal or App token, never
+   `GITHUB_TOKEN`. The `[0.3.0]` heading in `CHANGELOG.md` must read the day
+   the tag is pushed; if the sitting slipped past the date set in the
+   release-prep pull request, fix the date there and promote again rather
+   than committing to `main`.
 5. **Watch.** `gate` runs the full ladder on the tag; `build` is the only
    place the installed console script is exercised from a wheel and fails
    if the tag and the packaged version disagree; `publish` mints the OIDC
@@ -146,14 +162,15 @@ Then the release sequence:
    `planlint --version` (expect `planlint 0.3.0`), and
    `planlint --target <this clone> validate --fail-on ERROR` (expect exit 0).
    This is the plan's M1 exit criterion.
-8. **The post-tag commit.** Flip every own-action ref to `@v0.3.0`
+8. **The ref flip -- in the release-prep pull request, before the tag.**
+   Flip every own-action ref to `@v0.3.0`
    (`templates/spec-gate.yml`, its byte copy under `skills/`, `README.md`
    ×2) and the `.pre-commit-hooks.yaml` example to `rev: v0.3.0`; delete the
    README's "Not on PyPI yet" note and replace its `git+` install line with
    `pip install planlint`; rewrite SKILL.md's "Wiring it into CI" sentence to
    "pin `@v0.3.0`"; name 0.3.0 in `SECURITY.md`'s supported-versions
-   paragraph; re-run the §0 rows on the merge commit and record its SHA
-   there. `make pre-pr` green on it. No test demands this step
+   paragraph. `make pre-pr` green on it. Record M's SHA against the §0 rows
+   in a later pull request into `dev`. No test demands this step
    (`test_ci_template_pins_the_floor_the_skill_enforces` accepts the SHA and
    the tag alike), so this list is the only trigger.
 9. **GitHub release**, created from the `[0.3.0]` changelog section.
@@ -168,22 +185,17 @@ repository with exit 0.
 PyPI still 404s, the release workflow is red. That is a half-product. Do
 steps (2)–(7) in one sitting.
 
-**Interim window.** Between the merge of the version bump and the tag, the
-README's `git+` install still points at the pre-bump commit and reports
-`planlint 0.2.0`, which the skill's `planlint-min-version` (0.3.0) refuses;
-the composite Action, installing from its own checkout, is unaffected. If the
-sitting will slip, the option is one follow-up commit on `main` that points
-the README's `git+` line at the merge SHA — a later commit can name the merge
-commit — and the tag then goes on that commit.
+**Interim window.** From the `qa → main` merge until the publish, `main`'s
+README names `pip install planlint` and `@v0.3.0` refs that do not resolve
+yet. That is minutes, inside one sitting -- so run steps (2)–(7) in the same
+sitting as the `qa → main` merge, and merge M only when the sitting can
+finish. (Before the release-prep pull request, the README's `git+` install
+gives 0.2.0-era code the skill's `planlint-min-version` refuses; the
+composite Action is unaffected.)
 
-**After 0.3.0 — the promotion model.** This runbook is the 0.3.0 release, run
-on trunk before `dev` and `qa` exist (`adopt-branch-promotion-model`). From
-the next release on, steps (1), (4)'s changelog date and (8) move into one
-release-prep pull request on `dev`, the release promotes `dev → qa → main` by
-merge commits, steps (3)–(7) run against the `main` merge commit, and nothing
-is committed to `main` after the tag. The release workflow's `gate` refuses a
-tag not reachable from `main`. The full procedure, the back-merge, hotfixes
-and rollback are in `docs/hooks.md` under *Branching and promotion*.
+**After 0.3.0.** Every later release follows the same order through the
+`planlint-release` skill; the back-merge (`sync/main-into-dev`), hotfixes and
+rollback are in `docs/hooks.md` under *Branching and promotion*.
 
 **First foreign CI adopter (after the tag, or on the SHA until then).** Copy
 `templates/spec-gate.yml` into `ianshank/Agents` at `fail-on: ERROR`. A live
@@ -194,7 +206,8 @@ gate on `Mouse-Droid-AGI` (45 ERROR; unstable default branch) or
 follow-up in Agents, not here: eval-corpus-plan D6 — `planlint validate
 --fail-on ERROR` as the objective grader for `openspec-quality-plan` /
 `openspec-peer-review`, paired with `detect` so exit 2 is not conflated
-with fail. The template's own-action ref is `@v0.3.0` once step (8) lands.
+with fail. The template's own-action ref is `@v0.3.0` once the release-prep
+pull request (step 8) lands.
 
 ---
 
