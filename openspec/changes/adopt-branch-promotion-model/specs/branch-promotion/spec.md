@@ -26,7 +26,8 @@ release workflow's own checks on every pull request into `qa` or `main` and
 every push to them; adds one aggregating check, `ci-ok`, as the single
 required status; and refuses, in the release gate, a tag whose commit is not
 on production. The branches, rulesets and environment rule are the owner's,
-outside the tree, after this lands and after `v0.3.0` is tagged on trunk.
+outside the tree, after this lands; 0.3.0 is the first release the model
+carries (DEC-BPM-020).
 
 **Evidence:** `ci.yml`'s `on.push.branches` is `[main, master]` and no
 `master` branch exists on `origin`. `release.yml` triggers on
@@ -203,7 +204,11 @@ digits only.
   Dependabot's `target-branch` are the owner's, outside the tree, and no
   criterion below claims one before it is observed and recorded in
   `tasks.md`.
-- C-BPM-4: This change MUST NOT merge before `v0.3.0` is tagged on trunk.
+- C-BPM-4: `v0.3.0` MUST be tagged on a production merge commit reached by
+  `dev` → `qa` → `main`, and its own-action ref flip MUST land before the tag,
+  in the release-prep pull request into `dev`; nothing is committed to `main`
+  after the tag. (This replaces the original "no merge before `v0.3.0` on
+  trunk", which did not hold -- DEC-BPM-020.)
 
 ---
 
@@ -286,7 +291,8 @@ digits only.
   is always a release. The cost is that a new pull request offers `main` as
   its base; the template checkbox, the `route` refusal and, from Phase 2,
   the `main` ruleset each catch a feature pull request aimed there.
-- **DEC-BPM-010:** this change merges only after `v0.3.0` is tagged on
+- **DEC-BPM-010** (**superseded by DEC-BPM-020**; kept as the record of
+  the original reasoning)**:** this change merges only after `v0.3.0` is tagged on
   trunk. The 0.3.0 runbook in `docs/distribution-plan.md` was written for
   trunk and ends with a post-tag commit on `main`; this change rewrites that
   step. Landing mid-release would leave the release half under one runbook
@@ -331,7 +337,8 @@ digits only.
   commit that no release tier ever ran on -- meeting the old R-BPM-7's
   letter while defeating DEC-BPM-001. The production branch's first-parent
   chain is exactly its own tips: each promotion merge, and every trunk commit
-  from before the model, so the planned `v0.3.0` commit still passes.
+  from before the model, so a pre-model trunk tag such as `v0.1.0` still
+  passes.
 - **DEC-BPM-015:** a switch the reader cannot read is a configuration error,
   not an absence (review LOW-1). `enforce_routes = false` is valid TOML that
   the 3.10-safe string reader does not read; taken as absent it would enforce,
@@ -369,6 +376,30 @@ digits only.
   their tests; a `planlint-release` skill holds the release order; the
   `planlint-verifier` agent reproduces the CI-only gates; and a test holds every
   agent and skill named in both harness indexes.
+- **DEC-BPM-020:** 0.3.0 is the model's first release; it supersedes
+  DEC-BPM-010. This change merged into `main` as `e30289d` on 2026-10-08
+  with no `v0.3.0` tag on origin, so the ordering DEC-BPM-010 adopted did not
+  hold. Nothing broke: `e30289d` is on `main`'s first-parent chain, and the
+  release gate runs `main`'s own `check_promotion.py`. What changed is the
+  runbook: the 0.3.0 own-action ref flip, the README's PyPI line, SKILL.md's
+  and `SECURITY.md`'s version prose, and the changelog cut (the
+  `[Unreleased]` body folded into `[0.3.0]`, dated the day of the tag) land
+  as one release-prep pull request into `dev`, promote `dev` → `qa` → `main`
+  by merge commits, and the tag goes on the `main` merge commit --
+  R-BPM-14's rule, now with no 0.3.0 exception. This amends
+  `prepare-release-0-3-0` R-REL-9, R-REL-11, DEC-REL-007 and AC-REL-22 from
+  "one post-tag commit" to "one commit in the release-prep pull request";
+  their other properties (one commit, byte-identical templates, the note
+  deleted) are unchanged, and no test pins the timing --
+  `test_ci_template_pins_the_floor_the_skill_enforces` and
+  `test_every_copyable_tag_ref_names_the_current_version` accept a SHA or
+  `@v0.3.0` alike. The cost: from the `qa` → `main` merge until the publish
+  -- minutes, one sitting -- `main`'s README names a PyPI install and a tag
+  that do not resolve yet; DEC-REL-007's days-long `git+` window is gone.
+  Rejected: (a) reverting this change to release on trunk -- churn, and it
+  removes the release tier the first release should run through; (b)
+  tagging `e30289d` on trunk now -- it skips that tier, the thing this
+  package exists for, and still needs a post-tag commit on `main`.
 
 ---
 
@@ -531,14 +562,14 @@ digits only.
   run is `WARN` on `promotion` and green on `ci-ok`, per DEC-BPM-013. (R-BPM-11, DEC-BPM-003)
   _Verified by:_ stage: `make pre-pr`
 
-- [ ] **AC-BPM-27 (observed after Phase 2):** `v0.3.0` is tagged on trunk
-  before this merges; `dev` and `qa` exist, created from `main`; rulesets on
-  `main`, `qa` and `dev` require `ci-ok` and forbid force-push and deletion,
-  with `main` and `qa` accepting merge commits and `dev` squash and merge
-  commits; `enforce_routes` is `"true"`; a `v*` tag
-  ruleset exists; the `pypi` environment admits `v*` tags only; and
-  Dependabot targets `dev`. Each is recorded in `tasks.md` with its date.
-  (C-BPM-3, C-BPM-4, DEC-BPM-010, DEC-BPM-011)
+- [ ] **AC-BPM-27 (observed after Phase 2):** `dev` and `qa` exist, created
+  from `main`; rulesets on `main`, `qa` and `dev` require `ci-ok` and forbid
+  force-push and deletion, with `main` and `qa` accepting merge commits and
+  `dev` squash and merge commits; `enforce_routes` is `"true"`; a `v*` tag
+  ruleset exists; the `pypi` environment admits `v*` tags only; Dependabot
+  targets `dev`; and `v0.3.0` is tagged on the `main` merge commit of its
+  promotion, with no commit on `main` after it. Each is recorded in
+  `tasks.md` with its date. (C-BPM-3, C-BPM-4, DEC-BPM-011, DEC-BPM-020)
   _Verified by:_ stage: `make pre-pr`
 
 - [ ] **AC-BPM-28 (observed after Phase 2, non-success):** a feature pull

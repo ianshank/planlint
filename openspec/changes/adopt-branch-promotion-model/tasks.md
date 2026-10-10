@@ -1,8 +1,8 @@
 # Tasks: adopt-branch-promotion-model
 
 Implemented on `claude/branch-promotion-model`, 2026-10-07. Milestones 1–5
-land in one pull request, which merges only after `v0.3.0` is tagged on trunk
-(C-BPM-4, DEC-BPM-010). Milestone 6 is the owner's, outside the tree; its
+land in one pull request (#45, merged as `e30289d`); 0.3.0 is the first
+release through the model (C-BPM-4, DEC-BPM-020). Milestone 6 is the owner's, outside the tree; its
 bullets are filled in after the fact with what was observed.
 
 ## Milestone 1 — Topology and the config reader — done
@@ -70,7 +70,8 @@ bullets are filled in after the fact with what was observed.
   promotion" section (R-BPM-13); the release checklist points at it.
 - [x] `docs/distribution-plan.md`: the §3 runbook stays the 0.3.0 trunk
   release; a paragraph states what changes from the next release on
-  (R-BPM-14).
+  (R-BPM-14). Superseded in Phase 2: §3 now runs 0.3.0 through promotion,
+  its ref flip in the release-prep pull request (DEC-BPM-020).
 - [x] `.github/pull_request_template.md`: a Branch section with the base and
   merge-method checkboxes.
 - [x] `CHANGELOG.md` `[Unreleased]`: an `Added` entry.
@@ -145,13 +146,30 @@ finding resolved or recorded:
 
 ## Milestone 6 — Owner actions, outside the tree (Phase 2)
 
-- [ ] Precondition: `v0.3.0` tagged on trunk and published under the 0.3.0
-  runbook; this change merged after it. Record both commits.
-- [ ] Create `dev` and `qa` from `main`'s tip; record the SHA. In the same
-  sitting, a pull request into `dev` setting `enforce_routes = "true"` and
-  adding `target-branch: "dev"` to each `.github/dependabot.yml` entry
-  (DEC-BPM-011, DEC-BPM-013), promoted to `qa` and `main` as the first
-  promotion.
+- [x] The original precondition (merge after a trunk `v0.3.0`, DEC-BPM-010)
+  did not hold: this change merged into `main` as `e30289d` on 2026-10-08
+  with no tag on origin. DEC-BPM-020 supersedes it and C-BPM-4 now states
+  the rule in force: 0.3.0 ships through promotion, its ref flip and
+  changelog cut in a release-prep pull request into `dev`, the tag on the
+  `main` merge commit. `docs/distribution-plan.md` §3 and
+  `prepare-release-0-3-0` (R-REL-9, R-REL-11, DEC-REL-007, AC-REL-22) are
+  amended to match.
+- [x] `dev` and `qa` created from `main` at `e30289d` on 2026-10-08, with the
+  GitHub branch API (the PreToolUse guard rightly refuses a direct
+  `git push` to `qa`); all three branches at one SHA.
+- [x] In the same sitting, a pull request into `dev` setting
+  `enforce_routes = "true"` and `target-branch: "dev"` on both
+  `.github/dependabot.yml` entries (DEC-BPM-011, DEC-BPM-013), held together
+  by `test_route_enforcement_and_dependabot_flip_together`.
+- [ ] That pull request promoted `dev` → `qa` → `main` by merge commits, as
+  the first promotion; record both runs. **Observed so far:** #47 merged into
+  `dev` as `e22cfc8` (squash) on 2026-10-08; the `dev` push run 37725910018
+  had `ci-ok` success, with `release-tier` and `graph-diff` skipped as a push
+  to the integration branch should. The `dev` → `qa` pull request is #49;
+  its first run, 37725971039 on `e22cfc8`, had `promotion` success,
+  `release-tier` success (its first run on a promotion: `make pre-pr`,
+  build, metadata, smoke with both fixture probes) and `ci-ok` success.
+  Still open: #49's merge commit, the `qa` → `main` run, and its merge.
 - [ ] Rulesets: `main` and `qa` — pull request required, `ci-ok` required,
   merge commits only, no force-push, no deletion; `dev` — pull request
   required, `ci-ok` required, squash **and** merge commits allowed (the
