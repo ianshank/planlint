@@ -169,7 +169,17 @@ finding resolved or recorded:
   its first run, 37725971039 on `e22cfc8`, had `promotion` success,
   `release-tier` success (its first run on a promotion: `make pre-pr`,
   build, metadata, smoke with both fixture probes) and `ci-ok` success.
-  Still open: #49's merge commit, the `qa` → `main` run, and its merge.
+  #49 then merged on 2026-10-08 -- as a **squash** (`73ca407`, one parent),
+  not the merge commit DEC-BPM-002 requires, and before its own run on the
+  release-prep head had finished; the `qa` push run 37727242418 had
+  `release-tier` success on that tree. Merging it also **deleted `dev`**: the
+  repository's *Automatically delete head branches* setting removes a merged
+  pull request's head, and no ruleset restricted deletion yet. `dev` was
+  recreated at its exact former tip `d519c03` with the GitHub branch API. The
+  repair is a second `dev` → `qa` pull request merged by merge commit, which
+  makes `dev` an ancestor of `qa` with no tree change, before `qa` → `main`
+  (#50) merges; the setting goes off, or the rulesets land, first.
+  Still open: that repair merge, the `qa` → `main` run, and its merge.
 - [ ] Rulesets: `main` and `qa` — pull request required, `ci-ok` required,
   merge commits only, no force-push, no deletion; `dev` — pull request
   required, `ci-ok` required, squash **and** merge commits allowed (the
