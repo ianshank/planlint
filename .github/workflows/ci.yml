@@ -73,7 +73,7 @@ jobs:
       # with no report (died before `make test`, or pytest ended at collection)
       # contributes nothing under the action's `if-no-files-found` default of
       # `warn`.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: coverage-${{ runner.os }}-${{ matrix.python-version }}
@@ -121,7 +121,7 @@ jobs:
       # with no report (died before `make test`, or pytest ended at collection)
       # contributes nothing under the action's `if-no-files-found` default of
       # `warn`.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: coverage-${{ runner.os }}-${{ env.PYTHON_DEFAULT }}
@@ -182,7 +182,7 @@ jobs:
         if: always()
         run: planlint --target . validate --fail-on WARN --json > spec-findings.json || true
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: spec-artifacts
@@ -256,7 +256,7 @@ jobs:
       - name: Diff graphs (fail on new broken edges or orphans)
         run: python tools/diff_spec_graph.py base.json head.json
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: spec-graph-diff
