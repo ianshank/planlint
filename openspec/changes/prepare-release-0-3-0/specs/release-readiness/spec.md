@@ -603,10 +603,12 @@ another package's verification line.
   DEC-REL-004)
   _Verified by:_ `pytest -k test_a_stale_tag_ref_is_named_with_file_and_line` · stage: `make test`
 
-- [x] **AC-REL-9:** before the tag exists, `templates/spec-gate.yml` pins
-  the own action to a 40-hex SHA and names `@v0.3.0` as the ref to switch
-  to; after the tag exists it pins `@v0.3.0`; in both states the copy under
-  `skills/` is byte-identical to the template. (R-REL-9, DEC-REL-007)
+- [x] **AC-REL-9:** before the release-prep pull request,
+  `templates/spec-gate.yml` pins the own action to a 40-hex SHA and names
+  `@v0.3.0` as the ref to switch to; from the release-prep pull request on
+  -- before the tag as well as after it -- it pins `@v0.3.0`; in both states
+  the copy under `skills/` is byte-identical to the template. (R-REL-9,
+  DEC-REL-007)
   _Verified by:_ `pytest -k "test_ci_template_pins_the_floor_the_skill_enforces or test_skill_asset_matches_template"` · stage: `make test`
 
 - [x] **AC-REL-10:** `release.yml` still chains `gate` → `build` → `publish`,
