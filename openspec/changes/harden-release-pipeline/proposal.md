@@ -339,13 +339,16 @@ first may move a line without moving the fact.
       vulnerability" path;
     - `docs/next-steps.md`, where that package edits the rows beside `:231`;
     - `tests/test_release_surface.py`'s Docker-context tuple.
-  - With `prepare-release-0-4-0`:
-    - `.github/dependabot.yml`'s header and `docker` entry beside this
-      package's `github-actions` edit;
-    - `tests/test_release_surface.py` and `tests/test_workflow_pins.py`, where
-      that package deletes the Docker tests;
-    - `docs/hooks.md`'s CI table, where that package edits other rows;
-    - `docs/next-steps.md`'s Docker item.
+  - With `prepare-release-0-4-0`, which deprecates the Dockerfile in 0.4.0
+    and leaves its deletion to a 0.5.0 package, so the `docker` Dependabot
+    entry and the Docker tests stay untouched by both packages:
+    - `pyproject.toml`, where that package edits `requires-python`, the
+      classifiers and `[tool.mypy]` beside this package's
+      `action_major_floors` row;
+    - `docs/hooks.md`'s CI table, where that package edits the `test` row;
+    - `docs/next-steps.md`, where that package edits items 7a and 9;
+    - `SECURITY.md`, where that package's release-prep pull request rewords
+      the "Supported versions" clause, which this package does not touch.
   - Every package adds to `CHANGELOG.md` `[Unreleased]`.
 
 ## Non-Goals

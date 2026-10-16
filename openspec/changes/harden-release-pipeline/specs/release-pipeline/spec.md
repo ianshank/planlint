@@ -847,7 +847,8 @@ none is repeated here (C-HRP-4).
   _Verified by:_ stage: `make pre-pr`
 
 - [ ] **AC-HRP-20:** `SECURITY.md` carries each part R-HRP-16 lists, says SLSA
-  Build L2 and nowhere L3, names versions only through placeholders, and is
+  Build L2 and nowhere L3, names versions in its commands only through
+  placeholders, and is
   still present and linked from the README. Every root markdown file is still
   wired into the docs gate, and every copyable tag still names the current
   version. The prose is read directly. (R-HRP-16, DEC-HRP-003, DEC-HRP-016)

@@ -146,10 +146,10 @@ it.
   has not landed: stop, because Milestone 2's precondition is not met
   (DEC-HRP-017).
 - Read `prepare-release-0-4-0`'s state on `dev` and record which of the shared
-  edit sites `proposal.md` lists it has already changed:
-  `.github/dependabot.yml`'s header and `docker` entry, the Docker tests in
-  `tests/test_release_surface.py` and `tests/test_workflow_pins.py`, and the
-  `docs/hooks.md` rows.
+  edit sites `proposal.md` lists it has already changed: `pyproject.toml`'s
+  `requires-python`, classifiers and `[tool.mypy]`, the `docs/hooks.md`
+  `test` row, `docs/next-steps.md` items 7a and 9, and `SECURITY.md`'s
+  "Supported versions" clause.
 - **Gate:** `make test`
 
 ## Milestone 1 — The change package
@@ -634,8 +634,10 @@ it.
     `gh attestation verify <file> --repo ianshank/planlint --signer-workflow ianshank/planlint/.github/workflows/release.yml --source-ref refs/tags/v<version>`.
     Then one sentence: the build provenance meets SLSA Build L2.
 
-  No L3 anywhere. Every version is a placeholder, and no line reads
-  `ianshank/planlint…@v<digits>` (the adopter corpus's `_TAG_REF`). The
+  No L3 anywhere. Every version in these commands is a placeholder, and no
+  line reads `ianshank/planlint…@v<digits>` (the adopter corpus's
+  `_TAG_REF`). The "Supported versions" section keeps its literal version:
+  it is release-prep's to edit, not this package's (R-HRP-16). The
   existing `planlint --version` and `rules --json` block stays.
 - `docs/hooks.md` (R-HRP-17, DEC-HRP-017):
   - **The `release` row**, after `make pre-pr` and the clean-venv smoke test,
