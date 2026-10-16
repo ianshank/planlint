@@ -642,10 +642,13 @@ none is repeated here (C-HRP-4).
     `release` job is the 0.4.0 tag, recorded by that release.
 - **DEC-HRP-025:** sequencing. This change edits the workflow `v0.3.0`'s tag
   runs. Merged into `dev` before that tag, it would be promoted with 0.3.0
-  and run unrehearsed on the first public release. It merges after `v0.3.0`
-  is tagged and published, and after `lean-production-tree` (DEC-HRP-017),
-  and it ships in 0.4.0. No criterion can observe a remote tag, so the
-  ordering is held by `tasks.md` Milestone 2's gate. The pull request stays a
+  and run unrehearsed on the first public release. So the package and its
+  implementation land apart. The package lands first and alone, in #59; it
+  edits no workflow, as #58 did for `lean-production-tree`. The
+  implementation merges after `v0.3.0` is tagged and published, and after
+  `lean-production-tree`'s implementation (DEC-HRP-017), and it ships in
+  0.4.0. No criterion can observe a remote tag, so the ordering is held by
+  `tasks.md` Milestone 2's gate. The implementation pull request stays a
   GitHub draft until that gate is recorded, so it cannot merge early by
   accident. It is squash-merged into `dev`.
 - **DEC-HRP-026 (added at the first review):** the notes' boundary is the
@@ -909,7 +912,7 @@ spec.
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Preconditions | none — recorded on `tasks.md` Milestone 2's gate | `v0.3.0` tagged, published and an ancestor of `origin/dev`; `lean-production-tree` merged into `dev`; the `actions/attest` pin re-confirmed with its `runs:` block; the pull request a draft until all of it is recorded (DEC-HRP-025) |
+| Preconditions | none — recorded on `tasks.md` Milestone 2's gate | `v0.3.0` tagged, published and an ancestor of `origin/dev`; `lean-production-tree`'s implementation merged into `dev`; the `actions/attest` pin re-confirmed with its `runs:` block; the implementation pull request a draft until all of it is recorded (DEC-HRP-025) |
 | Focused | `make test` | AC-HRP-1..16, AC-HRP-18, AC-HRP-22..24 — every new guard green on the real tree and red on its planted counter-example; every guard this change leans on still green unedited |
 | Full | `make pre-pr` | AC-HRP-17, AC-HRP-19..21, AC-HRP-25, AC-HRP-26 — lint and strict typecheck of the new script, the docs gate, the thresholds guard, the `tools/` coverage floors, and this repository's own validate over every package |
 | Hosted | none — recorded in `tasks.md` | the dry run of the implementation branch before the pull request leaves draft, and of `dev` after the merge (`gate`, `build` green; `publish`, `release` skipped); the owner's gate rehearsal after the merge (`tag-ancestry` exit 1, the fetch succeeded, nothing built); the 0.4.0 tag's first run of the attest step and the `release` job, recorded by that release (DEC-HRP-024) |

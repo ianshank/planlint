@@ -9,10 +9,13 @@ adversarial review, read at `f96b7d1` (Milestone 1). That plan is not tracked
 (`lean-production-tree` DEC-LPT-005). Every decision this package takes from
 it is restated in `specs/release-pipeline/spec.md`.
 
-**This package must not merge into `dev` before `v0.3.0` is tagged and
-published, nor before `lean-production-tree` has merged** (Milestone 2,
-DEC-HRP-025). Its pull request stays a GitHub draft through Milestone 2. It is
-marked ready for review only after Milestone 6's dry run is recorded here.
+**This package's implementation must not merge into `dev` before `v0.3.0`
+is tagged and published, nor before `lean-production-tree`'s implementation
+has merged** (Milestone 2, DEC-HRP-025). #59 carries this package alone into
+`dev`, editing no workflow, as #58 did for `lean-production-tree` (squash
+`9f5c693`, 2026-10-16). The implementation is a new pull request from `dev`.
+It opens as a GitHub draft, stays one through Milestone 2, and is marked
+ready for review only after Milestone 6's dry run is recorded here.
 
 Every line number below is re-read at the implementation branch's head
 before the milestone that uses it, because a sibling landing first may move a
@@ -268,9 +271,13 @@ it.
 
 ## Milestone 2 — Preconditions, recorded before any edit outside this package (owner)
 
-- The pull request stays a GitHub draft through this milestone. No criterion
-  observes a tag, a release or a merge on `dev`, so the draft state is what
-  keeps the change from merging early (DEC-HRP-025).
+- The implementation pull request stays a GitHub draft through this
+  milestone. No criterion observes a tag, a release or a merge on `dev`, so
+  the draft state is what keeps the change from merging early (DEC-HRP-025).
+  - 2026-10-16: #59 was marked ready for review. The same day #58 merged
+    `lean-production-tree` package-first, and the owner chose the same for
+    this package: #59 carries the package alone, and the hold moves to the
+    implementation pull request.
 - `v0.3.0` is tagged, published and back-merged:
   - `git ls-remote --tags origin v0.3.0` prints the tag and its peeled line;
   - `curl -s -o /dev/null -w '%{http_code}\n' https://pypi.org/pypi/planlint/0.3.0/json`
@@ -281,7 +288,8 @@ it.
   Record all three with their output and the date. Also record that 0.3.0's
   GitHub release was created by hand, as its own runbook said. That is the
   last release this package's `release` job does not create.
-- `lean-production-tree` has merged into `dev`. Record its merge commit, and
+- `lean-production-tree`'s implementation has merged into `dev`, not only
+  its package (#58, `9f5c693`). Record the implementation's squash commit, and
   `git show origin/dev:docs/hooks.md` showing the "Releasing" runbook step
   this package amends. `git cat-file -e origin/dev:docs/distribution-plan.md`
   must fail.
