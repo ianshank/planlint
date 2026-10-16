@@ -171,9 +171,14 @@ first may move a line without moving the fact.
   With `commenters = ""` the same line yields the `;` and the `make`.
   Copilot's review of #59 then showed that the repaired reader still passes
   scripts bash runs differently: a quoted `"#notes"` before `; printf x`,
-  and a quoted or backtick command substitution. So the guard parses no
-  shell. It compares each script, normalised, with the two fixed scripts
-  the job runs (DEC-HRP-007).
+  and a quoted or backtick command substitution. A second adversarial
+  review then showed that comparing the scripts still left the job open, to
+  a flow-mapping step, a step `env:` such as `BASH_ENV`, a `container:` and
+  a blank line in a folded scalar. A third showed that pinning the job's
+  block still trusted a line scanner to find where the job ends: a column-0
+  comment ended it early. So the guard pins the whole file against a golden
+  copy, and holds the write scope by a list of the lines that may say
+  `write` (DEC-HRP-007).
 - **What the release tests pin, and do not.**
   `tests/test_release_surface.py::test_release_workflow_is_gated_and_uses_trusted_publishing`
   (`:30-77`) asserts the `gate → build → publish` wiring, `make pre-pr`, the
@@ -298,9 +303,13 @@ first may move a line without moving the fact.
   section, built on pure readers of the workflow text, each MUST shown red on
   a planted workflow. They cover the checkouts, the publish job's attestation
   inputs, the notes steps, and the `release` job's wiring, permissions,
-  commands and verification flags. The commands are read as the shell runs
-  them: continuations joined, one line at a time, a comment only at a word
-  that begins with `#`. They also cover the single `contents: write`. The
+  commands and verification flags. `release.yml` itself is pinned whole
+  against a golden copy, `tests/fixtures/release-workflow.golden`, with
+  only trailing whitespace, action pins and the `PYTHON_DEFAULT` value let
+  vary, so no shell or YAML is parsed. Across workflows, every
+  non-comment line containing `write`, with escaped line breaks joined and
+  every line break Python knows split, must be on a named list, which holds
+  the single `contents: write` however it is spelled. The
   existing tests keep their names and bodies.
   **`tests/test_workflow_pins.py`**: one test beside the Dependabot readers
   that the `github-actions` entry declares a cooldown.
