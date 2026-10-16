@@ -161,8 +161,9 @@ finding resolved or recorded:
   `enforce_routes = "true"` and `target-branch: "dev"` on both
   `.github/dependabot.yml` entries (DEC-BPM-011, DEC-BPM-013), held together
   by `test_route_enforcement_and_dependabot_flip_together`.
-- [ ] That pull request promoted `dev` → `qa` → `main` by merge commits, as
-  the first promotion; record both runs. **Observed so far:** #47 merged into
+- [x] That pull request promoted `dev` → `qa` → `main` -- not cleanly by
+  merge commits as planned, but repaired to the shape DEC-BPM-002 requires
+  (record below); record both runs. **Observed so far:** #47 merged into
   `dev` as `e22cfc8` (squash) on 2026-10-08; the `dev` push run 37725910018
   had `ci-ok` success, with `release-tier` and `graph-diff` skipped as a push
   to the integration branch should. The `dev` → `qa` pull request is #49;
@@ -179,7 +180,25 @@ finding resolved or recorded:
   repair is a second `dev` → `qa` pull request merged by merge commit, which
   makes `dev` an ancestor of `qa` with no tree change, before `qa` → `main`
   (#50) merges; the setting goes off, or the rulesets land, first.
-  Still open: that repair merge, the `qa` → `main` run, and its merge.
+  **Outcome (2026-10-08 to 2026-10-12):**
+  - `qa` → `main` (#50) merged on 2026-10-10, also as a **squash** --
+    `5bb45e9`, one parent `e30289d` -- before the repair; its tree equals
+    `qa`'s `73ca407`. The `main` push run 38069346152 had `release-tier` and
+    `ci-ok` success, so `5bb45e9` is the 0.3.0 release commit: the tip of
+    `main`'s first-parent chain, the commit the `v0.3.0` tag goes on.
+  - The `dev` → `qa` repair conflicted in this file (#49's squash and #51
+    both edited it), so `qa` was first back-merged into `dev` (#53, merge
+    commit `491a259`, `dev`'s side kept, tree unchanged); the repair #52 then
+    merged by merge commit as `b9a4e3e` (parents `73ca407`, `491a259`), its
+    run 38069281198 green with `release-tier`.
+  - The `main` → `dev` back-merge was squashed twice (#55 `8b02179`, #56
+    `3688feb`: tree no-ops that left `5bb45e9` outside `dev`'s history) and
+    landed as a merge commit in #57 (`c0ff090`, via `786c019` with parents
+    `3688feb` and `5bb45e9`).
+  - Net: `dev` contains `qa` and `main`; `dev` → `qa` merges cleanly. Every
+    squash above was a promotion or back-merge merged through the default
+    "Squash and merge" button -- the ruleset below (merge commits only on
+    `qa` and `main`) is what stops a recurrence. `v0.3.0` is not tagged yet.
 - [ ] Rulesets: `main` and `qa` — pull request required, `ci-ok` required,
   merge commits only, no force-push, no deletion; `dev` — pull request
   required, `ci-ok` required, squash **and** merge commits allowed (the
