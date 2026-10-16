@@ -171,9 +171,11 @@ first may move a line without moving the fact.
   With `commenters = ""` the same line yields the `;` and the `make`.
   Copilot's review of #59 then showed that the repaired reader still passes
   scripts bash runs differently: a quoted `"#notes"` before `; printf x`,
-  and a quoted or backtick command substitution. So the guard parses no
-  shell. It compares each script, normalised, with the two fixed scripts
-  the job runs (DEC-HRP-007).
+  and a quoted or backtick command substitution. A second adversarial
+  review then showed that comparing the scripts still left the job open, to
+  a flow-mapping step, a step `env:` such as `BASH_ENV`, a `container:` and
+  a blank line in a folded scalar. So the guard pins the `release` job's
+  whole text (DEC-HRP-007).
 - **What the release tests pin, and do not.**
   `tests/test_release_surface.py::test_release_workflow_is_gated_and_uses_trusted_publishing`
   (`:30-77`) asserts the `gate → build → publish` wiring, `make pre-pr`, the
@@ -298,9 +300,11 @@ first may move a line without moving the fact.
   section, built on pure readers of the workflow text, each MUST shown red on
   a planted workflow. They cover the checkouts, the publish job's attestation
   inputs, the notes steps, and the `release` job's wiring, permissions,
-  commands and verification flags. The commands are read as the shell runs
-  them: continuations joined, one line at a time, a comment only at a word
-  that begins with `#`. They also cover the single `contents: write`. The
+  commands and verification flags. The `release` job is pinned whole: its
+  block, with trailing whitespace stripped and action pins let vary, must
+  equal the fixed text the test holds, so no shell or YAML is parsed. They
+  also cover the single `contents: write`, `permissions: write-all`
+  included. The
   existing tests keep their names and bodies.
   **`tests/test_workflow_pins.py`**: one test beside the Dependabot readers
   that the `github-actions` entry declares a cooldown.

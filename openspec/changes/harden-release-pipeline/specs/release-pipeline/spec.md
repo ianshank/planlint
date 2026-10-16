@@ -133,7 +133,9 @@ none is repeated here (C-HRP-4).
   `attestations: read`, with a comment line inside the job's own body, between
   its `release:` line and that block, naming `gh release create` as the reason
   for the first and `gh attestation verify` for the second. No other job in
-  any workflow under `.github/workflows/` MAY hold `contents: write`, and
+  any workflow under `.github/workflows/` MAY hold `contents: write`, whether
+  by a `contents: write` line, by the flow form `{contents: write}` or by
+  `permissions: write-all`, and
   `release.yml`'s top-level block MUST stay `contents: read` alone.
 - R-HRP-6: The `release` job MUST NOT check out the repository and MUST NOT
   bring the tagged tree in by any other route. Its steps MUST be exactly the
@@ -145,13 +147,18 @@ none is repeated here (C-HRP-4).
   from `github.token`, never from a stored secret, and `GH_REPO` from
   `github.repository`, both through `env:`. They MUST read the tag from
   `GITHUB_REF_NAME` in the environment, never through an inline expression in
-  `run:`. The guard MUST admit only the two `run:` scripts this change
-  writes, compared whole and never parsed as shell: each step's script, with
-  backslash continuations joined, each line's runs of spaces and tabs
-  collapsed and its ends stripped, and blank lines dropped, MUST equal one
-  of two fixed texts the test holds, line for line. Any other script is an
-  offender. No step MAY set `shell:`, and neither the job nor the workflow
-  MAY set `defaults.run.shell`.
+  `run:`. The guard MUST pin the job's whole text, never parse its YAML or
+  its shell: the `release` block `workflow_job_blocks` returns, with each
+  line's trailing whitespace stripped, its leading and trailing blank lines
+  dropped, and each action pin's `@<40-hex sha> # v<version>` replaced by
+  one placeholder, MUST equal the fixed text the test holds, line for line.
+  Any other block is an offender, named by its first differing line. So the
+  job's steps, their `env:`, their scalar styles and every key the job
+  carries are fixed, and a step, an environment variable, a `container:`, a
+  `services:`, a `working-directory:` or a `shell:` the text does not hold
+  is refused, however it is written. Outside the block, `release.yml`'s
+  top-level `env:` MUST hold `PYTHON_DEFAULT` alone, and the file MUST
+  declare no top-level `defaults:`, because both reach every job.
 - R-HRP-7: The `release` job MUST run `gh attestation verify` on every file
   in the downloaded `dist` directory, each with the following flags:
   - `--repo` naming this repository;
@@ -395,16 +402,16 @@ none is repeated here (C-HRP-4).
   controls that tree, the reason the gate already reads `tag-ancestry` from
   the default branch. "No checkout" alone leaves other doors open: a
   `git clone`, a `gh repo clone`, an interpreter running a downloaded script.
-  So the guard admits a fixed set of scripts rather than denying paths.
+  So the guard pins the whole job rather than denying paths.
   That is stronger than the plan's "no `run:` invoking a tree path", and with
   no checkout there is no tree path to invoke. The tag reaches the shell
   through `GITHUB_REF_NAME` in the environment, the safe form
   `add-witness-ci-artifacts` DEC-WCA-014 models, although only the owner pushes
   tags here.
 
-  The guard compares whole scripts with fixed texts and parses no shell.
-  This is a decision of Copilot's review of #59 (2026-10-16), and it
-  replaces the first review's command reader:
+  The guard parses no shell. That was first decided at Copilot's review of
+  #59 (2026-10-16), which replaced the first review's command reader with a
+  comparison of the two scripts:
   - That reader joined continuations, lexed each line with `shlex` in POSIX
     mode, and took a word beginning with `#` as a comment.
   - Three scripts passed it while bash ran a command outside the
@@ -417,18 +424,33 @@ none is repeated here (C-HRP-4).
     partial shell parser, and every gap it kept would be a command run
     with `contents: write`.
 
-  The job's commands are fixed anyway, by R-HRP-7 and R-HRP-8. So the test
-  holds the two scripts as text, and a change to them edits the test in the
-  same commit, which is the review a write-scoped job deserves. What the
-  first review asked of the reader survives as the normalisation:
-  - continuations are joined and spacing is collapsed within a line, so a
-    reformatting is not an offence;
-  - newlines are kept, because to the shell a newline ends a command, so a
-    script split across lines differently is refused;
-  - nothing is skipped, so the check fails closed.
+  Comparing the two scripts was not enough either. The second adversarial
+  review (2026-10-16) showed that the job around them still let other code
+  run:
+  - `run_scripts` matches only a block-style `run:` key, so a step written
+    as a flow mapping, `- {name: x, run: make pre-pr}`, is a real step that
+    the reader never returns;
+  - a step `env:` can set `BASH_ENV`, which a non-interactive bash sources
+    before the fixed command, or redefine `GITHUB_SHA` and `GITHUB_REF_NAME`,
+    which DEC-HRP-009's binding reads;
+  - a job `container:` or `services:`, or a step `working-directory:`, runs
+    the same text somewhere else;
+  - `run_scripts` folds a `>-` scalar by joining lines with spaces, but YAML
+    turns a blank line inside it into a newline, so a blank line splits the
+    create in two while the folded text still matches.
 
-  A `shell:` key, or a job or workflow `defaults.run.shell`, would hand the
-  same text to another interpreter, so none is allowed.
+  The scripts are not the unit; the job is. So the test pins the job's
+  whole text, and a change to the job edits the test in the same commit,
+  which is the review a write-scoped job deserves. The text is compared,
+  not parsed:
+  - PyYAML is deliberately not a dependency;
+  - an exact comparison has no grammar to get wrong;
+  - only trailing whitespace and the action pins are let vary, the pins so
+    that Dependabot's SHA bumps stay green, their form being
+    `tests/test_workflow_pins.py`'s to check.
+
+  The top-level `env:` and `defaults:` sit outside the block but reach
+  every job, so they are held separately.
 - **DEC-HRP-008 (revised at the first review):** the `release` job holds
   `contents: write` and `attestations: read`, the second beyond the plan's
   block. A job-level block replaces the top-level one, so every scope it omits
@@ -750,17 +772,18 @@ none is repeated here (C-HRP-4).
   _Verified by:_ `pytest -k "test_every_job_in_every_workflow_has_a_timeout_inside_the_range or test_every_job_level_permissions_block_carries_a_comment or test_no_write_permission_anywhere_in_ci"` · stage: `make test`
 
 - [ ] **AC-HRP-9 (non-success):** A planted second job holding
-  `contents: write` is named. So are a `release` job conditioned on anything
+  `contents: write` is named, and so are one holding it in the flow form
+  `permissions: {contents: write}` and one holding `permissions: write-all`. So are a `release` job conditioned on anything
   but the exact tag test (an added `always()`, a dispatch alternative), one
   needing `build` instead of `publish`, and one whose block grants any
   further scope. (R-HRP-5)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-HRP-10:** The `release` job has no checkout. Its steps are exactly
-  the two downloads and two `run:` steps whose scripts are, line for line
-  once normalised, the two fixed texts the test holds: the verification loop
-  and the one `gh release create`. No step sets `shell:`, and neither the job
-  nor the workflow sets a default shell. `GH_TOKEN` comes from
+  the two downloads and the two `run:` steps, and its whole block, once
+  normalised, equals the pinned job the test holds. `release.yml`'s top-level
+  `env:` holds `PYTHON_DEFAULT` alone, and it declares no top-level
+  `defaults:`. `GH_TOKEN` comes from
   `github.token` and `GH_REPO` from `github.repository` through `env:`, and
   the tag through `GITHUB_REF_NAME`. Each downloaded file is verified with
   `--repo`, `--signer-workflow`, `--source-ref`, `--source-digest` and
@@ -773,7 +796,7 @@ none is repeated here (C-HRP-4).
 - [ ] **AC-HRP-11 (non-success):** Through the same check, each planted
   `release` job below is named, each with its own offender.
 
-  Reaching the tree, or running a command outside the allow-list:
+  Reaching the tree, or running anything but the pinned job:
   - an `actions/checkout` step;
   - a `run:` invoking `python tools/release_notes.py`;
   - `git clone`;
@@ -789,7 +812,13 @@ none is repeated here (C-HRP-4).
   - the same substitution in backticks;
   - the create command split across two lines;
   - a `shell:` key on a step, and a `defaults.run.shell` on the job and on
-    the workflow.
+    the workflow;
+  - a step written as a flow mapping, `- {name: x, run: make pre-pr}`;
+  - a step `env:` that adds `BASH_ENV`, or that redefines `GITHUB_SHA`;
+  - a job `container:`, a job `services:`, and a step `working-directory:`;
+  - a blank line inside the folded create;
+  - a top-level `env:` key beside `PYTHON_DEFAULT`, and a top-level
+    `defaults:`.
 
   Weakening the verification:
   - the release created before the verification;

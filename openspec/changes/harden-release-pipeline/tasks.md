@@ -254,6 +254,34 @@ it.
     coordinator chose the fixed shapes, the review's own alternative, over
     patching the reader. Clauses: R-HRP-6, DEC-HRP-007, AC-HRP-10,
     AC-HRP-11, Milestones 3, 4 and 6.
+- **Review 2** (`spec-adversary`, against `26eeb5d` after #59 merged it as
+  `40c12c9`; two HIGH), resolved in a follow-up pull request into `dev`:
+  - **HIGH-1, a flow-mapping step is invisible.** `run_scripts`'s `_RUN_KEY`
+    matches a block-style `run:` only. So `- {name: x, run: make pre-pr}`
+    is a third step that GitHub runs and the script check never saw.
+  - **HIGH-2, the environment was unpinned.** The script check compared
+    only the text, so these all passed:
+    - a step `env:` adding `BASH_ENV` (sourced by a non-interactive bash)
+      or `PATH`;
+    - a step `env:` redefining `GITHUB_SHA`, which DEC-HRP-009's binding
+      reads;
+    - a job `container:` or `services:`, or a step `working-directory:`.
+  - **MEDIUM-1, a blank line in the folded create.** `run_scripts` joins a
+    `>-` scalar with spaces. YAML makes the blank line a newline, which
+    splits the command while the folded text still matched.
+  - **MEDIUM-2, LOW-1.** The proposal still described the shlex reader, and
+    AC-HRP-11 still spoke of an allow-list.
+  - **LOW-2.** Collapsing spaces inside quotes is moot now, because only
+    trailing whitespace is stripped.
+  - **Added by the coordinator.** R-HRP-5 counted a `contents: write` line
+    only, so `permissions: write-all` on another job would also have held
+    the write scope unseen.
+
+  All are resolved by pinning the `release` job's whole text rather than its
+  scripts. The top-level `env:` (`PYTHON_DEFAULT` alone) and the absence of
+  a top-level `defaults:` are held beside it, and `write-all` is counted as
+  a write scope. Clauses: R-HRP-5, R-HRP-6, DEC-HRP-007, AC-HRP-9,
+  AC-HRP-10, AC-HRP-11, Milestones 3, 4 and 6, the proposal.
 - AC-HRP-1, 2, 4, 7, 9, 10, 11, 13, 14 and 15 cite their stage only, because
   the tests that will verify them do not exist yet. AC-HRP-19 cites its stage
   only because it is read directly. Every other criterion cites existing tests
@@ -354,36 +382,45 @@ it.
     - no `actions/checkout`, and exactly two downloads, of `dist` and
       `release-notes`;
     - `GH_TOKEN: ${{ github.token }}`, never `secrets.*`;
-    - every `run:` script one of `_RELEASE_SCRIPTS`, and no `shell:` on a
-      step, in the job's `defaults` or in the workflow's;
+    - the whole block equal to `_RELEASE_JOB` once normalised, the first
+      differing line being the offender;
     - all five verification flags present;
     - verification before creation, and `--verify-tag`;
     - no `SOFT_FAIL` token from `tests/workflow_support.py`, and no `if:` on
       any step;
     - no `${{` inside any `run:` script.
   - `_contents_write_holders(texts)`: the jobs across every workflow whose
-    block grants `contents: write` (R-HRP-5).
-- The script check (R-HRP-6, DEC-HRP-007). It parses no shell. Take the
-  `run:` scripts raw through `_common.run_scripts`
-  (`load_tool("_common", "_common.py")`), which folds a `>-` scalar and keeps
-  a `|` scalar's lines, never through `_code_lines`, which cuts at the first
-  `#`. Then:
-  - normalise each script with `_normalised_script`: join backslash
-    continuations with `script.replace("\\\n", " ")`, as
-    `shell_invocations` does; split on newlines; in each line collapse
-    `[ \t]+` to one space and strip it; and drop blank lines, giving a tuple
-    of lines;
-  - require that tuple to equal one of `_RELEASE_SCRIPTS`, the two
-    normalised scripts Milestone 4 writes into `release.yml`: the
-    verification loop (three lines) and the create (one line);
-  - report any other script whole, with its step's name;
-  - report a `shell:` key on any step of the job, and a `defaults:` block
-    naming `run:` and `shell:` on the job or at the top of the workflow.
+    block matches `contents:\s*write` anywhere, so the flow form
+    `{contents: write}` counts too, or `write-all` (R-HRP-5).
+  - `_release_header_offenders(text)`: `release.yml`'s top-level `env:`
+    holding any key but `PYTHON_DEFAULT`, and any top-level `defaults:`
+    (R-HRP-6).
+- The job pin (R-HRP-6, DEC-HRP-007). It parses neither YAML nor shell.
+  - Take the `release` block from `workflow_job_blocks(RELEASE_YML)`
+    (`tests/support.py`), which keeps every line of the job, comments and
+    flow mappings included.
+  - Normalise it with `_normalised_job`: strip each line's trailing
+    whitespace; replace `@[0-9a-f]{40} # v[\w.-]+` with `@<pin>`; drop the
+    leading and trailing blank lines but keep every blank line inside,
+    since a blank line in a folded scalar is a newline to YAML.
+  - Require the result to equal `_RELEASE_JOB`, the normalised text of
+    Milestone 4's job, held in the test module. Name the first line that
+    differs, with its number, as the offender.
+  - The pin's form is not this check's: `tests/test_workflow_pins.py`
+    already holds every `uses:` to a 40-hex SHA with its version comment.
 
-  Checked on 2026-10-16 against Milestone 4's job: both of its scripts
-  normalise into `_RELEASE_SCRIPTS`. Each of these is refused: the two
-  scripts from Copilot's review, the backtick form, the create split across
-  two lines, `|| true`, and an added `make pre-pr` line.
+  Checked on 2026-10-16 against Milestone 4's job, with `workflow_job_blocks`
+  and the normalisation above:
+  - admitted: the job unchanged, the job with a Dependabot bump of its
+    download pin, and the job with trailing spaces added;
+  - refused:
+    - a flow-mapping step;
+    - `BASH_ENV` added to a step `env:`;
+    - `GITHUB_SHA` redefined in a step `env:`;
+    - a job `container:`, a job `services:`, a step `working-directory:`
+      and a step `shell:`;
+    - a blank line inside the folded create;
+    - Copilot's quoted-`#` script.
 - Planned test functions, named here so the stage-only verification lines can
   be re-pointed once they exist:
   - `test_every_release_checkout_drops_its_credential` (AC-HRP-1);
@@ -403,10 +440,10 @@ it.
   - `test_a_release_job_that_reaches_the_tree_or_weakens_verification_is_named`
     (AC-HRP-11), parametrized over every planting AC-HRP-11 lists, each
     asserting its own offender text;
-  - `test_the_script_check_admits_only_the_fixed_scripts` (AC-HRP-11), a
-    unit test of `_normalised_script` and the comparison alone. A
-    reformatted continuation is admitted. The quoted-`#` script, the quoted
-    and backtick substitutions and a split line are refused.
+  - `test_the_release_job_pin_admits_only_the_fixed_job` (AC-HRP-11), a
+    unit test of `_normalised_job` and the comparison alone. A Dependabot
+    pin bump and trailing spaces are admitted. Every refusal the check above
+    lists is refused.
 
   Real-tree tests read `RELEASE_YML` and `WORKFLOWS` from
   `tests/workflow_support.py` and are `integration`. Planted tests feed
@@ -582,9 +619,9 @@ it.
   The comment sits inside the job body, between `release:` and
   `permissions:` (`tests/workflow_support.py`'s comment rule). An empty
   `dist/` leaves the glob literal, so `gh attestation verify` fails on a
-  missing file and the step fails closed. The verification step's
-  continuations are what the script check's join exists for. A change to
-  either script edits `_RELEASE_SCRIPTS` in the same commit. Re-read the
+  missing file and the step fails closed. This job, normalised, is
+  `_RELEASE_JOB`, so a change to any line of it edits that constant in the
+  same commit. Re-read the
   download pin at the head. No `concurrency` block (R-HRP-9).
 - New `tools/release_notes.py` (R-HRP-13, R-HRP-14, DEC-HRP-026):
   - A module docstring naming this package and the exit contract.
@@ -733,7 +770,7 @@ it.
   - AC-HRP-4: the planted publish test;
   - AC-HRP-7: the planted notes test;
   - AC-HRP-9: the planted write-scope test;
-  - AC-HRP-10, 11: the release-job tests and the script-check test;
+  - AC-HRP-10, 11: the release-job tests and the job-pin test;
   - AC-HRP-13, 14, 15: the notes-tool tests;
   - AC-HRP-3, 6, 8, 18: also cite their new real-tree tests beside the
     existing ones.
