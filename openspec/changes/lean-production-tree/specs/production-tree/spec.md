@@ -32,9 +32,9 @@ tag pins the last `dev` tree that carried it, every pointer names that tag,
 the content still needed moves before its file goes, a sweep rule keeps the
 tree from refilling, and a test holds the tree to all of it.
 
-**Evidence:** measured at `c0ff090`, 2026-10-15, and re-checked at `04d1622`,
-2026-10-16, for the review's findings; each command and its figure is in
-`tasks.md`, and none is repeated here (C-LPT-3).
+**Evidence:** measured at `c0ff090`, 2026-10-15, and re-checked at `04d1622`
+and `122fa09`, 2026-10-16, for the reviews' findings; each command and its
+figure is in `tasks.md`, and none is repeated here (C-LPT-3).
 
 - **What ships.** `.github/actions/planlint/action.yml` copies
   `$GITHUB_ACTION_PATH/../../..` with `shutil.copytree` before installing,
@@ -46,10 +46,13 @@ tree from refilling, and a test holds the tree to all of it.
   item 16 says no job runs `evals/`, and item 4's one real run is still open.
 - **The coupling.** `tests/test_spec_status.py` pins `THIS_PACKAGE`;
   `.claude/agents/spec-drafter.md`, `.claude/agents/spec-adversary.md` and
-  `.claude/skills/planlint-release/SKILL.md` name packages; `docs/hooks.md`'s
-  reports section, `docs/aqa.md` and `docs/next-steps.md` item 24 say
+  `.claude/skills/planlint-release/SKILL.md` name packages, and the
+  adversary's precedent step greps only the open specs while its examples are
+  decisions of packages this change deletes; `docs/hooks.md`'s reports
+  section, `docs/aqa.md` and `docs/next-steps.md` item 24 say
   `make spec-status` stays red until `settle-package-status-headers` lands,
-  which a scratch export with the deletions applied contradicts.
+  which a scratch export with the deletions applied contradicts only while no
+  kept package is complete.
 - **The kept packages.** `add-witness-ci-artifacts` and
   `widen-indeterminate-unchecked-citations`, with no criterion ticked, both
   require edits to `docs/differentiation-roadmap.md` and
@@ -57,8 +60,10 @@ tree from refilling, and a test holds the tree to all of it.
   as well; the first also keeps `evals/fabricate-witness/` byte-identical
   and re-points a criterion of `add-finding-line-hits`, a package this change
   deletes. `prepare-release-0-3-0` and `adopt-branch-promotion-model` place
-  the release runbook in `docs/distribution-plan.md`, and the 0.3.0 record
-  step re-runs that file's §0 rows.
+  the release runbook in `docs/distribution-plan.md`, their record step
+  re-runs that file's §0 rows, and once that step ticks
+  `prepare-release-0-3-0`'s remaining criteria the spec-status report reads
+  it `draft-but-complete`.
 - **What a lean tree keeps green.** The same scratch export validates clean
   at `--fail-on INFO`, graphs with no broken link and no new orphan
   requirement, and passes the docs gate. G006 and G009 cannot fire:
@@ -87,14 +92,19 @@ tree from refilling, and a test holds the tree to all of it.
   holds the last planning documents. `docs/AGENTS.md` MUST keep its link to
   `policies.md`, its precedence clause and a balanced mermaid fence, and MUST
   stay within `MAX_NESTED_LINES`. `REQUIRED_DOCS` MUST keep every entry.
-- R-LPT-2: Under `openspec/changes/`, the change MUST delete every package
-  directory present at the archive tag except `add-witness-ci-artifacts`,
-  `widen-indeterminate-unchecked-citations`, `prepare-release-0-3-0` and
-  `adopt-branch-promotion-model`, which stay open with this package beside
-  them. `openspec/AGENTS.md`, `openspec/project.md` and
-  `openspec/specgraph.json` MUST stay. Wherever the deleted package set is
-  described — this spec, its proposal, `CHANGELOG.md` — it MUST be described
-  by that rule and by the command that lists it,
+- R-LPT-2: Under `openspec/changes/`, the change MUST keep every package whose
+  work had not shipped by v0.3.0 — read from DEC-LPT-002's evidence, never
+  from a Status header — and the packages that carry the 0.3.0 release's own
+  record, `prepare-release-0-3-0` and `adopt-branch-promotion-model`; and
+  MUST delete every other package directory present at the archive tag. At
+  `c0ff090` the kept set's members are `add-witness-ci-artifacts` and
+  `widen-indeterminate-unchecked-citations`, not shipped, and the 0.3.0
+  record's packages. A package added to `dev` after `c0ff090` MUST be
+  classified by the same evidence before anything is deleted, and kept if it
+  has not shipped. This package stays beside them. `openspec/AGENTS.md`,
+  `openspec/project.md` and `openspec/specgraph.json` MUST stay. Wherever the
+  deleted package set is described — this spec, its proposal, `CHANGELOG.md`
+  — it MUST be described by that rule and by the command that lists it,
   `git diff --name-only --diff-filter=D archive/dev-record-2026-10 <commit> -- openspec/changes | cut -d/ -f3 | sort -u`,
   where `<commit>` is `HEAD` on the implementation branch before the merge
   and the merge commit after it, and MUST NOT be described by a count.
@@ -104,9 +114,10 @@ tree from refilling, and a test holds the tree to all of it.
   — or, where DEC-LPT-001's fallback is taken, the same form under the dated
   tag that replaces it — on the line that names the path: a markdown link to
   a deleted path MUST take that URL as its target, and a backticked deleted
-  path MUST stand on the same line as its own URL. The tag's name MUST begin
-  `archive/`, so it matches no `v*` pattern, and no workflow trigger, guard or
-  tool in the tree MAY act on it.
+  path MUST stand on the same line as its own URL, except under `.claude/`
+  and `skills/`, where the pointer MUST be the backticked URL itself
+  (R-LPT-8). The tag's name MUST begin `archive/`, so it matches no `v*`
+  pattern, and no workflow trigger, guard or tool in the tree MAY act on it.
 
 ### What moves before its file goes
 
@@ -146,15 +157,16 @@ tree from refilling, and a test holds the tree to all of it.
   retire items 4 and 16 to one line each saying the suite is withdrawn and
   where it is archived; MUST re-scope item 24 so that its worklist is
   recorded as having left with `report-dead-code-and-spec-status`, its
-  condition (b) as moot because no shipped package remains in the tree, and
-  only its condition (c) — whether the vocabulary gains a "shipped" value an
-  agent may set at a package's closure — as surviving; MUST replace the "Near
-  term" pointer at the reflection plan, link target included, with an archive
-  pointer; MUST make every sentence that counts nested `AGENTS.md` files true
-  on the merged tree, naming the command that regenerates the count; and MUST
-  gain a "Retired documents" list naming once each document R-LPT-1 deletes,
-  each with its archive pointer. Its "the N rules" phrase MUST still match
-  the rule registry.
+  conditions (a) and (b) as binding on the shipped packages still in the
+  tree — `prepare-release-0-3-0` and `adopt-branch-promotion-model`, until
+  the sweep removes them — and its condition (c) — whether the vocabulary
+  gains a "shipped" value an agent may set at a package's closure — as
+  surviving; MUST replace the "Near term" pointer at the reflection plan, link
+  target included, with an archive pointer; MUST make every sentence that
+  counts nested `AGENTS.md` files true on the merged tree, naming the command
+  that regenerates the count; and MUST gain a "Retired documents" list naming
+  once each document R-LPT-1 deletes, each with its archive pointer. Its "the
+  N rules" phrase MUST still match the rule registry.
 
 ### The prose and configuration that pointed at the record
 
@@ -167,19 +179,19 @@ tree from refilling, and a test holds the tree to all of it.
   `SKILL.md`'s prose; MUST describe the gate under "Dogfooding" with no link
   to a change package and no count — `openspec/changes/` holds the packages
   still open, CI runs this repository's own `planlint --target . validate
-  --fail-on ERROR` as a hard gate, a package leaves the tree in the release
-  that ships it, and the CHANGELOG and the archive tag hold every package
-  shipped through v0.3.0; and MUST drop the documentation-list rows of every
-  document R-LPT-1 deletes and of the suite, keeping every `REQUIRED_DOCS`
-  link. `llms.txt` MUST drop its roadmap line.
-  `docs/agents-skills-harness.md` MUST drop the eval-case skill from its list,
-  MUST state the nested `AGENTS.md` set true on the merged tree with the
-  command that regenerates its count, and MUST point at the wiring plan by
-  archive URL. `SECURITY.md` MUST say coverage limits are tracked as findings
-  in `docs/next-steps.md`. `docs/aqa.md` MUST drop its evaluation-suite claim.
-  `docs/architecture/c4.md` MUST drop `evals/` from its distribution row.
-  `docs/hooks.md` MUST drop the bullet for edits under `evals/` and the
-  eval-case skill from its skill list.
+  --fail-on ERROR` as a hard gate, a package leaves the tree at the first
+  post-release sweep after a release has shipped its work, and the CHANGELOG
+  and the archive tag hold every package shipped through v0.3.0; and MUST
+  drop the documentation-list rows of every document R-LPT-1 deletes and of
+  the suite, keeping every `REQUIRED_DOCS` link. `llms.txt` MUST drop its
+  roadmap line. `docs/agents-skills-harness.md` MUST drop the eval-case skill
+  from its list, MUST state the nested `AGENTS.md` set true on the merged
+  tree with the command that regenerates its count, and MUST point at the
+  wiring plan by archive URL. `SECURITY.md` MUST say coverage limits are
+  tracked as findings in `docs/next-steps.md`. `docs/aqa.md` MUST drop its
+  evaluation-suite claim. `docs/architecture/c4.md` MUST drop `evals/` from
+  its distribution row. `docs/hooks.md` MUST drop the bullet for edits under
+  `evals/` and the eval-case skill from its skill list.
 - R-LPT-7: `context7.json` MUST drop `evals` from `excludeFolders` and the
   deleted plan files from `excludeFiles`, and every folder and file it names
   MUST exist. Each line of `.gitignore`, `.dockerignore`, `.gitleaks.toml` and
@@ -199,7 +211,15 @@ tree from refilling, and a test holds the tree to all of it.
   `.claude/agents/spec-adversary.md` and
   `.claude/skills/planlint-change-package/SKILL.md` MUST say to read the open
   packages under `openspec/changes/` in full, and MUST put any worked example
-  behind its archive URL as a backticked `https://` span;
+  behind its archive URL. Under `.claude/` and `skills/`, every pointer to a
+  deleted path MUST be a backticked `https://` span: a backticked repository
+  path there is read by `test_path_like_backtick_references_resolve_to_real_files`
+  and fails once the path is gone, whatever stands beside it.
+  `.claude/agents/spec-adversary.md`'s precedent step MUST grep the archived
+  specs as well as the open ones — `git grep -n 'DEC-' archive/dev-record-2026-10 -- 'openspec/changes/*/specs/*/spec.md'`,
+  over each tag `git tag -l 'archive/*'` lists wherever its prose can name
+  the tag generically — and MUST cite its precedent examples by the archive
+  URLs of the specs that declare them.
   `.claude/skills/planlint-add-rule/SKILL.md` MUST drop the roadmap;
   `.claude/agents/planlint-verifier.md` MUST drop `evals/` and the
   `post-merge-quality-review` path. Area codes MUST stay unique across the
@@ -262,27 +282,32 @@ tree from refilling, and a test holds the tree to all of it.
   made of letters, digits, `_`, `.`, `/` and `-`, resolved against the
   repository root, a span carrying `<`, `*` or `://` being skipped. A link
   target MUST NOT be exempt by anything on its line. A backticked span MUST
-  be exempt only when its own line carries `archive/` and a tag name matching
-  `[\w.-]+`, then `/`, immediately followed by that span's exact text and then
-  by no further path character — the span's own archive URL — whatever the
-  tag's name. Every other token that resolves to nothing MUST be reported
-  with its file, its line and the token.
+  be exempt only when its own line, read with the content of every HTML
+  comment in the file blanked, carries `archive/` and a tag name matching
+  `[\w.-]+`, then `/`, immediately followed by the span's exact text — a
+  trailing `/` on the span or on the URL ignored — and then by neither a word
+  character, `/` or `-`, nor a `.` followed by one of those: the span's own
+  archive URL, whatever the tag's name, which may end a sentence. Every other
+  token that resolves to nothing MUST be reported with its file, its line and
+  the token.
 - R-LPT-12: The reference scanner MUST be one function that takes a file's
   text, its repository-relative path and the root, reads no file, and returns
   the offenders; the real-tree test and the planted tests MUST both call it.
   Planted, the module MUST show: a dangling backticked path reported with
   file and line; a dangling relative link reported with file and line; a
   dangling backticked path reported on a line whose archive URL names a
-  different path, and on a line whose only archive ref is a bare `archive/`
-  mention; a dangling relative link reported on a line that also carries
-  that file's own archive URL; a dangling backticked path quiet on a line
-  that carries its own archive URL, under the archive tag's name and under
-  another tag name; a path-shaped token inside an external URL, quiet; a span
-  carrying `<` or `*`, quiet; a fragment-only link, quiet; and, in a
-  repository made under `tmp_path` with `git init`, a tracked
-  `docs/foo-plan.md` and a file under `evals/` each reported by the shape
-  check, and a tracked file removed from disk with plain `rm` absent from the
-  helper's enumeration. Every test in it MUST carry the tier
+  different path, on a line whose only archive ref is a bare `archive/`
+  mention, and on a line whose own archive URL sits inside an HTML comment;
+  a dangling relative link reported on a line that also carries that file's
+  own archive URL; a dangling backticked path quiet on a line that carries
+  its own archive URL, under the archive tag's name and under another tag
+  name, and quiet where that URL ends a sentence with a full stop or differs
+  from the span only by a trailing `/`; a path-shaped token inside an
+  external URL, quiet; a span carrying `<` or `*`, quiet; a fragment-only
+  link, quiet; and, in a repository made under `tmp_path` with `git init`, a
+  tracked `docs/foo-plan.md` and a file under `evals/` each reported by the
+  shape check, and a tracked file removed from disk with plain `rm` absent
+  from the helper's enumeration. Every test in it MUST carry the tier
   `tests/shape_support.py`'s criterion computes, marked per function where
   the module mixes tiers. The module MUST stay flat under `tests/` and within
   `MAX_TEST_MODULE_LINES`, and MUST add no mypy error under `tests/`.
@@ -290,16 +315,18 @@ tree from refilling, and a test holds the tree to all of it.
 ### Keeping the tree lean
 
 - R-LPT-13: `docs/hooks.md` "Releasing", as its last step, and `README.md`
-  "Dogfooding" MUST state the sweep rule: after a release is tagged, a
-  post-release sweep deletes from `openspec/changes/` every package whose
-  work that release shipped, once its `tasks.md` records the release, and
-  appends the area codes the deleted packages declared to the
-  `openspec/AGENTS.md` entry of R-LPT-8, keeping that file within
-  `MAX_NESTED_LINES` by tightening its prose and never by raising the bound;
-  a package's shipped-ness is read from evidence — the surface in the tree
-  and a CHANGELOG entry — never from its Status header; and the sweep MUST
-  NOT delete the last package in `openspec/changes/` — if none would remain,
-  the next package lands first.
+  "Dogfooding" MUST state the sweep rule: at each post-release sweep, every
+  package under `openspec/changes/` whose work a tagged release has shipped —
+  that release or an earlier one — leaves, once its `tasks.md` records the
+  release that shipped it; every owner action still open in a package the
+  sweep removes MUST move to `docs/next-steps.md` in that sweep, with the
+  trigger that closes it; the sweep appends the area codes the deleted
+  packages declared to the `openspec/AGENTS.md` entry of R-LPT-8, keeping
+  that file within `MAX_NESTED_LINES` by tightening its prose and never by
+  raising the bound; a package's shipped-ness is read from evidence — the
+  surface in the tree and a CHANGELOG entry — never from its Status header;
+  and the sweep MUST NOT delete the last package in `openspec/changes/` — if
+  none would remain, the next package lands first.
 - R-LPT-14: On the merged tree, `make spec-status` MUST list one row per
   package under `openspec/changes/` and none for a deleted one. Every living
   document's sentence about its exit — the spec-status row and the paragraph
@@ -379,17 +406,19 @@ tree from refilling, and a test holds the tree to all of it.
   Git history already holds every byte; an annotated tag,
   `archive/dev-record-2026-10`, makes the last tree that carried the record
   addressable by a name a reader can type, and carries its reason in the tag
-  object. It points at the `dev` commit the implementation branch is cut
-  from, so each deleted file is byte for byte what the tree held, and before
-  the merge the branch is checked for a deleted path that changed on `dev`
-  since the tag (`tasks.md` Milestone 2). The tag is never moved, because a
-  moved tag would silently change what every pointer shows. No setting
-  enforces that: at drafting the repository has no ruleset at all, and the
-  tag ruleset the owner plans covers `v*` tags with the owner as its bypass,
-  so even once it lands it would neither cover `archive/*` nor bind the
-  person who pushes this tag. The rule rests on this decision and on the
-  runbook, and `tasks.md` Milestone 2 records the rulesets' state when the
-  tag is pushed, so a reader knows what, if anything, protected it. So if the
+  object. It sits on X, the `dev` commit that becomes the implementation
+  branch's merge base with `dev`: the owner tags the `dev` tip once the 0.3.0
+  record has merged, and the branch, cut earlier, is brought to X by merging
+  `origin/dev` into it. So each deleted file is byte for byte what the tree
+  held, and before the merge the branch is checked for a deleted path that
+  changed on `dev` since the tag (`tasks.md` Milestone 2). The tag is never
+  moved, because a moved tag would silently change what every pointer shows.
+  No setting enforces that: at drafting the repository has no ruleset at all,
+  and the tag ruleset the owner plans covers `v*` tags with the owner as its
+  bypass, so even once it lands it would neither cover `archive/*` nor bind
+  the person who pushes this tag. The rule rests on this decision and on the
+  runbook, and `tasks.md` Milestone 2 records the rulesets' state when the tag
+  is pushed, so a reader knows what, if anything, protected it. So if the
   deleted-path check fails, the merge base is tagged under a dated suffix,
   the pointers are rewritten to it, and the first tag stays. A pointer names
   the tag rather than a sha so a reader sees what it is, and uses `/tree/`
@@ -417,22 +446,29 @@ tree from refilling, and a test holds the tree to all of it.
   it, never by a count: a count is true at one commit, and
   `docs/policies.md` writes a number no command regenerates as a description
   of the set.
-- **DEC-LPT-003:** which packages stay, and why the 0.3.0 pair is not swept
-  here. `add-witness-ci-artifacts` and
-  `widen-indeterminate-unchecked-citations` are drafted and unimplemented, so
-  they are open work, not record. `prepare-release-0-3-0` and
-  `adopt-branch-promotion-model` shipped in 0.3.0, but their record is not
-  closed by the tag: the release's record step ticks their criteria and
-  appends to their `tasks.md` after it, and `adopt-branch-promotion-model`'s
-  owner actions — its rulesets among them — are still open in its own
-  `tasks.md`. Whether that record is complete is their record step's to
-  judge, not this change's, which may not touch their text (C-LPT-4). The
-  part written by the time the archive tag is pushed is merged into `dev`
-  before it, so the tag holds it (DEC-LPT-017); anything they record later
-  lands in their own `tasks.md` on `dev`, and they leave in the 0.4.0
-  post-release sweep, as this package does. This change is a one-time removal
-  set by the kept list; the sweep rule of DEC-LPT-012 binds from that sweep
-  on.
+- **DEC-LPT-003:** which packages stay: the kept set is a rule, not a list. A
+  package whose work had not shipped by v0.3.0 is open work, not record, and
+  stays; at `c0ff090` that is `add-witness-ci-artifacts` and
+  `widen-indeterminate-unchecked-citations`, drafted and unimplemented. `dev`
+  keeps moving while this change waits on the release, so a package that
+  lands there after `c0ff090` is classified by DEC-LPT-002's evidence before
+  anything is deleted (`tasks.md` Milestones 0 and 2), and kept if it has not
+  shipped: a closed list of names would delete open work it never saw, while
+  the listing command, which reads only deletions, is unaffected either way.
+  `prepare-release-0-3-0` and `adopt-branch-promotion-model` shipped in 0.3.0
+  but stay too, because their record is not closed by the tag: the release's
+  record step ticks their criteria and appends to their `tasks.md` after it,
+  and `adopt-branch-promotion-model`'s owner actions — its rulesets among
+  them — are still open in its own `tasks.md`. Whether that record is
+  complete is their record step's to judge, not this change's, which may not
+  touch their text (C-LPT-4). The part written by the time the archive tag is
+  pushed is merged into `dev` before it, so the tag holds it (DEC-LPT-017).
+  From then on they are shipped packages like any other and leave by
+  DEC-LPT-012's rule, at the first post-release sweep after their `tasks.md`
+  records the release, their open owner actions moving to
+  `docs/next-steps.md`; this change schedules no sweep. It is a one-time
+  removal set by the kept-set rule, and the sweep rule binds from the first
+  post-release sweep on.
 - **DEC-LPT-004 (supersedes the premise of DEC-MCO-006 and DEC-TSS-016):**
   restated, DEC-MCO-006
   (`https://github.com/ianshank/planlint/tree/archive/dev-record-2026-10/openspec/changes/measure-coverage-once/specs/one-run-coverage/spec.md`)
@@ -449,11 +485,12 @@ tree from refilling, and a test holds the tree to all of it.
   what shipped. So the half that protected the record survives — no change
   edits a shipped package's text, and a change that supersedes a shipped
   decision names it with its archive URL — and this change applies it to the
-  0.3.0 pair (C-LPT-4). Both packages are deleted here, so both are cited by
-  archive URL. The cost is recorded, not hidden: a precedent grep over the
-  open specs no longer finds an archived decision, and a kept package's
-  cross-reference to one becomes an archive lookup; a package restates what
-  it relies on, as this one does.
+  0.3.0 packages (C-LPT-4). Both superseded packages are deleted here, so
+  both are cited by archive URL. The cost is recorded, not hidden: a
+  precedent grep over the open specs alone no longer finds an archived
+  decision, so the adversary's precedent step also greps the archive tag
+  (R-LPT-8), and a kept package's cross-reference to one becomes an archive
+  lookup; a package restates what it relies on, as this one does.
 - **DEC-LPT-005 (supersedes the premise of DEC-POL-008):** restated, DEC-POL-008
   (`https://github.com/ianshank/planlint/tree/archive/dev-record-2026-10/openspec/changes/write-down-policies/specs/project-policies/spec.md`)
   registered `docs/policies.md` in `REQUIRED_DOCS` because a policy document
@@ -496,42 +533,45 @@ tree from refilling, and a test holds the tree to all of it.
   change deletes, keeping `evals/fabricate-witness/` byte-identical, and
   re-pointing a criterion of `add-finding-line-hits`;
   `widen-indeterminate-unchecked-citations` requires its C-IND-7 documents to
-  move, three of which this change deletes. Implemented on the lean tree as
-  written, those clauses could not be met. Neither package is shipped, so
-  there is no record to protect, and `add-witness-ci-artifacts` already
-  carries in-place amendments marked "(amended by `measure-coverage-once`)";
-  the same form here keeps both open specs true of the tree their
-  implementers will meet. The deleted documents leave their lists; the evals
-  clause becomes `SKILL.md`'s refusal kept verbatim, the property the eval
-  case was evidence for; the AC-GA-29 re-point becomes moot, because the spec
-  it would edit leaves with its package and no open spec then cites the test
-  `add-witness-ci-artifacts` replaces. The proposal sentences edited are only
-  those that require such an edit or preservation:
-  `add-witness-ci-artifacts`' "Docs that move together" entries for the
-  roadmap and the 2026-09 review, its `add-finding-line-hits` bullet, and the
-  evals clause of its "No agent permission to record a witness" Non-Goal;
-  and `widen-indeterminate-unchecked-citations`' "Docs and contracts that
-  move together" clauses for the two reviews and the roadmap. Evidence citing
-  a deleted path stays as written — `add-witness-ci-artifacts`' Why and its
-  spec's Problem Statement cite both reviews and `add-witness-mode`'s spec by
-  path, and `widen-indeterminate-unchecked-citations`' Why and Problem
-  Statement cite both reviews — because a citation says what was measured
-  where, and the archive tag resolves each path; rewriting it would make a
-  proposal disagree with what its author saw. That line is the one
-  `measure-coverage-once` drew in DEC-MCO-007, which left its target's
-  proposal wholly unedited because every site there was a measurement — the
-  dated count in its Why — while the plan it amended lived in spec and
-  tasks. Here the proposals' What Changes and Non-Goals carry plan:
-  sentences that tell an implementer to edit or keep a file that will not
-  exist. A measurement stays and a plan is amended, as before; the line falls
-  inside the proposals this time because the plan does. A clause that names
-  no deleted path stays even where its subject shrinks: AC-IND-18's
-  "every planning-record mention of this package reads shipped" is
-  satisfiable on the lean tree. Both amendments assume the package is still
-  unimplemented, which `tasks.md` Milestone 0 checks for each. Rejected:
-  superseding them by name only (an implementer would meet a requirement
-  nobody can satisfy and would reconcile it without this reasoning); deleting
-  them (they are open work); amending their evidence (above).
+  move, the 2026-09 and 2026-10 peer reviews and the roadmap among them.
+  Implemented on the lean tree as written, those clauses could not be met.
+  Neither package is shipped, so there is no record to protect, and
+  `add-witness-ci-artifacts` already carries in-place amendments marked
+  "(amended by `measure-coverage-once`)"; the same form here keeps both open
+  specs true of the tree their implementers will meet. The deleted documents
+  leave their lists; the evals clause becomes `SKILL.md`'s refusal kept
+  verbatim, the property the eval case was evidence for; the AC-GA-29
+  re-point becomes moot, because the spec it would edit leaves with its
+  package and no open spec then cites the test `add-witness-ci-artifacts`
+  replaces. The proposal sentences edited are only those that require such
+  an edit or preservation: `add-witness-ci-artifacts`' "Docs that move
+  together" entries for the roadmap and the 2026-09 review, its
+  `add-finding-line-hits` bullet, and the evals clause of its "No agent
+  permission to record a witness" Non-Goal; and
+  `widen-indeterminate-unchecked-citations`' "Docs and contracts that move
+  together" clauses for the 2026-09 and 2026-10 reviews and the roadmap.
+  Evidence citing a deleted path stays as written — `add-witness-ci-artifacts`'
+  Why and its spec's Problem Statement cite the 2026-09 and 2026-10 reviews
+  and `add-witness-mode`'s spec by path, and
+  `widen-indeterminate-unchecked-citations`' Why and Problem Statement cite
+  the same reviews — because a citation says what was measured where, and the
+  archive tag resolves each path; rewriting it would make a proposal disagree
+  with what its author saw. That line is the one `measure-coverage-once` drew
+  in DEC-MCO-007, which left its target's proposal wholly unedited because
+  every site there was a measurement — the dated count in its Why — while the
+  plan it amended lived in spec and tasks. Here the proposals' What Changes
+  and Non-Goals carry plan: sentences that tell an implementer to edit or
+  keep a file that will not exist. A measurement stays and a plan is amended,
+  as before; the line falls inside the proposals this time because the plan
+  does. AC-IND-18 names no deleted path and stays: its "every planning-record
+  mention of this package reads shipped" means a mention in the documents
+  C-IND-7 lists, so after the amendment it reaches exactly C-IND-7's amended
+  list, every member of which still exists. Both amendments assume the
+  package is still unimplemented, which `tasks.md` Milestone 0 checks for
+  each. Rejected: superseding them by name only (an implementer would meet a
+  requirement nobody can satisfy and would reconcile it without this
+  reasoning); deleting them (they are open work); amending their evidence
+  (above).
 - **DEC-LPT-008:** `evals/` is withdrawn, not moved. No job runs it,
   `claude plugin eval` needs a plugin runtime CI lacks, its adversarial half
   is non-deterministic, and item 4's one real run never happened; its only
@@ -550,34 +590,39 @@ tree from refilling, and a test holds the tree to all of it.
   comparison already lives in the README's "Why this and not Spec-Kit /
   GitHub Spec / Kiro / Cursor", and the rule-count row
   `tests/test_rule_registry_docs.py` reads from it goes with the file.
-- **DEC-LPT-010:** agent prose names no change package, and area codes stay
-  unique across the record. Every package is transient now, so a package
-  named as the worked example dangles at the next sweep, while "read the open
-  packages under `openspec/changes/` in full" is true at every commit. An
-  example worth keeping sits behind its archive URL as a backticked
-  `https://` span, which the `.claude/` path test cannot read as a path (its
-  pattern admits no `:`) and which the reference scanner skips (`://`). Ids
-  are history-wide: the kept packages cite archived decisions by id, and
-  `CHANGELOG.md` cites a criterion the roadmap declared, so a new package
-  reusing a retired area code would make those citations ambiguous. A drafter
-  that may not run `git` cannot read the tag, so the retired codes are
-  written where every agent working in `openspec/` already reads:
-  `openspec/AGENTS.md`, the directory's own contract, hand-written and never
-  regenerated. Its precedence line and its mermaid block stay intact, and the
-  entry must fit inside `MAX_NESTED_LINES` with them; each sweep appends a
-  few codes, and when the entry would push the file past the bound the sweep
-  tightens the file's prose, never the bound. `openspec/project.md`, the
-  first draft's home, is rejected: `planlint init --force` rewrites it from
-  `scaffold.plan_init`, dropping any hand-added line, and the first draft's
-  premise that it declares itself authoritative rests on wording that
-  `fix-init-snapshot-wording`'s R-SNAP-1
+- **DEC-LPT-010:** agent prose names no change package, and the record stays
+  searchable from it. Every package is transient now, so a package named as
+  the worked example dangles at the next sweep, while "read the open packages
+  under `openspec/changes/` in full" is true at every commit. An example worth
+  keeping sits behind its archive URL as a backticked `https://` span — the
+  only form that survives under `.claude/` and `skills/`, because
+  `test_path_like_backtick_references_resolve_to_real_files` reads a
+  backticked repository path there and fails when the path is gone, while
+  its pattern admits no `:` — and the reference scanner skips such a span
+  (`://`). Ids are history-wide: the kept packages cite archived decisions by
+  id, and `CHANGELOG.md` cites a criterion the roadmap declared. So a
+  precedent search must reach the archive, and the adversary, which has
+  `Bash`, greps the archive tag's specs with `git grep` beside the open ones;
+  its examples, decisions of packages this change deletes, are cited by
+  archive URL. And a new package reusing a retired area code would make
+  those citations ambiguous. A drafter that may not run `git` cannot read the
+  tag, so the retired codes are written where every agent working in
+  `openspec/` already reads: `openspec/AGENTS.md`, the directory's own
+  contract, hand-written and never regenerated. Its precedence line and its
+  mermaid block stay intact, and the entry must fit inside `MAX_NESTED_LINES`
+  with them; each sweep appends a few codes, and when the entry would push
+  the file past the bound the sweep tightens the file's prose, never the
+  bound. `openspec/project.md`, the first draft's home, is rejected:
+  `planlint init --force` rewrites it from `scaffold.plan_init`, dropping any
+  hand-added line, and the first draft's premise that it declares itself
+  authoritative rests on wording that `fix-init-snapshot-wording`'s R-SNAP-1
   (`https://github.com/ianshank/planlint/tree/archive/dev-record-2026-10/openspec/changes/fix-init-snapshot-wording/specs/detected-conventions-snapshot/spec.md`)
   corrected in the generator, which now calls the file a snapshot that
   enforcement never reads back; the copy in this tree predates the
   correction. The entry lists the codes declared by the deleted packages and
   by the deleted roadmap, and none declared by a package still under
-  `openspec/changes/`, this one and the four it keeps included: the
-  generator `tasks.md` names reads only files this change deletes, and
+  `openspec/changes/` — this one and every package the kept-set rule keeps:
+  the generator `tasks.md` names reads only files this change deletes, and
   `tasks.md` Milestone 7 re-derives the entry from the archive tag. A
   docstring under `.claude/hooks/` that names a package is code, and
   C-LPT-2's. No mechanical guard checks package names: the reference scanner
@@ -598,19 +643,27 @@ tree from refilling, and a test holds the tree to all of it.
   spec-status report exits 2 on none, the agreement test refuses an empty
   scope, and the stage-citation test reads the `test` stage's row — which is
   why the sweep has a floor (DEC-LPT-012).
-- **DEC-LPT-012:** the sweep rule. A package leaves `openspec/changes/` in the
-  post-release sweep of the release that ships it, once its `tasks.md`
-  records that release. After the tag and not before: the tagged tree carries
-  the packages it shipped, so the release tag is their archive by
+- **DEC-LPT-012:** the sweep rule, cumulative. At each post-release sweep,
+  every package whose work a tagged release has shipped — that release or an
+  earlier one — leaves `openspec/changes/`, once its `tasks.md` records the
+  release that shipped it. Cumulative, because a rule keyed to "the release
+  that ships it" never removes a package whose record was still open at that
+  release's sweep: the 0.3.0 packages shipped in 0.3.0, and would wait for a
+  0.3.0 sweep that never comes. After a tag and not before: the tagged tree
+  carries the packages it shipped, so the release tag is their archive by
   DEC-LPT-001's reasoning, and the record the runbook writes lands only after
-  the tag. The sweep never deletes the last package, and if none would
-  remain the next package lands first, because the real-tree gates of
-  DEC-LPT-011 would otherwise read nothing — and a planted empty tree shows
-  they refuse it rather than pass. Shipped-ness is read from evidence
-  (DEC-LPT-002), and the sweep appends the deleted packages' area codes to
-  the entry in `openspec/AGENTS.md` (DEC-LPT-010). The rule is written where
-  it is run, as the runbook's last step, and where a reader of the front page
-  meets it, under "Dogfooding".
+  the tag. A shipped package can still carry open owner actions —
+  `adopt-branch-promotion-model`'s rulesets are the case at hand — and those
+  move to `docs/next-steps.md`, each with the trigger that closes it, in the
+  sweep that removes the package: once deleted, they would survive only at a
+  tag nobody reads as a backlog. The sweep never deletes the last package,
+  and if none would remain the next package lands first, because the
+  real-tree gates of DEC-LPT-011 would otherwise read nothing — and a planted
+  empty tree shows they refuse it rather than pass. Shipped-ness is read from
+  evidence (DEC-LPT-002), and the sweep appends the deleted packages' area
+  codes to the entry in `openspec/AGENTS.md` (DEC-LPT-010). The rule is
+  written where it is run, as the runbook's last step, and where a reader of
+  the front page meets it, under "Dogfooding".
 - **DEC-LPT-013:** the reference scanner's scope and tokens. The scope is the
   prose a reader or an agent opens first, where a path is a claim: every
   markdown document at the root — the README, the root `AGENTS.md`, and
@@ -647,12 +700,23 @@ tree from refilling, and a test holds the tree to all of it.
   backticked span is exempt only when its line carries `archive/<tag>/`
   immediately followed by the span itself — the span's own archive URL —
   because only then does the line show where that path went. The line-wide
-  exemption of the first draft hid three kinds of break the review planted:
-  a dangling span beside an archive URL for another path, a relative link
+  exemption of the first draft hid each kind of break the review planted: a
+  dangling span beside an archive URL for another path, a relative link
   beside its own archive URL, and a span beside a bare `archive/` mention
   naming no real tag; and after the prescribed edit to `docs/next-steps.md`'s
   "Near term" pointer, the relative link left on that line would have
-  dangled unreported. The tag is matched by `[\w.-]+`, not by the 2026-10
+  dangled unreported. Exact is not literal, because a correct pointer can
+  differ from its span in form: a trailing `/` on the span or on the URL is
+  ignored, since a directory is written both ways; and the URL may end a
+  sentence, so what follows the path may be a full stop — the match refuses
+  only a further path character, a word character, `/` or `-`, or a `.`
+  that continues the path, as in `.md.bak`. A URL inside an HTML comment does
+  not count: it renders nothing, so a reader sees the bare broken path with
+  no pointer beside it, and the exemption is read from the text with every
+  comment's content blanked, a comment spanning lines included. A URL wrapped
+  across lines is out of scope: R-LPT-3 puts each pointer on the line that
+  names its path, and no archive URL appears in the shipped prose before this
+  change writes one. The tag is matched by `[\w.-]+`, not by the 2026-10
   tag's name, so a dated-suffix tag (DEC-LPT-001) or a later archive needs no
   test edit. The cost, accepted and named: the scanner cannot tell whether
   the tag exists — that needs `git` or the network, and the scanner reads no
@@ -676,22 +740,36 @@ tree from refilling, and a test holds the tree to all of it.
   nothing, and a shape check over nothing would pass. Every gate runs the
   suite from a checkout, so the floor costs nothing there.
 - **DEC-LPT-016:** what `make spec-status` says after the merge, and the
-  sentences about it. On a tree with the deletions applied the report has no
-  finding, so "stays red until `settle-package-status-headers` lands" becomes
-  false the day this merges. The sentences are rewritten to the conditional
-  truth, which keeps the literal `tests/test_ci_makefile.py` requires in the
-  reports section and names the one case that turns the report red: a package
-  that closes under a `DRAFT` header, this one included once its boxes are
-  ticked. The docstring of the test that reads the literal follows, because
-  it states the same false fact. A figure is allowed only dated with its
-  commit and its command, because the package count moves at every sweep.
-  Item 24 keeps only its condition (c). Condition (b), writing down an
-  exception to the records convention before editing a shipped header, is
-  moot with no shipped package in the tree; condition (a) concerned recording
-  the status of shipped packages somewhere the report would have to learn to
-  read, and a swept package's status is its absence and its CHANGELOG entry,
-  which the report never reads; the worklist the report produced left with
-  the package that recorded it.
+  sentences about it. The report is green on the lean tree only while no
+  kept package is complete under a `DRAFT` header. On the tree simulated at
+  `c0ff090` it had no finding, but only because `prepare-release-0-3-0` was
+  not complete: its post-tag criteria were open and its record milestone
+  undone. The 0.3.0 record ticks them, after which the report reads that
+  package `draft-but-complete` and exits 1, as the second review executed;
+  `adopt-branch-promotion-model` reads the same if its record completes it.
+  That record merges before the archive tag (DEC-LPT-017), so the merged
+  tree may well be red. Neither "stays red until
+  `settle-package-status-headers` lands" nor "exits 0" is the truth on its
+  own: the report's exit turns on whether a package has closed under a
+  `DRAFT` header. The sentences are rewritten to that conditional truth,
+  which keeps the literal `tests/test_ci_makefile.py` requires in the reports
+  section and names the case that turns the report red: a package that
+  closes under a `DRAFT` header, the 0.3.0 packages and this one included.
+  The docstring of the test that reads the literal follows, because it
+  states the same false fact. A figure is allowed only dated with its commit
+  and its command. `tasks.md` Milestone 2's gate records the report at X,
+  where the kept packages' rows are already the rows the merged tree will
+  show, because this change edits none of them; so the sentence in
+  `docs/hooks.md` states that measured outcome, and never a fixed exit 0.
+  Item 24 keeps its conditions (a) and (b) for the shipped packages still in
+  the tree — the 0.3.0 packages, until the sweep removes them: (b) because
+  editing their headers is exactly the edit the records convention still
+  forbids, the half DEC-LPT-004 keeps; (a) because a status recorded beside
+  them rather than in their header is a record the report would have to learn
+  to read. Once they leave, both bind on nothing: a swept package's status is
+  its absence and its CHANGELOG entry, which the report never reads.
+  Condition (c) survives unconditionally, and the worklist the report
+  produced left with the package that recorded it.
 - **DEC-LPT-017:** the preconditions are `tasks.md` gates, not criteria, and
   the pull request's draft state enforces their order. No test can observe a
   remote tag or a published release, and a criterion citing a stage that
@@ -704,12 +782,15 @@ tree from refilling, and a test holds the tree to all of it.
   earlier. The 0.3.0 record — the `tasks.md` entries and criteria ticks of
   `prepare-release-0-3-0` and `adopt-branch-promotion-model` — is merged into
   `dev` before the archive tag is pushed, because that record cannot ride in
-  this change: writing it ticks the pair's criteria and appends to their
+  this change: writing it ticks those packages' criteria and appends to their
   `tasks.md`, which C-LPT-4 forbids this change, and its step re-runs the
   rows of `docs/distribution-plan.md` §0, a file this change deletes. Merged
-  first, it is in the tree the tag pins. Then the archive tag, read back with
-  `git ls-remote --tags origin 'archive/*'`, its peeled line naming the
-  branch's base. The deleted-path diff from the tag to the merge base is
+  first, it is in the tree the tag pins. The packages added to `dev` since
+  `c0ff090` are listed and each classified by DEC-LPT-002's evidence, so the
+  kept set is known before anything is deleted (DEC-LPT-003). The report
+  `make spec-status` prints at X is recorded (DEC-LPT-016). Then the archive
+  tag, read back with `git ls-remote --tags origin 'archive/*'`, its peeled
+  line naming X. The deleted-path diff from the tag to the merge base is
   re-run before the merge. The pull request stays a GitHub draft until that
   gate is recorded, so it cannot be merged early by accident. The change
   lands on `dev` after those and before 0.4.0's release-prep pull request,
@@ -742,16 +823,16 @@ tree from refilling, and a test holds the tree to all of it.
   the nudge table; dropping the table entry alone stays green. Dropping the
   eval-case skill's name from a harness index while its directory exists
   goes red; deleting the directory first stays green. Rewriting the reports
-  sentence without the literal its test reads goes red. Two pairs are not
-  red couples at all: `evals` in `_EXCLUDED_DIRS` stays green whichever half
-  lands first, and is dropped with the deletion only so the tuple names
-  nothing that is gone; and `evals/AGENTS.md` with the sentences that count
-  nested files is a truth couple, which no test counts, kept together
-  because either alone makes a sentence false. The order is unchanged: the
-  edits a still-present record does not contradict land first; the deletion,
-  the halves that may not land before it and the hygiene module land
-  together, because the shape check is red while any deleted document
-  exists.
+  sentence without the literal its test reads goes red. Neither of the
+  following is a red couple: `evals` in `_EXCLUDED_DIRS` stays green
+  whichever half lands first, and is dropped with the deletion only so the
+  tuple names nothing that is gone; and `evals/AGENTS.md` with the sentences
+  that count nested files is a truth couple, which no test counts, kept
+  together because either alone makes a sentence false. The order is
+  unchanged: the edits a still-present record does not contradict land
+  first; the deletion, the halves that may not land before it and the
+  hygiene module land together, because the shape check is red while any
+  deleted document exists.
 - **DEC-LPT-020:** history comments stay. A comment or docstring that says
   where a fact came from — G003's scope limit as a peer review measured it, a
   test as a plan proposed it, `.github/dependabot.yml`'s note that an earlier
@@ -777,11 +858,13 @@ tree from refilling, and a test holds the tree to all of it.
   `tasks.md`: none of the documents R-LPT-1 names is present —
   `docs/differentiation-roadmap.md` among them, which no shape matches — and
   not the eval-case skill's directory; and the directories under
-  `openspec/changes/` are the open packages R-LPT-2 names and this one, the
-  deleted set being what
+  `openspec/changes/` are the kept set R-LPT-2's rule describes — its members
+  at `c0ff090`, and any package added to `dev` since that `tasks.md`
+  Milestone 2 classified as not shipped — and this one, the deleted set being
+  what
   `git diff --name-only --diff-filter=D archive/dev-record-2026-10 HEAD -- openspec/changes | cut -d/ -f3 | sort -u`
   prints at the implementation branch's head before the merge.
-  (R-LPT-1, R-LPT-2, R-LPT-10, DEC-LPT-002, DEC-LPT-015)
+  (R-LPT-1, R-LPT-2, R-LPT-10, DEC-LPT-002, DEC-LPT-003, DEC-LPT-015)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-LPT-2 (non-success):** In a repository made under `tmp_path` with
@@ -795,9 +878,10 @@ tree from refilling, and a test holds the tree to all of it.
   tree, the reference scanner returns no offender, and that scope includes
   `README.md`: every relative link target resolves, and every in-scope
   backticked path resolves or stands on a line that carries its own archive
-  URL; and every archive pointer the change writes has R-LPT-3's URL form,
-  which is read directly. (R-LPT-3, R-LPT-11, DEC-LPT-001, DEC-LPT-013,
-  DEC-LPT-014)
+  URL; every archive pointer the change writes has R-LPT-3's URL form, on one
+  line, and under `.claude/` and `skills/` is a backticked `https://` span,
+  which is read directly. (R-LPT-3, R-LPT-8, R-LPT-11, DEC-LPT-001,
+  DEC-LPT-013, DEC-LPT-014)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-LPT-4 (non-success):** Through the same scanner the real-tree test
@@ -805,18 +889,20 @@ tree from refilling, and a test holds the tree to all of it.
   path, the line and the token, and the scan is not clean: a backticked path
   under one of R-LPT-11's prefixes that resolves to nothing; a relative link
   that resolves to nothing; such a backticked path on a line whose archive
-  URL names a different path, and on a line whose only archive ref is a bare
-  `archive/` mention; and a relative link to a missing file on a line that
-  also carries that file's own archive URL. (R-LPT-11, R-LPT-12,
-  DEC-LPT-013, DEC-LPT-014)
+  URL names a different path, on a line whose only archive ref is a bare
+  `archive/` mention, and on a line whose own archive URL sits inside an HTML
+  comment; and a relative link to a missing file on a line that also carries
+  that file's own archive URL. (R-LPT-11, R-LPT-12, DEC-LPT-013, DEC-LPT-014)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-LPT-5:** Through the same scanner, each of these planted lines
   yields no offender: a dangling backticked path on a line that carries its
   own archive URL under `archive/dev-record-2026-10`, and the same under a
-  differently named `archive/` tag; a path-shaped token inside an external
-  `https://` URL; a span carrying `<` or `*`; and a link that is a fragment
-  only. (R-LPT-11, R-LPT-12, DEC-LPT-013, DEC-LPT-014)
+  differently named `archive/` tag; the same where that URL ends a sentence
+  with a full stop, and where it differs from the span only by a trailing
+  `/`; a path-shaped token inside an external `https://` URL; a span carrying
+  `<` or `*`; and a link that is a fragment only. (R-LPT-11, R-LPT-12,
+  DEC-LPT-013, DEC-LPT-014)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-LPT-6:** The shape check and `nested_agents_files` enumerate the
@@ -844,8 +930,9 @@ tree from refilling, and a test holds the tree to all of it.
 - [ ] **AC-LPT-8:** `docs/hooks.md` "Releasing" carries the numbered runbook
   in R-LPT-4's order — the date rule, the tag only on a merge commit on
   production after `tag-ancestry`, nothing committed to production after the
-  tag, and the post-release sweep among its steps — with the
-  trusted-publisher sentence, and names no change package;
+  tag, and the post-release sweep among its steps, worded cumulatively and
+  moving a removed package's open owner actions to `docs/next-steps.md` —
+  with the trusted-publisher sentence, and names no change package;
   `.claude/skills/planlint-release/SKILL.md` cites that section where it
   cited the deleted runbook, names the sweep as its last step, names no
   change package, invokes only real promotion subcommands, and backticks
@@ -855,9 +942,10 @@ tree from refilling, and a test holds the tree to all of it.
 
 - [ ] **AC-LPT-9:** `docs/next-steps.md` carries R-LPT-5's edits — item 17
   with the distribution plan's deferrals, the non-goals sentence, items 4 and
-  16 retired to one line each, item 24 re-scoped to its surviving condition,
-  the "Near term" pointer with the archive URL as its link target, the
-  "Retired documents" list with one archive pointer per document, and every
+  16 retired to one line each, item 24 re-scoped with its conditions (a) and
+  (b) bound to the shipped packages still in the tree and (c) surviving, the
+  "Near term" pointer with the archive URL as its link target, the "Retired
+  documents" list with one archive pointer per document, and every
   nested-file count naming its command — and its rule-count phrase still
   matches the registry. The edits are read directly. (R-LPT-5, DEC-LPT-006,
   DEC-LPT-014, DEC-LPT-016)
@@ -866,13 +954,13 @@ tree from refilling, and a test holds the tree to all of it.
 - [ ] **AC-LPT-10:** `README.md` says what `tests/test_agent_artifacts.py`
   validates, describes the archived suite without claiming a test holds the
   skill's refusal, describes the gate under "Dogfooding" with no package
-  link, no count and the sweep rule, and keeps every required document's
-  link and none to a deleted one; `llms.txt`, `docs/agents-skills-harness.md`,
-  `SECURITY.md`, `docs/aqa.md`, `docs/architecture/c4.md` and
-  `docs/hooks.md` carry R-LPT-6's edits, each pointer in R-LPT-3's form;
-  every root markdown file is still wired into the docs gate; and both
-  harness indexes name every agent and skill. The prose is read directly.
-  (R-LPT-3, R-LPT-6, R-LPT-13, DEC-LPT-008, DEC-LPT-012)
+  link, no count and the cumulative sweep rule, and keeps every required
+  document's link and none to a deleted one; `llms.txt`,
+  `docs/agents-skills-harness.md`, `SECURITY.md`, `docs/aqa.md`,
+  `docs/architecture/c4.md` and `docs/hooks.md` carry R-LPT-6's edits, each
+  pointer in R-LPT-3's form; every root markdown file is still wired into the
+  docs gate; and both harness indexes name every agent and skill. The prose
+  is read directly. (R-LPT-3, R-LPT-6, R-LPT-13, DEC-LPT-008, DEC-LPT-012)
   _Verified by:_ `pytest -k "test_docs_check_passes or test_agent_index_links_resolve or test_harness_docs_list_every_agent_and_skill or test_every_root_markdown_file_is_wired_into_the_docs_gate"` · stage: `make docs-check`
 
 - [ ] **AC-LPT-11:** `context7.json` indexes the skill and excludes only
@@ -888,14 +976,17 @@ tree from refilling, and a test holds the tree to all of it.
 - [ ] **AC-LPT-12:** No agent or skill file under `.claude/` names a change
   package; the drafter, the adversary and the change-package skill say to
   read the open packages in full and put worked examples behind archive
-  URLs; `openspec/AGENTS.md` carries the entry listing the area codes the
-  deleted packages and the deleted roadmap declared and none an open package
-  declares, is still within its line bound, states its precedence and keeps
-  its mermaid block and its links; `openspec/project.md` is unchanged; the
-  drafter's collision check reads the entry; every backticked path in
-  `.claude/` prose resolves and every cited target is real. The names, the
-  entry, the unchanged file and the collision check are read directly.
-  (R-LPT-8, DEC-LPT-010)
+  URLs, each a backticked `https://` span; the adversary's precedent step
+  greps the archive tag's specs as well as the open ones and cites its
+  examples by archive URL; `openspec/AGENTS.md` carries the entry listing the
+  area codes the deleted packages and the deleted roadmap declared and none
+  an open package declares, is still within its line bound, states its
+  precedence and keeps its mermaid block and its links;
+  `openspec/project.md` is unchanged; the drafter's collision check reads the
+  entry; every backticked path in `.claude/` prose resolves and every cited
+  target is real. The names, the precedent step, the entry, the unchanged
+  file and the collision check are read directly. (R-LPT-8, DEC-LPT-004,
+  DEC-LPT-010)
   _Verified by:_ `pytest -k "test_path_like_backtick_references_resolve_to_real_files or test_make_target_references_are_real_makefile_targets or test_harness_docs_list_every_agent_and_skill or test_nested_agents_file_stays_short or test_nested_agents_file_states_its_precedence or test_nested_agents_file_has_a_balanced_mermaid_block or test_nested_agents_file_declares_no_invariant_ids or test_agent_index_links_resolve"` · stage: `make test`
 
 - [ ] **AC-LPT-13 (non-success):** With no test asserting on the name of a
@@ -921,9 +1012,11 @@ tree from refilling, and a test holds the tree to all of it.
   reports table still has a row for every report target and its section
   still names `settle-package-status-headers`; and the sentences R-LPT-14
   names, and the docstring of the test that reads that literal, state the
-  report's exit as it is on the merged tree, any figure in them dated with
-  its commit. The sentences, the docstring and the report's output are read
-  directly, the output recorded in `tasks.md`. (R-LPT-14, DEC-LPT-016)
+  report's exit as it is on the merged tree — green only while no kept
+  package is complete under a `DRAFT` header — any figure in them dated with
+  the commit it was measured at. The sentences, the docstring and the
+  report's output are read directly, the output recorded in `tasks.md`.
+  (R-LPT-14, DEC-LPT-016)
   _Verified by:_ `pytest -k "test_every_report_target_has_a_row_in_the_hooks_reports_table or test_spec_status_runs_over_this_repository"` · stage: `make test`
 
 - [ ] **AC-LPT-16:** `CHANGELOG.md`'s `[Unreleased]` section carries
@@ -980,7 +1073,7 @@ spec.
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Preconditions | none — owner actions recorded on `tasks.md` Milestone 2's gate | `v0.3.0` on origin, on PyPI and an ancestor of `origin/dev`; the 0.3.0 record merged into `dev`; `archive/dev-record-2026-10` on origin at the implementation branch's base, read back with `git ls-remote --tags origin 'archive/*'`; the pull request a draft until all of it is recorded; no deleted path changed on `dev` since the tag, re-checked before the merge (DEC-LPT-017) |
+| Preconditions | none — owner actions recorded on `tasks.md` Milestone 2's gate | `v0.3.0` on origin, on PyPI and an ancestor of `origin/dev`; the 0.3.0 record merged into `dev`; the packages added to `dev` since `c0ff090` listed and classified; `make spec-status` recorded at X; `archive/dev-record-2026-10` on origin at the implementation branch's merge base, X, read back with `git ls-remote --tags origin 'archive/*'`; the pull request a draft until all of it is recorded; no deleted path changed on `dev` since the tag, re-checked before the merge (DEC-LPT-017) |
 | Focused | `make test` | AC-LPT-1..6, AC-LPT-11..16, AC-LPT-18 — the hygiene module green on the real tree and red on its planted cases, the retuned tests green with no package named, every guard this change leans on still green |
 | Docs | `make docs-check` | AC-LPT-7..10 — the moved runbook, the rewritten conventions and pointers, every required document present and linked |
 | Full | `make pre-pr` | AC-LPT-17, AC-LPT-19, AC-LPT-20 — the ladder, including this repository's own validate over every package and the typecheck ratchets |
