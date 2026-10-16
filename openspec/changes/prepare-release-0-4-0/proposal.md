@@ -1,4 +1,4 @@
-# Change: Prepare the 0.4.0 Release — the Announced Removals, the Dockerfile, the Bump Set and the Cut
+# Change: Prepare the 0.4.0 Release — the Announced Removals, the Dockerfile's Deprecation, the Bump Set and the Cut
 
 ## Why
 
@@ -16,16 +16,19 @@ removal has to be complete: the floor is written by hand in more places than
 the announcement lists, and no test binds `requires-python` to the matrix,
 the classifiers or the prose, so a partial bump stays green.
 
-A third removal rides in the same release, and it was **not** announced. The
-`Dockerfile` with its `.dockerignore` and the `docker` Dependabot entry were
-built, published and scanned nowhere. `harden-ci-workflows` made the file a
+A third surface should go, and it was **not** announced: the `Dockerfile`,
+with its `.dockerignore` and the `docker` Dependabot entry. It is built,
+published and scanned nowhere. `harden-ci-workflows` made it a
 digest-pinned, non-root recipe (R-HCW-13, R-HCW-14), and every check it
 added is a text check that never builds the image. Keeping it to 2026
-practice would mean a second supported artifact: a CI build, a push to a
-registry under a second write scope, an attestation by digest and CVE triage
-of the base image. That is a lot of machinery for a stdlib CLI that installs
-in one line in any `python` image. This change deletes it and records why the
-deprecation window does not apply (DEC-RFR-006).
+practice would mean a second supported artifact, a lot of machinery for a
+stdlib CLI that installs in one line in any `python` image. But the
+repository's records call it user-facing, and the policy's window covers
+surfaces the tool does not ship, interpreter versions among them. So 0.4.0
+announces its deprecation, names 0.5.0 as the removal version, and changes
+nothing in it but one header line (DEC-RFR-006). The first draft removed it
+outright; the first adversarial review showed that was not defensible under
+the policy, and the removal moved to a 0.5.0 package.
 
 0.4.0 is also the release that first reaches production with the lean tree
 (`lean-production-tree`) and the hardened release pipeline
@@ -42,10 +45,11 @@ takes from it is restated in `specs/release-0-4-0/spec.md`, and every number
 below was re-measured here rather than copied from it.
 
 **Evidence:** measured at `4278d4c` on `claude/lean-production-tree`,
-2026-10-16. That branch adds only `openspec/changes/lean-production-tree/` to
-`dev` at `c0ff090`: `git diff --name-only c0ff090 HEAD | grep -v
-'^openspec/changes/lean-production-tree/'` prints nothing. Line numbers are
-at that commit. A sibling landing first moves a line without moving the
+2026-10-16, and re-checked at `f0063a6` on `claude/prepare-release-0-4-0`
+for the first adversarial review. Outside the change package each branch
+adds, both trees are `dev` at `c0ff090`: `git diff --name-only c0ff090 HEAD
+| grep -v '^openspec/changes/'` prints nothing on either. Line numbers are
+at those commits. A sibling landing first moves a line without moving the
 fact, and `tasks.md` re-reads each line before the milestone that uses it.
 
 - **The gate before the draft.** `planlint --target . validate --fail-on
@@ -59,11 +63,11 @@ fact, and `tasks.md` re-reads each line before the milestone that uses it.
   starts nothing until `v0.3.0` is tagged and `pip install planlint` resolves.
 - **What was announced, and what was not.** `CHANGELOG.md:350-364` is the
   `[0.3.0]` `### Deprecated` group, with the 3.10 and `specgraph` entries
-  only. `docs/policies.md:58-85` states the window and its three instances:
-  `specgraph`, `detect --json` (removal named as 1.0) and Python 3.10. The
-  Dockerfile appears in no `Deprecated` group. `CHANGELOG.md:1775`, in
-  `[0.1.0]`'s `Added`, introduced it as "Optional `Dockerfile` +
-  `.dockerignore` for hermetic CLI invocation".
+  only. `docs/policies.md:66-85` states the window and its three instances:
+  `specgraph`, `detect --json` (removal named as 1.0) and Python 3.10. Its
+  surface list (`:66-68`) is "a command or alias, a flag, an output shape, a
+  public import, an interpreter version". The Dockerfile appears in no
+  `Deprecated` group.
 - **The 3.10 sites.** The caller's grep is `grep -rn "3\.10\|tomli"
   --include=*.py --include=*.toml --include=*.yml --include=*.md . | grep -v
   '^./openspec/changes/\|^./.git/'`, read with untracked `build/` (ignored by
@@ -132,6 +136,9 @@ fact, and `tasks.md` re-reads each line before the milestone that uses it.
   `python_version`, `README.md:39` or `SKILL.md`'s `compatibility:` floor to
   anything. `test_compatibility_prose_matches_the_declared_minimum` reads
   only the planlint version in that line (`tests/test_agent_skill_docs.py:500-519`).
+  `_matrix_versions` returns version strings, and as strings `"3.10"` sorts
+  below `"3.9"`. `_version_key` (`tests/test_workflow_python.py:31-32`) is
+  the numeric key the hooks-row test already uses.
 - **The alias.** `pyproject.toml:61-69` declares `planlint =
   "openspec_graph.cli:main"` and `specgraph =
   "openspec_graph.cli:main_deprecated"` under a comment stating the window.
@@ -142,11 +149,14 @@ fact, and `tasks.md` re-reads each line before the milestone that uses it.
   `tests/test_cli_surface.py`:
   - the module docstring (`:1`) and the import of `main_deprecated` (`:20`);
   - `test_entry_points_wired_in_pyproject` (`:227-234`), which asserts both
-    entries as text;
+    entries as text, and the `repo_root` fixture (`:509-511`) that only it
+    uses;
   - `test_deprecated_alias_warns_to_stderr_and_delegates`,
     `test_deprecated_alias_preserves_failure_exit_code` and
     `test_deprecated_alias_keeps_stdout_parseable` (`:258-301`);
-  - `test_deprecated_alias_names_its_removal_version` (`:514-530`).
+  - `test_deprecated_alias_names_its_removal_version` (`:514-530`), the only
+    user of the module-level `from openspec_graph import __version__`
+    (`:19`); the version tests at `:155` and `:175` import it locally.
 
   That last test derives the window from `__version__`, so it goes red on
   the 0.4.0 bump while the alias still exists.
@@ -163,69 +173,76 @@ fact, and `tasks.md` re-reads each line before the milestone that uses it.
   contributor hook ids in `.pre-commit-config.yaml` (`specgraph-lint` and
   its siblings) and comments such as `pyproject.toml:123,133` name nothing
   a user runs.
-- **The Dockerfile and what reads it.**
-  - `Dockerfile:3-4` says the image "is not built in CI, so a pyproject
-    change can break it silently". `:21` pins `python:3.12-slim@sha256:…`
-    and `:38-39` add the non-root `USER`. `.dockerignore` is its build
-    context.
-  - `.github/dependabot.yml:3-4` puts "the Docker base image's digest" in
-    scope, and `:62-78` is the `docker` entry with its own `target-branch:
-    "dev"`. `test_route_enforcement_and_dependabot_flip_together`
+- **The Dockerfile is a user-facing surface by the repository's own
+  records.**
+  - `CHANGELOG.md:1775`, in `[0.1.0]`'s `Added`, introduced it as "Optional
+    `Dockerfile` + `.dockerignore` for hermetic CLI invocation".
+  - `Dockerfile:1-16` documents a build and a run "for CI sandboxes that
+    want a hermetic, dependency-free CLI invocation", and says at `:3-4` the
+    image "is not built in CI".
+  - `enterprise-hardening` DEC-EH-001 calls it "a convenience image for CI
+    sandboxes".
+  - `write-down-policies`' spec (`:412`) names "the Docker surface".
+- **What reads the Dockerfile's header.**
+  - `test_dockerfile_documents_the_user_override_for_writing_verbs`
+    (`tests/test_workflow_pins.py:432-438`) calls `_user_override_offenders`
+    (`:177-191`). That joins every comment line and requires `--user`,
+    `id -u` and each backticked writing verb, so an added comment line
+    removes nothing it needs.
+  - The `FROM` and `USER` readers go through `_code_lines`
+    (`tests/workflow_support.py:86`), which drops comments, and the `COPY`
+    reader (`tests/test_release_surface.py:202`) is anchored at `^COPY`.
+  - `tests/test_adopter_urls.py:168` globs the file into the adopter
+    corpus, whose scans look for install commands and `@v`/`rev:` tag
+    tokens.
+- **For the 0.5.0 package: what the removal touches.** The inventory
+  measured for the first draft, and handed to that package:
+  - `.github/dependabot.yml:3-4,62-78`, the `docker` entry with its own
+    `target-branch`. `test_route_enforcement_and_dependabot_flip_together`
     (`tests/test_ci_promotion.py:349-370`) requires one `target-branch` per
-    `package-ecosystem`, so the entry and its `target-branch` leave
-    together.
-  - Tests: `tests/test_release_surface.py:193-235`
-    (`test_docker_build_context_is_sufficient_for_the_dynamic_version`,
-    `test_agent_artifacts_are_excluded_from_the_docker_context`).
-    `tests/test_workflow_pins.py` has its docstring (`:1-6`), its imports
-    (`:23`, `:30`, `:32`), `_dockerfile_offenders` and
-    `_user_override_offenders` (`:154-191`), `_docker_watch_offenders`
-    (`:230-236`), the R-HCW-13/14 section (`:416-471`) and
-    `test_an_unwatched_digest_is_named` (`:491-499`). `_dependabot_entries`
-    (`:194-228`) and its parser test (`:473-489`) also serve R-ASP-11.
-    `tests/workflow_support.py` has `DOCKERFILE` (`:31`), `WRITING_VERBS`
-    and its comment (`:64-68`), and `_FROM`/`_dockerfile_from` (`:156-163`).
-  - `tests/test_workflow_python.py` has its imports (`:18`, `:23`),
-    `_dockerfile_tag_version` (`:129-134`), the Dockerfile source at `:198`
-    inside `test_the_default_python_agrees_across_workflows_action_and_dockerfile`
-    (`:187-201`), and the Dockerfile assertion at `:214` in
-    `test_a_disagreeing_default_is_named`. The agreement test also binds
-    both workflows' `PYTHON_DEFAULT` to the composite action's input default,
-    a check that must survive. The plan's "delete 187-201" would have lost
-    it.
-  - `tests/test_adopter_urls.py:168` globs `"Dockerfile"` into the adopter
-    corpus.
-  - Prose: `docs/aqa.md:39-48` (the pins paragraph and "the Dockerfile's
-    base tag must equal the workflows' `PYTHON_DEFAULT`") and `:113-114`;
-    `docs/hooks.md:111-112`; `docs/next-steps.md:254-256` (item 9, citing
-    DEC-EH-001); `.claude/agents/planlint-verifier.md:22` ("the
-    `.dockerignore` build context"); and `.gitignore:57-58`.
-  - `git grep -n -i docker` finds nothing else outside `openspec/changes/`,
-    `CHANGELOG.md` and the plan documents `lean-production-tree` deletes.
-    `pyproject.toml:237`'s "Docker-backed action" is gitleaks-action and
-    unrelated. The decisions this supersedes are `harden-ci-workflows`
-    R-HCW-13, R-HCW-14, C-HCW-5 and R-HCW-9's Dockerfile clause, and
-    `enterprise-hardening` DEC-EH-001's "optional reproducible runner".
-- **Which specs cite a test this change deletes.** `grep -ln -- <name>
-  openspec/changes/*/specs/*/spec.md`, per test:
-  - The Dockerfile tests: `harden-ci-workflows` and `pin-actions-by-sha`.
-  - The `test_deprecated_alias` substring: `prepare-release-0-3-0`,
-    `rename-cli-and-positioning`, `shape-the-test-suite` and
-    `write-down-policies`.
-  - `test_entry_points_wired_in_pyproject`: `prepare-release-0-3-0` and
-    `shape-the-test-suite`.
-  - `test_agent_artifacts_are_excluded_from_the_docker_context`:
-    `lean-production-tree` alone, in AC-LPT-11. Its R-LPT-7 also requires
-    `.dockerignore` to keep excluding the agent artifacts.
+    entry.
+  - `tests/test_release_surface.py:193-235`.
+  - `tests/test_workflow_pins.py:1-6,23,30,32,154-191,230-236,416-471,491-499`,
+    keeping `_dependabot_entries` (`:194-228`) and its parser test
+    (`:473-489`).
+  - `tests/workflow_support.py:31,64-68,156-163`, whose `import re` (`:12`)
+    is used only by `_FROM` and goes with it.
+  - `tests/test_workflow_python.py:18,23,129-134,198,214`.
+  - `tests/test_adopter_urls.py:168`.
+  - `docs/aqa.md:39-48,113-114`, `docs/hooks.md:111-112`,
+    `.claude/agents/planlint-verifier.md:22` and `.gitignore:57-58`.
 
-  `tests/test_spec_test_citations.py` reads every `pytest -k` token in every
-  spec and fails on one that is a substring of no test function name. Before
-  `lean-production-tree` lands, then, these removals would leave six shipped
-  packages and one open package citing nothing. After it lands, two remain:
-  `prepare-release-0-3-0`, which it keeps until the post-0.4.0 sweep
-  (DEC-LPT-012), and `lean-production-tree` itself.
-  `harden-release-pipeline` is being drafted concurrently and is re-checked
-  at implementation.
+  A citation measure for the Dockerfile tests, the script below with that
+  set as `gone`, names `harden-ci-workflows` and `pin-actions-by-sha` at
+  `f0063a6`, and `lean-production-tree`'s AC-LPT-11 at `4278d4c`.
+- **Which specs cite a test this change deletes.** At `f0063a6` the
+  citations that resolve today but would not once the alias tests are
+  deleted and `test_entry_points_wired_in_pyproject` is renamed are listed
+  by:
+
+  ```
+  python - <<'EOF'
+  import sys; sys.path.insert(0, ".")
+  from tests.test_spec_test_citations import _citations, _collected_test_names, REPO_ROOT
+  known = _collected_test_names()
+  gone = {n for n in known if n.startswith("test_deprecated_alias_")} | {"test_entry_points_wired_in_pyproject"}
+  after = (known - gone) | {"test_entry_points_declare_planlint_and_no_alias"}
+  for spec, tok in _citations():
+      if any(tok in n for n in known) and not any(tok in n for n in after):
+          print(spec.relative_to(REPO_ROOT).parts[2], tok)
+  EOF
+  ```
+
+  It names three packages: `prepare-release-0-3-0` (the four alias tests
+  and the entry-point test), `rename-cli-and-positioning` (the
+  `test_deprecated_alias` substring and the stdout test) and
+  `write-down-policies` (three alias tests). `shape-the-test-suite` mentions
+  the tests but cites none of them. The first draft's "six shipped packages
+  and one open package" counted the Dockerfile tests too, and counted
+  mentions as citations. `lean-production-tree` deletes
+  `rename-cli-and-positioning` and `write-down-policies` and keeps
+  `prepare-release-0-3-0` until the post-0.4.0 sweep (DEC-LPT-012).
+  `harden-release-pipeline` is re-checked at implementation.
 - **The release-prep sites.**
   - `openspec_graph/__init__.py:15`.
   - `skills/planlint-spec-governance/SKILL.md:5,7,8`, the three frontmatter
@@ -253,6 +270,15 @@ fact, and `tasks.md` re-reads each line before the milestone that uses it.
     `test_every_changelog_version_links_to_its_release_tag` and
     `test_every_copyable_tag_ref_names_the_current_version`
     (`tests/test_adopter_urls.py:285,338,453`).
+  - On the bump alone, the 0.3.0 record (`prepare-release-0-3-0/tasks.md:62-68`)
+    saw the metadata, template-floor and changelog tests go red while the
+    compatibility test stayed green; the minimum-ahead test cannot go red
+    on a bump, since the minimum is still the older version.
+- **The 3.10 refusal depends on pip's version.** The review measured that
+  `pip install --dry-run --python-version 3.10 <wheel>` exits 0 on pip 24.0
+  and 24.1 and refuses only from 24.2, while `pip download --no-deps
+  --only-binary=:all: --python-version 3.10 -d <dir> <wheel>` refuses on
+  24.0 and later. This environment has pip 24.0.
 - **The checks a removed leg could strand.** The promotion model's planned
   rulesets require the `ci-ok` check alone. `gh api
   repos/ianshank/planlint/rulesets` returned `[]` at `04d1622`
@@ -262,8 +288,9 @@ fact, and `tasks.md` re-reads each line before the milestone that uses it.
 
 ## What Changes
 
-**Pull request 1 — the removals (Milestones 0 to 4), squash into `dev`, after
-`v0.3.0` is published and `lean-production-tree` has merged.**
+**Pull request 1 — the removals and the Dockerfile's deprecation (Milestones
+0 to 4), squash into `dev`, after `v0.3.0` is published and
+`lean-production-tree` has merged.**
 
 - **`pyproject.toml`.**
   - `requires-python = ">=3.11"`, and the 3.10 classifier is dropped.
@@ -296,16 +323,22 @@ fact, and `tasks.md` re-reads each line before the milestone that uses it.
   `test_no_stub_name_or_condition_hides_code_from_mypy` says "no version or
   platform branch under `tests/`". Any per-code ceiling the run names is
   lowered: a ceiling only falls.
+- **`tests/workflow_support.py`**: a `requires_python_floor` reader, shared
+  by the two modules below.
 - **`tests/test_ci_workflow.py`**: `test_mypy_is_strict_and_warns_on_unreachable_code`
   asserts that `python_version` equals the lower bound of `requires-python`,
   read from the file, in place of the `"3.10"` literal.
-- **`tests/test_workflow_python.py`**: a new floor guard, plus its planted
-  non-success twin. The lower bound of `requires-python`, the lowest hard
-  matrix leg, the lowest `Programming Language :: Python :: 3.x` classifier,
-  `[tool.mypy] python_version`, `README.md`'s "Python X.Y+" and `SKILL.md`'s
-  `compatibility:` "Python X.Y or newer" must all name one version. A
-  disagreement fails, naming every source and its value. The function names
-  are fixed in `tasks.md` and added as selectors when the tests exist.
+- **`tests/test_workflow_python.py`**: a new floor guard and its planted
+  non-success twin.
+  - The lower bound of `requires-python`, the lowest hard matrix leg, the
+    lowest `Programming Language :: Python :: 3.x` classifier,
+    `[tool.mypy] python_version`, `README.md`'s "Python X.Y+" and
+    `SKILL.md`'s `compatibility:` "Python X.Y or newer" must all name one
+    version, compared numerically.
+  - Prose is read through a `_prose_floor` reader, and the twin plants text
+    and a specifier through the same readers.
+  - The function names are fixed in `tasks.md` and added as selectors when
+    the tests exist.
 - **`openspec_graph/cli.py`**:
   - `main_deprecated` and `_DEPRECATION_WARNING` are deleted.
   - The comment in `main` names one entry point.
@@ -316,54 +349,43 @@ fact, and `tasks.md` re-reads each line before the milestone that uses it.
   - `test_entry_points_wired_in_pyproject` flips to the absence direction
     under a new name: `[project.scripts]`, read structurally, has exactly
     the key `planlint`, and `openspec_graph.cli` has no `main_deprecated`.
-  - The import and the module docstring follow.
+  - The import of `main_deprecated`, the now-unused module-level
+    `__version__` import and the `repo_root` fixture go, and the module
+    docstring follows.
   - `test_primary_command_emits_no_deprecation_warning` stays.
-- **Deleted**: `Dockerfile`, `.dockerignore`, and `.github/dependabot.yml`'s
-  `docker` entry with the header sentence that names it.
-- **Tests that read the Docker files**:
-  - `tests/test_release_surface.py` loses its two Docker tests.
-  - `tests/test_workflow_pins.py` loses the Dockerfile and docker-watch
-    helpers and tests, and its docstring is corrected. `_dependabot_entries`
-    and its parser test stay.
-  - `tests/workflow_support.py` loses `DOCKERFILE`, `WRITING_VERBS` and
-    `_dockerfile_from`.
-  - `tests/test_workflow_python.py` loses `_dockerfile_tag_version`. The
-    agreement test keeps checking the workflows against the composite
-    action, renamed so its name no longer says Dockerfile, and
-    `test_a_disagreeing_default_is_named` loses its Dockerfile line.
-  - `tests/test_adopter_urls.py`'s corpus glob drops `"Dockerfile"`.
+- **`Dockerfile`**: one header comment line — deprecated in 0.4.0, removed
+  in 0.5.0, see the changelog. Nothing else in it, in `.dockerignore`, in
+  the `docker` Dependabot entry or in any test that reads them changes.
 - **Prose**:
   - `README.md:39` reads "Python 3.11+", and the alias paragraph is past
     tense with the stable identifiers kept.
-  - `docs/hooks.md`: the `test` row reads `(3.11–3.14)`, and the posture
-    paragraph no longer names the Dockerfile.
-  - `docs/aqa.md`: the ranges, the pins paragraph, and the build-context
-    clause.
+  - `docs/hooks.md`: the `test` row reads `(3.11–3.14)`.
+  - `docs/aqa.md`: the two version ranges.
   - `docs/policies.md`: the 3.10 and `specgraph` instances are past tense.
   - `docs/next-steps.md`: item 7a reads "now unblocked", with the swap still
-    its own package; item 9 records the removal and its reopen trigger.
+    its own package; item 9 records the Dockerfile's window and its reopen
+    trigger.
   - `skills/planlint-spec-governance/SKILL.md:5`: "Python 3.11 or newer".
-  - `.claude/agents/planlint-verifier.md:22` and `.gitignore:57-58`.
   - The comments and docstrings listed in the Evidence are reworded to stop
     stating the 3.10 floor as a present fact. Code changes only where a
     branch can no longer run or where ruff names an upgrade.
-- **`CHANGELOG.md` `[Unreleased]`**: one `### Removed — Python 3.10, the
-  `specgraph` alias, the Dockerfile` group, beside `lean-production-tree`'s
-  `### Removed — the development record`, with one entry per removal.
-- **Open packages, amended in place** (marked "(amended by
-  `prepare-release-0-4-0`)"):
-  - `prepare-release-0-3-0`: AC-REL-5's and AC-REL-6's verification lines
-    only.
-  - `lean-production-tree`: R-LPT-7's `.dockerignore` clause, and AC-LPT-11's
-    docker-context clause and its selector.
-  - Any further spec the citation guard names at implementation.
+- **`CHANGELOG.md` `[Unreleased]`**: a `### Removed — Python 3.10 and the
+  `specgraph` alias` group, beside `lean-production-tree`'s
+  `### Removed — the development record`, and a `### Deprecated` group
+  announcing the Dockerfile's removal in 0.5.0.
+- **One shipped package, amended at two lines**: `prepare-release-0-3-0`'s
+  AC-REL-5 and AC-REL-6 verification lines, marked "(amended by
+  `prepare-release-0-4-0`)", superseding `lean-production-tree` DEC-LPT-004's
+  no-edit rule for those two lines only (DEC-RFR-007). Any further spec the
+  citation guard names at implementation is amended the same way.
 
 **Pull request 2 — the 0.4.0 release prep (Milestone 5), squash into `dev`,
 after `lean-production-tree`, `harden-release-pipeline` and pull request 1
 have merged.**
 
 - `openspec_graph/__init__.py`: `__version__ = "0.4.0"`. Then
-  `make skill-manifests`.
+  `make skill-manifests`, and `pip install -e ".[dev]"` so the installed
+  metadata reads the new version.
 - `skills/planlint-spec-governance/SKILL.md`: the three frontmatter fields
   read `0.4.0`, and the "Wiring it into CI" prose says pin `@v0.4.0`.
 - `templates/spec-gate.yml` and its byte copy, `README.md`'s own-action
@@ -371,15 +393,18 @@ have merged.**
   `rev: v0.4.0`.
 - `.github/actions/planlint/action.yml`: the `version` example reads
   `"0.4.0"`.
-- `SECURITY.md`: the supported-versions statement names 0.4.0.
+- `SECURITY.md`: the supported-versions sentence names 0.4.0; the
+  verification commands keep their placeholders.
 - `CHANGELOG.md`: `## [0.4.0] — <the day the tag is pushed>`, with every line
-  under `[Unreleased]` moved verbatim. The `[0.4.0]:` tag link is added, and
-  the `[Unreleased]:` compare line moves to `v0.4.0...HEAD`.
+  under `[Unreleased]` moved verbatim, the Dockerfile's `Deprecated` group
+  included. The `[0.4.0]:` tag link is added, and the `[Unreleased]:`
+  compare line moves to `v0.4.0...HEAD`.
 
-**Then the maintainer (Milestone 6)**: promote `dev` → `qa` → `main` by merge
-commits, dry-run, tag the production merge commit `v0.4.0`, publish, verify
-and back-merge. The observations are recorded in this package's `tasks.md`
-in a later pull request into `dev`. The cumulative sweep that follows, the
+**Then the maintainer (Milestone 6)**: confirm `dev`'s tip is the recorded
+release-prep commit, promote `dev` → `qa` → `main` by merge commits,
+dry-run, tag the production merge commit `v0.4.0`, publish, verify and
+back-merge. The observations are recorded in this package's `tasks.md` in a
+later pull request into `dev`. The cumulative sweep that follows, the
 runbook's last step, removes this package with the others 0.4.0 shipped.
 
 ## Non-Goals
@@ -388,6 +413,10 @@ runbook's last step, removes this package with the others 0.4.0 shipped.
   and still install `specgraph`. Pull request 1 stays a GitHub draft until
   Milestone 0 records the tag, the PyPI release and its ancestry
   (DEC-RFR-001).
+- **No Dockerfile removal in 0.4.0.** The file, `.dockerignore`, the
+  `docker` Dependabot entry and their guards stay through every 0.4.x
+  release, apart from the one header line. The removal, with the inventory
+  the proposal measured, is a 0.5.0 package's (DEC-RFR-006).
 - **No `tomllib` in the hand-rolled scanners.** `scoped_fail_under`, the
   `tools/_common.py` readers and `tools/check_wheel_metadata.py` keep their
   line scanners. Replacing them is `docs/next-steps.md` item 7a's own
@@ -398,11 +427,11 @@ runbook's last step, removes this package with the others 0.4.0 shipped.
   and nowhere else. `contextlib.chdir` does not replace `working_directory`,
   and `logging.getLevelNamesMapping` does not replace `getLevelName`. Each
   is a behaviour change with a tested contract of its own.
-- **No removal that was not announced.** `SPECGRAPH_LOG_LEVEL` stays, and
-  so do `detect --json` (named for 1.0), the waiver prefix,
+- **No removal that was not announced; the one new deprecation announced
+  here is the Dockerfile's.** `SPECGRAPH_LOG_LEVEL` stays, and so do
+  `detect --json` (named for 1.0), the waiver prefix,
   `openspec/specgraph.json`, `[tool.specgraph]`, the contributor hook ids in
-  `.pre-commit-config.yaml` and the comments that use the old name. No new
-  deprecation is announced here either.
+  `.pre-commit-config.yaml` and the comments that use the old name.
 - **No container image of any kind.** No ghcr.io package and no
   `packages: write`. Reopening is recorded in `docs/next-steps.md` item 9
   with its trigger (DEC-RFR-006).
@@ -412,6 +441,11 @@ runbook's last step, removes this package with the others 0.4.0 shipped.
 - **No edit to a released `CHANGELOG.md` section.** The `[0.3.0]`
   `Deprecated` group stays as written. That is the announcement this
   package executes.
+- **No edit to a shipped package beyond two verification lines.** No line
+  of `prepare-release-0-3-0` other than AC-REL-5's and AC-REL-6's
+  verification lines changes, and no other shipped or open package is
+  edited; `lean-production-tree`'s R-LPT-7 and AC-LPT-11 hold as written
+  while the Dockerfile stays.
 - **No release-pipeline change, no lean-tree deletion, no sweep.** Those
   are `harden-release-pipeline`'s, `lean-production-tree`'s and the
   runbook's. The 0.3.0 packages leave in the post-0.4.0 sweep by
