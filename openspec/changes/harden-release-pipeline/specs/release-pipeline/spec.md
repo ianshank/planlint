@@ -145,10 +145,13 @@ none is repeated here (C-HRP-4).
   from `github.token`, never from a stored secret, and `GH_REPO` from
   `github.repository`, both through `env:`. They MUST read the tag from
   `GITHUB_REF_NAME` in the environment, never through an inline expression in
-  `run:`. The guard MUST judge the commands as the shell runs them: a
-  backslash-continued line joined to the next, each line read on its own, and
-  a comment only where a word begins with `#`. A line it cannot read is an
-  offender, never skipped.
+  `run:`. The guard MUST admit only the two `run:` scripts this change
+  writes, compared whole and never parsed as shell: each step's script, with
+  backslash continuations joined, each line's runs of spaces and tabs
+  collapsed and its ends stripped, and blank lines dropped, MUST equal one
+  of two fixed texts the test holds, line for line. Any other script is an
+  offender. No step MAY set `shell:`, and neither the job nor the workflow
+  MAY set `defaults.run.shell`.
 - R-HRP-7: The `release` job MUST run `gh attestation verify` on every file
   in the downloaded `dist` directory, each with the following flags:
   - `--repo` naming this repository;
@@ -392,27 +395,40 @@ none is repeated here (C-HRP-4).
   controls that tree, the reason the gate already reads `tag-ancestry` from
   the default branch. "No checkout" alone leaves other doors open: a
   `git clone`, a `gh repo clone`, an interpreter running a downloaded script.
-  So the guard is an allow-list of commands rather than a deny-list of paths.
+  So the guard admits a fixed set of scripts rather than denying paths.
   That is stronger than the plan's "no `run:` invoking a tree path", and with
   no checkout there is no tree path to invoke. The tag reaches the shell
   through `GITHUB_REF_NAME` in the environment, the safe form
   `add-witness-ci-artifacts` DEC-WCA-014 models, although only the owner pushes
   tags here.
 
-  The guard reads commands as the shell runs them. This is a decision of the
-  first review, because each simpler reading fails one way or the other:
-  - Lexing a whole script at once reads a forbidden command on its own line
-    as arguments of the `gh` line before it, since a newline is only
-    whitespace to a lexer.
-  - Lexing each raw line fails on a backslash continuation.
-  - A lexer that treats `#` as a comment character anywhere cuts mid-word,
-    so an unquoted `${GITHUB_REF_NAME#v}` hides a following
-    `; make pre-pr`.
+  The guard compares whole scripts with fixed texts and parses no shell.
+  This is a decision of Copilot's review of #59 (2026-10-16), and it
+  replaces the first review's command reader:
+  - That reader joined continuations, lexed each line with `shlex` in POSIX
+    mode, and took a word beginning with `#` as a comment.
+  - Three scripts passed it while bash ran a command outside the
+    allow-list. In `--title "#notes"; printf x`, POSIX lexing removes the
+    quotes, so the comment rule swallows the rest of the line. In
+    `--title "$(printf x)"`, a quoted command substitution is one
+    argument, which the command-position check never inspects. A backtick
+    substitution passes the same way.
+  - Patching the reader for quotes and substitutions would still leave a
+    partial shell parser, and every gap it kept would be a command run
+    with `contents: write`.
 
-  So continuations are joined first, as `tools/_common.py`'s
-  `shell_invocations` does. Each line is lexed alone with no comment
-  character, and only a word that begins with `#` starts a comment. A line
-  the lexer cannot read is an offender, because an allow-list fails closed.
+  The job's commands are fixed anyway, by R-HRP-7 and R-HRP-8. So the test
+  holds the two scripts as text, and a change to them edits the test in the
+  same commit, which is the review a write-scoped job deserves. What the
+  first review asked of the reader survives as the normalisation:
+  - continuations are joined and spacing is collapsed within a line, so a
+    reformatting is not an offence;
+  - newlines are kept, because to the shell a newline ends a command, so a
+    script split across lines differently is refused;
+  - nothing is skipped, so the check fails closed.
+
+  A `shell:` key, or a job or workflow `defaults.run.shell`, would hand the
+  same text to another interpreter, so none is allowed.
 - **DEC-HRP-008 (revised at the first review):** the `release` job holds
   `contents: write` and `attestations: read`, the second beyond the plan's
   block. A job-level block replaces the top-level one, so every scope it omits
@@ -741,8 +757,10 @@ none is repeated here (C-HRP-4).
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-HRP-10:** The `release` job has no checkout. Its steps are exactly
-  the two downloads and `run:` steps whose only commands are
-  `gh attestation verify` and `gh release create`. `GH_TOKEN` comes from
+  the two downloads and two `run:` steps whose scripts are, line for line
+  once normalised, the two fixed texts the test holds: the verification loop
+  and the one `gh release create`. No step sets `shell:`, and neither the job
+  nor the workflow sets a default shell. `GH_TOKEN` comes from
   `github.token` and `GH_REPO` from `github.repository` through `env:`, and
   the tag through `GITHUB_REF_NAME`. Each downloaded file is verified with
   `--repo`, `--signer-workflow`, `--source-ref`, `--source-digest` and
@@ -752,7 +770,7 @@ none is repeated here (C-HRP-4).
   (R-HRP-6, R-HRP-7, R-HRP-8, DEC-HRP-007, DEC-HRP-009)
   _Verified by:_ stage: `make test`
 
-- [ ] **AC-HRP-11 (non-success):** Through the same reader, each planted
+- [ ] **AC-HRP-11 (non-success):** Through the same check, each planted
   `release` job below is named, each with its own offender.
 
   Reaching the tree, or running a command outside the allow-list:
@@ -765,7 +783,13 @@ none is repeated here (C-HRP-4).
   - `gh release upload`;
   - a third artifact download;
   - a forbidden command on its own line after a `gh` line;
-  - an unquoted `${GITHUB_REF_NAME#v}` followed by `; make pre-pr`.
+  - an unquoted `${GITHUB_REF_NAME#v}` followed by `; make pre-pr`;
+  - a quoted `"#notes"` followed by `; printf x`;
+  - a quoted command substitution, `"$(printf x)"`;
+  - the same substitution in backticks;
+  - the create command split across two lines;
+  - a `shell:` key on a step, and a `defaults.run.shell` on the job and on
+    the workflow.
 
   Weakening the verification:
   - the release created before the verification;

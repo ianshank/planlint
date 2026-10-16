@@ -239,6 +239,21 @@ it.
     proposal's evidence.
   - **LOW-8, `--source-digest "$GITHUB_SHA"`, and the deletion bypass.**
     Clauses: R-HRP-7, DEC-HRP-009, AC-HRP-10, AC-HRP-11, Milestones 4 and 7.
+- **Copilot's review of #59** (2026-10-16, against `f58c715`; one High),
+  resolved in this revision:
+  - **HIGH, the command reader admitted commands bash runs.** Reproduced
+    with the reader exactly as Milestone 3 specified it:
+    - `gh release create v0.4.0 --title "#notes"; printf x` and
+      `gh release create v0.4.0 --title "$(printf x)"` both passed, and so
+      did the backtick form;
+    - an unquoted `$(printf x)` and the first review's `; make pre-pr` case
+      were caught.
+
+    The reader is replaced by a whole-script comparison with the two fixed
+    scripts, which parses no shell, and a `shell:` override is refused. The
+    coordinator chose the fixed shapes, the review's own alternative, over
+    patching the reader. Clauses: R-HRP-6, DEC-HRP-007, AC-HRP-10,
+    AC-HRP-11, Milestones 3, 4 and 6.
 - AC-HRP-1, 2, 4, 7, 9, 10, 11, 13, 14 and 15 cite their stage only, because
   the tests that will verify them do not exist yet. AC-HRP-19 cites its stage
   only because it is read directly. Every other criterion cites existing tests
@@ -339,7 +354,8 @@ it.
     - no `actions/checkout`, and exactly two downloads, of `dist` and
       `release-notes`;
     - `GH_TOKEN: ${{ github.token }}`, never `secrets.*`;
-    - every command an allowed one;
+    - every `run:` script one of `_RELEASE_SCRIPTS`, and no `shell:` on a
+      step, in the job's `defaults` or in the workflow's;
     - all five verification flags present;
     - verification before creation, and `--verify-tag`;
     - no `SOFT_FAIL` token from `tests/workflow_support.py`, and no `if:` on
@@ -347,24 +363,27 @@ it.
     - no `${{` inside any `run:` script.
   - `_contents_write_holders(texts)`: the jobs across every workflow whose
     block grants `contents: write` (R-HRP-5).
-- The command reader (R-HRP-6, DEC-HRP-007). Take the `run:` scripts raw
-  through `_common.run_scripts` (`load_tool("_common", "_common.py")`), never
-  through `_code_lines`, which cuts at the first `#`. Then:
-  - join backslash continuations with `script.replace("\\\n", " ")`, as
-    `shell_invocations` does;
-  - split on newlines and lex each line alone with
-    `shlex.shlex(line, posix=True, punctuation_chars=";&|()")`,
-    `whitespace_split = True` and `commenters = ""`;
-  - treat a word that begins with `#` as the start of a comment and drop it
-    and the rest of the line;
-  - read a word as in command position at the start of a line, or after a run
-    of separator characters that does not end in `)`;
-  - skip the shell keywords `for`, `in`, `do`, `done`, `if`, `then`, `else`
-    and `fi` there, keeping command position after `do`, `then` and `else`;
-  - require every other command-position word to be `gh`, followed by
-    `attestation verify` or `release create`;
-  - report a line `shlex` raises on (an unbalanced quote) as an offender, and
-    never skip it.
+- The script check (R-HRP-6, DEC-HRP-007). It parses no shell. Take the
+  `run:` scripts raw through `_common.run_scripts`
+  (`load_tool("_common", "_common.py")`), which folds a `>-` scalar and keeps
+  a `|` scalar's lines, never through `_code_lines`, which cuts at the first
+  `#`. Then:
+  - normalise each script with `_normalised_script`: join backslash
+    continuations with `script.replace("\\\n", " ")`, as
+    `shell_invocations` does; split on newlines; in each line collapse
+    `[ \t]+` to one space and strip it; and drop blank lines, giving a tuple
+    of lines;
+  - require that tuple to equal one of `_RELEASE_SCRIPTS`, the two
+    normalised scripts Milestone 4 writes into `release.yml`: the
+    verification loop (three lines) and the create (one line);
+  - report any other script whole, with its step's name;
+  - report a `shell:` key on any step of the job, and a `defaults:` block
+    naming `run:` and `shell:` on the job or at the top of the workflow.
+
+  Checked on 2026-10-16 against Milestone 4's job: both of its scripts
+  normalise into `_RELEASE_SCRIPTS`. Each of these is refused: the two
+  scripts from Copilot's review, the backtick form, the create split across
+  two lines, `|| true`, and an added `make pre-pr` line.
 - Planned test functions, named here so the stage-only verification lines can
   be re-pointed once they exist:
   - `test_every_release_checkout_drops_its_credential` (AC-HRP-1);
@@ -384,8 +403,10 @@ it.
   - `test_a_release_job_that_reaches_the_tree_or_weakens_verification_is_named`
     (AC-HRP-11), parametrized over every planting AC-HRP-11 lists, each
     asserting its own offender text;
-  - `test_the_command_reader_joins_continuations_and_reads_mid_word_hashes`
-    (AC-HRP-11), a unit test of the reader alone on the two lexing shapes.
+  - `test_the_script_check_admits_only_the_fixed_scripts` (AC-HRP-11), a
+    unit test of `_normalised_script` and the comparison alone. A
+    reformatted continuation is admitted. The quoted-`#` script, the quoted
+    and backtick substitutions and a split line are refused.
 
   Real-tree tests read `RELEASE_YML` and `WORKFLOWS` from
   `tests/workflow_support.py` and are `integration`. Planted tests feed
@@ -562,7 +583,8 @@ it.
   `permissions:` (`tests/workflow_support.py`'s comment rule). An empty
   `dist/` leaves the glob literal, so `gh attestation verify` fails on a
   missing file and the step fails closed. The verification step's
-  continuations are what the command reader's join exists for. Re-read the
+  continuations are what the script check's join exists for. A change to
+  either script edits `_RELEASE_SCRIPTS` in the same commit. Re-read the
   download pin at the head. No `concurrency` block (R-HRP-9).
 - New `tools/release_notes.py` (R-HRP-13, R-HRP-14, DEC-HRP-026):
   - A module docstring naming this package and the exit contract.
@@ -711,7 +733,7 @@ it.
   - AC-HRP-4: the planted publish test;
   - AC-HRP-7: the planted notes test;
   - AC-HRP-9: the planted write-scope test;
-  - AC-HRP-10, 11: the release-job tests and the command-reader test;
+  - AC-HRP-10, 11: the release-job tests and the script-check test;
   - AC-HRP-13, 14, 15: the notes-tool tests;
   - AC-HRP-3, 6, 8, 18: also cite their new real-tree tests beside the
     existing ones.

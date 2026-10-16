@@ -169,6 +169,11 @@ first may move a line without moving the fact.
     lexes as `${GITHUB_REF_NAME` and the rest vanishes.
 
   With `commenters = ""` the same line yields the `;` and the `make`.
+  Copilot's review of #59 then showed that the repaired reader still passes
+  scripts bash runs differently: a quoted `"#notes"` before `; printf x`,
+  and a quoted or backtick command substitution. So the guard parses no
+  shell. It compares each script, normalised, with the two fixed scripts
+  the job runs (DEC-HRP-007).
 - **What the release tests pin, and do not.**
   `tests/test_release_surface.py::test_release_workflow_is_gated_and_uses_trusted_publishing`
   (`:30-77`) asserts the `gate → build → publish` wiring, `make pre-pr`, the
