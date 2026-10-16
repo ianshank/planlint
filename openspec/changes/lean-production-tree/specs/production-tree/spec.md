@@ -789,11 +789,12 @@ figure is in `tasks.md`, and none is repeated here (C-LPT-3).
   Condition (c) survives unconditionally, and the worklist the report
   produced left with the package that recorded it.
 - **DEC-LPT-017:** the preconditions are `tasks.md` gates, not criteria, and
-  the pull request's draft state enforces their order. No test can observe a
-  remote tag or a published release, and a criterion citing a stage that
-  cannot see its subject is a pass nobody observed; so every criterion here
-  is observed at the implementation branch's head — "the merged tree" means
-  that tree, which is what merges — and none waits on a remote event.
+  the implementation pull request's draft state enforces their order. No
+  test can observe a remote tag or a published release, and a criterion
+  citing a stage that cannot see its subject is a pass nobody observed; so
+  every criterion here is observed at the implementation branch's head —
+  "the merged tree" means that tree, which is what merges — and none waits
+  on a remote event.
   `tasks.md` Milestone 2 records the preconditions on one gate before any
   deletion. `v0.3.0` is on origin, on PyPI and an ancestor of `origin/dev`,
   because `docs/next-steps.md`'s "After the first public tag" starts nothing
@@ -809,8 +810,11 @@ figure is in `tasks.md`, and none is repeated here (C-LPT-3).
   `make spec-status` prints at X is recorded (DEC-LPT-016). Then the archive
   tag, read back with `git ls-remote --tags origin 'archive/*'`, its peeled
   line naming X. The deleted-path diff from the tag to the merge base is
-  re-run before the merge. The pull request stays a GitHub draft until that
-  gate is recorded, so it cannot be merged early by accident. The change
+  re-run before the merge. The package and its implementation land in two
+  pull requests: #58 carried this package alone into `dev` on 2026-10-16,
+  with no deletion, and the implementation is a new pull request branched
+  from X. That pull request stays a GitHub draft until the gate is recorded,
+  so it cannot be merged early by accident. The change
   lands on `dev` after those and before 0.4.0's release-prep pull request,
   and reaches production only through the 0.4.0 promotion, so `main` never
   differs from `qa` in content.
@@ -1093,7 +1097,7 @@ spec.
 
 | Stage | Make Target | Pass Criteria |
 |---|---|---|
-| Preconditions | none — owner actions recorded on `tasks.md` Milestone 2's gate | `v0.3.0` on origin, on PyPI and an ancestor of `origin/dev`; the 0.3.0 record merged into `dev`; the packages added to `dev` since `c0ff090` listed and classified; `make spec-status` recorded at X; `archive/dev-record-2026-10` on origin at the implementation branch's merge base, X, read back with `git ls-remote --tags origin 'archive/*'`; the pull request a draft until all of it is recorded; no deleted path changed on `dev` since the tag, re-checked before the merge (DEC-LPT-017) |
+| Preconditions | none — owner actions recorded on `tasks.md` Milestone 2's gate | `v0.3.0` on origin, on PyPI and an ancestor of `origin/dev`; the 0.3.0 record merged into `dev`; the packages added to `dev` since `c0ff090` listed and classified; `make spec-status` recorded at X; `archive/dev-record-2026-10` on origin at the implementation branch's merge base, X, read back with `git ls-remote --tags origin 'archive/*'`; the implementation pull request a draft until all of it is recorded; no deleted path changed on `dev` since the tag, re-checked before the merge (DEC-LPT-017) |
 | Focused | `make test` | AC-LPT-1..6, AC-LPT-11..16, AC-LPT-18 — the hygiene module green on the real tree and red on its planted cases, the retuned tests green with no package named, every guard this change leans on still green |
 | Docs | `make docs-check` | AC-LPT-7..10 — the moved runbook, the rewritten conventions and pointers, every required document present and linked |
 | Full | `make pre-pr` | AC-LPT-17, AC-LPT-19, AC-LPT-20 — the ladder, including this repository's own validate over every package and the typecheck ratchets |
