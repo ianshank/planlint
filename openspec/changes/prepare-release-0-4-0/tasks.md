@@ -8,16 +8,22 @@ change package each branch adds, these trees are `dev` at `c0ff090`. The
 plan is not tracked; every decision this package takes from it is restated
 in `specs/release-0-4-0/spec.md`.
 
-The package lands in two pull requests and a maintainer's sitting:
+The package lands first, then its work lands in two pull requests and a
+maintainer's sitting:
 
+- **#60 carries this package alone into `dev`**, with no code, as #58 did
+  for `lean-production-tree` (squash `9f5c693`, 2026-10-16) and #59 does for
+  `harden-release-pipeline`. Each sibling's implementation follows in its
+  own pull request.
 - **Pull request 1, the removals and the Dockerfile's deprecation**
-  (Milestones 0 to 4) **must not merge before `v0.3.0` is tagged and
-  published**, and not before `lean-production-tree` has merged
-  (DEC-RFR-001). It stays a GitHub draft until Milestone 0's gate is
+  (Milestones 0 to 4) is a new pull request from `dev`. It **must not merge
+  before `v0.3.0` is tagged and published**, and not before
+  `lean-production-tree`'s implementation has merged (DEC-RFR-001). It
+  opens as a GitHub draft and stays one until Milestone 0's gate is
   recorded here.
-- **Pull request 2, the release prep** (Milestone 5), opens only after
-  `lean-production-tree`, `harden-release-pipeline` and pull request 1 have
-  merged into `dev`.
+- **Pull request 2, the release prep** (Milestone 5), opens only after the
+  implementations of `lean-production-tree` and `harden-release-pipeline`,
+  and pull request 1, have merged into `dev`.
 - **Milestone 6 is the maintainer's**, outside the tree. Its bullets are
   filled in afterwards with what was observed, in a later pull request into
   `dev`.
@@ -105,10 +111,13 @@ Every number names the command that produced it.
   ready only after this milestone's gate is recorded here. No criterion can
   observe the release, so the draft state is what keeps the removals out of
   `dev` early (DEC-RFR-001).
-  - 2026-10-16: the owner marked #60 ready for review to request a review.
-    It went back to draft the same day, once Copilot's review was answered,
-    and the hold applies again from then. That review's two findings are
-    resolved here:
+  - 2026-10-16: the owner marked #60 ready for review to request a review,
+    and Copilot reviewed it. The same day #58 merged `lean-production-tree`
+    package-first, and the owner chose the same for this package: #60
+    carries the package alone, and pull request 1 is a new pull request that
+    holds this milestone's draft. So `LPT` below is found by the deletion
+    that only the implementation makes, not by the package's arrival. The
+    review's two findings are resolved here:
     - the post-release `gh attestation verify` now carries the source ref,
       the source digest and the self-hosted-runner refusal (Milestone 6);
     - the required-checks preflight now reads the rules in force on each
@@ -186,30 +195,32 @@ Every number names the command that produced it.
     prints `200`.
   - `git fetch origin && git merge-base --is-ancestor 'v0.3.0^{commit}' origin/dev`
     exits 0.
-- **`lean-production-tree` has merged into `dev`.**
+- **`lean-production-tree`'s implementation has merged into `dev`.** Its
+  package alone reached `dev` in #58 (`9f5c693`), which deleted nothing, so
+  the package's presence proves nothing. The deletions do:
   - `git ls-remote --tags origin 'archive/*'` prints
     `refs/tags/archive/dev-record-2026-10`.
   - `git ls-tree --name-only origin/dev openspec/changes/` no longer lists
     `rename-cli-and-positioning` or `write-down-policies`, the shipped
     packages that cite the alias tests.
-  - `git ls-tree origin/dev openspec/changes/lean-production-tree` prints
-    its tree.
+  - `git ls-tree origin/dev docs/distribution-plan.md` prints nothing.
 
-  Record its squash commit's sha as `LPT`. That squash both adds the
-  package to `dev` and makes its deletions, so it is the one commit on
-  `dev`'s first-parent line that added the package's proposal:
+  Record the implementation's squash commit as `LPT`. It is the one commit
+  on `dev`'s first-parent line that deletes `docs/distribution-plan.md`,
+  a file only that pull request deletes:
 
   ```
-  LPT=$(git log --first-parent --diff-filter=A --format=%H origin/dev -- openspec/changes/lean-production-tree/proposal.md)
-  gh pr view 58 --json mergeCommit --jq .mergeCommit.oid
+  LPT=$(git log --first-parent --diff-filter=D --format=%H origin/dev -- docs/distribution-plan.md)
+  N=$(git log -1 --format=%s "$LPT" | sed -n 's/.*(#\([0-9][0-9]*\))$/\1/p')
+  gh pr view "$N" --json mergeCommit,headRefName --jq '.mergeCommit.oid + " " + .headRefName'
   ```
 
-  The first prints exactly one sha, and the second prints the same sha
-  (pull request #58 carries `lean-production-tree`; if it was closed in
-  favour of another, cross-check against the one that merged). A squash
-  subject is the pull request's title and need not name the package, so
-  the subject is not how `LPT` is found. Milestone 6 derives its
-  deleted-path list from `LPT`.
+  The first prints exactly one sha. The second reads the pull request
+  number GitHub appends to a squash subject. The third prints the same sha
+  and the implementation's head branch. Finding `LPT` as the commit that
+  added the package's proposal would name `9f5c693`, whose deleted list is
+  empty. Milestone 6 derives its deleted-path list from `LPT` and refuses
+  an empty one.
 - Bring this branch to that tip by merging `origin/dev` into it, never by
   rebasing or force-pushing. Re-run every measurement above at the branch
   head, and note any line that moved beside the bullet that uses it below.
@@ -265,8 +276,9 @@ Every number names the command that produced it.
   - `Dockerfile`: no sibling edits it, and this change adds one comment
     line.
 - **Gate:** every precondition above recorded with its output and the date
-  — the tag, the PyPI `200`, the ancestry exit 0, `lean-production-tree`'s
-  squash commit as `LPT` with both commands that find it, and the archive
+  — the tag, the PyPI `200`, the ancestry exit 0, the squash commit of
+  `lean-production-tree`'s implementation as `LPT` with the commands that
+  find it, and the archive
   tag, the citation dependencies, the placeholder reading and the rulesets
   — then `make test` on the branch head. Only then is pull request 1 marked
   ready, and no milestone below starts before this is recorded.
@@ -578,8 +590,10 @@ Every number names the command that produced it.
 
 - **Preconditions**, each recorded with its output and the date. Run
   `git fetch origin`, then check on `origin/dev`:
-  - `lean-production-tree` has merged (Milestone 0's facts);
-  - `harden-release-pipeline` has merged: its merge commit is recorded,
+  - `lean-production-tree`'s implementation has merged (Milestone 0's
+    facts);
+  - `harden-release-pipeline`'s implementation has merged, not only its
+    package (#59): its merge commit is recorded,
     `release.yml` carries what its spec names, and Milestone 0's
     placeholder reading still holds for its spec as merged;
   - pull request 1 has merged: its merge commit is recorded, and

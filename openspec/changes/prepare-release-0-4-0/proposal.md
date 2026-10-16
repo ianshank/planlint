@@ -314,8 +314,10 @@ re-reads each line before the milestone that uses it.
   covers (`docs/reflection-plan-2026-10.md`, `docs/differentiation-roadmap.md`),
   a skill directory (`.claude/skills/planlint-add-eval-case/`) and a set of
   package directories. A pattern such as
-  `^(evals/|docs/.*-plan\.md|docs/peer-review-)` sees none of those. Its
-  squash commit's diff against its first parent is the exact list.
+  `^(evals/|docs/.*-plan\.md|docs/peer-review-)` sees none of those. The
+  diff of its implementation's squash commit against its first parent is
+  the exact list. Its package arrived earlier, alone, in #58 (`9f5c693`),
+  whose diff deletes nothing.
 - **The checks a removed leg could strand.** The promotion model's planned
   rulesets require the `ci-ok` check alone. `gh api
   repos/ianshank/planlint/rulesets` returned `[]` at `04d1622`
@@ -325,9 +327,12 @@ re-reads each line before the milestone that uses it.
 
 ## What Changes
 
+**#60 carries this package alone into `dev`, as #58 did for
+`lean-production-tree`; the work follows in two new pull requests.**
+
 **Pull request 1 — the removals and the Dockerfile's deprecation (Milestones
 0 to 4), squash into `dev`, after `v0.3.0` is published and
-`lean-production-tree` has merged.**
+`lean-production-tree`'s implementation has merged.**
 
 - **`pyproject.toml`.**
   - `requires-python = ">=3.11"`, and the 3.10 classifier is dropped.
@@ -423,8 +428,8 @@ re-reads each line before the milestone that uses it.
     amended under this package as written.
 
 **Pull request 2 — the 0.4.0 release prep (Milestone 5), squash into `dev`,
-after `lean-production-tree`, `harden-release-pipeline` and pull request 1
-have merged.**
+after the implementations of `lean-production-tree` and
+`harden-release-pipeline`, and pull request 1, have merged.**
 
 - `openspec_graph/__init__.py`: `__version__ = "0.4.0"`. Then
   `make skill-manifests`, and `pip install -e ".[dev]"` so the installed

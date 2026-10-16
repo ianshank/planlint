@@ -139,10 +139,12 @@ line number is in the proposal.
   integration branch. The pull request that carries them MUST stay a GitHub
   draft until those facts are recorded in `tasks.md` with their output and
   the date.
-- R-RFR-2: The removals MUST merge after `lean-production-tree` has merged
-  into the integration branch. The release-prep pull request of R-RFR-17 to
-  R-RFR-20 MUST merge after `lean-production-tree`, `harden-release-pipeline`
-  and the removals have all merged. No other pull request MAY merge into the
+- R-RFR-2: The removals MUST merge after `lean-production-tree`'s
+  implementation has merged into the integration branch: the pull request
+  that makes its deletions, not the one that carried its package alone. The
+  release-prep pull request of R-RFR-17 to R-RFR-20 MUST merge after the
+  implementations of `lean-production-tree` and `harden-release-pipeline`,
+  and the removals, have all merged. No other pull request MAY merge into the
   integration branch between it and the promotion that carries it to
   production: its squash commit is recorded in `tasks.md`, and the
   integration branch's tip MUST equal that commit when the promotion to the
@@ -378,8 +380,8 @@ line number is in the proposal.
     API and `pypi-attestations`, and any build provenance
     `harden-release-pipeline` added, through the command it names;
   - the GitHub Release and its assets;
-  - that the tagged tree carries none of the paths `lean-production-tree`'s
-    squash commit deleted, the list being derived from that commit's diff
+  - that the tagged tree carries none of the paths the squash commit of
+    `lean-production-tree`'s implementation deleted, the list being derived from that commit's diff
     against its first parent rather than from a pattern;
   - a fresh-venv install of `planlint==0.4.0` that prints `planlint 0.4.0`,
     installs no `specgraph` script, and exits 0 from `validate --fail-on
@@ -760,7 +762,7 @@ line number is in the proposal.
     output is recorded with the pip version that produced it.
   - **The tagged tree, by list rather than pattern.** Whether `v0.4.0`
     still carries a path `lean-production-tree` deleted is checked against
-    the list that package's squash commit deleted — its diff against its
+    the list its implementation's squash commit deleted — its diff against its
     first parent, the integration branch just before it merged — and not
     against a pattern. A pattern cannot see every deleted plan, the
     retired skill or the deleted package directories. The Dockerfile is not
@@ -933,9 +935,9 @@ line number is in the proposal.
   with its output and date and never as a test:
   - before the removals' pull request leaves draft: `v0.3.0` on origin,
     `planlint` 0.3.0 on PyPI, `v0.3.0^{commit}` an ancestor of the
-    integration branch, and `lean-production-tree` merged;
-  - before the release-prep pull request opens: `harden-release-pipeline`
-    and the removals merged;
+    integration branch, and `lean-production-tree`'s implementation merged;
+  - before the release-prep pull request opens: `harden-release-pipeline`'s
+    implementation and the removals merged;
   - before the promotion opens: the integration branch's tip is the
     release-prep squash commit.
 
@@ -994,7 +996,7 @@ line number is in the proposal.
   - the attestations on the published wheel and sdist verify as the
     runbook says;
   - the GitHub Release carries the wheel and the sdist;
-  - no path that `lean-production-tree`'s squash commit deleted, by the list
+  - no path that `lean-production-tree`'s implementation squash deleted, by the list
     that commit's diff against its first parent gives, is in the tagged
     tree.
 
