@@ -313,8 +313,10 @@ command where it appears (`docs/policies.md`, "Count cites a command").
 - **Not before `v0.3.0` is published and its record is in `dev`.** Milestone
   2's gate records the tag, the PyPI release, the back-merge, the merged
   0.3.0 record, the packages added to `dev` since `c0ff090`, the
-  spec-status report at X and the archive tag before any deletion, and pull
-  request #58 stays a draft until it does (DEC-LPT-017).
+  spec-status report at X and the archive tag before any deletion. Pull
+  request #58 carried this package alone into `dev`. The implementation is
+  a new pull request branched from X, and it stays a draft until the gate
+  is recorded (DEC-LPT-017).
 - **No release hardening and no 0.4.0 removals.** Build provenance, the
   automated GitHub release, `persist-credentials: false` on the release
   checkouts and `CODEOWNERS` are a later hardening package; dropping Python

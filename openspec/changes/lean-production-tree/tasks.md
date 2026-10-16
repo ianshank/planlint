@@ -5,10 +5,13 @@ Drafted at `c0ff090` — the merge of PR #57 into `dev`, the base of
 for a lean production branch, and revised at `04d1622` and `122fa09` on
 2026-10-16 to resolve the first and second adversarial reviews (Milestone 1).
 That plan is not tracked (DEC-LPT-005); every decision this package takes
-from it is restated in `specs/production-tree/spec.md`. **This package must
-not merge before `v0.3.0` is published and the 0.3.0 record is in `dev`**
-(Milestone 2, DEC-LPT-017): pull request #58 stays a GitHub draft, and is
-marked ready for review only after Milestone 2's gate is recorded here. Every
+from it is restated in `specs/production-tree/spec.md`. **This package's
+implementation must not merge before `v0.3.0` is published and the 0.3.0
+record is in `dev`** (Milestone 2, DEC-LPT-017). Pull request #58 carried
+the package alone into `dev`, squashed as `9f5c693` on 2026-10-16 with no
+deletion. The implementation is a new pull request branched from X. It
+opens as a GitHub draft and is marked ready for review only after Milestone
+2's gate is recorded here. Every
 line number below is re-read at the implementation branch's head before the
 milestone that uses it; a sibling landing first may move a line without
 moving the fact. Every number names the command that produced it.
@@ -350,14 +353,16 @@ moving the fact. Every number names the command that produced it.
 
 ## Milestone 2 — Preconditions, recorded before any deletion (owner)
 
-- Pull request #58 stays a GitHub draft through this milestone, and is
-  marked ready for review only after this milestone's gate is recorded here.
-  No criterion observes the release or a tag, so the draft state is what
-  keeps the change from merging early (DEC-LPT-017).
-  - 2026-10-16: the owner marked #58 ready for review to request a review,
-    which made the draft state no hold while it lasted (Copilot's review
-    flagged this). It went back to draft the same day, once that review was
-    answered, and the hold applies again from then.
+- The implementation pull request stays a GitHub draft through this
+  milestone, and is marked ready for review only after this milestone's
+  gate is recorded here. No criterion observes the release or a tag, so the
+  draft state is what keeps the change from merging early (DEC-LPT-017).
+  - 2026-10-16: #58 was marked ready for review, reviewed by Copilot, and
+    squash-merged into `dev` as `9f5c693`. It carried this package's three
+    files and no deletion, so nothing reached 0.3.0's tree but the package.
+    The hold moved to the implementation pull request, which does not exist
+    yet. `harden-release-pipeline` (#59) and `prepare-release-0-4-0` (#60)
+    land the same way, each package first.
 - `v0.3.0` is tagged, published and back-merged:
   `git ls-remote --tags origin v0.3.0` prints the tag and its peeled line;
   `curl -s -o /dev/null -w '%{http_code}\n' https://pypi.org/pypi/planlint/0.3.0/json`
@@ -376,12 +381,16 @@ moving the fact. Every number names the command that produced it.
   origin/dev)`. Everything below is measured at X.
 - The packages added to `dev` since `c0ff090`, at X:
   `git diff --name-only --diff-filter=A c0ff090 "$X" -- openspec/changes | cut -d/ -f3 | sort -u`
-  prints nothing but `lean-production-tree`, if that, a name already present
-  at `c0ff090` being a file added to an existing package. If it prints a new
-  package, stop and classify it as Milestone 0 says. Record the kept set as
-  `KEEP`, the pattern Milestones 5 to 7 use:
-  `KEEP='add-witness-ci-artifacts|widen-indeterminate-unchecked-citations|prepare-release-0-3-0|adopt-branch-promotion-model|lean-production-tree'`,
-  plus `|<name>` for each added package classified as not shipped.
+  prints `lean-production-tree`, `harden-release-pipeline` and
+  `prepare-release-0-4-0`, all three merged package-first and not shipped
+  until 0.4.0. A name already present at `c0ff090` is a file added to an
+  existing package. If it prints any other new package, stop and classify it
+  as Milestone 0 says. Record the kept set as `KEEP`, the pattern Milestones
+  5 to 7 use:
+  `KEEP='add-witness-ci-artifacts|widen-indeterminate-unchecked-citations|prepare-release-0-3-0|adopt-branch-promotion-model|lean-production-tree|harden-release-pipeline|prepare-release-0-4-0'`,
+  plus `|<name>` for each other added package classified as not shipped.
+  Milestone 6 deletes every package outside `KEEP`, so a sibling missing
+  from it would be deleted with the record.
 - The spec-status report at X: `git worktree add --detach <scratch>/x "$X"`,
   then `make -C <scratch>/x spec-status; echo $?`, recorded in full. The
   kept packages' rows are the rows the merged tree will show, because this
@@ -418,9 +427,9 @@ moving the fact. Every number names the command that produced it.
   recorded; `make spec-status` at X is recorded with its exit; and
   `git ls-remote --tags origin 'archive/*'` prints
   `refs/tags/archive/dev-record-2026-10` and its peeled
-  `refs/tags/archive/dev-record-2026-10^{}` naming X. Only then is pull
-  request #58 marked ready, and no milestone below starts until this is
-  recorded.
+  `refs/tags/archive/dev-record-2026-10^{}` naming X. Only then is the
+  implementation pull request marked ready, and no milestone below starts
+  until this is recorded.
 
 ## Milestone 3 — The hygiene module, seen red first
 
