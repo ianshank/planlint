@@ -354,6 +354,10 @@ moving the fact. Every number names the command that produced it.
   marked ready for review only after this milestone's gate is recorded here.
   No criterion observes the release or a tag, so the draft state is what
   keeps the change from merging early (DEC-LPT-017).
+  - 2026-10-16: the owner marked #58 ready for review to request a review,
+    which made the draft state no hold while it lasted (Copilot's review
+    flagged this). It went back to draft the same day, once that review was
+    answered, and the hold applies again from then.
 - `v0.3.0` is tagged, published and back-merged:
   `git ls-remote --tags origin v0.3.0` prints the tag and its peeled line;
   `curl -s -o /dev/null -w '%{http_code}\n' https://pypi.org/pypi/planlint/0.3.0/json`
@@ -438,7 +442,10 @@ moving the fact. Every number names the command that produced it.
   blanked over the whole text — every character but a newline replaced by a
   space, so line numbers hold — before the exemption is read, while tokens
   are read from the original text; the span exemption, on the blanked line,
-  `re.search(r"archive/[\w.-]+/" + re.escape(span.rstrip("/")) + r"/?(?![\w/-]|\.[\w/-])", line)`;
+  `re.search(r"(?:^|(?<=[\s(<\x60]))" + re.escape(_ARCHIVE_URL) + r"[\w.-]+/" + re.escape(span.rstrip("/")) + r"/?(?![\w/-]|\.[\w/-])", line)`,
+  with `_ARCHIVE_URL = "https://github.com/ianshank/planlint/tree/archive/"`,
+  R-LPT-3's prefix, so a bare `archive/<tag>/` path or another host is no
+  pointer;
   and no exemption for a link. Functions:
   `shape_offenders(paths) -> list[str]`;
   `reference_offenders(text: str, path: str, root: Path) -> list[str]`, each
@@ -460,8 +467,11 @@ moving the fact. Every number names the command that produced it.
   - `test_a_dangling_backticked_path_is_named_with_file_and_line`,
     `test_a_dangling_relative_link_is_named_with_file_and_line`,
     `test_a_dangling_path_beside_another_archive_ref_is_named` (parametrised
-    over an archive URL for a different path and a bare
-    `archive/does-not-exist`),
+    over an archive URL for a different path, a bare
+    `archive/does-not-exist`, the span's own path under a bare
+    `archive/dev-record-2026-10/` with no URL, the same suffix under
+    `https://example.com/`, and the full URL inside another URL's query
+    string),
     `test_a_dangling_path_whose_archive_url_is_in_an_html_comment_is_named`
     (the URL in a same-line comment, and in a comment spanning lines) and
     `test_a_dangling_relative_link_beside_its_own_archive_url_is_named`
@@ -643,10 +653,12 @@ moving the fact. Every number names the command that produced it.
   packages under `openspec/changes/` in full; its area-code step also reads
   `openspec/AGENTS.md`'s retired-codes entry.
 - `.claude/agents/spec-adversary.md`: `:7,24` — the same example by archive
-  URL, a backticked span. Step 3 (`:13`) greps the open specs and also, for
-  each tag `git tag -l 'archive/*'` lists, `git grep -n 'DEC-' <tag> --
-  'openspec/changes/*/specs/*/spec.md'`, saying in its report when no
-  archive tag is present locally rather than skipping the check silently;
+  URL, a backticked span. Step 3 (`:13`) greps the open specs and also every
+  archive and release tag, `git grep -n 'DEC-' $(git tag -l 'archive/*' 'v*')
+  -- 'openspec/changes/*/specs/*/spec.md'`, since a package a post-release
+  sweep removes is archived at its release tag (DEC-LPT-012), saying in its
+  report when no such tag is present locally rather than skipping the check
+  silently;
   its `DEC-AD-008` and `DEC-WM-004` examples cite
   `https://github.com/ianshank/planlint/tree/archive/dev-record-2026-10/openspec/changes/add-architecture-drift-lint/specs/architecture-drift-lint/spec.md`
   and

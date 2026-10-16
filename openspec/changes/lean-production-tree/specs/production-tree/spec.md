@@ -216,10 +216,12 @@ figure is in `tasks.md`, and none is repeated here (C-LPT-3).
   path there is read by `test_path_like_backtick_references_resolve_to_real_files`
   and fails once the path is gone, whatever stands beside it.
   `.claude/agents/spec-adversary.md`'s precedent step MUST grep the archived
-  specs as well as the open ones — `git grep -n 'DEC-' archive/dev-record-2026-10 -- 'openspec/changes/*/specs/*/spec.md'`,
-  over each tag `git tag -l 'archive/*'` lists wherever its prose can name
-  the tag generically — and MUST cite its precedent examples by the archive
-  URLs of the specs that declare them.
+  specs as well as the open ones, at every tag that holds them: the archive
+  tags and the release tags, since a package a post-release sweep removes is
+  archived at the release tag that shipped it (DEC-LPT-012) —
+  `git grep -n 'DEC-' $(git tag -l 'archive/*' 'v*') -- 'openspec/changes/*/specs/*/spec.md'`
+  — and MUST cite its precedent examples by the archive URLs of the specs
+  that declare them.
   `.claude/skills/planlint-add-rule/SKILL.md` MUST drop the roadmap;
   `.claude/agents/planlint-verifier.md` MUST drop `evals/` and the
   `post-merge-quality-review` path. Area codes MUST stay unique across the
@@ -283,11 +285,15 @@ figure is in `tasks.md`, and none is repeated here (C-LPT-3).
   repository root, a span carrying `<`, `*` or `://` being skipped. A link
   target MUST NOT be exempt by anything on its line. A backticked span MUST
   be exempt only when its own line, read with the content of every HTML
-  comment in the file blanked, carries `archive/` and a tag name matching
+  comment in the file blanked, carries R-LPT-3's URL prefix
+  `https://github.com/ianshank/planlint/tree/archive/`, at the start of the
+  line or after whitespace, `(`, `<` or a backtick, then a tag name matching
   `[\w.-]+`, then `/`, immediately followed by the span's exact text — a
   trailing `/` on the span or on the URL ignored — and then by neither a word
   character, `/` or `-`, nor a `.` followed by one of those: the span's own
-  archive URL, whatever the tag's name, which may end a sentence. Every other
+  archive URL in full, whatever the tag's name, which may end a sentence. A
+  bare `archive/<tag>/` path and the same suffix under another host are not
+  that URL. Every other
   token that resolves to nothing MUST be reported with its file, its line and
   the token.
 - R-LPT-12: The reference scanner MUST be one function that takes a file's
@@ -297,7 +303,10 @@ figure is in `tasks.md`, and none is repeated here (C-LPT-3).
   file and line; a dangling relative link reported with file and line; a
   dangling backticked path reported on a line whose archive URL names a
   different path, on a line whose only archive ref is a bare `archive/`
-  mention, and on a line whose own archive URL sits inside an HTML comment;
+  mention, on a line whose only pointer is its own path under a bare
+  `archive/<tag>/` with no URL, on a line whose only pointer is that path
+  under another host, and on a line whose own archive URL sits inside an HTML
+  comment;
   a dangling relative link reported on a line that also carries that file's
   own archive URL; a dangling backticked path quiet on a line that carries
   its own archive URL, under the archive tag's name and under another tag
@@ -652,7 +661,10 @@ figure is in `tasks.md`, and none is repeated here (C-LPT-3).
   0.3.0 sweep that never comes. After a tag and not before: the tagged tree
   carries the packages it shipped, so the release tag is their archive by
   DEC-LPT-001's reasoning, and the record the runbook writes lands only after
-  the tag. A shipped package can still carry open owner actions —
+  the tag. So a reader that searches the record reads the release tags as
+  well as `archive/*`: the precedent step R-LPT-8 sets greps both, or it
+  would miss every package swept after the archive tag, this one included. A
+  shipped package can still carry open owner actions —
   `adopt-branch-promotion-model`'s rulesets are the case at hand — and those
   move to `docs/next-steps.md`, each with the trigger that closes it, in the
   sweep that removes the package: once deleted, they would survive only at a
@@ -697,9 +709,15 @@ figure is in `tasks.md`, and none is repeated here (C-LPT-3).
   by giving it the archive URL as its target, which the scanner already
   skips as external; a relative target left beside that URL is still broken
   for every reader who follows it, and an exemption would hide it. A
-  backticked span is exempt only when its line carries `archive/<tag>/`
-  immediately followed by the span itself — the span's own archive URL —
-  because only then does the line show where that path went. The line-wide
+  backticked span is exempt only when its line carries R-LPT-3's URL in full,
+  `https://github.com/ianshank/planlint/tree/archive/<tag>/`, immediately
+  followed by the span itself — the span's own archive URL — because only
+  then does the line show where that path went. The repository prefix is
+  matched literally, standing at the line's start or after whitespace, `(`,
+  `<` or a backtick: a bare `archive/<tag>/<path>` is no link a reader can
+  follow, and the same suffix under another host, or inside another URL's
+  query, points somewhere else. The cost, accepted: a rename of the
+  repository edits the scanner's constant along with R-LPT-3's form. The line-wide
   exemption of the first draft hid each kind of break the review planted: a
   dangling span beside an archive URL for another path, a relative link
   beside its own archive URL, and a span beside a bare `archive/` mention
@@ -890,8 +908,10 @@ figure is in `tasks.md`, and none is repeated here (C-LPT-3).
   under one of R-LPT-11's prefixes that resolves to nothing; a relative link
   that resolves to nothing; such a backticked path on a line whose archive
   URL names a different path, on a line whose only archive ref is a bare
-  `archive/` mention, and on a line whose own archive URL sits inside an HTML
-  comment; and a relative link to a missing file on a line that also carries
+  `archive/` mention, on a line whose only pointer is its own path under a
+  bare `archive/<tag>/` with no URL, on a line whose only pointer is that
+  path under another host, and on a line whose own archive URL sits inside
+  an HTML comment; and a relative link to a missing file on a line that also carries
   that file's own archive URL. (R-LPT-11, R-LPT-12, DEC-LPT-013, DEC-LPT-014)
   _Verified by:_ stage: `make test`
 
