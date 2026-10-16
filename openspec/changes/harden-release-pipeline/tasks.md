@@ -282,6 +282,61 @@ it.
   a top-level `defaults:` are held beside it, and `write-all` is counted as
   a write scope. Clauses: R-HRP-5, R-HRP-6, DEC-HRP-007, AC-HRP-9,
   AC-HRP-10, AC-HRP-11, Milestones 3, 4 and 6, the proposal.
+- **Review 3** (`spec-adversary`, against `d630412` in #62; two HIGH, one
+  MEDIUM), resolved in #62:
+  - **HIGH-1, a column-0 line ends the job block.** `workflow_job_blocks`
+    stops at the first column-0 line, and a column-0 `#` comment is valid
+    YAML inside a job. A step, a `container:`, or a whole `contents: write`
+    job after one passed the pin and the holder count. The existing posture
+    tests missed it too.
+  - **HIGH-2, the write scope matched one spelling.** These all held the
+    scope unseen: `"write"`, `'write'`, a quoted key, `contents : write`, a
+    next-line value, a folded value, an alias, `"\x77rite"` and `Write`.
+  - **MEDIUM-1, the top level was unspecified.** These all passed the
+    natural readers:
+    - `defaults:` written in flow form, or as `defaults :`;
+    - a second `env:` after `jobs:`;
+    - an extra write scope beside the top-level `contents: read`;
+    - `cache-mode`;
+    - a scalar `concurrency:`;
+    - a new trigger.
+  - **LOWs.**
+    - `rstrip()` and `splitlines()` disagree with YAML on a no-break space
+      and on Unicode line breaks.
+    - `GITHUB_*` variables cannot be overwritten, according to GitHub's
+      documentation.
+    - The spec's evidence still leaned on `run_scripts`.
+    - AC-HRP-11 listed the workflow default twice and named no test for the
+      header.
+    - This record lacked the review-2 revision run.
+    - The pin was self-referential.
+
+  The coordinator's decision fixes the root cause, not each spelling:
+  - `release.yml` is pinned whole against
+    `tests/fixtures/release-workflow.golden`. The file must be ASCII, it is
+    split on `\n` only, and only trailing `" \t\r"`, the action pins and
+    the `PYTHON_DEFAULT` value may vary.
+  - The write scope is held across every workflow by the list
+    `_WRITE_LINES`, and escapes are refused.
+
+  This closes every HIGH and MEDIUM case. The escaped line break inside a
+  double-quoted scalar is named as left to review. The self-reference is
+  accepted, because review reads the commit that edits both the workflow
+  and its copy. Clauses: R-HRP-5, R-HRP-6, DEC-HRP-007, AC-HRP-9,
+  AC-HRP-10, AC-HRP-11, the spec's evidence, Milestones 3, 4 and 6, and the
+  proposal.
+- The review-2 revision run, at `d630412` on
+  `claude/harden-release-pipeline-followup`:
+  - `planlint --target . validate --fail-on INFO --change harden-release-pipeline`
+    printed `1 spec(s) checked · 0 error · 0 warn · 0 info`, exit 0;
+  - `planlint --target . validate --fail-on ERROR` printed
+    `57 spec(s) checked · 0 error · 0 warn · 0 info`, exit 0.
+
+  The whole-tree count moves as sibling packages land.
+  `tests/test_release_surface.py` is 266 lines at `d630412`
+  (`wc -l tests/test_release_surface.py`), against `MAX_TEST_MODULE_LINES`
+  of 700. The golden copy lives in a fixture so that the module's growth is
+  readers and plantings only. It is re-measured at implementation.
 - AC-HRP-1, 2, 4, 7, 9, 10, 11, 13, 14 and 15 cite their stage only, because
   the tests that will verify them do not exist yet. AC-HRP-19 cites its stage
   only because it is read directly. Every other criterion cites existing tests
@@ -382,45 +437,61 @@ it.
     - no `actions/checkout`, and exactly two downloads, of `dist` and
       `release-notes`;
     - `GH_TOKEN: ${{ github.token }}`, never `secrets.*`;
-    - the whole block equal to `_RELEASE_JOB` once normalised, the first
-      differing line being the offender;
+    - these name offenders for a reader; the golden copy below is the guard,
+      so a form these line readers miss is still refused there;
     - all five verification flags present;
     - verification before creation, and `--verify-tag`;
     - no `SOFT_FAIL` token from `tests/workflow_support.py`, and no `if:` on
       any step;
     - no `${{` inside any `run:` script.
-  - `_contents_write_holders(texts)`: the jobs across every workflow whose
-    block matches `contents:\s*write` anywhere, so the flow form
-    `{contents: write}` counts too, or `write-all` (R-HRP-5).
-  - `_release_header_offenders(text)`: `release.yml`'s top-level `env:`
-    holding any key but `PYTHON_DEFAULT`, and any top-level `defaults:`
-    (R-HRP-6).
-- The job pin (R-HRP-6, DEC-HRP-007). It parses neither YAML nor shell.
-  - Take the `release` block from `workflow_job_blocks(RELEASE_YML)`
-    (`tests/support.py`), which keeps every line of the job, comments and
-    flow mappings included.
-  - Normalise it with `_normalised_job`: strip each line's trailing
-    whitespace; replace `@[0-9a-f]{40} # v[\w.-]+` with `@<pin>`; drop the
-    leading and trailing blank lines but keep every blank line inside,
-    since a blank line in a folded scalar is a newline to YAML.
-  - Require the result to equal `_RELEASE_JOB`, the normalised text of
-    Milestone 4's job, held in the test module. Name the first line that
-    differs, with its number, as the offender.
-  - The pin's form is not this check's: `tests/test_workflow_pins.py`
-    already holds every `uses:` to a 40-hex SHA with its version comment.
+  - `_write_line_offenders(texts)`: in every workflow, each line outside a
+    full-line comment whose lower-cased text contains `write` and whose
+    `(file, stripped line)` is not in `_WRITE_LINES`, and each line holding
+    a `\x`, `\u`, `\U` or `\N` escape (R-HRP-5). `_WRITE_LINES` is:
+    - the qualifying lines measured at `d630412` with
+      `grep -n -i write .github/workflows/*.yml | grep -v -E ':[0-9]+:\s*#'`:
+      `ci.yml`'s `::error::an unscannable target must write no envelope` echo
+      and `release.yml`'s `id-token: write`;
+    - the two lines this change adds: `attestations: write` in `publish`
+      and `contents: write` in `release`.
 
-  Checked on 2026-10-16 against Milestone 4's job, with `workflow_job_blocks`
-  and the normalisation above:
-  - admitted: the job unchanged, the job with a Dependabot bump of its
-    download pin, and the job with trailing spaces added;
+    The same `grep` found no escape at `d630412`.
+- The golden copy (R-HRP-6, DEC-HRP-007). It parses neither YAML nor shell.
+  - `_normalised_workflow(text)`: refuse a non-ASCII file. Otherwise split
+    on `"\n"`, strip each line's trailing `" \t\r"`, and replace
+    `@[0-9a-f]{40} # v[\w.-]+$` with `@<pin>` and
+    `^(  PYTHON_DEFAULT: )"[0-9.]+"$` with `\1"<python>"`. Then drop the
+    trailing blank lines.
+  - Require `_normalised_workflow(RELEASE_YML)` to equal the same function
+    of `tests/fixtures/release-workflow.golden`. Name the first differing
+    line by number, through `itertools.zip_longest`, so that an added or a
+    missing last line is named too.
+  - The `.golden` suffix keeps the copy out of every reader that globs
+    `*.yml`.
+
+  Checked on 2026-10-16 with this normalisation, against `release.yml` at
+  `d630412` as its own golden copy:
+  - admitted: the file unchanged, the whole file in CRLF, trailing spaces, a
+    Dependabot pin bump, and a `PYTHON_DEFAULT` bump;
   - refused:
-    - a flow-mapping step;
-    - `BASH_ENV` added to a step `env:`;
-    - `GITHUB_SHA` redefined in a step `env:`;
-    - a job `container:`, a job `services:`, a step `working-directory:`
-      and a step `shell:`;
-    - a blank line inside the folded create;
-    - Copilot's quoted-`#` script.
+    - a column-0 comment followed by a step;
+    - a tab-only line;
+    - `---` followed by a second document;
+    - a job after the last one;
+    - a second `env:` after `jobs:`;
+    - `defaults:` in flow form;
+    - `cache-mode: write` and a scalar `concurrency:`;
+    - an `on: release` trigger;
+    - a no-break space;
+    - a `PYTHON_DEFAULT` value carrying more than digits and dots;
+    - text after a pin;
+    - the last line removed.
+
+  `_write_line_offenders` was checked against the same tree plus `ci.yml`
+  plantings. It is quiet on the real tree. It names `"write"`, a quoted
+  key, `Write`, the flow form, a next-line value, a folded value, an
+  anchor with its alias, `"\x77rite"`, `write-all` and a write scope
+  after a column-0 comment.
 - Planned test functions, named here so the stage-only verification lines can
   be re-pointed once they exist:
   - `test_every_release_checkout_drops_its_credential` (AC-HRP-1);
@@ -440,10 +511,14 @@ it.
   - `test_a_release_job_that_reaches_the_tree_or_weakens_verification_is_named`
     (AC-HRP-11), parametrized over every planting AC-HRP-11 lists, each
     asserting its own offender text;
-  - `test_the_release_job_pin_admits_only_the_fixed_job` (AC-HRP-11), a
-    unit test of `_normalised_job` and the comparison alone. A Dependabot
-    pin bump and trailing spaces are admitted. Every refusal the check above
-    lists is refused.
+  - `test_release_workflow_matches_its_golden_copy` (AC-HRP-10), the real
+    file against `tests/fixtures/release-workflow.golden`;
+  - `test_the_golden_comparison_admits_only_the_pinned_workflow`
+    (AC-HRP-11), a unit test of `_normalised_workflow` and the comparison
+    over every planting AC-HRP-11 lists, with the admitted forms above;
+  - `test_write_appears_only_on_the_named_lines` (AC-HRP-8), the real tree;
+  - `test_a_write_scope_spelled_any_other_way_is_named` (AC-HRP-9), over
+    every spelling AC-HRP-9 lists.
 
   Real-tree tests read `RELEASE_YML` and `WORKFLOWS` from
   `tests/workflow_support.py` and are `integration`. Planted tests feed
@@ -619,9 +694,10 @@ it.
   The comment sits inside the job body, between `release:` and
   `permissions:` (`tests/workflow_support.py`'s comment rule). An empty
   `dist/` leaves the glob literal, so `gh attestation verify` fails on a
-  missing file and the step fails closed. This job, normalised, is
-  `_RELEASE_JOB`, so a change to any line of it edits that constant in the
-  same commit. Re-read the
+  missing file and the step fails closed. Write
+  `tests/fixtures/release-workflow.golden` as a byte copy of the new
+  `release.yml` in the same commit (R-HRP-6). Every later edit of the
+  workflow edits it too. Re-read the
   download pin at the head. No `concurrency` block (R-HRP-9).
 - New `tools/release_notes.py` (R-HRP-13, R-HRP-14, DEC-HRP-026):
   - A module docstring naming this package and the exit contract.
@@ -770,7 +846,8 @@ it.
   - AC-HRP-4: the planted publish test;
   - AC-HRP-7: the planted notes test;
   - AC-HRP-9: the planted write-scope test;
-  - AC-HRP-10, 11: the release-job tests and the job-pin test;
+  - AC-HRP-10, 11: the release-job tests and the two golden-copy tests;
+  - AC-HRP-8, 9: also the two write-line tests;
   - AC-HRP-13, 14, 15: the notes-tool tests;
   - AC-HRP-3, 6, 8, 18: also cite their new real-tree tests beside the
     existing ones.

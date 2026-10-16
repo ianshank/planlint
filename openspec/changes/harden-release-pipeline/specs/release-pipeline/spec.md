@@ -78,8 +78,11 @@ none is repeated here (C-HRP-4).
   an explicit `attestations: true`. `tests/test_release_surface.py` holds the
   job chain, the ancestry step and the two-workflow set, and says nothing
   about checkouts, attestations, a fourth job or a write permission.
-  `tools/_common.py`'s `run_scripts` extracts a workflow's `run:` scripts, and
-  its `shell_invocations` joins backslash continuations before lexing.
+  `tests/support.py`'s `workflow_job_blocks` cuts a workflow into job blocks
+  by a line scan that stops at the first column-0 line, and
+  `tools/_common.py`'s `run_scripts` reads block-style `run:` keys only.
+  Neither is a YAML parser, which is why the release guard relies on neither
+  (DEC-HRP-007).
 - **The documents.** `docs/hooks.md`'s `release` row, the release runbook and
   the release skill verify only the publish attestations, and the runbook
   leaves the GitHub release to a person. `SECURITY.md` is in the adopter
@@ -133,10 +136,13 @@ none is repeated here (C-HRP-4).
   `attestations: read`, with a comment line inside the job's own body, between
   its `release:` line and that block, naming `gh release create` as the reason
   for the first and `gh attestation verify` for the second. No other job in
-  any workflow under `.github/workflows/` MAY hold `contents: write`, whether
-  by a `contents: write` line, by the flow form `{contents: write}` or by
-  `permissions: write-all`, and
-  `release.yml`'s top-level block MUST stay `contents: read` alone.
+  any workflow under `.github/workflows/` MAY hold `contents: write`, however
+  it is spelled, and `release.yml`'s top-level block MUST stay
+  `contents: read` alone. So in every workflow, each line outside a full-line
+  comment that contains `write`, in any letter case, MUST be on a fixed list
+  the test holds by file and stripped text. No workflow MAY contain a `\x`,
+  `\u`, `\U` or `\N` escape. A quoted, capitalised, folded, aliased or
+  escaped spelling of the scope is then refused along with the plain one.
 - R-HRP-6: The `release` job MUST NOT check out the repository and MUST NOT
   bring the tagged tree in by any other route. Its steps MUST be exactly the
   `dist` and `release-notes` downloads, through the same pinned
@@ -147,18 +153,20 @@ none is repeated here (C-HRP-4).
   from `github.token`, never from a stored secret, and `GH_REPO` from
   `github.repository`, both through `env:`. They MUST read the tag from
   `GITHUB_REF_NAME` in the environment, never through an inline expression in
-  `run:`. The guard MUST pin the job's whole text, never parse its YAML or
-  its shell: the `release` block `workflow_job_blocks` returns, with each
-  line's trailing whitespace stripped, its leading and trailing blank lines
-  dropped, and each action pin's `@<40-hex sha> # v<version>` replaced by
-  one placeholder, MUST equal the fixed text the test holds, line for line.
-  Any other block is an offender, named by its first differing line. So the
-  job's steps, their `env:`, their scalar styles and every key the job
-  carries are fixed, and a step, an environment variable, a `container:`, a
-  `services:`, a `working-directory:` or a `shell:` the text does not hold
-  is refused, however it is written. Outside the block, `release.yml`'s
-  top-level `env:` MUST hold `PYTHON_DEFAULT` alone, and the file MUST
-  declare no top-level `defaults:`, because both reach every job.
+  `run:`. The guard MUST pin `release.yml`'s whole text and MUST NOT parse its
+  YAML or its shell. The file MUST be ASCII. Normalised, it MUST equal the
+  golden copy `tests/fixtures/release-workflow.golden`, normalised the same
+  way, line for line. Normalising means:
+  - splitting on line feeds;
+  - stripping each line's trailing spaces, tabs and carriage returns;
+  - replacing each action pin's `@<40-hex sha> # v<version>` at a line's
+    end, and the `PYTHON_DEFAULT` value, with placeholders;
+  - dropping the trailing blank lines.
+
+  Any other text is an offender, named by its first differing line. So no
+  step, environment variable, key, job, document or comment that the golden
+  copy does not hold can enter the file, however it is written. A change to
+  the workflow edits the golden copy in the same commit.
 - R-HRP-7: The `release` job MUST run `gh attestation verify` on every file
   in the downloaded `dist` directory, each with the following flags:
   - `--repo` naming this repository;
@@ -431,26 +439,56 @@ none is repeated here (C-HRP-4).
     as a flow mapping, `- {name: x, run: make pre-pr}`, is a real step that
     the reader never returns;
   - a step `env:` can set `BASH_ENV`, which a non-interactive bash sources
-    before the fixed command, or redefine `GITHUB_SHA` and `GITHUB_REF_NAME`,
-    which DEC-HRP-009's binding reads;
+    before the fixed command, or `PATH`. GitHub documents that `GITHUB_*`
+    variables cannot be overwritten, so a redefined `GITHUB_SHA` is planted
+    for completeness, not as a shown vector;
   - a job `container:` or `services:`, or a step `working-directory:`, runs
     the same text somewhere else;
   - `run_scripts` folds a `>-` scalar by joining lines with spaces, but YAML
     turns a blank line inside it into a newline, so a blank line splits the
     create in two while the folded text still matches.
 
-  The scripts are not the unit; the job is. So the test pins the job's
-  whole text, and a change to the job edits the test in the same commit,
-  which is the review a write-scoped job deserves. The text is compared,
-  not parsed:
-  - PyYAML is deliberately not a dependency;
-  - an exact comparison has no grammar to get wrong;
-  - only trailing whitespace and the action pins are let vary, the pins so
-    that Dependabot's SHA bumps stay green, their form being
-    `tests/test_workflow_pins.py`'s to check.
+  The scripts are not the unit. The third adversarial review (2026-10-16)
+  showed that the job is not either, because a guard that finds the job by
+  scanning lines trusts the scanner's idea of where the job ends:
+  - `workflow_job_blocks` stops at the first column-0 line, and a column-0
+    `#` comment is valid YAML inside a job. So a step, a `container:` or a
+    whole `contents: write` job written after one passed a pin of the
+    job's block.
+  - The top level had the same gaps: a second `env:` after `jobs:`, a
+    `defaults:` written as `{…}` or as `defaults :`, `cache-mode`, a scalar
+    `concurrency:`, and a new trigger.
 
-  The top-level `env:` and `defaults:` sit outside the block but reach
-  every job, so they are held separately.
+  So the unit is the file. The test holds a golden copy of `release.yml` and
+  compares the whole text, which needs no grammar at all:
+  - PyYAML is deliberately not a dependency, and no line scanner is trusted
+    to know where anything ends.
+  - Only three things may vary, and each placeholder admits only its own
+    shape at a line's end:
+    - trailing spaces, tabs and carriage returns;
+    - the action pins, so that Dependabot's SHA bumps stay green. Their
+      form is `tests/test_workflow_pins.py`'s to check;
+    - the `PYTHON_DEFAULT` value, which `tests/test_workflow_python.py`
+      keeps owning.
+  - The file must be ASCII, because YAML reads a no-break space or a
+    Unicode line separator as content that a strip or a split would drop.
+
+  The cost, accepted: every edit to `release.yml` edits the golden copy in
+  the same commit, and a commit that edits both passes. That commit is for
+  review to read, as every change to this file has always been.
+
+  The write scope is a question across workflows, not one file's shape, so
+  R-HRP-5 is held by a list instead:
+  - every line outside a full-line comment that contains `write`, in any
+    case, must be one the test names;
+  - no workflow may hold a `\x`, `\u`, `\U` or `\N` escape, which is how
+    a double-quoted scalar could spell the word without its letters.
+
+  `tasks.md` names the lines that qualify today, with the command that
+  finds them, and the lines this change adds. The gap, accepted and named:
+  an escaped line break inside a double-quoted scalar (`"wr\` on one line,
+  `ite"` on the next) still spells the word across two lines. It is left to
+  review.
 - **DEC-HRP-008 (revised at the first review):** the `release` job holds
   `contents: write` and `attestations: read`, the second beyond the plan's
   block. A job-level block replaces the top-level one, so every scope it omits
@@ -772,18 +810,24 @@ none is repeated here (C-HRP-4).
   _Verified by:_ `pytest -k "test_every_job_in_every_workflow_has_a_timeout_inside_the_range or test_every_job_level_permissions_block_carries_a_comment or test_no_write_permission_anywhere_in_ci"` · stage: `make test`
 
 - [ ] **AC-HRP-9 (non-success):** A planted second job holding
-  `contents: write` is named, and so are one holding it in the flow form
-  `permissions: {contents: write}` and one holding `permissions: write-all`. So are a `release` job conditioned on anything
+  `contents: write` is named, and so is each other spelling of that scope:
+  - the flow form `{contents: write}`;
+  - `permissions: write-all`;
+  - a quoted `"write"`, and a quoted key;
+  - `Write`;
+  - a value on the next line, and a folded value;
+  - an alias of an anchored `write`;
+  - the escape `"\x77rite"`.
+
+  So are a `release` job conditioned on anything
   but the exact tag test (an added `always()`, a dispatch alternative), one
   needing `build` instead of `publish`, and one whose block grants any
   further scope. (R-HRP-5)
   _Verified by:_ stage: `make test`
 
 - [ ] **AC-HRP-10:** The `release` job has no checkout. Its steps are exactly
-  the two downloads and the two `run:` steps, and its whole block, once
-  normalised, equals the pinned job the test holds. `release.yml`'s top-level
-  `env:` holds `PYTHON_DEFAULT` alone, and it declares no top-level
-  `defaults:`. `GH_TOKEN` comes from
+  the two downloads and the two `run:` steps, and `release.yml`, once
+  normalised, equals its golden copy line for line and is ASCII. `GH_TOKEN` comes from
   `github.token` and `GH_REPO` from `github.repository` through `env:`, and
   the tag through `GITHUB_REF_NAME`. Each downloaded file is verified with
   `--repo`, `--signer-workflow`, `--source-ref`, `--source-digest` and
@@ -793,10 +837,10 @@ none is repeated here (C-HRP-4).
   (R-HRP-6, R-HRP-7, R-HRP-8, DEC-HRP-007, DEC-HRP-009)
   _Verified by:_ stage: `make test`
 
-- [ ] **AC-HRP-11 (non-success):** Through the same check, each planted
+- [ ] **AC-HRP-11 (non-success):** Through the same comparison, each planted
   `release` job below is named, each with its own offender.
 
-  Reaching the tree, or running anything but the pinned job:
+  Reaching the tree, or running anything the golden copy does not hold:
   - an `actions/checkout` step;
   - a `run:` invoking `python tools/release_notes.py`;
   - `git clone`;
@@ -811,14 +855,21 @@ none is repeated here (C-HRP-4).
   - a quoted command substitution, `"$(printf x)"`;
   - the same substitution in backticks;
   - the create command split across two lines;
-  - a `shell:` key on a step, and a `defaults.run.shell` on the job and on
-    the workflow;
+  - a `shell:` key on a step, and a `defaults.run.shell` on the job;
   - a step written as a flow mapping, `- {name: x, run: make pre-pr}`;
   - a step `env:` that adds `BASH_ENV`, or that redefines `GITHUB_SHA`;
   - a job `container:`, a job `services:`, and a step `working-directory:`;
   - a blank line inside the folded create;
-  - a top-level `env:` key beside `PYTHON_DEFAULT`, and a top-level
-    `defaults:`.
+  - a column-0 `#` comment followed by a further step, and by a further
+    job;
+  - a tab-only line, a `---` followed by a second document, and a job after
+    `release`;
+  - a top-level `env:` key beside `PYTHON_DEFAULT`, and a second top-level
+    `env:` after `jobs:`;
+  - a top-level `defaults:`, written in block form, in flow form and as
+    `defaults :`;
+  - a `cache-mode: write`, a scalar `concurrency:`, and a new trigger;
+  - a no-break space, and the file with its last line removed.
 
   Weakening the verification:
   - the release created before the verification;
