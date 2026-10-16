@@ -325,6 +325,38 @@ it.
   and its copy. Clauses: R-HRP-5, R-HRP-6, DEC-HRP-007, AC-HRP-9,
   AC-HRP-10, AC-HRP-11, the spec's evidence, Milestones 3, 4 and 6, and the
   proposal.
+- **Review 4** (`spec-adversary`, against `ff3c4cb` in #62; no HIGH, three
+  MEDIUM, eight LOW). It was checked against PyYAML and against `yaml` 2.9.1,
+  the library GitHub's open-source workflow parser uses. Resolved in #62:
+  - **MEDIUM-1, a lone carriage return.** Stripping a trailing `\r` admitted
+    `dist/*\r\r\n`, which a YAML reader takes as a blank line inside the
+    folded create. Now `\r\n` becomes `\n` and any other `\r` is refused,
+    the input being bytes.
+  - **MEDIUM-2, the write list's line model.** A split on `\n` missed a
+    Unicode line break after a comment. The escaped line break, which
+    GitHub's parser honours, was left to review. Both are now read through
+    `str.splitlines` and a join at a trailing `\`, and the named gap is
+    closed.
+  - **MEDIUM-3, the pin placeholder.** Any 40-hex commit is admitted. This is
+    now named in DEC-HRP-007, with the review step that checks a hand-made
+    pin change against its tag.
+  - **LOWs.**
+    - The reader-level parametrized test is limited to the plantings the
+      readers can see.
+    - The red-by-design list names the golden-copy test.
+    - "pins the whole job" now reads "pins the whole file".
+    - The escape fact cites its own `grep`.
+    - The write list reads every file under `.github/workflows/` and
+      counts lines with a `Counter`.
+    - Milestone 2 records `default_workflow_permissions`.
+    - Tags, directives and the `\u` and `\U` escapes are refused and
+      planted.
+    - DEC-HRP-007 now answers `harden-ci-workflows` DEC-HCW-008's
+      objection to a test copy of a pin.
+
+  No HIGH changed the design, so no fifth review is required. Clauses:
+  R-HRP-5, R-HRP-6, DEC-HRP-007, AC-HRP-9, AC-HRP-11, Milestones 2 and 3,
+  the proposal.
 - The review-2 revision run, at `d630412` on
   `claude/harden-release-pipeline-followup`:
   - `planlint --target . validate --fail-on INFO --change harden-release-pipeline`
@@ -403,6 +435,10 @@ it.
   - the Actions settings (`gh api repos/ianshank/planlint/actions/permissions`):
     the allowed-actions setting and whether full-length SHA pinning is
     required (DEC-HRP-005);
+  - the default token permission
+    (`gh api repos/ianshank/planlint/actions/permissions/workflow`), whose
+    `default_workflow_permissions` must read `read`. It is the backstop for
+    any job with no `permissions:` key;
   - immutable releases (Settings → General → Releases), which DEC-HRP-009 and
     DEC-HRP-016 name.
 
@@ -437,28 +473,44 @@ it.
     - no `actions/checkout`, and exactly two downloads, of `dist` and
       `release-notes`;
     - `GH_TOKEN: ${{ github.token }}`, never `secrets.*`;
-    - these name offenders for a reader; the golden copy below is the guard,
-      so a form these line readers miss is still refused there;
+    - these name offenders one at a time, and they are the layer that still
+      holds when a commit edits both `release.yml` and its golden copy. A
+      form they miss is refused by the golden copy below;
     - all five verification flags present;
     - verification before creation, and `--verify-tag`;
     - no `SOFT_FAIL` token from `tests/workflow_support.py`, and no `if:` on
       any step;
     - no `${{` inside any `run:` script.
-  - `_write_line_offenders(texts)`: in every workflow, each line outside a
-    full-line comment whose lower-cased text contains `write` and whose
-    `(file, stripped line)` is not in `_WRITE_LINES`, and each line holding
-    a `\x`, `\u`, `\U` or `\N` escape (R-HRP-5). `_WRITE_LINES` is:
-    - the qualifying lines measured at `d630412` with
-      `grep -n -i write .github/workflows/*.yml | grep -v -E ':[0-9]+:\s*#'`:
-      `ci.yml`'s `::error::an unscannable target must write no envelope` echo
-      and `release.yml`'s `id-token: write`;
-    - the two lines this change adds: `attestations: write` in `publish`
-      and `contents: write` in `release`.
+  - `_write_line_offenders(files)` (R-HRP-5) reads every file under
+    `.github/workflows/`, whatever its extension.
+    - `_logical_lines(text)` splits with `str.splitlines()`. It joins a
+      line ending in `\` to the next line, with that line's leading
+      whitespace dropped, unless the first line is a full-line comment.
+    - An offender is a `collections.Counter` of the `(file, stripped line)`
+      pairs whose lower-cased text contains `write` that differs from
+      `_WRITE_LINES`. So is a line holding a `\x`, `\u`, `\U` or `\N`
+      escape, a `!!` or `!<` tag, or a leading `%`.
+    - `_WRITE_LINES` holds two kinds of line:
+      - the qualifying lines measured at `d630412` with
+        `grep -n -i write .github/workflows/*.yml | grep -v -E ':[0-9]+:\s*#'`:
+        `release.yml`'s `id-token: write`, and `ci.yml`'s `::error::` echo,
+        in its joined form
+        `[ ! -f "$EVIDENCE/findings.json" ] || { echo "::error::an unscannable target must write no envelope"; fail=1; }`;
+      - the two lines this change adds: `attestations: write` in `publish`
+        and `contents: write` in `release`.
 
-    The same `grep` found no escape at `d630412`.
+    `grep -n -E '\\[xuUN]|(^|\s)(!!|!<)|^%' .github/workflows/*.yml` found
+    nothing at `ff3c4cb`, exit 1. On 2026-10-16 the joined reader was
+    quiet on the real tree, and it named:
+    - an escaped line break;
+    - a Unicode line separator, a next line and a lone carriage return
+      after a comment;
+    - `!!binary`;
+    - every spelling `_write_line_offenders` already named.
 - The golden copy (R-HRP-6, DEC-HRP-007). It parses neither YAML nor shell.
-  - `_normalised_workflow(text)`: refuse a non-ASCII file. Otherwise split
-    on `"\n"`, strip each line's trailing `" \t\r"`, and replace
+  - `_normalised_workflow(data: bytes)`: refuse non-ASCII bytes. Turn each
+    `\r\n` into `\n`, and refuse any carriage return that remains. Then
+    split on `"\n"`, strip each line's trailing `" \t"`, and replace
     `@[0-9a-f]{40} # v[\w.-]+$` with `@<pin>` and
     `^(  PYTHON_DEFAULT: )"[0-9.]+"$` with `\1"<python>"`. Then drop the
     trailing blank lines.
@@ -509,8 +561,10 @@ it.
   - `test_the_release_job_is_checkout_free_and_verifies_before_it_creates`
     (AC-HRP-10);
   - `test_a_release_job_that_reaches_the_tree_or_weakens_verification_is_named`
-    (AC-HRP-11), parametrized over every planting AC-HRP-11 lists, each
-    asserting its own offender text;
+    (AC-HRP-11), parametrized over the plantings the line readers can see,
+    each asserting its own offender text. These are the ones inside the
+    `release` job's steps, its flags, its conditions and its `env:`. The
+    rest go to the golden-comparison test below;
   - `test_release_workflow_matches_its_golden_copy` (AC-HRP-10), the real
     file against `tests/fixtures/release-workflow.golden`;
   - `test_the_golden_comparison_admits_only_the_pinned_workflow`
@@ -568,7 +622,12 @@ it.
   - no notes steps;
   - no `release` job;
   - no cooldown;
-  - the notes tests erroring because the script does not exist.
+  - the notes tests erroring because the script does not exist;
+  - the golden-copy test erroring because
+    `tests/fixtures/release-workflow.golden` does not exist until
+    Milestone 4;
+  - the write-line test naming nothing, since the tree has no unlisted
+    line yet.
 
   The planted tests pass where they need no file. Do not commit this state,
   because a commit whose suite is red by design is one the ladder cannot

@@ -307,7 +307,8 @@ first may move a line without moving the fact.
   against a golden copy, `tests/fixtures/release-workflow.golden`, with
   only trailing whitespace, action pins and the `PYTHON_DEFAULT` value let
   vary, so no shell or YAML is parsed. Across workflows, every
-  non-comment line containing `write` must be on a named list, which holds
+  non-comment line containing `write`, with escaped line breaks joined and
+  every line break Python knows split, must be on a named list, which holds
   the single `contents: write` however it is spelled. The
   existing tests keep their names and bodies.
   **`tests/test_workflow_pins.py`**: one test beside the Dependabot readers

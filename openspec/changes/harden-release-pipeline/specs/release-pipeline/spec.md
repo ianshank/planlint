@@ -138,11 +138,21 @@ none is repeated here (C-HRP-4).
   for the first and `gh attestation verify` for the second. No other job in
   any workflow under `.github/workflows/` MAY hold `contents: write`, however
   it is spelled, and `release.yml`'s top-level block MUST stay
-  `contents: read` alone. So in every workflow, each line outside a full-line
-  comment that contains `write`, in any letter case, MUST be on a fixed list
-  the test holds by file and stripped text. No workflow MAY contain a `\x`,
-  `\u`, `\U` or `\N` escape. A quoted, capitalised, folded, aliased or
-  escaped spelling of the scope is then refused along with the plain one.
+  `contents: read` alone. The check reads every file under
+  `.github/workflows/`, whatever its extension, as logical lines:
+  - it splits wherever Python's `str.splitlines` does, Unicode line breaks
+    and a lone carriage return included;
+  - it joins a line ending in `\` to the next line, with the next line's
+    leading whitespace dropped, unless the first line is a full-line
+    comment.
+
+  Each logical line outside a full-line comment that contains `write`, in
+  any letter case, MUST appear on a fixed list the test holds, by file and
+  stripped text, exactly as many times as the list names it. No workflow MAY
+  contain a `\x`, `\u`, `\U` or `\N` escape, a `!!` or `!<` tag, or a line
+  that starts with `%`. A quoted, capitalised, folded, aliased, escaped,
+  tagged or line-broken spelling of the scope is then refused along with the
+  plain one.
 - R-HRP-6: The `release` job MUST NOT check out the repository and MUST NOT
   bring the tagged tree in by any other route. Its steps MUST be exactly the
   `dist` and `release-notes` downloads, through the same pinned
@@ -154,19 +164,22 @@ none is repeated here (C-HRP-4).
   `github.repository`, both through `env:`. They MUST read the tag from
   `GITHUB_REF_NAME` in the environment, never through an inline expression in
   `run:`. The guard MUST pin `release.yml`'s whole text and MUST NOT parse its
-  YAML or its shell. The file MUST be ASCII. Normalised, it MUST equal the
-  golden copy `tests/fixtures/release-workflow.golden`, normalised the same
-  way, line for line. Normalising means:
+  YAML or its shell. The file MUST be ASCII. After each `\r\n` becomes `\n`,
+  it MUST hold no carriage return, because YAML reads a lone one as a line
+  break. Normalised, it MUST equal the golden copy
+  `tests/fixtures/release-workflow.golden`, normalised the same way, line
+  for line. Normalising means:
   - splitting on line feeds;
-  - stripping each line's trailing spaces, tabs and carriage returns;
+  - stripping each line's trailing spaces and tabs;
   - replacing each action pin's `@<40-hex sha> # v<version>` at a line's
     end, and the `PYTHON_DEFAULT` value, with placeholders;
   - dropping the trailing blank lines.
 
   Any other text is an offender, named by its first differing line. So no
   step, environment variable, key, job, document or comment that the golden
-  copy does not hold can enter the file, however it is written. A change to
-  the workflow edits the golden copy in the same commit.
+  copy does not hold can enter the file, however it is written. The one
+  exception is the code behind an action pin, which DEC-HRP-007 leaves to
+  review. A change to the workflow edits the golden copy in the same commit.
 - R-HRP-7: The `release` job MUST run `gh attestation verify` on every file
   in the downloaded `dist` directory, each with the following flags:
   - `--repo` naming this repository;
@@ -410,7 +423,7 @@ none is repeated here (C-HRP-4).
   controls that tree, the reason the gate already reads `tag-ancestry` from
   the default branch. "No checkout" alone leaves other doors open: a
   `git clone`, a `gh repo clone`, an interpreter running a downloaded script.
-  So the guard pins the whole job rather than denying paths.
+  So the guard pins the whole file rather than denying paths.
   That is stronger than the plan's "no `run:` invoking a tree path", and with
   no checkout there is no tree path to invoke. The tag reaches the shell
   through `GITHUB_REF_NAME` in the environment, the safe form
@@ -465,7 +478,8 @@ none is repeated here (C-HRP-4).
     to know where anything ends.
   - Only three things may vary, and each placeholder admits only its own
     shape at a line's end:
-    - trailing spaces, tabs and carriage returns;
+    - trailing spaces and tabs, and CRLF line endings, a lone carriage
+      return being refused because YAML reads it as a line break;
     - the action pins, so that Dependabot's SHA bumps stay green. Their
       form is `tests/test_workflow_pins.py`'s to check;
     - the `PYTHON_DEFAULT` value, which `tests/test_workflow_python.py`
@@ -475,20 +489,37 @@ none is repeated here (C-HRP-4).
 
   The cost, accepted: every edit to `release.yml` edits the golden copy in
   the same commit, and a commit that edits both passes. That commit is for
-  review to read, as every change to this file has always been.
+  review to read, as every change to this file has always been. The line
+  readers that name single offenders are the layer that still holds when a
+  commit edits both. `harden-ci-workflows` DEC-HCW-008 rejects a test copy
+  of a pin because every Dependabot bump would have to edit it. The pin
+  placeholder removes exactly that harm, and the golden copy changes only
+  when a person changes the workflow.
+
+  One gap is named. The placeholder admits any 40-hex commit, so a swapped
+  SHA changes the code a step runs without changing a golden line, and
+  `tests/test_workflow_pins.py` checks a pin's form, not that its commit is
+  the tag's. So a pin change in `release.yml` that Dependabot did not make
+  is checked in review against its tag, with Milestone 0's
+  `git ls-remote --tags`.
 
   The write scope is a question across workflows, not one file's shape, so
   R-HRP-5 is held by a list instead:
-  - every line outside a full-line comment that contains `write`, in any
-    case, must be one the test names;
-  - no workflow may hold a `\x`, `\u`, `\U` or `\N` escape, which is how
-    a double-quoted scalar could spell the word without its letters.
+  - every logical line outside a full-line comment that contains `write`,
+    in any case, must be one the test names, as often as it names it;
+  - lines split wherever `str.splitlines` splits and are joined at a
+    trailing `\`. So a Unicode line break after a comment, and an escaped
+    line break inside a double-quoted scalar (`"wr\` on one line, `ite"` on
+    the next), are read as the YAML reader reads them;
+  - no workflow may hold a `\x`, `\u`, `\U` or `\N` escape, or a `!!` or
+    `!<` tag or a `%` directive, which are how a scalar could spell the
+    word without its letters.
 
-  `tasks.md` names the lines that qualify today, with the command that
-  finds them, and the lines this change adds. The gap, accepted and named:
-  an escaped line break inside a double-quoted scalar (`"wr\` on one line,
-  `ite"` on the next) still spells the word across two lines. It is left to
-  review.
+  `ci.yml` is not ASCII and is not this change's to edit, so the list
+  reads it as it is. `tasks.md` names the lines that qualify today, with
+  the command that finds them, and the lines this change adds. A spelling
+  that GitHub's own reader refuses, such as an expression or a look-alike
+  letter, needs no guard: it grants nothing.
 - **DEC-HRP-008 (revised at the first review):** the `release` job holds
   `contents: write` and `attestations: read`, the second beyond the plan's
   block. A job-level block replaces the top-level one, so every scope it omits
@@ -817,7 +848,12 @@ none is repeated here (C-HRP-4).
   - `Write`;
   - a value on the next line, and a folded value;
   - an alias of an anchored `write`;
-  - the escape `"\x77rite"`.
+  - the escapes `"\x77rite"`, `"\u0077rite"` and `"\U00000077rite"`;
+  - an escaped line break inside a double-quoted `"wr\` and `ite"`;
+  - a Unicode line separator, a next line or a lone carriage return after a
+    comment, followed by `contents: write`;
+  - a `!!binary` value;
+  - a second copy of a listed line.
 
   So are a `release` job conditioned on anything
   but the exact tag test (an added `always()`, a dispatch alternative), one
@@ -869,7 +905,8 @@ none is repeated here (C-HRP-4).
   - a top-level `defaults:`, written in block form, in flow form and as
     `defaults :`;
   - a `cache-mode: write`, a scalar `concurrency:`, and a new trigger;
-  - a no-break space, and the file with its last line removed.
+  - a no-break space, a lone carriage return (`dist/*` then `\r\r\n`), and
+    the file with its last line removed.
 
   Weakening the verification:
   - the release created before the verification;
