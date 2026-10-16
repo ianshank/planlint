@@ -105,6 +105,14 @@ Every number names the command that produced it.
   ready only after this milestone's gate is recorded here. No criterion can
   observe the release, so the draft state is what keeps the removals out of
   `dev` early (DEC-RFR-001).
+  - 2026-10-16: the owner marked #60 ready for review to request a review.
+    It went back to draft the same day, once Copilot's review was answered,
+    and the hold applies again from then. That review's two findings are
+    resolved here:
+    - the post-release `gh attestation verify` now carries the source ref,
+      the source digest and the self-hosted-runner refusal (Milestone 6);
+    - the required-checks preflight now reads the rules in force on each
+      branch rather than the ruleset summaries (Milestone 0).
 - The package is reviewed by `spec-adversary` before any code. Its findings
   are resolved in the package and listed here with what changed.
   **Recorded — first review, at `f0063a6`:**
@@ -220,10 +228,20 @@ Every number names the command that produced it.
   sentence naming a version while the commands keep placeholders. If
   AC-HRP-20 reads the rule as file-wide, stop and reconcile the two
   packages before Milestone 5 edits that sentence (DEC-RFR-011).
-- **The required checks.** Record `gh api repos/ianshank/planlint/rulesets`.
-  If any branch ruleset's `required_status_checks` names a `test (3.10)`
-  leg rather than `ci-ok` alone, the owner edits that ruleset in the same
-  sitting as the merge, or pull request 1 cannot pass its own checks.
+- **The required checks.** The rulesets list endpoint returns summaries
+  without their rules, so read the rules in force on each long-lived branch
+  instead. Record, for `dev`, `qa` and `main`:
+
+  ```
+  gh api --paginate "repos/ianshank/planlint/rules/branches/<branch>" --jq '[.[] | select(.type=="required_status_checks") | .parameters.required_status_checks[].context]'
+  gh api "repos/ianshank/planlint/branches/<branch>/protection"   # classic protection: 404, "Branch not protected"
+  ```
+
+  Each list must hold `ci-ok` alone. The protection read must answer 404.
+  If either names a `test (3.10)` leg, the owner edits that ruleset or
+  protection in the same sitting as the merge. Otherwise the check stays
+  pending once its matrix leg is gone, and pull request 1 cannot pass its
+  own checks.
 - **Merge hazards**, resolved on purpose whichever sibling lands first:
   - `docs/hooks.md`: `harden-release-pipeline` edits the `release` row,
     while this change edits the `test` row only.
@@ -684,8 +702,10 @@ Every number names the command that produced it.
   - `pipx run pypi-attestations verify pypi --repository https://github.com/ianshank/planlint pypi:<filename>`
     reports success;
   - where `harden-release-pipeline` added build provenance,
-    `gh attestation verify <file> --repo ianshank/planlint --signer-workflow ianshank/planlint/.github/workflows/release.yml`
-    passes.
+    `gh attestation verify <file> --repo ianshank/planlint --signer-workflow ianshank/planlint/.github/workflows/release.yml --source-ref refs/tags/v0.4.0 --source-digest "$M2" --deny-self-hosted-runners`
+    passes. These are the bindings that package's `release` job checks, so
+    an artifact attested by `release.yml` on another ref, on another commit,
+    or on a self-hosted runner fails here too.
 
   Record each verdict with the date (AC-RFR-26).
 - **The Release and the tree.**
