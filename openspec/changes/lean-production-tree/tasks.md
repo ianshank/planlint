@@ -2,13 +2,16 @@
 
 Drafted at `c0ff090` — the merge of PR #57 into `dev`, the base of
 `claude/lean-production-tree` — on 2026-10-15, as Phase 1 of the session plan
-for a lean production branch. That plan is not tracked (DEC-LPT-005); every
-decision this package takes from it is restated in
+for a lean production branch, and revised at `04d1622` on 2026-10-16 to
+resolve the first adversarial review (Milestone 1). That plan is not tracked
+(DEC-LPT-005); every decision this package takes from it is restated in
 `specs/production-tree/spec.md`. **This package must not merge before
-`v0.3.0` is published** (Milestone 2, DEC-LPT-017). Every line number below
-is re-read at the implementation branch's head before the milestone that uses
-it; a sibling landing first may move a line without moving the fact. Every
-number names the command that produced it.
+`v0.3.0` is published and the 0.3.0 record is in `dev`** (Milestone 2,
+DEC-LPT-017): pull request #58 stays a GitHub draft, and is marked ready for
+review only after Milestone 2's gate is recorded here. Every line number
+below is re-read at the implementation branch's head before the milestone
+that uses it; a sibling landing first may move a line without moving the
+fact. Every number names the command that produced it.
 
 ## Measured at `c0ff090`
 
@@ -42,8 +45,11 @@ number names the command that produced it.
   `tests/test_spec_test_citations.py:77-84`. No retune (C-LPT-5).
 - **Invariant and ADR sources.** `python -c "import json;
   print(json.load(open('openspec/specgraph.json'))['invariant_source'])"` →
-  `None`; no path in `INVARIANT_SOURCES` or `ADR_SOURCES`
-  (`openspec_graph/detect.py:64-86`) exists, so G006 and G009 cannot fire.
+  `None`. Of the paths in `INVARIANT_SOURCES` and `ADR_SOURCES`
+  (`openspec_graph/detect.py:64-86`), `for p in <each>; do [ -e "$p" ] && echo
+  "$p"; done` prints only `AGENTS.md`, which `_invariants`
+  (`detect.py:349-372`) skips because it carries no `INV-n` id
+  (`test_agents_md_declares_no_invariant_ids`); so G006 and G009 cannot fire.
 - **A simulated lean tree** (the session lead's, this session):
   `git archive HEAD | tar -x` into a scratch directory with the deletions
   applied — 266 files, 2459866 bytes; `planlint --target <sim> validate
@@ -78,9 +84,10 @@ number names the command that produced it.
   `.claude/skills/planlint-add-eval-case/` against `docs/hooks.md:277` and
   `docs/agents-skills-harness.md:6`.
 - **The reference scanner, simulated** (a one-off read-only script
-  implementing R-LPT-11's tokens over the files that survive the deletion, not
-  committed): 28 files in scope, 31 dangling tokens in 9 files —
-  `.claude/agents/planlint-verifier.md:28`, `.claude/agents/spec-drafter.md:7`,
+  implementing the first draft's R-LPT-11 tokens and scope over the files
+  that survive the deletion, not committed): 28 files in scope, 31 dangling
+  tokens in 10 files — `.claude/agents/planlint-verifier.md:28`,
+  `.claude/agents/spec-drafter.md:7`,
   `.claude/skills/planlint-add-rule/SKILL.md:18`,
   `.claude/skills/planlint-change-package/SKILL.md:11`,
   `.claude/skills/planlint-release/SKILL.md:19,61`,
@@ -113,28 +120,110 @@ number names the command that produced it.
   - `tests/test_graph.py:1-4` and `.claude/hooks/guard_promotion.py:2`,
     docstrings naming `add-graph-export` and `adopt-branch-promotion-model`
     (C-LPT-2: history, unchanged);
-  - `tests/test_ledger.py:55`, a fixture path under
-    `openspec/changes/add-waiver-ledger-and-inv-lints/` that is test data, not
-    a reference — no edit;
+  - `tests/test_ledger.py:53-59`, a spec path under
+    `openspec/changes/add-waiver-ledger-and-inv-lints/` built in memory and
+    an assertion on that package name — test data, not a reference to the
+    tree, outside R-LPT-9 (DEC-LPT-011) — no edit;
   - the clauses of the kept packages that R-LPT-16 reconciles.
 - **No test holds the skill's refusal.**
   `grep -rn "Never run .witness. yourself\|finding disappear\|without changing the fact" tests/`
   prints nothing (DEC-LPT-008).
+
+## Re-checked at `04d1622`, 2026-10-16 (the review)
+
+- **The gate before the revision.** `planlint --target . validate --fail-on
+  ERROR`: `55 spec(s) checked · 0 error · 0 warn · 0 info`, `PASS`, exit 0.
+- **Remote state.** `git ls-remote --tags origin` prints `refs/tags/v0.1.0`
+  and its peeled line, nothing else; `curl -s -o /dev/null -w '%{http_code}\n'
+  https://pypi.org/pypi/planlint/0.3.0/json` → `404`;
+  `gh api repos/ianshank/planlint/rulesets` → `[]`;
+  `gh api repos/ianshank/planlint/pulls/58 --jq '{draft,base:.base.ref,head:.head.ref}'`
+  → `{"base":"dev","draft":true,"head":"claude/lean-production-tree"}`.
+  `adopt-branch-promotion-model/tasks.md:183-188` plans the rulesets, the
+  owner as the only bypass and a `v*` tag ruleset, unticked.
+- **The widened reference scan** (the same read-only script, fed on stdin
+  and not committed, over every root `*.md` but `CHANGELOG.md` and the
+  markdown under `.github/` as well): 30 files in scope, 32 dangling tokens in
+  11 files — the 31 above plus `SECURITY.md:48`, which backticks
+  `docs/peer-review-2026-09.md`; `.github/pull_request_template.md` has none.
+  No in-scope line carries a `path:line` span: a `grep -nE` over the scope
+  for a backticked in-scope path followed by a colon and a digit prints
+  nothing.
+- **`openspec/AGENTS.md`'s budget.** `wc -l openspec/AGENTS.md` → 54;
+  `grep -n '^MAX_NESTED_LINES' tests/test_agent_artifacts.py` →
+  `454:MAX_NESTED_LINES = 60`, held as `len(lines) <= MAX_NESTED_LINES` by
+  `test_nested_agents_file_stays_short`. The retired-codes entry, wrapped as
+  the file's prose is, takes four lines
+  (`printf '%s\n' "<entry>" | fold -s -w 78 | wc -l` → 4) and one blank line
+  before it, leaving the file at 59 of 60.
+- **The retired-codes generator** (Milestone 5's command), run here:
+  `AA AC AD AQA ASP CF CH CP CT DC DEF DG DL EH FE GA GR GTC GV HCW HNS LH LM
+  MCO MFD MP PB PM POL PR PS RDS RE RP SA SD SDI SE SER SK SNAP TC TDR TSS UB
+  UG UMC VER WL WM ZCG`, `| wc -w` → 51. None of `WCA`, `IND`, `REL`, `BPM`
+  or `LPT`, which `grep -ohE '^- (R|C)-[A-Z]{2,}-' openspec/changes/*/specs/*/spec.md`
+  shows the open packages declare. The first draft's command, run with this
+  package present, also listed `LPT`; reading only the packages, it missed
+  `RP` and `AC`, which only `docs/differentiation-roadmap.md` declares
+  (`AC-RP-1` to `AC-RP-3`, `AC-AC-1` to `AC-AC-3`) and which
+  `CHANGELOG.md:1712` and three deleted packages cite (`AC-RP-3`).
+- **`widen-indeterminate-unchecked-citations` is unimplemented.**
+  `grep -rn 'unchecked-citations' openspec_graph/ .github/actions/` and
+  `grep -rn '"waived"' openspec_graph/` print nothing; 0 of 20 criteria
+  ticked, 0 of 6 milestones `[DONE]` (the commands above).
+- **Where IND and WCA name a deleted path.**
+  `grep -n 'peer-review\|differentiation-roadmap\|evals/\|openspec/changes/' <file>`
+  over each package's three files. Requiring an edit or preservation:
+  WCA spec `:270-277` (R-WCA-33), `:547-549` (DEC-WCA-022's AC-GA-29
+  sentence), `:815-822` (AC-WCA-29), `:824-829` (AC-WCA-30); WCA proposal
+  `:194-200`, `:212-213`, `:243-245`; WCA `tasks.md:135-143`, `:316-322`,
+  `:327-328`; IND spec `:196-200` (C-IND-7); IND proposal `:208-215`; IND
+  `tasks.md:249-260`. Evidence, which stays: WCA proposal `:13`, `:16`,
+  `:37`; WCA spec `:20`; IND proposal `:16`, `:21`, `:62`, `:64`, `:66`,
+  `:115`, `:117`, `:120`; IND spec `:22`, `:29`, `:46`, `:219`, `:248`.
+  After the deletion only WCA's own `tasks.md` names
+  `test_action_does_not_pass_require_witness`
+  (`grep -ln test_action_does_not_pass_require_witness <kept packages>`), so
+  the AC-GA-29 re-point is moot.
+- **The couples' direction** (DEC-LPT-019), read in the tests:
+  `test_agent_artifacts_are_excluded_from_the_docker_context`
+  (`tests/test_release_surface.py:216-224`) asserts each tuple entry is in
+  `.dockerignore`; `test_harness_docs_list_every_agent_and_skill` asserts
+  each existing agent and skill is named, never that a named one exists;
+  `test_each_documented_file_class_is_nudged` asserts each table entry is
+  nudged. `tests/test_adopter_urls.py`'s argument-free tests, run in memory
+  with `evals` removed from `_EXCLUDED_DIRS` and no file edited, all pass.
+- **The helpers only the evals section calls.** `grep -n '_ids\b\|_frontmatter' tests/test_agent_artifacts.py`:
+  `_ids` (`:114-115`), `_frontmatter_block`, `_frontmatter` and
+  `_frontmatter_list` (`:117-140`) are defined there and called only inside
+  the evals section (`:146-307`); `tests/test_agent_skill_docs.py` has its
+  own `_frontmatter`.
+- **More lines the inventory missed**, each added below:
+  `docs/next-steps.md:391-392` ("Eight files exist and are gated");
+  `tests/test_agent_artifacts.py:433` ("so nine files cannot land in no
+  gate"); `pyproject.toml:162-166` ("is in measure-coverage-once's
+  tasks.md"); `tests/test_ci_makefile.py:478-480` (the docstring saying the
+  section says the report "stays red"). `.github/dependabot.yml:23-25`
+  attributes a deferral and says an earlier attribution to the distribution
+  plan was wrong — history (C-LPT-2), unchanged.
 
 ## Milestone 0 — Grounding at the implementation branch's head
 
 - Run the gate and record its exit code before the first edit outside this
   package: `planlint --target . validate --fail-on ERROR`.
 - Re-run every measurement above at the head and record the figures beside
-  the `c0ff090` ones, each with its commit.
+  the `c0ff090` and `04d1622` ones, each with its commit.
 - Re-run the cross-check `git grep` above and the package-name grep over the
   agent prose,
   `git grep -nwE "$(ls openspec/changes | grep -vE '\.(md|json)$' | paste -sd'|')" -- .claude skills AGENTS.md '*/AGENTS.md' llms.txt`;
   any hit outside Milestones 4 to 6 joins them, recorded here.
 - Confirm `add-witness-ci-artifacts` is still unimplemented: no criterion
   ticked, and `grep -n "witness-dir" openspec_graph/cli.py` prints nothing.
-  If it has been implemented, R-LPT-16's amendment changes shape: stop and
-  re-read DEC-LPT-007.
+- Confirm `widen-indeterminate-unchecked-citations` is still unimplemented:
+  no criterion ticked, no milestone `[DONE]`, and
+  `grep -rn 'unchecked-citations' openspec_graph/ .github/actions/` prints
+  nothing.
+- If either has been implemented, R-LPT-16's amendment of it changes shape:
+  stop and re-read DEC-LPT-007.
 - **Gate:** `make test`
 
 ## Milestone 1 — The change package
@@ -143,23 +232,79 @@ number names the command that produced it.
   first; every criterion unticked; `Status: DRAFT`. Reviewed by
   `spec-adversary` before any edit outside this directory; each finding
   resolved by a decision and recorded here.
-- AC-LPT-1 to AC-LPT-5 cite their stage only, because their tests do not
-  exist yet; Milestone 7 adds the selectors (DEC-LPT-018).
-- Record the exit codes of `planlint --target . validate --fail-on ERROR
-  --change lean-production-tree`, of the unscoped run, and of
-  `python -m pytest tests/test_spec_test_citations.py -q -p no:cacheprovider`.
+- Review 1 (`spec-adversary`, against `04d1622`), resolved in this revision,
+  each finding by the clauses beside it:
+  - IND's C-IND-7 requires edits to deleted documents — R-LPT-16,
+    DEC-LPT-007, AC-LPT-17, Milestones 0 and 5, the proposal's "Kept
+    packages" bullet;
+  - the line-wide archive exemption hid broken links — R-LPT-3, R-LPT-5,
+    R-LPT-11, R-LPT-12, DEC-LPT-014, AC-LPT-3 to AC-LPT-5, AC-LPT-9,
+    Milestones 3 and 5;
+  - AC-LPT-17 reached too far and not far enough — AC-LPT-17, R-LPT-16,
+    DEC-LPT-007;
+  - the 0.3.0 record riding in this change — C-LPT-4, DEC-LPT-003,
+    DEC-LPT-017, Milestone 2;
+  - the merge-order gate was unenforceable — DEC-LPT-017, AC-LPT-1,
+    Milestone 2, this file's header;
+  - the retired-codes line in `openspec/project.md` — R-LPT-8, R-LPT-13,
+    DEC-LPT-010, DEC-LPT-012, AC-LPT-12, Milestones 5 and 7;
+  - AC-LPT-1 claimed more than its test sees — AC-LPT-1;
+  - the enumeration could pass vacuously — R-LPT-10, DEC-LPT-015, AC-LPT-6,
+    Milestone 3;
+  - lines missing from the edit inventory — R-LPT-7, R-LPT-9, R-LPT-14,
+    Milestones 5 to 7;
+  - `.github/dependabot.yml` and the couples' direction — R-LPT-7,
+    DEC-LPT-019, DEC-LPT-020, AC-LPT-11;
+  - the simulated scan's file figure — "Measured at `c0ff090`";
+  - Milestone 4's gate — Milestone 4;
+  - a tag ruleset that does not exist — DEC-LPT-001, Milestone 2;
+  - in-memory package names — R-LPT-9, DEC-LPT-011;
+  - AC-LPT-2's planted file and AC-LPT-13's empty scope — AC-LPT-2,
+    AC-LPT-13, Milestone 3;
+  - the scan's scope, widened — R-LPT-11, DEC-LPT-013.
+
+  Found while resolving them: the roadmap declares area codes the CHANGELOG
+  cites, so the retired-codes generator reads it (R-LPT-8, DEC-LPT-010); and
+  the G006/G009 evidence said no candidate path exists, while the root
+  `AGENTS.md` does and carries no `INV-n` (proposal and spec evidence). Hand
+  the revision back to `spec-adversary` before any edit outside this
+  directory.
+- AC-LPT-1 to AC-LPT-5 cite their stage only, and AC-LPT-6 only its existing
+  tests, because the new tests do not exist yet; Milestone 7 adds the
+  selectors (DEC-LPT-018).
+- Record the exit codes of `planlint --target . validate --fail-on INFO
+  --change lean-production-tree`, of the unscoped run at `--fail-on ERROR`,
+  and of `python -m pytest tests/test_spec_test_citations.py tests/test_spec_status.py tests/test_stage_citations.py -q -p no:cacheprovider`.
 - **Gate:** `make pre-pr`
 
 ## Milestone 2 — Preconditions, recorded before any deletion (owner)
 
-- `v0.3.0` is published and back-merged: `git ls-remote --tags origin v0.3.0`
-  prints the tag; `python -m pip index versions planlint` lists `0.3.0`;
-  `git merge-base --is-ancestor 'v0.3.0^{commit}' origin/dev` exits 0. Record
-  all three. Nothing below starts until all three hold (DEC-LPT-017).
+- Pull request #58 stays a GitHub draft through this milestone, and is
+  marked ready for review only after this milestone's gate is recorded here.
+  No criterion observes the release or a tag, so the draft state is what
+  keeps the change from merging early (DEC-LPT-017).
+- `v0.3.0` is tagged, published and back-merged:
+  `git ls-remote --tags origin v0.3.0` prints the tag and its peeled line;
+  `curl -s -o /dev/null -w '%{http_code}\n' https://pypi.org/pypi/planlint/0.3.0/json`
+  prints `200`, and in a fresh venv `python -m pip install planlint==0.3.0`
+  resolves and exits 0; `git fetch origin && git merge-base --is-ancestor
+  'v0.3.0^{commit}' origin/dev` exits 0. Record all three with their output
+  and the date.
+- The 0.3.0 record is merged into `dev` before the archive tag is created:
+  the `tasks.md` entries and the criteria ticks of `prepare-release-0-3-0`
+  and `adopt-branch-promotion-model` that the release's record step writes,
+  in their own pull request into `dev`, never in this change (C-LPT-4).
+  Record that pull request's number and merge commit, and
+  `git show origin/dev:<spec> | grep -c '^- \[x\] \*\*AC-'` for each of the
+  two specs beside the `c0ff090` figures.
+- Record `gh api repos/ianshank/planlint/rulesets` as the tag is pushed (`[]`
+  at `04d1622`): whatever it prints is what protects the archive tag, and
+  nothing in the tree depends on it (DEC-LPT-001).
 - The archive tag, pushed by the owner on the `dev` tip that will be the
-  implementation branch's base:
+  implementation branch's base — after the 0.3.0 record above has merged:
 
   ```
+  git fetch origin
   X=$(git rev-parse origin/dev)
   git tag -a archive/dev-record-2026-10 "$X" -m "Last dev tree carrying the development record before lean-production-tree"
   git push origin archive/dev-record-2026-10
@@ -168,24 +313,32 @@ number names the command that produced it.
   This branch was cut at `c0ff090`, before the release; bring it to `X` by
   merging `origin/dev` into it, never by force-pushing, so that
   `git merge-base origin/dev HEAD` prints `X`.
-- Before merging, and again at the last push:
+- With the deletion committed (Milestone 7, and again at the last push):
   `B=$(git merge-base origin/dev HEAD); git diff --quiet archive/dev-record-2026-10 "$B" -- $(git diff --name-only --diff-filter=D "$B" HEAD)`
-  exits 0 — no deleted path changed on `dev` since the tag. If it fails, the
-  owner tags `$B` as `archive/dev-record-2026-10-<YYYYMMDD>`, every pointer is
-  rewritten to the new name, and the first tag stays; a tag is never moved
-  (DEC-LPT-001).
-- **Gate:** `git ls-remote --tags origin 'archive/*'` prints
+  exits 0 — no deleted path changed on `dev` since the tag. Not before: with
+  no deletion the path list is empty and the diff would compare whole trees.
+  If it fails, the owner tags `$B` as
+  `archive/dev-record-2026-10-<YYYYMMDD>`, every pointer is rewritten to the
+  new name, and the first tag stays; a tag is never moved (DEC-LPT-001).
+- **Gate:** every precondition recorded here, with both shas and the date —
+  `git ls-remote --tags origin v0.3.0` prints the tag; the PyPI JSON query
+  prints `200`; `git merge-base --is-ancestor 'v0.3.0^{commit}' origin/dev`
+  exits 0; the 0.3.0 record's pull request is merged into `dev`; and
+  `git ls-remote --tags origin 'archive/*'` prints
   `refs/tags/archive/dev-record-2026-10` and its peeled
-  `refs/tags/archive/dev-record-2026-10^{}` naming `X`, recorded here with
-  both shas and the date. No milestone below starts until it is recorded.
+  `refs/tags/archive/dev-record-2026-10^{}` naming `X`. Only then is pull
+  request #58 marked ready, and no milestone below starts until this is
+  recorded.
 
 ## Milestone 3 — The hygiene module, seen red first
 
 - `tests/support.py`: `shipped_files(root: Path) -> list[str]`, the
   `git ls-files --cached --others --exclude-standard` call moved out of
-  `nested_agents_files`, returning `[]` when git fails, as today;
-  `nested_agents_files` in `tests/test_agent_artifacts.py` keeps its filter
-  and calls it (R-LPT-10).
+  `nested_agents_files`, returning `[]` when git fails, as today, and
+  keeping only paths present on disk (`(root / p).exists()`), so an index
+  entry removed with plain `rm` is not shipped; `nested_agents_files` in
+  `tests/test_agent_artifacts.py` keeps its filter and calls it (R-LPT-10,
+  DEC-LPT-015).
 - `tests/test_tree_hygiene.py` (new, flat under `tests/`): a module docstring
   giving the argument — the record lives at the archive tag, so a shipped
   path resolves or says where it went. `_SHAPES` for
@@ -193,40 +346,55 @@ number names the command that produced it.
   `docs/**/reflection-*.md`, plus the `evals/` prefix; `_LINK` over
   `](target)`; `_SPAN` exactly
   `` `((?:docs|evals|openspec/changes|\.claude|skills)/[A-Za-z0-9_./-]+)` ``;
-  `_ARCHIVE = re.compile(r"archive/[\w.-]+")`. Functions:
+  the span exemption
+  `re.search(r"archive/[\w.-]+/" + re.escape(span) + r"(?![\w./-])", line)`,
+  and no exemption for a link. Functions:
   `shape_offenders(paths) -> list[str]`;
   `reference_offenders(text: str, path: str, root: Path) -> list[str]`, each
   offender `"<path>:<line>: <token>"`, reading no file;
-  `prose_files(paths) -> list[str]`, R-LPT-11's scope over `shipped_files`
+  `prose_files(paths) -> list[str]`, R-LPT-11's scope over `shipped_files` —
+  every root `*.md` but `CHANGELOG.md`, `llms.txt`, the nested `AGENTS.md`
+  set, and `*.md` under `docs/`, `skills/`, `.claude/` and `.github/`
   (R-LPT-11, R-LPT-12, DEC-LPT-013, DEC-LPT-014).
 - Planned tests, named so Milestone 7 can cite them (DEC-LPT-018):
   - `test_no_shipped_file_is_a_plan_review_or_evaluation_document` (the real
-    tree through `shipped_files`) — AC-LPT-1;
-  - `test_a_tracked_plan_document_is_named` (a `tmp_path` repository with
-    `git init` and `git add docs/foo-plan.md`) and
-    `test_a_file_under_evals_is_named` (a planted path list) — AC-LPT-2;
-  - `test_every_path_in_shipped_prose_resolves_or_names_an_archive` (the real
-    tree) — AC-LPT-3;
-  - `test_a_dangling_backticked_path_is_named_with_file_and_line` and
-    `test_a_dangling_relative_link_is_named_with_file_and_line` (planted text
-    under `tmp_path`) — AC-LPT-4;
-  - `test_a_line_naming_an_archive_ref_is_quiet` (parametrised over
+    tree through `shipped_files`, asserting `README.md` is enumerated) —
+    AC-LPT-1;
+  - `test_a_tracked_plan_document_is_named` and
+    `test_a_file_under_evals_is_named` (one `tmp_path` repository made with
+    `git init`, `docs/foo-plan.md` and `evals/case/prompt.md` added with
+    `git add`) — AC-LPT-2;
+  - `test_every_path_in_shipped_prose_resolves_or_names_its_archive` (the
+    real tree, asserting `README.md` is in scope) — AC-LPT-3;
+  - `test_a_dangling_backticked_path_is_named_with_file_and_line`,
+    `test_a_dangling_relative_link_is_named_with_file_and_line`,
+    `test_a_dangling_path_beside_another_archive_ref_is_named` (parametrised
+    over an archive URL for a different path and a bare
+    `archive/does-not-exist`) and
+    `test_a_dangling_relative_link_beside_its_own_archive_url_is_named`
+    (planted text under `tmp_path`) — AC-LPT-4;
+  - `test_a_path_beside_its_own_archive_url_is_quiet` (parametrised over
     `archive/dev-record-2026-10` and `archive/dev-record-2026-10-20261101`),
     `test_a_path_inside_an_external_url_is_quiet`,
     `test_a_placeholder_or_glob_span_is_quiet` and
-    `test_a_fragment_only_link_is_quiet` — AC-LPT-5.
+    `test_a_fragment_only_link_is_quiet` — AC-LPT-5;
+  - `test_a_tracked_file_removed_from_disk_is_not_enumerated` (the `git init`
+    repository: a committed file removed with plain `rm` is absent from
+    `shipped_files`) — AC-LPT-6.
 
   Each carries the tier `tests/shape_support.py` computes, marked per
   function, since the module mixes tiers (a git process is `e2e`).
 - Red first, never committed: in a scratch worktree outside the repository
   (`git worktree add --detach <scratch>/lean HEAD`), apply Milestone 6's
-  deletion list only, copy the module and the helper in, and run
+  deletion list with `git rm -r` — never plain `rm`, so the index agrees with
+  the disk — copy the module and the helper in, and run
   `python -m pytest tests/test_tree_hygiene.py -q -p no:cacheprovider` there.
   Record: the planted tests green; the shape test green there and red in the
   real checkout, where the planning documents still exist; the reference test
   red with its offender list. That list is the authority on what Milestones 4
-  to 6 missed (DEC-LPT-013): compare it with the simulated list above and add
-  any extra file to Milestone 5. Then `git worktree remove` the scratch tree.
+  to 6 missed (DEC-LPT-013): compare it with the widened simulated list above
+  and add any extra file to Milestone 5. Then `git worktree remove` the
+  scratch tree.
 - The module is committed in Milestone 6, with the deletion that turns its
   shape check green.
 - **Gate:** `make test` (the committed tree, the module held back)
@@ -261,7 +429,8 @@ number names the command that produced it.
   `sync/main-into-dev → dev`, a merge commit (`qa` is never back-merged);
   (13) M, the run ids and the pull requests recorded in a later pull request
   into `dev` — nothing is committed to `main` after the tag; (14) the
-  post-release sweep of R-LPT-13. One sentence: the PyPI trusted publisher is
+  post-release sweep of R-LPT-13, appending the swept packages' area codes to
+  the `openspec/AGENTS.md` entry. One sentence: the PyPI trusted publisher is
   bound to `release.yml` and the environment `pypi`, so renaming either
   breaks the publish. Keep the interim-window sentence (run M to the publish
   in one sitting). Do not carry the 0.3.0-only steps — the pending-publisher
@@ -283,24 +452,31 @@ number names the command that produced it.
   of the skill in this repository, and no README claim about an agent load
   path this project has not tested.
 - `docs/next-steps.md`: a "Retired documents" list, near the end, naming
-  each of R-LPT-1's documents once, each with its archive URL on the same
-  line, and one line for `evals/`.
+  each of R-LPT-1's documents once, each as a link whose target is its
+  archive URL or as a backticked path beside its own archive URL, and one
+  line for `evals/`.
 - `.claude/skills/planlint-release/SKILL.md`: `:17-19` — the branches may not
   exist until routes are enforced (point at `docs/hooks.md`, *Branching and
   promotion*), and `docs/hooks.md` *Releasing* is this skill's checklist, in
   the same order; `:61` — "as `docs/hooks.md` *Releasing* says"; the
   back-merge section ends with the post-release sweep. No package named.
-- **Gate:** `make docs-check`
+- **Gate:** `make pre-pr` (this milestone edits files `make test` checks)
 
-## Milestone 5 — References, conventions, agent prose, the open package and the retunes, with the record still present
+## Milestone 5 — References, conventions, agent prose, the open packages and the retunes, with the record still present
 
+- The pointer rule for every edit below (R-LPT-3, DEC-LPT-014): a markdown
+  link to a deleted path takes the archive URL as its target — never left
+  relative with the URL beside it — and a backticked deleted path is dropped
+  or kept on the same line as its own archive URL.
 - `docs/next-steps.md`: on `:13`, `:28`, `:39`, `:52-53`, `:120`, `:163`,
-  `:230`, `:234`, `:322` and `:338`, drop the path token or add the archive
-  URL on the same line, keeping finding ids such as F4, D3 and N8a; `:384`,
-  the wiring-plan link, becomes its archive URL; items 4 (`:41-43`) and 16
-  (`:437-442`) become one line each; item 24 (`:350-379`) is re-scoped as
+  `:230`, `:234`, `:322` and `:338`, drop the path token or point at it by
+  that rule, keeping finding ids such as F4, D3 and N8a — `:53`'s link
+  `(reflection-plan-2026-10.md)` becomes the archive URL; `:384`, the
+  wiring-plan link, takes its archive URL as target; items 4 (`:41-43`) and
+  16 (`:437-442`) become one line each; item 24 (`:350-379`) is re-scoped as
   R-LPT-5 says and its exit sentence rewritten as R-LPT-14 says. The
-  nested-file sentence at `:385` moves with the deletion (Milestone 6).
+  nested-file sentences at `:385` and `:391-392` move with the deletion
+  (Milestone 6).
 - `README.md`: `:344-345` ("validates the retrieval config and the agent
   indexes"); `:500-504` (the archived-suite paragraph, DEC-LPT-008: "An
   agent-skill evaluation suite lived in this tree through v0.3.0 and is
@@ -320,10 +496,11 @@ number names the command that produced it.
   `test_context7_indexes_the_skill_and_excludes_the_evals` renamed
   `test_context7_indexes_the_skill` and its `evals` assertion dropped in the
   same commit.
-- `docs/agents-skills-harness.md:140`, the wiring-plan link → archive URL
-  (`:6` and `:127-130` move with the deletion, Milestone 6).
-- `SECURITY.md:47-48`; `docs/aqa.md:113-114` (the evaluation-suite claim)
-  and `:221-222` (R-LPT-14); `docs/architecture/c4.md:84`.
+- `docs/agents-skills-harness.md:140`, the wiring-plan link's target → its
+  archive URL (`:6` and `:127-130` move with the deletion, Milestone 6).
+- `SECURITY.md:47-48` (the widened scan's addition); `docs/aqa.md:113-114`
+  (the evaluation-suite claim) and `:221-222` (R-LPT-14);
+  `docs/architecture/c4.md:84`.
 - `docs/hooks.md`: the spec-status row (`:163`) and the paragraph
   (`:171-173`) as R-LPT-14 says, keeping `settle-package-status-headers` —
   for example: "`make spec-status` reads the packages still open under
@@ -331,7 +508,9 @@ number names the command that produced it.
   (`make spec-status`, exit 0). A package that closes under a `DRAFT` header
   reads `draft-but-complete`, exiting 1, until
   `settle-package-status-headers` decides the vocabulary
-  ([`next-steps.md`](next-steps.md) item 24)."; the bullet at `:214-218`,
+  ([`next-steps.md`](next-steps.md) item 24)." — with
+  `tests/test_ci_makefile.py:478-480`, the docstring, saying the section
+  names the follow-up that settles the vocabulary; the bullet at `:214-218`,
   together with the hook arm and the nudge-table entry below.
 - `docs/AGENTS.md:13` (the diagram node) and `:31-33` (the paragraph): "a
   plan is a change package; a planning document that is not one is not
@@ -340,7 +519,9 @@ number names the command that produced it.
   `MAX_NESTED_LINES`; `tools/check_docs.py:24-28`, the comment, the same.
 - Configuration: `.gitignore:60-65`; `.dockerignore:52` with
   `tests/test_release_surface.py:223`; `.gitleaks.toml:4-6`;
-  `pyproject.toml:77-79`; `.github/dependabot.yml:24-25`.
+  `pyproject.toml:77-79` and `:162-166` (the per-file list "is in
+  measure-coverage-once's tasks.md" → at that file's archive URL).
+  `.github/dependabot.yml:23-25` is not edited (R-LPT-7, C-LPT-2).
 - `.claude/hooks/nudge_rule_registry.sh:58-61` with
   `tests/test_claude_hooks.py:49` and `docs/hooks.md:214-218`.
   `tests/test_claude_hooks.py:52` and `:201` need no edit: the hook matches
@@ -349,33 +530,66 @@ number names the command that produced it.
   `https://github.com/ianshank/planlint/tree/archive/dev-record-2026-10/openspec/changes/add-witness-mode/proposal.md`;
   its "read existing packages" step says to read the open packages under
   `openspec/changes/` in full; its area-code step also reads
-  `openspec/project.md`'s retired-codes line.
+  `openspec/AGENTS.md`'s retired-codes entry.
   `.claude/agents/spec-adversary.md:7,24` — the same example by archive URL.
   `.claude/skills/planlint-change-package/SKILL.md:11` — the reviewed
   packages by the archive URL of `docs/peer-review-2026-10.md`.
   `.claude/skills/planlint-add-rule/SKILL.md:18` — drop the roadmap.
   `.claude/agents/planlint-verifier.md:22,28` — drop `evals/` and the
   `post-merge-quality-review` path.
-- `openspec/project.md`: one line, "- Retired area codes (archived; never
-  reuse): …", generated before the deletion by
-  `ls openspec/changes | grep -v -e '^add-witness-ci-artifacts$' -e '^widen-indeterminate-unchecked-citations$' -e '^prepare-release-0-3-0$' -e '^adopt-branch-promotion-model$' | grep -vE '\.(md|json)$' | while read -r p; do cat openspec/changes/"$p"/specs/*/spec.md; done | grep -oE '^- (R|C)-[A-Z]{2,}-' | sed -E 's/^- (R|C)-//; s/-$//' | sort -u | paste -sd' ' -`
-  — declarations only, so a code a kept package owns is never listed
-  (R-LPT-8, DEC-LPT-010).
-- `openspec/changes/add-witness-ci-artifacts/`: R-WCA-33 (spec `:270-277`),
-  AC-WCA-29 (`:815-822`), AC-WCA-30 (`:824-829`), the proposal's "Docs that
-  move together" and "No agent permission to record a witness" bullets, and
-  Milestone 9's lines in its `tasks.md` naming a deleted document or
-  `evals/fabricate-witness/` — each amended and marked "(amended by
-  `lean-production-tree`)" (R-LPT-16, DEC-LPT-007). Then
-  `planlint --target . validate --fail-on ERROR --change add-witness-ci-artifacts`
-  exit 0, and `python -m pytest tests/test_spec_test_citations.py -q` green.
+- `openspec/AGENTS.md`: one entry, after the paragraph naming the drafter
+  and the adversary and before the precedence paragraph — "Retired area
+  codes, declared by packages and documents the `archive/dev-record-2026-10`
+  tag holds; never reuse one:" and the codes, wrapped as the file's prose
+  is — generated before the deletion by
+
+  ```
+  KEEP='add-witness-ci-artifacts|widen-indeterminate-unchecked-citations|prepare-release-0-3-0|adopt-branch-promotion-model|lean-production-tree'
+  { for p in $(ls openspec/changes | grep -vE '\.(md|json)$' | grep -vxE "$KEEP"); do cat openspec/changes/"$p"/specs/*/spec.md; done; cat docs/differentiation-roadmap.md; } | grep -oE '^- (\*\*)?(R|C|AC)-[A-Z]{2,}-[0-9]' | sed -E 's/^- (\*\*)?(R|C|AC)-//; s/-[0-9]$//' | sort -u | paste -sd' ' -
+  ```
+
+  — declarations only, from files this change deletes, so no code an open
+  package declares is listed, this package's `LPT` included. The precedence
+  paragraph and the mermaid block are not touched, and `wc -l
+  openspec/AGENTS.md` stays at or under `MAX_NESTED_LINES` (60).
+  `openspec/project.md` is not edited (R-LPT-8, DEC-LPT-010).
+- `openspec/changes/add-witness-ci-artifacts/`, each edit marked "(amended
+  by `lean-production-tree`)" (R-LPT-16, DEC-LPT-007): R-WCA-33 (spec
+  `:270-277`) and AC-WCA-29 (`:815-822`) drop the roadmap and the 2026-09
+  review from their lists; R-WCA-33 and AC-WCA-30 (`:824-829`) drop the
+  `evals/fabricate-witness/` clause, keeping SKILL.md's "Never run `witness`
+  yourself to make the flag pass" verbatim; DEC-WCA-022's AC-GA-29 sentence
+  (`:547-549`) reads as moot — `add-finding-line-hits` left the tree, so no
+  open spec cites the test this change replaces. Proposal: the "Docs that
+  move together" entries for the roadmap and the 2026-09 review (`:212-213`);
+  the `add-finding-line-hits` bullet (`:194-200`), as moot; the evals clause
+  of "No agent permission to record a witness" (`:243-245`), becoming
+  SKILL.md's refusal. `tasks.md`: the AC-GA-29 bullet (`:135-143`), as moot;
+  the roadmap and 2026-09 review lines (`:316-322`); the
+  `evals/fabricate-witness/` line (`:327-328`). Not edited: the evidence at
+  proposal `:13`, `:16`, `:37` and spec `:20`.
+- `openspec/changes/widen-indeterminate-unchecked-citations/`, each edit
+  marked the same way: C-IND-7 (spec `:196-200`) drops
+  `docs/peer-review-2026-09.md`, `docs/peer-review-2026-10.md` and
+  `docs/differentiation-roadmap.md`; `tasks.md:249-260`, the three bullets
+  editing those documents, become one line saying they left the tree at the
+  archive tag and need no edit; the proposal's "Docs and contracts that move
+  together" bullet drops its clauses for the three (`:208-215`). Not edited:
+  AC-IND-18, which names no deleted path, and the evidence listed under
+  "Re-checked at `04d1622`".
+- Then `planlint --target . validate --fail-on ERROR --change add-witness-ci-artifacts`
+  and `--change widen-indeterminate-unchecked-citations`, each exit 0, and
+  `python -m pytest tests/test_spec_test_citations.py -q` green.
 - Retunes: `tests/test_spec_status.py` — `:40`, `:289`, and `:494-502`
   (`assert rows`, docstring); `tests/test_agent_artifacts.py` — the docstring
-  at `:3`, `:27`, `:78-115`, `:142-307`, and `:333-343` with `context7.json`
-  above; `tests/test_release_surface.py:223` with `.dockerignore`, and the
-  docstring at `:252`; `tests/test_rule_registry_docs.py:69`. Then
-  `make typecheck`, and lower each ceiling in `MYPY_TESTS_CEILINGS` the guard
-  names to its new exact count; raise none (R-LPT-9).
+  at `:3`, `:27`, `:78-307` (`EVAL_CASES` and its comment, the grader and tag
+  constants, `_ids`, `_frontmatter_block`, `_frontmatter`,
+  `_frontmatter_list` and the evals section), and `:333-343` with
+  `context7.json` above; `tests/test_release_surface.py:223` with
+  `.dockerignore`, and the docstring at `:252`;
+  `tests/test_rule_registry_docs.py:69`. Then `make typecheck`, and lower
+  each ceiling in `MYPY_TESTS_CEILINGS` the guard names to its new exact
+  count; raise none (R-LPT-9).
 - **Gate:** `make pre-pr`
 
 ## Milestone 6 — The deletion, its coupled halves, the hygiene module and the CHANGELOG entry
@@ -385,11 +599,12 @@ number names the command that produced it.
   listing prints.
 - In the same commit (DEC-LPT-019): `docs/agents-skills-harness.md:6` and
   `docs/hooks.md:277` drop `planlint-add-eval-case`;
-  `docs/agents-skills-harness.md:127-130` and `docs/next-steps.md:385` state
-  the nested set true, naming `git ls-files '*/AGENTS.md'` as the
-  regenerator; `tests/test_adopter_urls.py:59` drops `"evals"`;
-  `tests/support.py`, `nested_agents_files` and `tests/test_tree_hygiene.py`
-  from Milestone 3.
+  `docs/agents-skills-harness.md:127-130`, `docs/next-steps.md:385` and
+  `:391-392` state the nested set true, naming `git ls-files '*/AGENTS.md'`
+  as the regenerator; the section comment at
+  `tests/test_agent_artifacts.py:433` drops "nine files";
+  `tests/test_adopter_urls.py:59` drops `"evals"`; `tests/support.py`,
+  `nested_agents_files` and `tests/test_tree_hygiene.py` from Milestone 3.
 - `CHANGELOG.md` `[Unreleased]`: `### Removed — the development record`, one
   bullet led by ``- **`lean-production-tree`.**`` naming each of R-LPT-1's
   documents by name, `evals/`, `.claude/skills/planlint-add-eval-case/`,
@@ -425,9 +640,22 @@ number names the command that produced it.
   package, this one partial until its boxes are ticked and
   `draft-but-complete` afterwards, by design (R-LPT-14); the grep 0. Record
   the file and byte counts beside the `c0ff090` figures above.
-- Re-point AC-LPT-1 to AC-LPT-5 from stage-only to the Milestone 3 test names,
-  keeping each stage; run `python -m pytest tests/test_spec_test_citations.py
-  -q` and record.
+- AC-LPT-1's listing, at the head before the merge, so no criterion waits on
+  the merge: `git diff --name-only --diff-filter=D archive/dev-record-2026-10 HEAD -- openspec/changes | cut -d/ -f3 | sort -u`
+  — every package at the tag but the four kept; `ls -d openspec/changes/*/`
+  — the four and this one; and `ls docs/differentiation-roadmap.md
+  .claude/skills/planlint-add-eval-case` fails on each.
+- Milestone 2's deleted-path diff, now that the deletion is committed; record
+  its exit.
+- The retired codes, re-derived from the tag:
+  `T=archive/dev-record-2026-10; git diff --name-only --diff-filter=D "$T" HEAD -- 'openspec/changes/*/specs/*/spec.md' docs/differentiation-roadmap.md | while read -r f; do git show "$T:$f"; done | grep -oE '^- (\*\*)?(R|C|AC)-[A-Z]{2,}-[0-9]' | sed -E 's/^- (\*\*)?(R|C|AC)-//; s/-[0-9]$//' | sort -u | paste -sd' ' -`
+  prints the codes the `openspec/AGENTS.md` entry lists, and none of them is
+  in `grep -ohE '^- (R|C)-[A-Z]{2,}-' openspec/changes/*/specs/*/spec.md`;
+  `wc -l openspec/AGENTS.md` is at or under 60.
+- Re-point AC-LPT-1 to AC-LPT-5 from stage-only to the Milestone 3 test
+  names, and add `test_a_tracked_file_removed_from_disk_is_not_enumerated` to
+  AC-LPT-6, keeping each stage; run `python -m pytest
+  tests/test_spec_test_citations.py -q` and record.
 - Confirm `make stage-citations` lists no stage this package added to the
   unrun set: its verification lines cite `test`, `docs-check` and `pre-pr`
   only (DEC-LPT-018).
@@ -439,8 +667,10 @@ number names the command that produced it.
   `tests/test_detect_thresholds.py:382`, `tests/test_stage_citations.py:5`,
   `tools/stage_citations.py:13`, `tests/workflow_support.py:54`,
   `tests/test_agent_artifacts.py:435,549`, `tests/test_graph.py:1-4`,
-  `.claude/hooks/guard_promotion.py:2`; corrected —
-  `tests/test_release_surface.py:252`.
+  `.claude/hooks/guard_promotion.py:2`, `.github/dependabot.yml:23-25`;
+  corrected — `tests/test_release_surface.py:252`,
+  `tests/test_ci_makefile.py:478-480`, `tests/test_agent_artifacts.py:433`,
+  `pyproject.toml:162-166`.
 - Tick each criterion only as it is verified. This package's header stays
   `DRAFT`; the pull request, into `dev`, asks the maintainer to settle it at
   merge. This package leaves the tree in the 0.4.0 post-release sweep, with
