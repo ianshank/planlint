@@ -2,11 +2,11 @@
 
 Drafted at `4278d4c` on `claude/lean-production-tree`, 2026-10-16, as Phase
 2.2 and Phase 3 of the session plan for a lean production branch, and
-revised at `f0063a6` on `claude/prepare-release-0-4-0` to resolve the first
-adversarial review (Milestone 0). Outside the change package each branch
-adds, both trees are `dev` at `c0ff090`. The plan is not tracked; every
-decision this package takes from it is restated in
-`specs/release-0-4-0/spec.md`.
+revised at `f0063a6` and `eb14cba` on `claude/prepare-release-0-4-0` to
+resolve the first and second adversarial reviews (Milestone 0). Outside the
+change package each branch adds, these trees are `dev` at `c0ff090`. The
+plan is not tracked; every decision this package takes from it is restated
+in `specs/release-0-4-0/spec.md`.
 
 The package lands in two pull requests and a maintainer's sitting:
 
@@ -22,19 +22,20 @@ The package lands in two pull requests and a maintainer's sitting:
   filled in afterwards with what was observed, in a later pull request into
   `dev`.
 
-Every line number below was measured at `4278d4c` or `f0063a6` and is
-re-read at the implementation branch's head before the milestone that uses
-it. A sibling landing first moves a line without moving the fact. Every
-number names the command that produced it.
+Every line number below was measured at `4278d4c`, `f0063a6` or `eb14cba`
+and is re-read at the implementation branch's head before the milestone
+that uses it. A sibling landing first moves a line without moving the fact.
+Every number names the command that produced it.
 
-## Measured at `4278d4c`, re-checked at `f0063a6`
+## Measured at `4278d4c`, re-checked at `f0063a6` and `eb14cba`
 
 - **The gate before the draft.** `planlint --target . validate --fail-on
   ERROR` at `4278d4c`: `55 spec(s) checked · 0 error · 0 warn · 0 info`,
-  `PASS`, exit 0, before any file of this package existed. At `f0063a6`,
-  before the revision: `55 spec(s) checked · 0 error · 0 warn · 0 info`,
-  `PASS`, exit 0. Both counts include this package's spec at `f0063a6` and
-  `lean-production-tree`'s at `4278d4c`.
+  `PASS`, exit 0, before any file of this package existed. At `f0063a6`
+  and at `eb14cba`, before each revision: `55 spec(s) checked · 0 error · 0
+  warn · 0 info`, `PASS`, exit 0. The counts include this package's spec on
+  `claude/prepare-release-0-4-0` and `lean-production-tree`'s on
+  `claude/lean-production-tree`.
 - **The window is not open.** `git ls-remote --tags origin` prints
   `refs/tags/v0.1.0` and its peeled line, and nothing else.
   `curl -sS -o /dev/null -w '%{http_code}\n' https://pypi.org/pypi/planlint/json`
@@ -42,8 +43,12 @@ number names the command that produced it.
 - **The 3.10 sites.** The caller's grep (`grep -rn "3\.10\|tomli"
   --include=*.py --include=*.toml --include=*.yml --include=*.md . | grep -v
   '^./openspec/changes/\|^./.git/'`), read with the untracked, ignored
-  `build/` set aside, gives the sites the proposal's Evidence lists. Three
-  sites carry the same reason without the string: `openspec_graph/thresholds.py:10-12`,
+  `build/` set aside, gives the sites the proposal's Evidence lists. Its
+  lines in `docs/differentiation-roadmap.md` and
+  `docs/reflection-plan-2026-10.md` — eight, by the same grep piped to
+  `grep -c 'differentiation-roadmap\|reflection-plan'` — are set aside too,
+  because `lean-production-tree` deletes both files. Three sites carry the
+  same reason without the string: `openspec_graph/thresholds.py:10-12`,
   `tests/test_static_ratchets.py:217-219` and `docs/next-steps.md:182-194`.
   `git grep -n "version_info\|py310\|(3, 10)\|(3, 11)\|contextlib.chdir\|tomllib"`
   finds no further code site.
@@ -80,10 +85,19 @@ number names the command that produced it.
   `skills/planlint-spec-governance/SKILL.md:178`, `README.md:403,449`,
   `.pre-commit-hooks.yaml:10`, and lines of `docs/distribution-plan.md` and
   `docs/reflection-plan-2026-10.md`, both deleted by `lean-production-tree`.
+  `SECURITY.md:56-57` calls the supported `0.3.0` "the first release
+  published to PyPI".
 - **The artifact names.** `grep -rn "coverage-\${{\|coverage-Linux"
   .github/ tests/*.py tools/*.py docs/hooks.md` finds only the two upload
   steps in `ci.yml` (`:79`, `:127`). No job downloads a leg's artifact by
   name.
+- **`lean-production-tree`'s pull request.** That package's `tasks.md`
+  records `gh api repos/ianshank/planlint/pulls/58 --jq
+  '{draft,base:.base.ref,head:.head.ref}'` as
+  `{"base":"dev","draft":true,"head":"claude/lean-production-tree"}`, and
+  `git ls-tree --name-only origin/dev openspec/changes/` does not list
+  `lean-production-tree`, so the squash that merges it is the commit that
+  adds its package to `dev`.
 
 ## Milestone 0 — Preconditions and review, recorded before pull request 1 leaves draft
 
@@ -124,6 +138,39 @@ number names the command that produced it.
       and 6);
     - the Dependabot timing note is in DEC-RFR-006;
     - R-RFR-19 is reconciled with the placeholder rule (DEC-RFR-011).
+
+  **Recorded — second review, at `eb14cba` (no HIGH):**
+  - **MEDIUM-1.** The no-stderr reason was false. DEC-RFR-006 now grounds
+    the window in the policy's scope: its stderr clause covers what the tool
+    runs, and planlint runs neither the recipe nor the image. It also
+    rejects an entrypoint wrapper.
+  - **MEDIUM-2.** The tagged-tree check is a list derived from
+    `lean-production-tree`'s squash commit, not a pattern (R-RFR-22,
+    AC-RFR-26, DEC-RFR-010, Milestone 6). `LPT` is found as the commit
+    that adds that package's proposal to `dev`, cross-checked against its
+    pull request's merge commit, below.
+  - **MEDIUM-3.** DEC-RFR-007 cites DEC-WCA-022 as the planned precedent
+    and DEC-LPT-007's mooting as why it never ran.
+  - **LOW-1.** A further spec named by the citation measure stops
+    implementation for a revision; it is never amended in passing
+    (R-RFR-16, AC-RFR-18, DEC-RFR-007, the proposal's What Changes and
+    Non-Goals, Milestones 0 and 2).
+  - **LOW-2.** The stale-metadata tests are described as a set with
+    examples, not counted (Milestone 5).
+  - **LOW-3.** The merge-hazard list gains `docs/next-steps.md`,
+    `README.md`, `pyproject.toml` and `tests/support.py`.
+  - **LOW-4.** The 0.5.0 brief drops `import re` only if nothing else uses
+    it.
+  - **LOW-5.** Branch diffs use `origin/dev...HEAD`.
+  - **LOW-6.** `SECURITY.md:56-57` is reworded to stay true, and
+    DEC-RFR-011 records its reliance on R-HRP-16, checked below and in
+    Milestone 5.
+  - **LOW-7.** The roadmap and reflection-plan lines of the 3.10 grep are
+    set aside.
+  - **LOW-8.** One exact marker string is used. AC-REL-5's marker names
+    what was deleted, the moot "once it exists" is gone, `_prose_floor`
+    reads the whole `SKILL.md`, and the Milestone 5 alias check covers
+    `pyproject.toml`.
 - **`v0.3.0` is tagged, published and back-merged.** Record each output with
   the date:
   - `git ls-remote --tags origin v0.3.0` prints the tag and its peeled line.
@@ -140,15 +187,39 @@ number names the command that produced it.
   - `git ls-tree origin/dev openspec/changes/lean-production-tree` prints
     its tree.
 
-  Record the merge commit.
+  Record its squash commit's sha as `LPT`. That squash both adds the
+  package to `dev` and makes its deletions, so it is the one commit on
+  `dev`'s first-parent line that added the package's proposal:
+
+  ```
+  LPT=$(git log --first-parent --diff-filter=A --format=%H origin/dev -- openspec/changes/lean-production-tree/proposal.md)
+  gh pr view 58 --json mergeCommit --jq .mergeCommit.oid
+  ```
+
+  The first prints exactly one sha, and the second prints the same sha
+  (pull request #58 carries `lean-production-tree`; if it was closed in
+  favour of another, cross-check against the one that merged). A squash
+  subject is the pull request's title and need not name the package, so
+  the subject is not how `LPT` is found. Milestone 6 derives its
+  deleted-path list from `LPT`.
 - Bring this branch to that tip by merging `origin/dev` into it, never by
   rebasing or force-pushing. Re-run every measurement above at the branch
   head, and note any line that moved beside the bullet that uses it below.
 - **The citation dependencies at the branch head.** Re-run the proposal's
   script. Expect `prepare-release-0-3-0` alone. `harden-release-pipeline`,
-  if it has merged or is on `dev` by then, is read too. Any spec the
-  script adds is amended in Milestone 2, at its verification line, in the
-  same commit (R-RFR-16).
+  if it has merged or is on `dev` by then, is read too. If the script
+  names any further spec, stop here and revise this package before
+  Milestone 2 (R-RFR-16, DEC-RFR-007). The revision is a new, named
+  supersession if the spec's package has shipped, or an amendment of the
+  DEC-LPT-007 kind if it is open. No further spec is amended under this
+  package as written.
+- **The placeholder reading.** Read `harden-release-pipeline`'s spec as it
+  merged, or as it stands on `dev`. Confirm that R-HRP-16 scopes its
+  version-placeholder rule to `SECURITY.md`'s verification commands ("Its
+  commands"), and that AC-HRP-20 is satisfied by a supported-versions
+  sentence naming a version while the commands keep placeholders. If
+  AC-HRP-20 reads the rule as file-wide, stop and reconcile the two
+  packages before Milestone 5 edits that sentence (DEC-RFR-011).
 - **The required checks.** Record `gh api repos/ianshank/planlint/rulesets`.
   If any branch ruleset's `required_status_checks` names a `test (3.10)`
   leg rather than `ci-ok` alone, the owner edits that ruleset in the same
@@ -158,17 +229,29 @@ number names the command that produced it.
     while this change edits the `test` row only.
   - `docs/aqa.md`: `lean-production-tree` edits `:113-114`, while this change
     edits the ranges at `:150` and `:287` only.
+  - `docs/next-steps.md`: `lean-production-tree` edits rows throughout and
+    `harden-release-pipeline` edits `:231`, while this change edits items 7a
+    and 9.
+  - `README.md`: `lean-production-tree` edits it throughout, while this
+    change edits `:39` and the alias paragraph at `:77-84`.
+  - `pyproject.toml`: `harden-release-pipeline` edits
+    `[tool.specgraph.action_major_floors]`, while this change edits
+    `requires-python`, the classifiers, `[project.scripts]`, the dev extra
+    and the mypy tables.
+  - `tests/support.py`: `lean-production-tree` adds `shipped_files`, while
+    this change edits `read_pyproject` and the `working_directory`
+    docstring.
   - `SECURITY.md`: `harden-release-pipeline` rewrites it, and only
-    Milestone 5 touches its version.
+    Milestone 5 touches its supported-versions sentence.
   - `CHANGELOG.md` `[Unreleased]`: all three packages add groups there.
   - `Dockerfile`: no sibling edits it, and this change adds one comment
     line.
 - **Gate:** every precondition above recorded with its output and the date
   — the tag, the PyPI `200`, the ancestry exit 0, `lean-production-tree`'s
-  merge commit and the archive tag, the citation dependencies and the
-  rulesets — then `make test` on the branch head. Only then is pull
-  request 1 marked ready, and no milestone below starts before this is
-  recorded.
+  squash commit as `LPT` with both commands that find it, and the archive
+  tag, the citation dependencies, the placeholder reading and the rulesets
+  — then `make test` on the branch head. Only then is pull request 1 marked
+  ready, and no milestone below starts before this is recorded.
 
 ## Milestone 1 — The Python 3.11 floor
 
@@ -195,10 +278,12 @@ number names the command that produced it.
     - the lowest hard leg from `_matrix_versions(_ci_text())`;
     - the lowest of `_classifier_versions(...)`;
     - `[tool.mypy] python_version`;
-    - `_prose_floor` over `README.md` with `Python (\d+\.\d+)\+`;
-    - `_prose_floor` over the `compatibility:` frontmatter line of
+    - `_prose_floor` over the whole of `README.md` with
+      `Python (\d+\.\d+)\+`;
+    - `_prose_floor` over the whole of
       `skills/planlint-spec-governance/SKILL.md` with
-      `Python (\d+\.\d+) or newer`.
+      `Python (\d+\.\d+) or newer`, whose only match is the `compatibility:`
+      line.
   - `test_a_stale_python_floor_is_named_with_its_source` (unit,
     non-success) uses the same readers on planted input (AC-RFR-6):
     - a planted README text saying "Python 3.10+" through `_prose_floor`,
@@ -351,15 +436,17 @@ number names the command that produced it.
     `test_primary_command_emits_no_deprecation_warning` in its selector,
     with its stage;
   - AC-REL-6's verification line becomes its stage alone;
-  - each line carries "(amended by `prepare-release-0-4-0`, superseding
-    DEC-LPT-004 for this line only: the alias and the tests that verified
-    it at 0.3.0 were removed in 0.4.0; they are read at the `v0.3.0` tag)".
+  - each of the two lines carries exactly R-RFR-16's marker:
+    "(amended by `prepare-release-0-4-0`, superseding DEC-LPT-004 for this
+    line only: 0.4.0 removed the `specgraph` alias and deleted the tests of
+    it that this line cited; the original line is read at the `v0.3.0`
+    tag)".
 
-  The criteria keep their ticks and their text. Any spec Milestone 0's
-  re-run added is amended the same way. Run
+  The criteria keep their ticks and their text. No other spec is amended:
+  Milestone 0 stopped for a revision if its re-run named one. Run
   `python -m pytest tests/test_spec_test_citations.py -q` on that commit,
-  and `git diff --stat origin/dev -- openspec/changes/` to confirm no other
-  package changed.
+  and confirm that `git diff --stat origin/dev...HEAD -- openspec/changes/`
+  lists only `prepare-release-0-3-0`'s spec and this package.
 - Prose (R-RFR-11):
   - `README.md:77-84`: the command was renamed from `specgraph` to
     `planlint`; the `specgraph` alias warned through every 0.3.x release and
@@ -368,7 +455,7 @@ number names the command that produced it.
     contract identifiers, and the link to `docs/policies.md` stays.
   - `docs/policies.md:74-79`: past tense — the alias warned through every
     0.3.x release and was removed in 0.4.0.
-- Confirm `SPECGRAPH_LOG_LEVEL` is untouched: `git diff -- openspec_graph/log.py tools/_common.py`
+- Confirm `SPECGRAPH_LOG_LEVEL` is untouched: `git diff origin/dev...HEAD -- openspec_graph/log.py tools/_common.py`
   shows only Milestone 1's comment rewording, and `test_verbose_via_env_var`
   passes (R-RFR-11, AC-RFR-12).
 - **Gate:** `make test`
@@ -379,7 +466,8 @@ number names the command that produced it.
   lines (`:8-9`):
   `# Deprecated in 0.4.0 and removed in 0.5.0 (CHANGELOG.md, Deprecated): use the published package or the composite action instead.`
   It carries no install command and no `@v` or `rev:` token. Nothing else in
-  the file changes (R-RFR-23, DEC-RFR-006).
+  the file changes, and no entrypoint wrapper is added (R-RFR-23,
+  DEC-RFR-006).
 - Confirm the tests that read the file stay green with the line in place,
   and record the run (AC-RFR-28):
   - `test_dockerfile_documents_the_user_override_for_writing_verbs`, whose
@@ -397,10 +485,12 @@ number names the command that produced it.
     file for install commands and tag tokens, under `make test`.
 - `.dockerignore`, `.github/dependabot.yml`'s `docker` entry and every test
   and helper that reads them are not edited:
-  `git diff --stat origin/dev -- .dockerignore .github/dependabot.yml tests/test_workflow_pins.py tests/test_release_surface.py tests/workflow_support.py`
-  prints nothing (R-RFR-23). The Dependabot entry staying with its file
-  means the "dependency file not found" window cannot open in 0.4.0; the
-  0.5.0 package deletes both in one commit (DEC-RFR-006).
+  `git diff --stat origin/dev...HEAD -- .dockerignore .github/dependabot.yml tests/test_workflow_pins.py tests/test_release_surface.py`
+  prints nothing. `git diff origin/dev...HEAD -- tests/workflow_support.py`
+  shows only Milestone 1's `requires_python_floor` (R-RFR-23). The
+  Dependabot entry staying with its file means the "dependency file not
+  found" window cannot open in 0.4.0; the 0.5.0 package deletes both in one
+  commit (DEC-RFR-006).
 - `docs/next-steps.md:254-256`, item 9, is rewritten. The `Dockerfile` is
   deprecated in 0.4.0 and removed in 0.5.0, because it is built, published
   and scanned nowhere and keeping it would mean a second supported
@@ -430,8 +520,8 @@ number names the command that produced it.
     are unchanged through every 0.4.x release, and `pip install planlint` in
     any `python` image, or the composite action, replaces them.
 
-  No released section changes. `git diff -- CHANGELOG.md` shows only
-  `[Unreleased]` lines (C-RFR-4, AC-RFR-17).
+  No released section changes. `git diff origin/dev...HEAD -- CHANGELOG.md`
+  shows only `[Unreleased]` lines (C-RFR-4, AC-RFR-17).
 - Re-point this package's stage-only criteria to the tests that now exist,
   keeping each stage:
   - AC-RFR-5 → `test_the_python_floor_agrees_across_every_source`;
@@ -456,7 +546,7 @@ number names the command that produced it.
   lines add no stage to the set no workflow runs by name: only `test` and
   `pre-pr` are cited (DEC-RFR-010).
 - Confirm the diff touches none of the fixtures and dated comments C-RFR-5
-  lists, using `git diff -U0 origin/dev -- tests/test_workflow_python.py tests/test_ci_workflow.py tests/test_static_ratchets_planted.py pyproject.toml .pre-commit-config.yaml`
+  lists, using `git diff -U0 origin/dev...HEAD -- tests/test_workflow_python.py tests/test_ci_workflow.py tests/test_static_ratchets_planted.py pyproject.toml .pre-commit-config.yaml`
   read for those lines (AC-RFR-19).
 - Run `planlint --target . validate --fail-on INFO --change prepare-release-0-4-0`,
   then `planlint --target . validate --fail-on ERROR` on the whole tree,
@@ -471,11 +561,13 @@ number names the command that produced it.
 - **Preconditions**, each recorded with its output and the date. Run
   `git fetch origin`, then check on `origin/dev`:
   - `lean-production-tree` has merged (Milestone 0's facts);
-  - `harden-release-pipeline` has merged: its merge commit is recorded, and
-    `release.yml` carries what its spec names;
+  - `harden-release-pipeline` has merged: its merge commit is recorded,
+    `release.yml` carries what its spec names, and Milestone 0's
+    placeholder reading still holds for its spec as merged;
   - pull request 1 has merged: its merge commit is recorded, and
-    `git grep -q main_deprecated origin/dev -- openspec_graph` exits 1,
-    since the alias is gone.
+    `git grep -q main_deprecated origin/dev -- openspec_graph pyproject.toml`
+    exits 1, since the alias is gone from both the code and the entry
+    points.
 
   (R-RFR-2, AC-RFR-20.)
 - Cut the branch from `origin/dev` and follow
@@ -484,8 +576,11 @@ number names the command that produced it.
 - `openspec_graph/__init__.py:15` → `__version__ = "0.4.0"`, and nothing
   else in the module (R-RFR-17). Then run `pip install -e ".[dev]"`: an
   editable install's metadata is written at install time. Until it is
-  refreshed, the version tests that read the installed distribution — the
-  review counted four — go red for a reason that is not the bump set.
+  refreshed, the tests that compare the installed distribution's metadata
+  with `__version__` go red for a reason that is not the bump set; among
+  them are
+  `test_installed_distribution_version_matches_the_package_attribute` and
+  `test_envelope_carries_the_tool_version`.
 - Run `make test` on the bump alone and record which tests fail. Expect,
   among others:
   - `test_skill_metadata_version_matches_the_package`;
@@ -520,10 +615,13 @@ number names the command that produced it.
 - The hand edits no test names (R-RFR-19, DEC-RFR-011):
   - `.github/actions/planlint/action.yml:34` → `e.g. "0.4.0"`, with nothing
     else in the file changed (`test_the_action_declares_exactly_the_v1_inputs`);
-  - `SECURITY.md`'s supported-versions sentence, as `harden-release-pipeline`
-    left it, names `0.4.0` as the latest released and only supported
-    version, while its verification commands keep the placeholders R-HRP-16
-    requires.
+  - `SECURITY.md:56-57`, as `harden-release-pipeline` left it. "Only the
+    latest released version is supported: `0.3.0`, the first release
+    published to PyPI" is reworded so it stays true after the bump: it names
+    `0.4.0` as the latest released and only supported version, and keeps
+    "the first release published to PyPI" only as a fact about `0.3.0`,
+    never as a description of `0.4.0`. Its verification commands keep the
+    placeholders R-HRP-16 requires.
 - `CHANGELOG.md` (R-RFR-20, DEC-RFR-009):
   - Insert `## [0.4.0] — <date>` directly below `## [Unreleased]` and its
     blank line, the date being the day the tag will be pushed. Set it the
@@ -535,7 +633,8 @@ number names the command that produced it.
   - Add `[0.4.0]: https://github.com/ianshank/planlint/releases/tag/v0.4.0`
     above the `[0.3.0]:` line, and make the `[Unreleased]:` line
     `https://github.com/ianshank/planlint/compare/v0.4.0...HEAD`.
-  - `git diff -- CHANGELOG.md` shows no line of a released section changed.
+  - `git diff origin/dev...HEAD -- CHANGELOG.md` shows no line of a released
+    section changed.
 - `make test` green, recording that each test listed above went green on
   its edit, then `make pre-pr` exit 0 on the head (AC-RFR-21, AC-RFR-23,
   AC-RFR-24, AC-RFR-25).
@@ -592,10 +691,27 @@ number names the command that produced it.
 - **The Release and the tree.**
   - `gh release view v0.4.0 --json assets --jq '[.assets[].name]'` names the
     wheel and the sdist.
-  - `git ls-tree -r --name-only v0.4.0 | grep -E '^(evals/|docs/.*-plan\.md|docs/peer-review-)'`
-    prints nothing.
+  - The paths `lean-production-tree` deleted are absent from the tag, by
+    the list its squash commit `LPT` (Milestone 0) gives rather than by a
+    pattern (DEC-RFR-010):
 
-  Record both (AC-RFR-26).
+    ```
+    git rev-list --parents -n 1 "$LPT"
+    deleted=$(mktemp); git diff --name-only --diff-filter=D "$LPT^1" "$LPT" > "$deleted"; wc -l < "$deleted"
+    git ls-tree -r --name-only v0.4.0 | grep -Fxf "$deleted"; echo $?
+    ```
+
+    The first prints two shas, the commit and its one parent: a squash
+    has a single parent, the `dev` it landed on. Were it a merge commit
+    instead, its diff against the first parent would still be the whole
+    pull request's change. The count the second prints is not `0`, since
+    an empty list would make the third pass vacuously. The third prints no
+    path, then `1`. The list holds every file of the deleted plans, the
+    retired skill and the deleted package directories, which no pattern
+    covered. The `Dockerfile` is not on it: it stays until 0.5.0 and is
+    deliberately outside this check.
+
+  Record each command's output (AC-RFR-26).
 - **A fresh install.** In a fresh venv:
   - `python -m pip install planlint==0.4.0`;
   - `planlint --version` prints `planlint 0.4.0`;
