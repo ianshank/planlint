@@ -430,6 +430,9 @@ re-reads each line before the milestone that uses it.
 **Pull request 2 — the 0.4.0 release prep (Milestone 5), squash into `dev`,
 after the implementations of `lean-production-tree` and
 `harden-release-pipeline`, and pull request 1, have merged.**
+It also waits for `tighten-release-surface`'s implementation to merge, or for
+the maintainer's recorded decision to defer that change (amended by
+`tighten-release-surface`).
 
 - `openspec_graph/__init__.py`: `__version__ = "0.4.0"`. Then
   `make skill-manifests`, and `pip install -e ".[dev]"` so the installed

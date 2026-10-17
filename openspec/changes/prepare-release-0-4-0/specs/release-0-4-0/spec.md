@@ -149,6 +149,10 @@ line number is in the proposal.
   production: its squash commit is recorded in `tasks.md`, and the
   integration branch's tip MUST equal that commit when the promotion to the
   candidate branch is opened.
+  The release-prep pull request MUST also merge only after
+  `tighten-release-surface`'s implementation has merged, or after the
+  maintainer's decision to defer that change to a later release is recorded
+  in `tasks.md` (amended by `tighten-release-surface`).
 
 ### The Python floor
 
@@ -938,6 +942,9 @@ line number is in the proposal.
     integration branch, and `lean-production-tree`'s implementation merged;
   - before the release-prep pull request opens: `harden-release-pipeline`'s
     implementation and the removals merged;
+  - also before the release-prep pull request opens:
+    `tighten-release-surface`'s implementation merged, or the maintainer's
+    recorded decision to defer it (amended by `tighten-release-surface`);
   - before the promotion opens: the integration branch's tip is the
     release-prep squash commit.
 

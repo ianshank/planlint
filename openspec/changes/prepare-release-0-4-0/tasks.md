@@ -24,6 +24,9 @@ maintainer's sitting:
 - **Pull request 2, the release prep** (Milestone 5), opens only after the
   implementations of `lean-production-tree` and `harden-release-pipeline`,
   and pull request 1, have merged into `dev`.
+  It also waits for `tighten-release-surface`'s implementation, or for the
+  maintainer's recorded decision to defer it (amended by
+  `tighten-release-surface`).
 - **Milestone 6 is the maintainer's**, outside the tree. Its bullets are
   filled in afterwards with what was observed, in a later pull request into
   `dev`.
@@ -258,6 +261,12 @@ Every number names the command that produced it.
     while this change edits the `test` row only.
   - `docs/aqa.md`: `lean-production-tree` edits `:113-114`, while this change
     edits the ranges at `:150` and `:287` only.
+    `tighten-release-surface` rewrites the comment at `:283` and the
+    paragraph that holds `:287`, so its edit and this change's are a real
+    textual conflict in either merge order. The resolution keeps that
+    change's sentence carrying this change's "Python 3.11–3.14" token, and
+    the merged paragraph is read at the merge (amended by
+    `tighten-release-surface`).
   - `docs/next-steps.md`: `lean-production-tree` edits rows throughout and
     `harden-release-pipeline` edits `:231`, while this change edits items 7a
     and 9.
@@ -600,6 +609,13 @@ Every number names the command that produced it.
     `git grep -q main_deprecated origin/dev -- openspec_graph pyproject.toml`
     exits 1, since the alias is gone from both the code and the entry
     points.
+  - `tighten-release-surface`'s implementation has merged, not only its
+    package: its merge commit is recorded, and both of these exit 0:
+    `git grep -q "Exit-1 cases that are not findings" origin/dev -- skills/planlint-spec-governance/references/exit-codes.md`
+    and `git grep -q "### Changed — the release surface" origin/dev -- CHANGELOG.md`.
+    Otherwise the maintainer's decision to defer that change to a later
+    release is recorded here with the date, and its entry lands under the
+    next `[Unreleased]` (amended by `tighten-release-surface`).
 
   (R-RFR-2, AC-RFR-20.)
 - Cut the branch from `origin/dev` and follow
