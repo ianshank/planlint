@@ -195,8 +195,10 @@ finding resolved or recorded:
   Still open: the 0.3.0 promotions `dev` → `qa` and `qa` → `main` by merge
   commit, each with its runs recorded. `qa`'s tip `b9a4e3e` is not an
   ancestor of `dev`, but `git merge-tree --write-tree origin/qa origin/dev`
-  merges clean. The tag-day changelog date, 2026-10-17 (UTC), lands in the
-  release-prep pull request that carries this record.
+  merges clean. The tag-day changelog date, first set to 2026-10-17 (UTC)
+  in the release-prep pull request that carries this record, was re-dated
+  to 2026-10-21 when the earlier day passed untagged; the promotion record
+  after the tag names the slip and its cause.
 - [ ] Rulesets: `main` and `qa` — pull request required, `ci-ok` required,
   merge commits only, no force-push, no deletion; `dev` — pull request
   required, `ci-ok` required, squash **and** merge commits allowed (the
