@@ -197,8 +197,8 @@ finding resolved or recorded:
   ancestor of `dev`, but `git merge-tree --write-tree origin/qa origin/dev`
   merges clean. The tag-day changelog date, first set to 2026-10-17 (UTC)
   in the release-prep pull request that carries this record, was re-dated
-  to 2026-10-21 when the earlier day passed untagged; the promotion record
-  after the tag names the slip and its cause.
+  to 2026-10-21 and then to 2026-10-22 as each earlier day passed untagged;
+  the promotion record after the tag names the slips and their cause.
 - [ ] Rulesets: `main` and `qa` — pull request required, `ci-ok` required,
   merge commits only, no force-push, no deletion; `dev` — pull request
   required, `ci-ok` required, squash **and** merge commits allowed (the
