@@ -42,7 +42,13 @@ Check each route before opening it:
 Integration into candidate, then candidate into production, each merged with a
 **merge commit** -- a squash gives the target a commit the source lacks, and
 the next promotion conflicts. The `release-tier` and `ci-ok` checks must be
-green on both.
+green on both -- finished, not still running -- before either merges.
+
+A promotion's head is a long-lived branch. With the repository's
+*Automatically delete head branches* setting on and no ruleset restricting
+deletion, merging the promotion deletes that branch (the first promotion lost
+`dev` this way). Confirm one of the two before merging; if a branch was
+deleted, recreate it at its exact former tip.
 
 ## 3. Tag the production merge commit
 
@@ -77,6 +83,7 @@ branch is never back-merged; it catches up at the next promotion.
 - Flip `enforce_routes` or edit the promotion table to make a route pass.
 - Tag a commit that is not a production merge commit (or pre-model trunk).
 - Commit to production after the tag.
+- Squash a promotion, or merge one before its checks finish.
 
 Precedence: `skills/planlint-spec-governance/SKILL.md`, then the root
 `AGENTS.md`, then `docs/hooks.md`, then this file.

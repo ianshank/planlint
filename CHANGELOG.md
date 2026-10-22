@@ -5,7 +5,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-## [0.3.0] — 2026-10-08
+## [0.3.0] — 2026-10-22
 
 > `v0.3.0` is the first tag pushed under the `planlint` name and the first
 > release published to PyPI. `v0.2.0` was never tagged: the section below

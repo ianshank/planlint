@@ -385,10 +385,17 @@ feature/* --squash--> dev --merge commit--> qa --merge commit--> main --tag vX.Y
   so its pull request would never report `ci-ok` and its tag would never run
   `release.yml`.
 - **Owner-only settings, outside this tree:** a ruleset per branch (pull
-  request required, `ci-ok` required, the merge methods above, no force-push
-  or deletion, the owner as the only bypass), a tag ruleset on `v*` (owner
-  creates; no update or delete), and the `pypi` environment limited to `v*`
-  tags. `main` stays the default branch, because the plugin marketplace
+  request required; `ci-ok` required from the GitHub Actions app, with the
+  up-to-date requirement off so *Update branch* never merges `main` into
+  `qa`; the merge methods above; no force-push or deletion; no bypass actor,
+  because a bypass would let the owner's own push to `main` through
+  silently -- the emergency path is editing the ruleset, which is audited.
+  Restricting deletion is also what stops *Automatically delete head
+  branches* from deleting `dev` or `qa` when a promotion they head merges --
+  until the rulesets exist, turn that setting off), a tag ruleset on `v*`
+  and `archive/*` (no update or delete; the owner, by repository role, is
+  its only bypass and creates the tags), and the `pypi` environment limited
+  to `v*` tags. `main` stays the default branch, because the plugin marketplace
   install, the changelog URL and adopters all resolve it and it holds
   released code.
 

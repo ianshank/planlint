@@ -169,12 +169,52 @@ finding resolved or recorded:
   its first run, 37725971039 on `e22cfc8`, had `promotion` success,
   `release-tier` success (its first run on a promotion: `make pre-pr`,
   build, metadata, smoke with both fixture probes) and `ci-ok` success.
-  Still open: #49's merge commit, the `qa` → `main` run, and its merge.
+  #49 then merged on 2026-10-08 -- as a **squash** (`73ca407`, one parent),
+  not the merge commit DEC-BPM-002 requires, and before its own run on the
+  release-prep head had finished; the `qa` push run 37727242418 had
+  `release-tier` success on that tree. Merging it also **deleted `dev`**: the
+  repository's *Automatically delete head branches* setting removes a merged
+  pull request's head, and no ruleset restricted deletion yet. `dev` was
+  recreated at its exact former tip `d519c03` with the GitHub branch API. The
+  repair is a second `dev` → `qa` pull request merged by merge commit, which
+  makes `dev` an ancestor of `qa` with no tree change, before `qa` → `main`
+  (#50) merges; the setting goes off, or the rulesets land, first.
+  **Observed since** (2026-10-16, from `gh api repos/ianshank/planlint/pulls/<n>`
+  and `git log -1 --format=%p`):
+  - #50 (`qa` → `main`) merged on 2026-10-10 as a squash, `5bb45e9`, with the
+    one parent `e30289d`. So `main` was not an ancestor of `qa` or `dev`.
+  - The back-merges #55 (`8b02179`) and #56 (`3688feb`, titled a redo by
+    merge commit) both merged as squashes on 2026-10-12, each with one
+    parent.
+  - #57 (`sync/main-into-dev` → `dev`) repaired the history on 2026-10-15. It
+    is a merge commit, `c0ff090`, with parents `3688feb` and `786c019`, and
+    its tree equals `dev`'s. `5bb45e9` is now an ancestor of `dev`.
+  - *Automatically delete head branches* is off (`delete_branch_on_merge`
+    false).
+
+  Still open: the 0.3.0 promotions `dev` → `qa` and `qa` → `main` by merge
+  commit, each with its runs recorded. `qa`'s tip `b9a4e3e` is not an
+  ancestor of `dev`, but `git merge-tree --write-tree origin/qa origin/dev`
+  merges clean. The tag-day changelog date, first set to 2026-10-17 (UTC)
+  in the release-prep pull request that carries this record, was re-dated
+  to 2026-10-21 and then to 2026-10-22 as each earlier day passed untagged;
+  the promotion record after the tag names the slips and their cause.
 - [ ] Rulesets: `main` and `qa` — pull request required, `ci-ok` required,
   merge commits only, no force-push, no deletion; `dev` — pull request
   required, `ci-ok` required, squash **and** merge commits allowed (the
   `sync/` back-merge is a merge commit), no force-push, no deletion. The owner
   is the only bypass. A `v*` tag ruleset: owner creates, no update or delete.
   The `pypi` environment's deployment rule: tags matching `v*` only.
+  **Refined 2026-10-16, not yet applied**
+  (`gh api repos/ianshank/planlint/rulesets` returns `[]`):
+  - The branch rulesets carry no bypass actor at all. An `always` bypass
+    would let the owner's own `git push` to `main` through silently. The
+    emergency path is editing the ruleset, which is audited.
+  - `ci-ok` is required by the GitHub Actions app id (`15368`), with the
+    strict up-to-date policy off. The first promotions after the squashed
+    history cannot be up to date, and Update-branch would merge `main` into
+    `qa`.
+  - The owner, by repository role, bypasses only the tag ruleset, which
+    also covers `archive/*`.
 - [ ] Record the first refused feature pull request into `qa` and the first
   `dev` → `qa` promotion running `release-tier` (AC-BPM-28).
