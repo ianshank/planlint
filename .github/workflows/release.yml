@@ -136,7 +136,7 @@ jobs:
           name: dist
           path: dist/
 
-      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         # `attestations: true` is this action's default since v1.11.0 (the
         # input exists since v1.10.0, where it defaulted to false). Stated
         # explicitly so a SHA pin cannot drop it: a pin at or above v1.11.0
