@@ -18,7 +18,7 @@
 # The digest is the pin; the tag stays inside the reference for readers and
 # for Dependabot's docker ecosystem, which moves tag and digest together. (A
 # Dockerfile has no trailing comments: a `#` after FROM would be an argument.)
-FROM python:3.12-slim@sha256:05cda9777409a9c3ffddd94a4c476b79f0769a0b4857f0c7ed9226b6800b0d6f
+FROM python:3.15-slim@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913
 
 WORKDIR /app
 
